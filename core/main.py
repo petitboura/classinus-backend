@@ -19,6 +19,7 @@ from comportements_etudiants import (
 #   from codes_partage import lister_programmes_recus_legers
 from codes_partage import lister_comportements_recus
 from mode_actif_conversation import rattachement_actif_pour_prompt
+from persona_pedagogique_conversation import obtenir_persona_pedagogique
 from avancement_notions_ia import notions_pertinentes_pour_eleve, resoudre_code_actif_eleve
 from signalements import signalements_pertinents_pour_injection
 from mcp_tools import lister_outils_autorises_pour_agent, filtrer_catalogue_par_outil_force, appeler_outil
@@ -451,8 +452,13 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             f_rattachement_actif = executor.submit(rattachement_actif_pour_prompt, conversation_id, user_id) if conversation_id else None
             f_comportements_etudiant = executor.submit(lister_comportements_etudiant, agent_id, user_id)
+            # Persona pédagogique (jonction items 1+8+9, 14/09/2026) : ne
+            # dépend d'aucun des deux autres, lancé dans le même lot
+            # parallèle -- même principe que comportements_etudiant.
+            f_persona_pedagogique = executor.submit(obtenir_persona_pedagogique, conversation_id, user_id) if conversation_id else None
             rattachement_id_actif = f_rattachement_actif.result() if f_rattachement_actif else None
             comportements_etudiant_bruts = f_comportements_etudiant.result()
+            persona_pedagogique = f_persona_pedagogique.result() if f_persona_pedagogique else None
 
         # rattachement_id_actif (voir core/mode_actif_conversation.py) vaut :
         # - None si conversation_id est absent ou si aucun mode actif n'a
@@ -641,7 +647,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id)
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force_contexte_seul)
             outil_force_verifie_optimiste = [o["function"]["name"] for o in outils_mcp] if outil_force_contexte_seul else None
-            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents)
+            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, persona_pedagogique)
             return outils_mcp, table_routage, system_final, catalogue_complet, table_routage_complet
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -760,7 +766,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id)
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force)
             outil_force_verifie = [o["function"]["name"] for o in outils_mcp] if outil_force else outil_force
-        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents)
+        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, persona_pedagogique)
 
         # PERF (10/08) : second (et dernier) point de vérification --
         # couvre tous les chemins qui ne passent PAS par le premier

@@ -5,9 +5,9 @@ import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from configuration import get_system_prompt
-from profils_agents import INSTRUCTIONS_FORMATS_AFFICHAGE, INSTRUCTIONS_ARBITRAGE_CALCUL, REGLE_CONTEXTE_INVISIBLE, INSTRUCTIONS_LONGUEUR_REPONSE
+from profils_agents import INSTRUCTIONS_FORMATS_AFFICHAGE, INSTRUCTIONS_ARBITRAGE_CALCUL, REGLE_CONTEXTE_INVISIBLE, INSTRUCTIONS_LONGUEUR_REPONSE, MODES_PEDAGOGIQUES, REGLE_BASCULE_MODE_PEDAGOGIQUE
 
-def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None):
+def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, persona_pedagogique=None):
     # Restauré le 14/08 (voir commentaire des constantes plus haut) : la
     # page Notion de l'agent (get_system_prompt) ne doit plus contenir QUE
     # la personnalité/le comportement propre à l'agent -- les 3 blocs fixes
@@ -64,6 +64,24 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
             "(action=\"consulter\") avec son id pour lire son contenu complet AVANT de répondre "
             "-- ne devine jamais son contenu à partir de la description seule."
         )
+
+    # Mode pédagogique (jonction items 1+8+9 des specs indépendantes
+    # ScholarFlow AI, volet étudiant, 14/09/2026, demande Bourama).
+    # persona_pedagogique vient de obtenir_persona_pedagogique(conversation_id,
+    # user_id) (core/persona_pedagogique_conversation.py), calculé dans
+    # chat() et reçu ici en paramètre -- même patron que rattachement_id_actif
+    # pour mode_actif_conversation.py, jamais recalculé ici.
+    #
+    # Pas de mode par défaut : persona_pedagogique vaut None tant que
+    # l'étudiant n'a rien choisi explicitement (obtenir_persona_pedagogique
+    # ne renvoie jamais de valeur implicite -- voir sa docstring), et dans
+    # ce cas aucun texte de mode n'est injecté : le modèle garde son
+    # comportement normal, ni Socratique ni Professeur ni rien d'autre.
+    # Ne PAS confondre avec rattachement_id_actif / mode_actif_conversation.py
+    # (rattachement enseignant/code de classe), un mécanisme totalement
+    # différent, déjà géré ailleurs dans ce fichier.
+    if persona_pedagogique and persona_pedagogique in MODES_PEDAGOGIQUES:
+        system_final += "\n\n" + MODES_PEDAGOGIQUES[persona_pedagogique] + REGLE_BASCULE_MODE_PEDAGOGIQUE
 
     # Injection de la structure "Programme" (classe/matière/chapitre) dans
     # le system prompt retirée le 29/08/2026 (demande Bourama) -- la
