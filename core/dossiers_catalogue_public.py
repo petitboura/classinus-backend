@@ -36,10 +36,22 @@ from api.auth import supabase
 from core.notifications import creer_notification
 
 
+_CAMPOS_DOSSIER = (
+    "id, cree_par, nom, description, statut, dossier_parent_id, created_at, "
+    "pays, niveau, categorie, classe, specialite, "
+    # 13/09/2026, demande Bourama : réglages d'héritage vers sous-dossiers/fichiers, par filtre.
+    "pays_heritage_sous_dossiers, pays_heritage_fichiers, "
+    "niveau_heritage_sous_dossiers, niveau_heritage_fichiers, "
+    "categorie_heritage_sous_dossiers, categorie_heritage_fichiers, "
+    "classe_heritage_sous_dossiers, classe_heritage_fichiers, "
+    "specialite_heritage_sous_dossiers, specialite_heritage_fichiers"
+)
+
+
 def _dossier(dossier_id: str) -> dict | None:
     res = (
         supabase.table("dossiers_catalogue_public")
-        .select("id, cree_par, nom, description, statut, dossier_parent_id, created_at, pays, niveau, categorie, classe, specialite")
+        .select(_CAMPOS_DOSSIER)
         .eq("id", dossier_id)
         .maybe_single()
         .execute()
@@ -67,6 +79,17 @@ def creer_dossier(
     user_id: str, nom: str, statut: str = "contribution_libre", dossier_parent_id: str = None,
     pays: list[str] | None = None, niveau: list[str] | None = None, categorie: list[str] | None = None,
     classe: list[str] | None = None, specialite: list[str] | None = None, description: str = "",
+    # 13/09/2026, demande Bourama : pour chaque filtre, quelles valeurs
+    # (parmi celles ci-dessus) descendent automatiquement aux
+    # sous-dossiers et/ou aux fichiers, à n'importe quelle profondeur --
+    # voir dossiers_heritant_valeur() plus bas. Chaque liste DOIT être
+    # un sous-ensemble de la liste de base correspondante (vérifié par
+    # l'appelant, voir api/dossiers_catalogue_public.py).
+    pays_heritage_sous_dossiers: list[str] | None = None, pays_heritage_fichiers: list[str] | None = None,
+    niveau_heritage_sous_dossiers: list[str] | None = None, niveau_heritage_fichiers: list[str] | None = None,
+    categorie_heritage_sous_dossiers: list[str] | None = None, categorie_heritage_fichiers: list[str] | None = None,
+    classe_heritage_sous_dossiers: list[str] | None = None, classe_heritage_fichiers: list[str] | None = None,
+    specialite_heritage_sous_dossiers: list[str] | None = None, specialite_heritage_fichiers: list[str] | None = None,
 ) -> dict:
     insertion = supabase.table("dossiers_catalogue_public").insert({
         "cree_par": user_id,
@@ -92,6 +115,18 @@ def creer_dossier(
         # 04/09/2026, demande Bourama : 2 filtres supplémentaires, même principe.
         "classe": classe or [],
         "specialite": specialite or [],
+        # 13/09/2026 (suite), demande Bourama : héritage vers sous-dossiers/fichiers,
+        # voir migrations/2026_09_13b_heritage_filtres_dossiers_catalogue_public.sql.
+        "pays_heritage_sous_dossiers": pays_heritage_sous_dossiers or [],
+        "pays_heritage_fichiers": pays_heritage_fichiers or [],
+        "niveau_heritage_sous_dossiers": niveau_heritage_sous_dossiers or [],
+        "niveau_heritage_fichiers": niveau_heritage_fichiers or [],
+        "categorie_heritage_sous_dossiers": categorie_heritage_sous_dossiers or [],
+        "categorie_heritage_fichiers": categorie_heritage_fichiers or [],
+        "classe_heritage_sous_dossiers": classe_heritage_sous_dossiers or [],
+        "classe_heritage_fichiers": classe_heritage_fichiers or [],
+        "specialite_heritage_sous_dossiers": specialite_heritage_sous_dossiers or [],
+        "specialite_heritage_fichiers": specialite_heritage_fichiers or [],
     }).execute()
     return insertion.data[0]
 
@@ -104,6 +139,11 @@ def modifier_filtres_dossier(
     dossier_id: str,
     pays: list[str] | None = None, niveau: list[str] | None = None, categorie: list[str] | None = None,
     classe: list[str] | None = None, specialite: list[str] | None = None,
+    pays_heritage_sous_dossiers: list[str] | None = None, pays_heritage_fichiers: list[str] | None = None,
+    niveau_heritage_sous_dossiers: list[str] | None = None, niveau_heritage_fichiers: list[str] | None = None,
+    categorie_heritage_sous_dossiers: list[str] | None = None, categorie_heritage_fichiers: list[str] | None = None,
+    classe_heritage_sous_dossiers: list[str] | None = None, classe_heritage_fichiers: list[str] | None = None,
+    specialite_heritage_sous_dossiers: list[str] | None = None, specialite_heritage_fichiers: list[str] | None = None,
 ) -> None:
     """
     13/09/2026, demande Bourama : les 5 filtres d'un dossier n'étaient
@@ -111,6 +151,9 @@ def modifier_filtres_dossier(
     permet désormais de les changer après coup, réservé au créateur du
     dossier (même règle que renommer_dossier, voir api/dossiers_
     catalogue_public.py pour la vérification cree_par).
+
+    13/09/2026 (suite) : + réglage d'héritage vers sous-dossiers/fichiers
+    par valeur, voir dossiers_heritant_valeur() plus bas.
     """
     supabase.table("dossiers_catalogue_public").update({
         "pays": pays or [],
@@ -118,6 +161,16 @@ def modifier_filtres_dossier(
         "categorie": categorie or [],
         "classe": classe or [],
         "specialite": specialite or [],
+        "pays_heritage_sous_dossiers": pays_heritage_sous_dossiers or [],
+        "pays_heritage_fichiers": pays_heritage_fichiers or [],
+        "niveau_heritage_sous_dossiers": niveau_heritage_sous_dossiers or [],
+        "niveau_heritage_fichiers": niveau_heritage_fichiers or [],
+        "categorie_heritage_sous_dossiers": categorie_heritage_sous_dossiers or [],
+        "categorie_heritage_fichiers": categorie_heritage_fichiers or [],
+        "classe_heritage_sous_dossiers": classe_heritage_sous_dossiers or [],
+        "classe_heritage_fichiers": classe_heritage_fichiers or [],
+        "specialite_heritage_sous_dossiers": specialite_heritage_sous_dossiers or [],
+        "specialite_heritage_fichiers": specialite_heritage_fichiers or [],
     }).eq("id", dossier_id).execute()
 
 
@@ -135,7 +188,7 @@ def lister_dossiers(pays_prioritaire: str | None = None) -> list:
     """
     dossiers = (
         supabase.table("dossiers_catalogue_public")
-        .select("id, cree_par, nom, description, statut, dossier_parent_id, created_at, pays, niveau, categorie, classe, specialite")
+        .select(_CAMPOS_DOSSIER)
         .order("created_at")
         .execute()
         .data
@@ -153,6 +206,25 @@ def lister_fichiers_ids_dossier(dossier_id: str) -> list:
         supabase.table("fichiers_dossiers_catalogue_public")
         .select("fichier_id")
         .eq("dossier_id", dossier_id)
+        .execute()
+    )
+    return [ligne["fichier_id"] for ligne in res.data]
+
+
+def fichier_ids_pour_dossiers(dossier_ids: set) -> list:
+    """
+    13/09/2026, demande Bourama (héritage des filtres) : même chose que
+    lister_fichiers_ids_dossier() ci-dessus, mais pour tout un ensemble
+    de dossiers d'un coup (utilisé pour retrouver les fichiers qui
+    héritent d'une valeur via leur dossier, voir dossiers_heritant_
+    valeur() plus bas et api/bibliotheque_publique.py).
+    """
+    if not dossier_ids:
+        return []
+    res = (
+        supabase.table("fichiers_dossiers_catalogue_public")
+        .select("fichier_id")
+        .in_("dossier_id", list(dossier_ids))
         .execute()
     )
     return [ligne["fichier_id"] for ligne in res.data]
@@ -176,6 +248,61 @@ def supprimer_dossier(dossier_id: str) -> None:
 
 def _tous_les_dossiers_par_id() -> dict:
     return {d["id"]: d for d in lister_dossiers()}
+
+
+def _map_enfants(dossiers: list) -> dict:
+    """13/09/2026 : parent_id -> liste des ids de ses sous-dossiers DIRECTS."""
+    enfants: dict = {}
+    for d in dossiers:
+        parent = d.get("dossier_parent_id")
+        if parent:
+            enfants.setdefault(parent, []).append(d["id"])
+    return enfants
+
+
+def _descendants(dossier_id: str, enfants: dict) -> set:
+    """13/09/2026 : tous les sous-dossiers de dossier_id, à N'IMPORTE
+    QUELLE profondeur (sans dossier_id lui-même)."""
+    resultat: set = set()
+    a_visiter = list(enfants.get(dossier_id, []))
+    while a_visiter:
+        courant = a_visiter.pop()
+        if courant in resultat:
+            continue
+        resultat.add(courant)
+        a_visiter.extend(enfants.get(courant, []))
+    return resultat
+
+
+def dossiers_heritant_valeur(filtre: str, valeur: str, camp: str, dossiers: list | None = None) -> set:
+    """
+    13/09/2026, demande Bourama : un dossier peut faire descendre
+    automatiquement une valeur de filtre à tous ses descendants (sous-
+    dossiers ET fichiers, à n'importe quelle profondeur, de façon
+    additive -- jamais de remplacement des valeurs propres d'un
+    descendant). `camp` vaut "sous_dossiers" ou "fichiers" (colonne
+    `{filtre}_heritage_{camp}` sur dossiers_catalogue_public).
+
+    Retourne l'ensemble des ids de dossier concernés :
+    - camp="fichiers" : le(s) dossier(s) racine(s) qui portent cette
+      valeur en héritage EUX-MÊMES, PLUS tous leurs descendants -- les
+      fichiers rangés directement dans n'importe lequel de ces dossiers
+      héritent de la valeur (voir fichier_ids_pour_dossiers ci-dessus).
+    - camp="sous_dossiers" : uniquement les descendants (le dossier
+      racine lui-même n'est pas "son propre sous-dossier").
+    """
+    colonne = f"{filtre}_heritage_{camp}"
+    tous = dossiers if dossiers is not None else lister_dossiers()
+    racines = {d["id"] for d in tous if valeur in (d.get(colonne) or [])}
+    if not racines:
+        return set()
+    enfants = _map_enfants(tous)
+    descendants_totaux: set = set()
+    for racine in racines:
+        descendants_totaux |= _descendants(racine, enfants)
+    if camp == "fichiers":
+        return racines | descendants_totaux
+    return descendants_totaux
 
 
 def deplacerait_en_boucle(dossier_id: str, nouveau_parent_id: str | None) -> bool:

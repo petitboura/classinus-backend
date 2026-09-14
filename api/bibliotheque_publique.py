@@ -47,6 +47,8 @@ from core.dossiers_catalogue_public import (
     peut_ajouter_contenu as _peut_ajouter_contenu_dossier,
     _dossier as _dossier_catalogue_public,
     lister_fichiers_ids_dossier as _lister_fichiers_ids_dossier,
+    dossiers_heritant_valeur,
+    fichier_ids_pour_dossiers,
 )
 from core.dossiers_publics_attaches import propager_fichier_public_range_dossier as _propager_fichier_public_range_dossier
 from core.geolocalisation_pays import pays_utilisateur
@@ -153,6 +155,24 @@ def lister_bibliotheque_publique(
         if not ids_dossier:
             return []
 
+    def _echapper_valeur_or(v: str) -> str:
+        # 13/09/2026 : valeur passée telle quelle dans le mini-langage
+        # or_() de PostgREST -- toujours entre guillemets pour rester
+        # sûr même si elle contient une virgule ou une parenthèse.
+        return '"' + v.replace('"', '""') + '"'
+
+    def _filtrer_avec_heritage(requete, champ: str, valeur: str):
+        # 13/09/2026, demande Bourama (héritage des filtres d'un
+        # dossier) : un fichier peut correspondre soit parce qu'il a
+        # lui-même cette valeur, soit parce qu'un dossier ancêtre la
+        # fait descendre jusqu'à lui (voir core/dossiers_catalogue_
+        # public.py::dossiers_heritant_valeur, camp="fichiers").
+        dossiers_concernes = dossiers_heritant_valeur(champ, valeur, "fichiers")
+        ids_heritage = fichier_ids_pour_dossiers(dossiers_concernes) if dossiers_concernes else []
+        if not ids_heritage:
+            return requete.eq(champ, valeur)
+        return requete.or_(f"{champ}.eq.{_echapper_valeur_or(valeur)},id.in.({','.join(ids_heritage)})")
+
     def _base(campos: str = _CAMPOS_ENTREE, count: str | None = None):
         requete = supabase.table("bibliotheque_publique").select(campos, count=count).eq("statut", "publie")
         if (q or "").strip():
@@ -160,14 +180,14 @@ def lister_bibliotheque_publique(
         # 02/09/2026, demande Bourama : filtres pays/niveau/catégorie, en
         # plus du filtre par type déjà géré côté frontend.
         if (niveau or "").strip():
-            requete = requete.eq("niveau", niveau.strip())
+            requete = _filtrer_avec_heritage(requete, "niveau", niveau.strip())
         if (categorie or "").strip():
-            requete = requete.eq("categorie", categorie.strip())
+            requete = _filtrer_avec_heritage(requete, "categorie", categorie.strip())
         # 04/09/2026, demande Bourama : 2 filtres supplémentaires, même principe.
         if (classe or "").strip():
-            requete = requete.eq("classe", classe.strip())
+            requete = _filtrer_avec_heritage(requete, "classe", classe.strip())
         if (specialite or "").strip():
-            requete = requete.eq("specialite", specialite.strip())
+            requete = _filtrer_avec_heritage(requete, "specialite", specialite.strip())
         if ids_dossier is not None:
             requete = requete.in_("id", ids_dossier)
         return requete
@@ -180,7 +200,7 @@ def lister_bibliotheque_publique(
     pays_prioritaire = None if pays_filtre else pays_utilisateur(request)
 
     if pays_filtre:
-        res = _base().eq("pays", pays_filtre).order("created_at", desc=True).range(decalage, decalage + limite - 1).execute()
+        res = _filtrer_avec_heritage(_base(), "pays", pays_filtre).order("created_at", desc=True).range(decalage, decalage + limite - 1).execute()
         return res.data or []
 
     if not pays_prioritaire:

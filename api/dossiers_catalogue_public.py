@@ -52,6 +52,20 @@ class CreerDossierPayload(BaseModel):
     categorie: list[str] = []
     classe: list[str] = []
     specialite: list[str] = []
+    # 13/09/2026 (suite), demande Bourama : héritage vers sous-dossiers/
+    # fichiers, par valeur -- chaque liste DOIT être un sous-ensemble de
+    # la liste de base correspondante ci-dessus (voir _sous_ensemble()
+    # plus bas, silencieux -- jamais bloquant).
+    pays_heritage_sous_dossiers: list[str] = []
+    pays_heritage_fichiers: list[str] = []
+    niveau_heritage_sous_dossiers: list[str] = []
+    niveau_heritage_fichiers: list[str] = []
+    categorie_heritage_sous_dossiers: list[str] = []
+    categorie_heritage_fichiers: list[str] = []
+    classe_heritage_sous_dossiers: list[str] = []
+    classe_heritage_fichiers: list[str] = []
+    specialite_heritage_sous_dossiers: list[str] = []
+    specialite_heritage_fichiers: list[str] = []
 
 
 class RenommerDossierPayload(BaseModel):
@@ -64,6 +78,23 @@ class ModifierFiltresDossierPayload(BaseModel):
     categorie: list[str] = []
     classe: list[str] = []
     specialite: list[str] = []
+    pays_heritage_sous_dossiers: list[str] = []
+    pays_heritage_fichiers: list[str] = []
+    niveau_heritage_sous_dossiers: list[str] = []
+    niveau_heritage_fichiers: list[str] = []
+    categorie_heritage_sous_dossiers: list[str] = []
+    categorie_heritage_fichiers: list[str] = []
+    classe_heritage_sous_dossiers: list[str] = []
+    classe_heritage_fichiers: list[str] = []
+    specialite_heritage_sous_dossiers: list[str] = []
+    specialite_heritage_fichiers: list[str] = []
+
+
+def _sous_ensemble(heritage: list[str], base: list[str]) -> list[str]:
+    """13/09/2026 : une valeur ne peut être cochée en héritage que si
+    elle fait partie de la liste de base du filtre -- écarte
+    silencieusement le reste plutôt que de bloquer la requête."""
+    return [v for v in (heritage or []) if v in base]
 
 
 class RangerFichierPayload(BaseModel):
@@ -100,15 +131,27 @@ def creer(payload: CreerDossierPayload, utilisateur=Depends(utilisateur_courant)
         raise erreur_api(400, "STATUT_INVALIDE")
     # Nom optionnel (28/08, demande Bourama : "nom et description optionnels même pour dossier") -- repli sur "Nouveau dossier".
     nom = (payload.nom or "").strip() or "Nouveau dossier"
+    pays = normaliser_et_enregistrer_liste("pays", payload.pays)
+    niveau = normaliser_et_enregistrer_liste("niveau", payload.niveau)
+    categorie = normaliser_et_enregistrer_liste("categorie", payload.categorie)
+    classe = normaliser_et_enregistrer_liste("classe", payload.classe)
+    specialite = normaliser_et_enregistrer_liste("specialite", payload.specialite)
     return creer_dossier(
         utilisateur.id, nom, payload.statut, payload.dossier_parent_id,
-        pays=normaliser_et_enregistrer_liste("pays", payload.pays),
-        niveau=normaliser_et_enregistrer_liste("niveau", payload.niveau),
-        categorie=normaliser_et_enregistrer_liste("categorie", payload.categorie),
-        classe=normaliser_et_enregistrer_liste("classe", payload.classe),
-        specialite=normaliser_et_enregistrer_liste("specialite", payload.specialite),
+        pays=pays, niveau=niveau, categorie=categorie, classe=classe, specialite=specialite,
         # 08/09/2026, demande Bourama : dossiers = même logique que les fichiers, description optionnelle.
         description=(payload.description or "").strip(),
+        # 13/09/2026, demande Bourama : héritage vers sous-dossiers/fichiers, par valeur.
+        pays_heritage_sous_dossiers=_sous_ensemble(payload.pays_heritage_sous_dossiers, pays),
+        pays_heritage_fichiers=_sous_ensemble(payload.pays_heritage_fichiers, pays),
+        niveau_heritage_sous_dossiers=_sous_ensemble(payload.niveau_heritage_sous_dossiers, niveau),
+        niveau_heritage_fichiers=_sous_ensemble(payload.niveau_heritage_fichiers, niveau),
+        categorie_heritage_sous_dossiers=_sous_ensemble(payload.categorie_heritage_sous_dossiers, categorie),
+        categorie_heritage_fichiers=_sous_ensemble(payload.categorie_heritage_fichiers, categorie),
+        classe_heritage_sous_dossiers=_sous_ensemble(payload.classe_heritage_sous_dossiers, classe),
+        classe_heritage_fichiers=_sous_ensemble(payload.classe_heritage_fichiers, classe),
+        specialite_heritage_sous_dossiers=_sous_ensemble(payload.specialite_heritage_sous_dossiers, specialite),
+        specialite_heritage_fichiers=_sous_ensemble(payload.specialite_heritage_fichiers, specialite),
     )
 
 
@@ -160,7 +203,20 @@ def modifier_filtres(dossier_id: str, payload: ModifierFiltresDossierPayload, ut
     categorie = normaliser_et_enregistrer_liste("categorie", payload.categorie)
     classe = normaliser_et_enregistrer_liste("classe", payload.classe)
     specialite = normaliser_et_enregistrer_liste("specialite", payload.specialite)
-    modifier_filtres_dossier(dossier_id, pays=pays, niveau=niveau, categorie=categorie, classe=classe, specialite=specialite)
+    modifier_filtres_dossier(
+        dossier_id, pays=pays, niveau=niveau, categorie=categorie, classe=classe, specialite=specialite,
+        # 13/09/2026, demande Bourama : héritage vers sous-dossiers/fichiers, par valeur.
+        pays_heritage_sous_dossiers=_sous_ensemble(payload.pays_heritage_sous_dossiers, pays),
+        pays_heritage_fichiers=_sous_ensemble(payload.pays_heritage_fichiers, pays),
+        niveau_heritage_sous_dossiers=_sous_ensemble(payload.niveau_heritage_sous_dossiers, niveau),
+        niveau_heritage_fichiers=_sous_ensemble(payload.niveau_heritage_fichiers, niveau),
+        categorie_heritage_sous_dossiers=_sous_ensemble(payload.categorie_heritage_sous_dossiers, categorie),
+        categorie_heritage_fichiers=_sous_ensemble(payload.categorie_heritage_fichiers, categorie),
+        classe_heritage_sous_dossiers=_sous_ensemble(payload.classe_heritage_sous_dossiers, classe),
+        classe_heritage_fichiers=_sous_ensemble(payload.classe_heritage_fichiers, classe),
+        specialite_heritage_sous_dossiers=_sous_ensemble(payload.specialite_heritage_sous_dossiers, specialite),
+        specialite_heritage_fichiers=_sous_ensemble(payload.specialite_heritage_fichiers, specialite),
+    )
     return {"id": dossier_id, "pays": pays, "niveau": niveau, "categorie": categorie, "classe": classe, "specialite": specialite}
 
 
