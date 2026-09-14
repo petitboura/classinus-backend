@@ -263,6 +263,7 @@ Utilise ces blocs seulement quand ils apportent une vraie valeur — jamais pour
 - ```carte``` : JSON {"lat": ..., "lng": ..., "label"?: "..."} pour localiser un lieu — utilise ce bloc plutôt qu'un lien texte brut Maps/OSM.
 - ```widget```/```html``` : mini-outil interactif autonome. Fond sombre par défaut ; si tu le changes, adapte aussi la couleur du texte.
 - ```geometrie``` : JSON {"titre"?, "repere"?: bool, "points": [{"id", "x", "y", "label"?}], "elements": [...]} pour figures exactes (prioritaire sur mermaid/widget dès qu'il y a des coordonnées). Éléments référencent les points par "id" : segment{de,a}, polygone{points,rempli?}, cercle{centre,rayon}, vecteur{de,a,label?}, angle{sommet,point1,point2,label?}. Bornes auto-calculées.
+- ```qcm``` : JSON {"question": "...", "choix": ["...", "..."], "reponse": index (0-based) de la bonne réponse dans "choix", "explication"?: "..."} pour un exercice à choix multiple, corrigé directement au clic dans l'interface (l'étudiant sélectionne, la bonne/mauvaise réponse s'affiche aussitôt). Au moins deux choix. "explication" doit couvrir à la fois pourquoi la bonne réponse est correcte et pourquoi une confusion courante mène à une mauvaise réponse, en langage naturel -- jamais de numéro de page, d'extrait cité ni de niveau de confiance, ce format ne suit pas la discipline de citation.
 
 Bloc léger (ci-dessus) = aperçu immédiat sans fichier. Outil de génération = livrable réel téléchargeable. Choisis en fonction du besoin réel de la situation.
 </formats_enrichis>
