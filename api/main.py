@@ -52,6 +52,7 @@ from api.contenu_legal import router as contenu_legal_router
 from api.codes_partage import router_mes_codes, router_rattachements
 from api.etablissements import router_etablissements
 from api.mode_actif_conversation import router_mode_actif
+from api.persona_pedagogique_conversation import router_persona_pedagogique
 from api.outils_registre import router as outils_registre_router
 from api.appareils_mobiles import router as appareils_mobiles_router
 from api.canal_temps_reel import router as canal_temps_reel_router
@@ -706,6 +707,7 @@ app.include_router(contenu_legal_router)
 app.include_router(router_mes_codes)
 app.include_router(router_rattachements)
 app.include_router(router_mode_actif)
+app.include_router(router_persona_pedagogique)
 app.include_router(outils_registre_router)
 app.include_router(appareils_mobiles_router)
 app.include_router(canal_temps_reel_router)
