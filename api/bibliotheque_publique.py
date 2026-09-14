@@ -228,6 +228,32 @@ def lister_bibliotheque_publique(
     return resultats
 
 
+@router.get("/par-url")
+def obtenir_entree_bibliotheque_publique_par_url(url: str):
+    """13/09/2026, demande Bourama : quand l'IA retrouve un fichier de la
+    bibliothèque publique et le montre dans le chat, la carte fichier
+    (components/chat/FichierChip.tsx) ne reçoit qu'un lien -- cette route
+    permet au frontend de retrouver l'entrée correspondante (id) à partir
+    de cette URL, pour proposer là aussi "Ajouter à ma bibliothèque" en
+    plus du téléchargement réel. Renvoie 404 si l'URL ne correspond à
+    aucune entrée publiée (cas normal la plupart du temps : fichier
+    généré par l'IA, pas issu de la bibliothèque). Déclarée AVANT
+    "/{entree_id}" ci-dessous : sinon FastAPI matcherait "par-url" comme
+    un entree_id et renverrait toujours ENTREE_INTROUVABLE.
+    """
+    res = (
+        supabase.table("bibliotheque_publique")
+        .select("id")
+        .eq("url_publique", url)
+        .eq("statut", "publie")
+        .maybe_single()
+        .execute()
+    )
+    if not res or not res.data:
+        raise erreur_api(404, "ENTREE_INTROUVABLE")
+    return res.data
+
+
 @router.get("/{entree_id}", response_model=EntreeBibliothequePublique)
 def obtenir_entree_bibliotheque_publique(entree_id: str):
     """Détail d'une entrée publiée, pour la page publique /bibliotheque/[id]
