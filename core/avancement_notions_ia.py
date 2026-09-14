@@ -25,6 +25,10 @@ from core.programme_notions import (
     lister_notions,
     creer_notion,
     changer_statut_notion,
+    renommer_notion,
+    reordonner_notions,
+    fusionner_notions,
+    supprimer_notion,
 )
 from core.mode_actif_conversation import MODE_DESACTIVE
 
@@ -254,6 +258,118 @@ def definir_consigne_llm(
         logging.error(f"ERREUR SUPABASE (definition consigne notion {notion['id']}) : {e}")
         return None
     return res.data[0] if res.data else None
+
+
+def renommer_notion_par_nom(
+    proprietaire_id: str,
+    code_id: str,
+    nom_notion: str,
+    nouveau_nom: str,
+) -> dict | None:
+    """Equivalent 'par nom' (usage MCP/LLM) de
+    core/programme_notions.py:renommer_notion (equivalent REST, par
+    notion_id) -- meme principe que les autres fonctions de ce fichier :
+    resout le nom en id puis delegue toute l'ecriture a la fonction
+    existante, jamais de logique dupliquee. None si le code n'appartient
+    pas a proprietaire_id, si la notion est introuvable/ambigue, ou si
+    nouveau_nom est vide."""
+    if not code_appartient_a(code_id, proprietaire_id):
+        return None
+    notion = trouver_notion_par_nom(code_id, nom_notion)
+    if notion is None:
+        return None
+    return renommer_notion(notion["id"], code_id, proprietaire_id, nouveau_nom)
+
+
+def deplacer_notion_par_nom(
+    proprietaire_id: str,
+    code_id: str,
+    nom_notion: str,
+    direction: str,
+) -> dict | None:
+    """Deplace nom_notion d'une position parmi ses freres/soeurs (meme
+    notion_parent_id) -- "monter" ou "descendre" -- puis delegue
+    l'ecriture a core/programme_notions.py:reordonner_notions, avec la
+    meme logique d'echange de position que ProgrammeNotions.tsx:deplacer
+    cote frontend (jamais de repositionnement arbitraire, seulement un
+    cran a la fois, pour rester previsible en langage naturel). Renvoie
+    la notion deplacee (avec son statut/nom, pas son nouvel `ordre` -- le
+    caller n'en a pas besoin). None si le code n'appartient pas a
+    proprietaire_id, si la notion est introuvable/ambigue, si direction
+    n'est ni 'monter' ni 'descendre', ou si la notion est deja en
+    premiere/derniere position (rien a faire)."""
+    if direction not in {"monter", "descendre"}:
+        return None
+    if not code_appartient_a(code_id, proprietaire_id):
+        return None
+    notion = trouver_notion_par_nom(code_id, nom_notion)
+    if notion is None:
+        return None
+    fratrie = sorted(
+        (n for n in toutes_notions_code(code_id) if n["notion_parent_id"] == notion["notion_parent_id"]),
+        key=lambda n: n["ordre"],
+    )
+    index = next((i for i, n in enumerate(fratrie) if n["id"] == notion["id"]), None)
+    if index is None:
+        return None
+    delta = -1 if direction == "monter" else 1
+    nouvel_index = index + delta
+    if nouvel_index < 0 or nouvel_index >= len(fratrie):
+        return None
+    fratrie[index], fratrie[nouvel_index] = fratrie[nouvel_index], fratrie[index]
+    ok = reordonner_notions(code_id, proprietaire_id, notion["notion_parent_id"], [n["id"] for n in fratrie])
+    if not ok:
+        return None
+    return notion
+
+
+def fusionner_notions_par_nom(
+    proprietaire_id: str,
+    code_id: str,
+    nom_notion_source: str,
+    nom_notion_cible: str,
+) -> dict | None:
+    """Equivalent 'par nom' (usage MCP/LLM) de
+    core/programme_notions.py:fusionner_notions -- resout les deux noms
+    en id puis delegue toute l'ecriture (reparentage des sous-notions de
+    la source, puis suppression de la source) a la fonction existante.
+    ATTENTION : irreversible, l'appelant (outil MCP) doit avoir fait
+    confirmer l'action a l'utilisateur avant d'appeler cette fonction.
+    None si le code n'appartient pas a proprietaire_id, si l'une des
+    deux notions est introuvable/ambigue, si source == cible, ou si
+    cible est un descendant de source (cycle refuse)."""
+    if not code_appartient_a(code_id, proprietaire_id):
+        return None
+    source = trouver_notion_par_nom(code_id, nom_notion_source)
+    cible = trouver_notion_par_nom(code_id, nom_notion_cible)
+    if source is None or cible is None:
+        return None
+    return fusionner_notions(code_id, proprietaire_id, source["id"], cible["id"])
+
+
+def supprimer_notion_par_nom(
+    proprietaire_id: str,
+    code_id: str,
+    nom_notion: str,
+) -> dict | None:
+    """Equivalent 'par nom' (usage MCP/LLM) de
+    core/programme_notions.py:supprimer_notion -- resout le nom en id
+    puis delegue la suppression (cascade sur les descendants) a la
+    fonction existante. ATTENTION : irreversible, l'appelant (outil MCP)
+    doit avoir fait confirmer l'action a l'utilisateur avant d'appeler
+    cette fonction. Renvoie la notion supprimee (pour que l'appelant
+    puisse confirmer son nom dans sa reponse) si la suppression a
+    reussi, None sinon (code n'appartenant pas a proprietaire_id, ou
+    notion introuvable/ambigue)."""
+    if not code_appartient_a(code_id, proprietaire_id):
+        return None
+    notion = trouver_notion_par_nom(code_id, nom_notion)
+    if notion is None:
+        return None
+    ok = supprimer_notion(code_id, proprietaire_id, notion["id"])
+    if not ok:
+        return None
+    return notion
 
 
 def consigne_effective_pour_notion(notion: dict, toutes_notions: list[dict]) -> str | None:

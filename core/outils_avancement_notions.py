@@ -18,6 +18,10 @@ from core.avancement_notions_ia import (
     mettre_a_jour_ou_creer_avancement,
     definir_regle_comportement,
     definir_consigne_llm,
+    renommer_notion_par_nom,
+    deplacer_notion_par_nom,
+    fusionner_notions_par_nom,
+    supprimer_notion_par_nom,
     formatter_arborescence,
     toutes_notions_code,
 )
@@ -37,6 +41,9 @@ def gerer_avancement_notions(
     statut: str = "",
     regle: str = "",
     consigne: str = "",
+    nouveau_nom: str = "",
+    direction: str = "",
+    nom_notion_cible: str = "",
 ) -> str:
     """
     Gère l'avancement du programme (structure de notions de la Partie 1)
@@ -94,6 +101,29 @@ def gerer_avancement_notions(
       l'arborescence, même logique d'héritage que `regle`. La notion
       doit DÉJÀ exister. Passe `consigne` vide pour la retirer.
       Paramètres : `code_id` (ou `code_nom`), `nom_notion`, `consigne`.
+    - "renommer_notion" : renomme une notion EXISTANTE. La notion doit
+      DÉJÀ exister. Paramètres : `code_id` (ou `code_nom`), `nom_notion`
+      (nom actuel), `nouveau_nom`.
+    - "deplacer_notion" : déplace une notion d'un cran parmi ses
+      frères/sœurs (même parent), vers le haut ou le bas de la liste --
+      jamais de repositionnement arbitraire à une position précise,
+      seulement un cran à la fois (comme les flèches monter/descendre
+      côté interface). Paramètres : `code_id` (ou `code_nom`),
+      `nom_notion`, `direction` ("monter" ou "descendre").
+    - "fusionner_notions" : fusionne une notion source dans une notion
+      cible -- les sous-notions de la source sont rattachées à la
+      cible, puis la source est supprimée (nom/statut de la cible
+      conservés). IRRÉVERSIBLE : demande TOUJOURS confirmation
+      explicite à l'utilisateur avant d'appeler cette action, en lui
+      rappelant ce que ça va faire. Les deux notions doivent DÉJÀ
+      exister. Paramètres : `code_id` (ou `code_nom`), `nom_notion`
+      (source), `nom_notion_cible`.
+    - "supprimer_notion" : supprime une notion ET tous ses descendants
+      (chapitres/parties/notions en dessous, cascade complète).
+      IRRÉVERSIBLE : demande TOUJOURS confirmation explicite à
+      l'utilisateur avant d'appeler cette action, en lui rappelant que
+      tout ce qui est en dessous sera aussi supprimé. Paramètres :
+      `code_id` (ou `code_nom`), `nom_notion`.
     """
     utilisateur_id = ctx.request_context.request.query_params.get("user_id")
     if not utilisateur_id:
@@ -184,10 +214,65 @@ def gerer_avancement_notions(
             return f"Consigne sur \"{resultat['nom']}\" : \"{resultat['consigne_llm']}\"."
         return f"Consigne retirée sur \"{resultat['nom']}\"."
 
+    if action == "renommer_notion":
+        if not nom_notion or not nouveau_nom:
+            return "Erreur : `nom_notion` et `nouveau_nom` sont requis pour cette action."
+        try:
+            resultat = renommer_notion_par_nom(utilisateur_id, code_cible_id, nom_notion, nouveau_nom)
+        except Exception as e:
+            logging.error(f"ERREUR gerer_avancement_notions (renommer_notion) : {e}")
+            return "Erreur : impossible de renommer cette notion, réessaie."
+        if resultat is None:
+            return "Impossible de renommer cette notion : introuvable/ambiguë dans ce code, ou nouveau nom vide."
+        return f"Notion renommée en \"{resultat['nom']}\"."
+
+    if action == "deplacer_notion":
+        if not nom_notion or direction not in ("monter", "descendre"):
+            return "Erreur : `nom_notion` requis, et `direction` doit être \"monter\" ou \"descendre\"."
+        try:
+            resultat = deplacer_notion_par_nom(utilisateur_id, code_cible_id, nom_notion, direction)
+        except Exception as e:
+            logging.error(f"ERREUR gerer_avancement_notions (deplacer_notion) : {e}")
+            return "Erreur : impossible de déplacer cette notion, réessaie."
+        if resultat is None:
+            return (
+                f"Impossible de déplacer \"{nom_notion}\" : notion introuvable/ambiguë, ou déjà en "
+                "première/dernière position parmi ses frères/sœurs."
+            )
+        return f"Notion \"{resultat['nom']}\" déplacée ({direction})."
+
+    if action == "fusionner_notions":
+        if not nom_notion or not nom_notion_cible:
+            return "Erreur : `nom_notion` (source) et `nom_notion_cible` sont requis pour cette action."
+        try:
+            resultat = fusionner_notions_par_nom(utilisateur_id, code_cible_id, nom_notion, nom_notion_cible)
+        except Exception as e:
+            logging.error(f"ERREUR gerer_avancement_notions (fusionner_notions) : {e}")
+            return "Erreur : impossible de fusionner ces notions, réessaie."
+        if resultat is None:
+            return (
+                f"Impossible de fusionner \"{nom_notion}\" dans \"{nom_notion_cible}\" : une des deux "
+                "notions est introuvable/ambiguë, source et cible identiques, ou cible descendante de source."
+            )
+        return f"\"{nom_notion}\" fusionnée dans \"{resultat['nom']}\"."
+
+    if action == "supprimer_notion":
+        if not nom_notion:
+            return "Erreur : `nom_notion` est requis pour cette action."
+        try:
+            resultat = supprimer_notion_par_nom(utilisateur_id, code_cible_id, nom_notion)
+        except Exception as e:
+            logging.error(f"ERREUR gerer_avancement_notions (supprimer_notion) : {e}")
+            return "Erreur : impossible de supprimer cette notion, réessaie."
+        if resultat is None:
+            return f"Impossible de supprimer \"{nom_notion}\" : introuvable/ambiguë dans ce code."
+        return f"\"{resultat['nom']}\" supprimée (avec tout ce qui était en dessous)."
+
     return (
         f"Erreur : action '{action}' inconnue. Actions valides : lister_mes_codes, "
         "lister_notions, mettre_a_jour_statut, definir_regle_comportement, "
-        "definir_consigne_llm."
+        "definir_consigne_llm, renommer_notion, deplacer_notion, fusionner_notions, "
+        "supprimer_notion."
     )
 
 # consulter_avancement_notion (09/09/2026) retirée le 12/09/2026 :
