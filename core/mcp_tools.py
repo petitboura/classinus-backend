@@ -335,7 +335,7 @@ def filtrer_catalogue_par_outil_force(outils_pour_llm, table_routage, outil_forc
     sur AUCUN agent, sauf sélection explicite d'un ou plusieurs outils
     par le frontend (bouton Outils, voir BarreDeSaisie.tsx). Effet de
     bord assumé et voulu : l'IA perd son autonomie d'appel d'outil
-    implicite partout (ex. chercher_fichier automatique quand on
+    implicite partout (ex. gerer_fichier_conversation automatique quand on
     redemande un fichier envoyé, tavily_search automatique sur une
     question d'actualité) tant que rien n'est sélectionné.
     """

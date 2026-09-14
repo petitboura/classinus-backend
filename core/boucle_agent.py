@@ -660,7 +660,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
     logging.info(f"Réponse via GROQ (avec outil, plafond_absolu={plafond_absolu} atteint): {modele}")
 
 
-def _capturer_reponse(generateur, accumulateur, meta=None):
+def _capturer_reponse(generateur, accumulateur, meta=None, fichiers_generes_accumules=None):
     """
     Relaie tous les evenements d'un generateur tel quel, en accumulant au
     passage le texte des evenements "reponse" dans `accumulateur` (une
@@ -678,6 +678,19 @@ def _capturer_reponse(generateur, accumulateur, meta=None):
     jamais a un tableau global -- le backend emet toujours outil_resultat
     puis sources pour un meme appel, sans rien entre les deux (voir
     _traiter_appels).
+
+    `fichiers_generes_accumules` (optionnel, liste mutee en place,
+    14/09/2026, demande Bourama) : capture les fichiers de chaque
+    evenement "fichiers_generes" (nom/url), qui n'etait JUSQU'ICI que
+    diffuse en direct (SSE, carte fichier cote frontend) sans jamais
+    entrer dans `accumulateur` -- donc jamais dans le texte sauvegarde,
+    donc invisible pour le modele au tour suivant (voir docstring de
+    chat() dans core/main.py, "le frontend... ne garde que 'reponse'
+    dans l'historique"). Contrairement a un fichier uploade (dont le
+    lien reste visible via le bloc "[Lien réel du fichier : ...]" injecte
+    cote frontend), rien ne garantissait ca pour un fichier GENERE. Cette
+    liste sert a core/main.py pour ajouter un bloc equivalent, garanti
+    par le code, au texte sauvegarde -- voir _texte_avec_fichiers_generes.
     """
     for event in generateur:
         if event["type"] == "reponse":
@@ -696,6 +709,8 @@ def _capturer_reponse(generateur, accumulateur, meta=None):
             # ça, elle ne serait visible qu'en direct pendant le
             # streaming -- voir docstring de cette fonction).
             meta["outils"][-1]["images"] = event["images"]
+        if fichiers_generes_accumules is not None and event["type"] == "fichiers_generes":
+            fichiers_generes_accumules.extend(event["fichiers"])
         yield event
 
 

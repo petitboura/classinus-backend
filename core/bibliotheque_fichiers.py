@@ -98,8 +98,12 @@ def enregistrer_fichier(
     (route API) de garantir la cohérence selon qui uploade.
     `origine` (2026-08-01, voir migration fichiers_uploades_origine ;
     étendu le 02/09/2026, demande Bourama : onglets d'origine dans la
-    bibliothèque perso) : "chat" (pièce jointe de conversation, jamais
-    dans "Mon espace > Bibliothèque", voir lister_fichiers), "publique"
+    bibliothèque perso) : "chat" (pièce jointe de conversation --
+    DEPUIS le 02/09/2026 visible dans "Mon espace > Bibliothèque", son
+    propre onglet "Uploadé dans un chat" ; ce commentaire disait encore
+    "jamais dans Bibliothèque" avant correction du 14/09/2026, resté
+    obsolète après le changement -- seule la recherche/liste côté IA
+    l'exclut encore par défaut, voir exclut_origine ci-dessous), "publique"
     (copié depuis la bibliothèque publique), "code_partage" (reçu via un
     code de partage), "ia_generee" (généré par l'IA -- document, code,
     image, audio, vidéo, 3D...), ou par défaut "bibliotheque" (ajout
@@ -150,6 +154,34 @@ def enregistrer_fichier(
     return insertion.data[0]
 
 
+def renommer_fichier_par_url(url_publique: str, nouveau_nom: str, user_id: str) -> dict | None:
+    """
+    Renomme (met à jour la description, utilisée comme nom affiché,
+    voir lister_fichiers/chercher_fichiers) un fichier identifié par
+    son url_publique -- ajouté le 14/09/2026 (demande Bourama) pour
+    core/outils_fichiers_conversation.py : contrairement à
+    gerer_document_bibliotheque, le modèle ne connaît JAMAIS le
+    `fichier_id` d'une pièce jointe de conversation (jamais montré),
+    seulement son url_publique (visible dans le texte juste après
+    l'upload) -- donc on retrouve/renomme par url, pas par id.
+
+    Scope STRICT sur user_id (`.eq("user_id", user_id)` en plus de
+    l'url) : un utilisateur ne peut jamais renommer le fichier d'un
+    autre, même en devinant/hallucinant une url. Renvoie la ligne mise
+    à jour, ou None si introuvable ou n'appartenant pas à cet
+    utilisateur (pas d'erreur levée dans ce cas, à l'appelant de
+    distinguer via la valeur None).
+    """
+    res = (
+        supabase.table("fichiers_uploades")
+        .update({"description": nouveau_nom})
+        .eq("url_publique", url_publique)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return res.data[0] if res.data else None
+
+
 def indexer_fichier_existant(
     url_publique: str,
     chemin_stockage: str,
@@ -188,7 +220,7 @@ def indexer_fichier_existant(
     return insertion.data[0]
 
 
-def chercher_fichiers(recherche: str, agent_id: str = None, user_id: str = None, limite: int = 10) -> list:
+def chercher_fichiers(recherche: str, agent_id: str = None, user_id: str = None, limite: int = 10, origine: str = None) -> list:
     """
     Cherche des fichiers accessibles dans le contexte courant (agent_id
     + user_id de la conversation en cours), tous niveaux confondus,
@@ -199,6 +231,12 @@ def chercher_fichiers(recherche: str, agent_id: str = None, user_id: str = None,
 
     Un utilisateur non connecté (user_id=None) ne voit que les niveaux
     agent et plateforme -- pas d'erreur, juste moins de résultats.
+
+    `origine` (14/09/2026, demande Bourama) : optionnel, filtre EXACT
+    sur une origine -- utilisé par gerer_fichier_conversation
+    (origine="chat") pour ne chercher QUE les pièces jointes de
+    conversation, jamais mélangées aux documents de la bibliothèque
+    "officielle".
     """
     niveaux_accessibles = ["plateforme"]
     if agent_id:
@@ -213,6 +251,8 @@ def chercher_fichiers(recherche: str, agent_id: str = None, user_id: str = None,
         .or_(f"nom_fichier.ilike.%{recherche}%,description.ilike.%{recherche}%")
         .limit(limite)
     )
+    if origine:
+        requete = requete.eq("origine", origine)
 
     resultat = requete.execute()
 

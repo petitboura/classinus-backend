@@ -359,7 +359,10 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "tavily_crawl": {"label": "Exploration d'un site", "icone": "Globe", "onglet": "rechercher"},
     "tavily_map": {"label": "Cartographie d'un site", "icone": "Map", "onglet": "rechercher"},
     "tavily_research": {"label": "Recherche approfondie", "icone": "BookOpen", "onglet": "rechercher"},
-    "chercher_fichier": {"label": "Recherche d'un fichier", "icone": "FolderSearch", "onglet": "rechercher"},
+    # "chercher_fichier" retiré le 14/09/2026 (outil cassé, jamais de
+    # user_id réel, voir core/outils_bibliotheque.py) -- remplacé par
+    # gerer_fichier_conversation, onglet=None comme les autres outils
+    # consolidés par action (voir plus bas).
     # Ajouté 01/09 -- recherche d'IMAGE existante sur le web (galerie),
     # à ne pas confondre avec generer_image ci-dessus (qui en crée une
     # nouvelle). Icône "ImageSearch" NON VÉRIFIÉE dans cette version de
@@ -374,6 +377,11 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # (seule action manuellement cliquable, les autres restent onglet=None
     # en pratique côté modèle -- pas besoin de doublon d'entrée pour ça).
     "gerer_document_bibliotheque": {"label": "Bibliothèque personnelle", "icone": "Library", "onglet": "rechercher"},
+    # Ajouté 14/09/2026 (demande Bourama) : outil séparé pour les
+    # pièces jointes de conversation (origine="chat"), pas cliquable
+    # manuellement (onglet=None), même logique que les autres outils
+    # consolidés par action.
+    "gerer_fichier_conversation": {"label": "Fichiers de la conversation", "icone": "Paperclip", "onglet": None},
     # Composites "nom_outil:action" (28/08, bug remonté par Bourama :
     # l'entrée générique ci-dessus s'affichait pour TOUTES les actions
     # de cet outil, y compris chercher_publique/trouver_catalogue_public/

@@ -54,6 +54,52 @@ from boucle_agent import _agent_groq, _capturer_reponse
 
 logging.basicConfig(level=logging.INFO)
 
+
+# Extensions reconnues par les memes marqueurs deja utilises cote frontend
+# pour une piece jointe UPLOADEE par l'etudiant (voir ChatIA.tsx/BulleMessage.tsx)
+# -- reutilisees telles quelles ci-dessous pour un fichier GENERE, voir
+# _bloc_fichiers_generes.
+_EXTENSIONS_IMAGE_GENEREE = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
+_EXTENSIONS_AUDIO_GENEREE = {"mp3", "wav", "ogg", "m4a"}
+_EXTENSIONS_VIDEO_GENEREE = {"mp4", "webm", "mov"}
+
+
+def _bloc_fichiers_generes(fichiers):
+    """
+    Construit, pour chaque fichier généré pendant ce tour (voir
+    _capturer_reponse dans core/boucle_agent.py, paramètre
+    fichiers_generes_accumules), un bloc texte au MÊME format que celui
+    déjà utilisé pour une pièce jointe UPLOADÉE par l'étudiant (voir
+    ChatIA.tsx : "[Image jointe : url]", ou "[Document joint : nom]" /
+    "[Audio joint : nom]" / "[Vidéo jointe : nom]" suivi de
+    "[Lien réel du fichier : url]") -- réutilise EXACTEMENT ces mêmes
+    marqueurs pour bénéficier du même rendu en carte fichier
+    (BulleMessage.tsx/FichierChip.tsx) SANS rien changer côté frontend,
+    et pour que le modèle puisse reprendre ce lien plus tard exactement
+    comme il le fait déjà pour un upload (même instruction, voir
+    core/outils_bibliotheque.py, "réécris-le directement").
+
+    Ajouté le 14/09/2026 (demande Bourama) : jusqu'ici, un fichier
+    généré n'entrait JAMAIS dans le texte sauvegardé (seul l'événement
+    SSE "fichiers_generes" existait, purement visuel -- voir docstring
+    de _capturer_reponse) : garanti maintenant par le code,
+    indépendamment de ce que le modèle écrit lui-même dans sa réponse.
+    """
+    blocs = []
+    for fichier in fichiers:
+        url = fichier.get("url", "")
+        nom = fichier.get("nom", "") or url
+        extension = nom.rsplit(".", 1)[-1].lower() if "." in nom else ""
+        if extension in _EXTENSIONS_IMAGE_GENEREE:
+            blocs.append(f"\n\n[Image jointe : {url}]")
+        elif extension in _EXTENSIONS_AUDIO_GENEREE:
+            blocs.append(f"\n\n[Audio joint : {nom}]\n[Lien réel du fichier : {url}]")
+        elif extension in _EXTENSIONS_VIDEO_GENEREE:
+            blocs.append(f"\n\n[Vidéo jointe : {nom}]\n[Lien réel du fichier : {url}]")
+        else:
+            blocs.append(f"\n\n[Document joint : {nom}]\n[Lien réel du fichier : {url}]")
+    return "".join(blocs)
+
 # (13/08) Commentaire ajoute pour forcer Railway a rebuild depuis ce commit --
 # le deploiement precedent avait reutilise une image en cache identique a
 # celle d'avant le fix du NameError resume_memoire dans
@@ -1089,6 +1135,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         messages_agent = list(messages_base)
         reponse_accumulee = []
         meta_assistant = {}
+        fichiers_generes_accumules = []
 
         # 1. DeepSeek, position principale de la cascade (07/09/2026,
         # demande Bourama). Meme boucle d'agent generique (_agent_groq)
@@ -1105,8 +1152,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                                 catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet),
                     reponse_accumulee,
                     meta_assistant,
+                    fichiers_generes_accumules,
                 )
-                ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee), conversation_id, modele=DEEPSEEK_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant)
+                ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=DEEPSEEK_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant)
                 if ids_historique:
                     yield {"type": "meta", **ids_historique}
                 _finaliser_memoire_en_arriere_plan(user_id, agent_id)
@@ -1128,8 +1176,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                             catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet),
                 reponse_accumulee,
                 meta_assistant,
+                fichiers_generes_accumules,
             )
-            ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee), conversation_id, modele=GROQ_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant)
+            ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GROQ_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant)
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
             _finaliser_memoire_en_arriere_plan(user_id, agent_id)
@@ -1168,8 +1217,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     ),
                     reponse_accumulee,
                     meta_assistant,
+                    fichiers_generes_accumules,
                 )
-                ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee), conversation_id, modele=model, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant)
+                ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=model, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant)
                 # Signale au frontend quand la reponse vient d'un modele de
                 # qualite reduite (demande Bourama, 26/07) : evite que
                 # l'utilisateur juge la plateforme sur une reponse plus
@@ -1290,7 +1340,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     reponse_accumulee.append(chunk.text)
                     yield {"type": "reponse", "texte": chunk.text}
             logging.info("Réponse via GEMINI")
-            ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee), conversation_id, modele=GOOGLE_MODEL, meta_utilisateur=meta_utilisateur)
+            ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GOOGLE_MODEL, meta_utilisateur=meta_utilisateur)
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
             _finaliser_memoire_en_arriere_plan(user_id, agent_id)

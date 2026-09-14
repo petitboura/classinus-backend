@@ -1176,7 +1176,9 @@ async def uploader_fichier_bibliotheque(
     Bibliothèque du créateur pour CET agent (niveau="agent", voir
     core/bibliotheque_fichiers.py) : n'importe quel type de fichier
     (image/audio/vidéo/PDF...), avec une description donnée par le
-    créateur pour que l'IA sache le retrouver via chercher_fichier
+    créateur pour que l'IA sache le retrouver via l'action "chercher"
+    de gerer_document_bibliotheque (14/09/2026 : référençait encore
+    chercher_fichier, outil retiré depuis, voir core/outils_bibliotheque.py)
     -- le titre est optionnel (juste un intitulé court), c'est la
     description qui compte vraiment pour la recherche (2026-07-22,
     demande de Bourama : la description prime sur le titre).

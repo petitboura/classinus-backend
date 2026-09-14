@@ -39,19 +39,26 @@ from core.outils_generation_commun import mcp_generation, Context, _sauvegarder_
 # pour la meme raison (generation pas instantanee).
 if modele_3d_disponible():
     @mcp_generation.tool()
-    def lancer_generation_3d(prompt: str) -> str:
+    def lancer_generation_3d(prompt: str, titre: str) -> str:
         """
         Lance une génération de modèle 3D (.glb) à partir d'une
         description textuelle. NE renvoie PAS le modèle immédiatement :
         renvoie un identifiant à donner à consulter_statut_generation
         (type "3d") un peu plus tard. Préviens l'étudiant que ça prend
         un peu de temps.
+
+        `titre` (obligatoire, 14/09/2026, demande Bourama : toute
+        génération doit avoir un vrai nom choisi par toi, jamais un nom
+        technique) : nom court et clair du modèle 3D, sans extension.
+        Redonne EXACTEMENT ce même titre à consulter_statut_generation
+        quand tu redemanderas le statut, pour qu'il soit bien enregistré
+        sous ce nom dans la bibliothèque une fois prêt.
         """
         try:
             resultat = _lancer_generation_3d(prompt)
             return (
                 f"Génération 3D lancée (id: {resultat['request_id']}). "
-                f"Redemande le statut avec cet identifiant dans une minute ou deux."
+                f"Redemande le statut avec cet identifiant et le même titre (\"{titre}\") dans une minute ou deux."
             )
         except Exception as e:
             logging.error(f"ERREUR outil generation : {e}")
@@ -65,7 +72,7 @@ if modele_3d_disponible():
 # verifier un peu plus tard, pas rester bloque a attendre.
 if video_disponible():
     @mcp_generation.tool()
-    def lancer_generation_video(prompt: str, duree_secondes: int = 5) -> str:
+    def lancer_generation_video(prompt: str, titre: str, duree_secondes: int = 5) -> str:
         """
         Lance une génération vidéo à partir d'une description
         textuelle. NE renvoie PAS la vidéo (elle prend 1 à 3 minutes à
@@ -73,12 +80,19 @@ if video_disponible():
         consulter_statut_generation (type "video") un peu plus tard.
         Préviens l'étudiant que ça prend du temps et qu'il doit
         redemander le statut dans quelques minutes.
+
+        `titre` (obligatoire, 14/09/2026, demande Bourama : toute
+        génération doit avoir un vrai nom choisi par toi, jamais un nom
+        technique) : nom court et clair de la vidéo, sans extension.
+        Redonne EXACTEMENT ce même titre à consulter_statut_generation
+        quand tu redemanderas le statut, pour qu'elle soit bien
+        enregistrée sous ce nom dans la bibliothèque une fois prête.
         """
         try:
             resultat = _lancer_generation_video(prompt, duree_secondes)
             return (
                 f"Génération lancée (id: {resultat['request_id']}). "
-                f"Ça prend 1 à 3 minutes, redemande le statut avec cet identifiant un peu plus tard."
+                f"Ça prend 1 à 3 minutes, redemande le statut avec cet identifiant et le même titre (\"{titre}\") un peu plus tard."
             )
         except Exception as e:
             logging.error(f"ERREUR outil generation : {e}")
@@ -91,7 +105,7 @@ if video_disponible():
 # mis explicitement par Bourama).
 if audio_disponible():
     @mcp_generation.tool()
-    def generer_audio(texte: str, voix: str = "austin", ctx: Context = None) -> str:
+    def generer_audio(texte: str, titre: str, voix: str = "austin", ctx: Context = None) -> str:
         """
         Convertit du texte en audio parlé (voix naturelle). Le texte
         peut inclure des indications vocales entre crochets, ex.
@@ -107,11 +121,16 @@ if audio_disponible():
         voix/narrateur (pas de dialogue à deux voix). Vise une durée
         raisonnable pour de la révision, pas une lecture intégrale du
         cours.
+
+        `titre` (obligatoire, 14/09/2026, demande Bourama : toute
+        génération doit avoir un vrai nom choisi par toi, jamais un
+        simple extrait du texte parlé) : nom court et clair de cet
+        audio, sans extension.
         """
         try:
             url = _generer_audio(texte, voix)
             extension = url.rsplit(".", 1)[-1].split("?", 1)[0] if "." in url.rsplit("/", 1)[-1] else "mp3"
-            nom = (texte[:40].strip() or "Audio") + f".{extension}"
+            nom = (titre.strip() or "Audio") + f".{extension}"
             _sauvegarder_generation_bibliotheque(ctx, url, nom, f"audio/{extension}")
             return url
         except Exception as e:
@@ -145,7 +164,7 @@ if signature_disponible():
 
 if modele_3d_disponible() or signature_disponible():
     @mcp_generation.tool()
-    def consulter_statut_generation(type: str, request_id: str, ctx: Context = None) -> str:
+    def consulter_statut_generation(type: str, request_id: str, titre: str = "", ctx: Context = None) -> str:
         """
         Consulte l'état d'une génération asynchrone déjà lancée
         (modèle 3D, vidéo ou demande de signature), consolidé le 26/08,
@@ -166,6 +185,12 @@ if modele_3d_disponible() or signature_disponible():
         `request_id` : l'identifiant renvoyé par l'outil de lancement
         correspondant (`request_id` pour "3d"/"video",
         `signature_request_id` pour "signature").
+
+        `titre` (pour "3d"/"video" uniquement, 14/09/2026, demande
+        Bourama) : redonne EXACTEMENT le même titre que celui donné à
+        lancer_generation_3d/lancer_generation_video, pour que le
+        fichier soit enregistré sous ce nom dans la bibliothèque une
+        fois prêt.
         """
         if type == "3d":
             if not modele_3d_disponible():
@@ -173,7 +198,8 @@ if modele_3d_disponible() or signature_disponible():
             try:
                 resultat = _statut_modele_3d(request_id)
                 if resultat["statut"] == "COMPLETED":
-                    _sauvegarder_generation_bibliotheque(ctx, resultat["url"], f"Modele_3D_{request_id}.glb", "model/gltf-binary")
+                    nom = (titre.strip() if titre else "") or f"Modele_3D_{request_id}"
+                    _sauvegarder_generation_bibliotheque(ctx, resultat["url"], f"{nom}.glb", "model/gltf-binary")
                     return f"Modèle 3D prêt : {resultat['url']}"
                 return f"Toujours en cours (statut : {resultat['statut']}), redemande un peu plus tard."
             except Exception as e:
@@ -186,7 +212,8 @@ if modele_3d_disponible() or signature_disponible():
             try:
                 resultat = _statut_video(request_id)
                 if resultat["statut"] == "COMPLETED":
-                    _sauvegarder_generation_bibliotheque(ctx, resultat["url"], f"Video_{request_id}.mp4", "video/mp4")
+                    nom = (titre.strip() if titre else "") or f"Video_{request_id}"
+                    _sauvegarder_generation_bibliotheque(ctx, resultat["url"], f"{nom}.mp4", "video/mp4")
                     return f"Vidéo prête : {resultat['url']}"
                 return f"Toujours en cours (statut : {resultat['statut']}), redemande dans une minute."
             except Exception as e:
@@ -213,15 +240,20 @@ if modele_3d_disponible() or signature_disponible():
 # condition ici, contrairement à la signature/audio/vidéo/3D qui, eux,
 # n'ont pas d'équivalent gratuit connu.
 @mcp_generation.tool()
-def generer_image(prompt: str, ctx: Context = None) -> str:
+def generer_image(prompt: str, titre: str, ctx: Context = None) -> str:
     """
     Génère une image à partir d'une description textuelle. Renvoie
     l'URL publique de l'image générée.
+
+    `titre` (obligatoire, 14/09/2026, demande Bourama : toute
+    génération doit avoir un vrai nom choisi par toi, jamais un simple
+    extrait du prompt) : nom court et clair de cette image, sans
+    extension.
     """
     try:
         url = _generer_image(prompt)
         extension = url.rsplit(".", 1)[-1].split("?", 1)[0] if "." in url.rsplit("/", 1)[-1] else "png"
-        nom = (prompt[:40].strip() or "Image") + f".{extension}"
+        nom = (titre.strip() or "Image") + f".{extension}"
         _sauvegarder_generation_bibliotheque(ctx, url, nom, f"image/{extension}")
         return url
     except Exception as e:

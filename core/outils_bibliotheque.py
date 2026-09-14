@@ -14,7 +14,6 @@ import base64
 import requests
 
 from core.bibliotheque_fichiers import (
-    chercher_fichiers as _chercher_fichiers,
     enregistrer_fichier as _enregistrer_fichier,
     enregistrer_lien as _enregistrer_lien,
     lister_fichiers as _lister_fichiers,
@@ -70,33 +69,16 @@ from core.outils_generation_commun import (
 )
 
 
-
-@mcp_generation.tool()
-def chercher_fichier(recherche: str, agent_id: str = None, user_id: str = None) -> str:
-    """
-    Cherche un fichier déjà uploadé (image, PDF, audio, vidéo, autre)
-    dans la bibliothèque -- uploadé soit par la plateforme (accessible à
-    tous les agents), soit par le créateur de CET agent, soit par CET
-    utilisateur lui-même dans une conversation passée. `recherche` est un
-    mot-clé (nom de fichier ou sujet). `agent_id` et `user_id` doivent
-    être exactement ceux donnés dans tes instructions système, pas
-    inventés. Renvoie la liste des fichiers trouvés (nom, url, niveau)
-    ou un message si rien n'est trouvé -- à toi ensuite d'inclure le
-    lien dans ta réponse (![...](url) pour une image, [...](url) sinon).
-    """
-    try:
-        resultats = _chercher_fichiers(recherche, agent_id=agent_id, user_id=user_id)
-    except Exception:
-        return "Erreur : la recherche de fichier a échoué, réessaie."
-
-    if not resultats:
-        return "Aucun fichier trouvé pour cette recherche."
-
-    return "\n".join(
-        f"- {f['nom_fichier']} ({f['niveau']}) : {f['url_publique']}"
-        + (f" -- {f['description']}" if f.get("description") else "")
-        for f in resultats
-    )
+# Outil "chercher_fichier" retiré le 14/09/2026 (demande Bourama) : il
+# demandait agent_id/user_id en paramètre au modèle en lui disant de
+# reprendre "exactement ceux donnés dans tes instructions système" --
+# sauf que ces identifiants ne sont écrits NULLE PART dans le system
+# prompt (vérifié dans core/construction_system_prompt.py), donc
+# user_id valait toujours None en pratique : la recherche ne pouvait
+# jamais remonter un fichier personnel (upload ou génération), sans
+# la moindre erreur visible. Remplacé par core/outils_fichiers_conversation.py
+# (gerer_fichier_conversation, action "chercher") qui prend le user_id
+# depuis `ctx` (authentifié), jamais demandé au modèle.
 
 
 @mcp_generation.tool()
@@ -157,7 +139,11 @@ def gerer_document_bibliotheque(
     l'utilisateur a joint DANS cette conversation : son lien réel est
     déjà visible entre crochets "[Lien réel du fichier : ...]" juste
     après son upload, réécris-le directement, pas besoin d'appeler cet
-    outil pour ça.
+    outil pour ça. Si ce lien n'est PLUS visible plus haut dans la
+    conversation (upload trop ancien), NE cherche PAS ce fichier ici --
+    cet outil exclut volontairement les pièces jointes de conversation
+    (14/09/2026, demande Bourama) : utilise gerer_fichier_conversation
+    à la place (core/outils_fichiers_conversation.py).
 
     `action` doit être l'une de :
     - "chercher" : RECHERCHE COMBINÉE dans la bibliothèque PERSONNELLE
@@ -270,7 +256,7 @@ def gerer_document_bibliotheque(
       fichier reste dans la bibliothèque et ses autres dossiers
       éventuels). Paramètres : `fichier_id`, `dossier_id`.
     - "lire_entier" : renvoie le texte intégral d'un document PDF/texte
-      déjà indexé (obtiens `fichier_id` via "chercher" ou chercher_fichier).
+      déjà indexé (obtiens `fichier_id` via "chercher" ci-dessus).
       À utiliser quand les extraits de "chercher" ne suffisent pas. Ne
       fonctionne que pour les documents PDF/texte (images/audio/vidéo non
       vectorisés aujourd'hui -- utilise leur lien pour les afficher).

@@ -95,14 +95,16 @@ async def uploader_document(
     pdf/image/audio est en plus vectorisé en ARRIÈRE-PLAN (29/08, voir
     core/file_attente_vectorisation.py) pour que consulter_bibliotheque
     puisse répondre à partir de son contenu dès que c'est prêt -- les
-    autres types restent retrouvables par nom/description via
-    chercher_fichier uniquement.
+    autres types restent retrouvables par nom/description via l'action
+    "chercher" de gerer_document_bibliotheque uniquement (14/09/2026 :
+    référençait encore chercher_fichier, outil retiré depuis, voir
+    core/outils_bibliotheque.py).
     """
     # CORRECTION du 01/08 (Bourama : "plusieurs upload à la fois") :
     # description/titre ne sont plus obligatoires -- repli sur le nom du
     # fichier tel quel, pour ne pas forcer une saisie manuelle par
-    # fichier quand on en envoie plusieurs d'un coup. chercher_fichier
-    # (recherche par nom/description) reste utilisable, juste moins
+    # fichier quand on en envoie plusieurs d'un coup. La recherche par
+    # nom/description (action "chercher" de gerer_document_bibliotheque) reste utilisable, juste moins
     # fin sans description écrite à la main.
     # 17/08 (Bourama : "il faut qu'on puisse uploader tout") -- la
     # whitelist de types (pdf/image/audio/vidéo) a été retirée : seule

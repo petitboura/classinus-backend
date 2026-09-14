@@ -132,9 +132,11 @@ async def uploader_image_chat(
     # Persistance bibliothèque (2026-07-22, demande de Bourama : un
     # fichier uploadé par un utilisateur en chat ne doit plus être
     # "utilisé une fois puis perdu" -- l'IA doit pouvoir le retrouver
-    # plus tard via chercher_fichier). Best-effort : un souci d'indexation
-    # ne doit jamais empêcher l'upload lui-même de réussir (Gemini a déjà
-    # ce dont il a besoin, l'url, à ce stade).
+    # plus tard via l'action "chercher" de gerer_fichier_conversation,
+    # 14/09/2026 : référençait encore chercher_fichier, outil retiré
+    # depuis, voir core/outils_bibliotheque.py). Best-effort : un souci
+    # d'indexation ne doit jamais empêcher l'upload lui-même de réussir
+    # (Gemini a déjà ce dont il a besoin, l'url, à ce stade).
     try:
         indexer_fichier_existant(
             url_publique=url,
@@ -323,7 +325,9 @@ async def uploader_document_chat(
     # Persistance bibliothèque (2026-07-22) : contrairement à avant, le
     # document original est maintenant gardé (pas seulement son texte
     # extrait), pour que l'IA puisse le retrouver et le redonner plus
-    # tard via chercher_fichier. Best-effort : un souci ici ne doit
+    # tard via gerer_fichier_conversation (14/09/2026 : référençait
+    # encore chercher_fichier, outil retiré depuis, voir
+    # core/outils_bibliotheque.py). Best-effort : un souci ici ne doit
     # jamais faire échouer la réponse (le texte extrait reste le besoin
     # principal de cet endpoint).
     #
@@ -333,9 +337,13 @@ async def uploader_document_chat(
     # (indexer_texte_bibliotheque) ajoutée plus tôt le même jour est
     # retirée. Un document envoyé en chat reste UNIQUEMENT un artefact de
     # cette conversation -- stocké et retrouvable par nom via
-    # chercher_fichier comme avant, mais PAS injecté dans
-    # documents_bibliotheque, et PAS listé sur la page Mon espace >
-    # Bibliothèque (voir le filtre ajouté dans
+    # gerer_fichier_conversation comme avant, mais PAS injecté dans
+    # documents_bibliotheque (jamais vectorisé). CORRECTIF du 02/09/2026
+    # (repris le 14/09/2026, ce commentaire était resté obsolète après
+    # coup) : il est en fait bien listé côté affichage sur la page Mon
+    # espace > Bibliothèque, son propre onglet "Uploadé dans un chat" --
+    # seule la recherche/liste côté IA de gerer_document_bibliotheque
+    # (voir le filtre ajouté dans
     # api/bibliotheque_utilisateur.py:lister). Seul ce qui est ajouté à
     # la main depuis Mon espace fait partie de la base que
     # consulter_bibliotheque interroge.

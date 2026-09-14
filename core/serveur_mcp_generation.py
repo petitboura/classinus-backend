@@ -25,6 +25,8 @@ uniquement un déplacement de code :
     calcul symbolique/export/site
   - outils_generation_media.py   : image/3D/vidéo/audio/signature
   - outils_bibliotheque.py       : fichiers/dossiers/RAG de la bibliothèque
+  - outils_fichiers_conversation.py : pièces jointes de conversation
+    (origine="chat", 14/09/2026), séparé de outils_bibliotheque.py
   - outils_memoire_profil.py     : mémoire, historique, profil, messagerie,
     rappels
   - outils_comportements_connaissance.py : comportements (skills), base
@@ -70,6 +72,7 @@ from core.outils_generation_commun import mcp_generation  # noqa: F401 (ré-expo
 import core.outils_generation_documents  # noqa: F401
 import core.outils_generation_media  # noqa: F401
 import core.outils_bibliotheque  # noqa: F401
+import core.outils_fichiers_conversation  # noqa: F401
 import core.outils_dossiers_catalogue_public  # noqa: F401
 import core.outils_catalogue_public_publication  # noqa: F401
 import core.outils_memoire_profil  # noqa: F401
