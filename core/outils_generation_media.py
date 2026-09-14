@@ -97,6 +97,16 @@ if audio_disponible():
         peut inclure des indications vocales entre crochets, ex.
         "[cheerful] Bienvenue !". Renvoie l'URL publique du fichier
         audio généré.
+
+        Pour un résumé audio de révision à partir d'un cours : ne
+        JAMAIS passer le contenu du cours tel quel. Condense-le
+        d'abord toi-même en un texte fluide, écrit pour être écouté
+        (phrases courtes, transitions naturelles à l'oral, jamais de
+        listes à puces ni de mise en forme écrite), qui reprend les
+        points essentiels du cours dans un ordre logique. Une seule
+        voix/narrateur (pas de dialogue à deux voix). Vise une durée
+        raisonnable pour de la révision, pas une lecture intégrale du
+        cours.
         """
         try:
             url = _generer_audio(texte, voix)

@@ -141,6 +141,7 @@ MESSAGES_FR: dict[str, str] = {
     "NOTION_CONNEXION_ECHEC": "Connexion à Notion impossible.",
     "NOTION_RECHERCHE_ECHEC": "Recherche Notion impossible.",
     "NOTION_NON_CONNECTE": "Notion n'est pas encore connecté.",
+    "PERSONA_PEDAGOGIQUE_INVALIDE": "Mode pédagogique inconnu.",
     "PLAGE_JOURS_INVALIDE": "La période demandée n'est pas valide.",
     "PLATEFORME_INCONNUE": "Plateforme inconnue (android ou ios attendu).",
     "PROFIL_INTROUVABLE": "Profil introuvable.",
