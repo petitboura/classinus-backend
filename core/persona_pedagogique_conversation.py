@@ -15,11 +15,9 @@ Ne jamais fusionner ni faire écrire ce module dans conversation_mode_actif.
 Table dédiée conversation_persona_pedagogique (migration 2026_09_12),
 même schéma de cache court que core/mode_actif_conversation.py.
 
-PAS ENCORE BRANCHÉ (hors scope de cet item, voir specs-independantes.md) :
-la lecture du mode actif n'est pas injectée dans _construire_system_prompt.
-Ce module ne fait que stocker/lire le choix -- le branchement dans le
-prompt réel est une jonction restante, à faire une fois ce module et le
-texte des modes (item 1) réunis.
+BRANCHÉ (14/09/2026, jonction items 1+8+9) : obtenir_persona_pedagogique
+est appelé dans core/main.py et le résultat est passé à
+_construire_system_prompt (core/construction_system_prompt.py).
 """
 import logging
 import time
@@ -42,10 +40,8 @@ PERSONAS_VALIDES = ("socratique", "professeur", "tuteur", "examinateur")
 def obtenir_persona_pedagogique(conversation_id: str, user_id: str) -> str | None:
     """Mode pédagogique actuellement actif pour cette conversation, ou
     None si l'étudiant n'a encore rien choisi. Pas de valeur par défaut
-    implicite ici -- décision volontairement pas prise dans ce module
-    (voir commentaire "DÉCISION EN ATTENTE" dans core/profils_agents.py,
-    item 1) : à trancher avec Bourama avant le branchement dans le
-    prompt, pas à deviner ici."""
+    implicite (voir core/profils_agents.py, item 1) : None reste None
+    jusqu'au premier choix explicite de l'étudiant."""
     maintenant = time.time()
     entree = _cache_persona.get(conversation_id)
     if entree is not None and entree["expire_a"] > maintenant:

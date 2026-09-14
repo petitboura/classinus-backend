@@ -346,9 +346,10 @@ INSTRUCTIONS_LONGUEUR_REPONSE = {
 # le modèle à changer de mode de lui-même en interprétant la conversation
 # (voir REGLE_BASCULE_MODE_PEDAGOGIQUE juste en dessous).
 #
-# PAS ENCORE BRANCHÉ : ces constantes ne sont pas encore injectées dans
-# _construire_system_prompt. L'injection réelle dépend du mode actif par
-# conversation, qui n'existe pas encore en base (chantier séparé).
+# BRANCHÉ (14/09/2026, jonction items 1+8+9 des specs indépendantes) :
+# injecté dans _construire_system_prompt via obtenir_persona_pedagogique
+# (core/persona_pedagogique_conversation.py), lui-même lu/écrit par
+# SelecteurPersonaPedagogique.tsx côté frontend.
 #
 # ATTENTION NOM : ne jamais confondre avec conversation_mode_actif /
 # core/mode_actif_conversation.py, qui désigne le rattachement
@@ -356,9 +357,11 @@ INSTRUCTIONS_LONGUEUR_REPONSE = {
 # totalement différent. La future table de stockage du mode pédagogique
 # doit porter un nom distinct (ex. conversation_persona_pedagogique).
 #
-# DÉCISION EN ATTENTE (pas prise ici) : quel mode s'applique par défaut
-# tant que l'étudiant n'a jamais rien choisi. À trancher avec Bourama
-# avant le branchement -- ne pas supposer une valeur par défaut.
+# PAS DE MODE PAR DÉFAUT (branché ainsi le 14/09/2026) :
+# obtenir_persona_pedagogique renvoie None tant que l'étudiant n'a rien
+# choisi, et aucun mode n'est alors injecté dans le prompt -- comportement
+# volontairement conservateur, à revoir avec Bourama si un défaut s'avère
+# souhaitable plus tard.
 MODES_PEDAGOGIQUES = {
     "socratique": """
 <mode_pedagogique_socratique>
