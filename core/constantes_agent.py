@@ -116,6 +116,16 @@ AGENT_ID_PAR_DEFAUT = "clovis"  # 12/08 : ce depot isole ne sert plus que Clovis
 SEUIL_RESUME_MESSAGES = 20
 MODELE_RESUME = "openai/gpt-oss-20b"  # 17/08 : llama-3.1-8b-instant decommissionne par Groq (404 en prod) -- quota TPM separe de la cascade principale, evite la contention
 
+# Ajoute le 15/09/2026 (demande Bourama) : au-dela de ce volume cumule
+# (en caracteres) de resultats d'outils reinjectes dans l'historique d'une
+# meme conversation (voir core/historique_outils.py), les plus ANCIENS
+# sont condenses en un seul resume via MODELE_RESUME plutot que renvoyes
+# integralement -- pour ne jamais depasser la fenetre de contexte du
+# modele sur une conversation longue et riche en outils. ~12000 caracteres
+# ~= 3000 tokens, une marge large mais qui laisse encore beaucoup de place
+# pour le reste du prompt (systeme + question + reponses).
+SEUIL_CARACTERES_OUTILS_HISTORIQUE = 12000
+
 # Profil utilisateur dynamique par agent (2026-07-21, voir
 # agents.profil_utilisateur_schema et _mettre_a_jour_profil_utilisateur_si_besoin
 # plus bas). Seuil plus bas que SEUIL_RESUME_MESSAGES : contrairement au
