@@ -660,6 +660,23 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
     logging.info(f"Réponse via GROQ (avec outil, plafond_absolu={plafond_absolu} atteint): {modele}")
 
 
+def _ajouter_segment_texte(meta, type_segment, texte):
+    """
+    Ajoute `texte` au dernier segment de `meta["segments"]` s'il est du
+    même type ("raisonnement" ou "texte"), sinon démarre un nouveau
+    segment -- même règle de fusion que segmentsAvecTexteFusionne côté
+    frontend (ChatIA.tsx), pour que la timeline reconstruite à la
+    réouverture soit identique à celle vue en direct. Un segment "outil"
+    n'est JAMAIS fusionné (voir _capturer_reponse, qui en ajoute toujours
+    un nouveau), donc ne passe jamais par cette fonction.
+    """
+    segments = meta.setdefault("segments", [])
+    if segments and segments[-1]["type"] == type_segment:
+        segments[-1]["texte"] += texte
+    else:
+        segments.append({"type": type_segment, "texte": texte})
+
+
 def _capturer_reponse(generateur, accumulateur, meta=None, fichiers_generes_accumules=None):
     """
     Relaie tous les evenements d'un generateur tel quel, en accumulant au
@@ -679,6 +696,18 @@ def _capturer_reponse(generateur, accumulateur, meta=None, fichiers_generes_accu
     puis sources pour un meme appel, sans rien entre les deux (voir
     _traiter_appels).
 
+    Ajoute le 15/09/2026 (demande Bourama) : `meta["segments"]` capture EN
+    PLUS la timeline chronologique complete (raisonnement/texte/outil,
+    dans l'ordre reel) -- meme structure et meme regle de fusion que
+    MessageAffiche.segments construit en direct cote frontend (voir
+    ChatIA.tsx:segmentsAvecTexteFusionne). Avant, cette timeline n'existait
+    qu'en memoire le temps du direct : a la reouverture d'une conversation,
+    l'affichage retombait sur un rendu groupe approximatif (tout le
+    raisonnement, puis tout un bloc d'outils, puis le texte) au lieu de
+    l'ordre reel traverse. `meta["outils"]` reste inchange en parallele
+    (toujours utilise pour la reinjection au modele, voir
+    core/historique_outils.py).
+
     `fichiers_generes_accumules` (optionnel, liste mutee en place,
     14/09/2026, demande Bourama) : capture les fichiers de chaque
     evenement "fichiers_generes" (nom/url), qui n'etait JUSQU'ICI que
@@ -695,20 +724,34 @@ def _capturer_reponse(generateur, accumulateur, meta=None, fichiers_generes_accu
     for event in generateur:
         if event["type"] == "reponse":
             accumulateur.append(event["texte"])
+            if meta is not None:
+                _ajouter_segment_texte(meta, "texte", event["texte"])
+        elif meta is not None and event["type"] == "raisonnement":
+            _ajouter_segment_texte(meta, "raisonnement", event["texte"])
         elif meta is not None and event["type"] == "outil_resultat":
             meta.setdefault("outils", []).append({
                 "nomOutil": event["nom_outil"],
                 "nomLisible": event["nom_lisible"],
                 "resultat": event["resultat"],
             })
+            meta.setdefault("segments", []).append({
+                "type": "outil",
+                "nomOutil": event["nom_outil"],
+                "nomLisible": event["nom_lisible"],
+                "resultat": event["resultat"],
+            })
         elif meta is not None and event["type"] == "sources" and meta.get("outils"):
             meta["outils"][-1]["sources"] = event["sources"]
+            if meta.get("segments") and meta["segments"][-1]["type"] == "outil":
+                meta["segments"][-1]["sources"] = event["sources"]
         elif meta is not None and event["type"] == "images" and meta.get("outils"):
             # Même principe que "sources" juste au-dessus, pour que la
             # galerie survive à la réouverture d'une conversation (sans
             # ça, elle ne serait visible qu'en direct pendant le
             # streaming -- voir docstring de cette fonction).
             meta["outils"][-1]["images"] = event["images"]
+            if meta.get("segments") and meta["segments"][-1]["type"] == "outil":
+                meta["segments"][-1]["images"] = event["images"]
         if fichiers_generes_accumules is not None and event["type"] == "fichiers_generes":
             fichiers_generes_accumules.extend(event["fichiers"])
         yield event

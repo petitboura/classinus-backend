@@ -31,9 +31,15 @@ def _sauvegarder_echange(user_id, agent_id, message_utilisateur, reponse_finale,
     reouverture d'une conversation, seul le texte brut survivant. Contenu
     attendu : meta_utilisateur = {"pieces_jointes": [...]},
     meta_assistant = {"outils": [{"nomOutil", "nomLisible", "resultat",
-    "sources"}, ...]} -- voir _capturer_reponse pour la construction de
-    meta_assistant, structure alignee sur MessageAffiche.outilsResultats
-    cote frontend.
+    "sources"}, ...], "segments": [...]} -- voir _capturer_reponse pour la
+    construction de meta_assistant. "outils" est aligne sur
+    MessageAffiche.outilsResultats cote frontend (affichage groupe,
+    ancien format) ; "segments" (ajoute le 15/09/2026, demande Bourama)
+    est la timeline chronologique complete (raisonnement/texte/outil dans
+    l'ordre reel), alignee sur MessageAffiche.segments -- permet de
+    reconstruire a la reouverture le meme affichage qu'en direct, plutot
+    que l'ancien rendu groupe approximatif. Absent pour les echanges
+    anterieurs a cette date (pas de retro-remplissage).
     """
     ids_historique = None  # renvoyé à l'appelant pour l'indexation du feedback
 
