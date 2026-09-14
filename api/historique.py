@@ -21,6 +21,42 @@ from core.erreurs import erreur_api
 
 router = APIRouter(prefix="/api/historique", tags=["historique"])
 
+# Corrigé le 2026-09-14 (Bourama : "les historiques ne s'affichent pas tout,
+# y a-t-il un plafond") -- l'API Supabase (PostgREST) plafonne chaque
+# requête à 1000 lignes par défaut (réglage "Max Rows" du projet, jamais
+# modifié). Aucune des requêtes de ce fichier ne posait de .limit()
+# explicite : au-delà de 1000 lignes pour un même utilisateur, les plus
+# récentes (ou plus anciennes, selon le tri) étaient silencieusement
+# coupées par Supabase, sans erreur -- l'historique semblait juste
+# incomplet. TAILLE_PAGE_SUPABASE pagine nous-mêmes par blocs de 1000
+# jusqu'à épuisement, pour ne plus jamais dépendre de ce plafond, quel que
+# soit le volume de messages accumulés.
+TAILLE_PAGE_SUPABASE = 1000
+
+
+def _recuperer_toutes_les_lignes(construire_requete):
+    """
+    Exécute `construire_requete()` (une fonction qui RECONSTRUIT la requête
+    à chaque appel -- un query builder Supabase déjà exécuté ne peut pas
+    être réutilisé) en lui appliquant `.range()` par blocs de
+    TAILLE_PAGE_SUPABASE, jusqu'à ce qu'un bloc renvoie moins de lignes que
+    la taille de page (signe qu'on a atteint la fin). Renvoie la liste
+    complète, sans jamais dépendre du plafond par défaut de l'API.
+    """
+    toutes_les_lignes: list = []
+    debut = 0
+    while True:
+        page = (
+            construire_requete()
+            .range(debut, debut + TAILLE_PAGE_SUPABASE - 1)
+            .execute()
+        ).data or []
+        toutes_les_lignes.extend(page)
+        if len(page) < TAILLE_PAGE_SUPABASE:
+            break
+        debut += TAILLE_PAGE_SUPABASE
+    return toutes_les_lignes
+
 
 class ConversationResume(BaseModel):
     agent_id: str
@@ -39,19 +75,16 @@ def lister_conversations(utilisateur=Depends(utilisateur_courant)):
     demandée par Bourama. Un agent = une "conversation" ; le détail
     message par message est sur GET /api/historique/{agent_id}.
 
-    Pas de pagination pour l'instant : le nombre d'agents avec qui un même
-    utilisateur discute reste naturellement borné (contrairement au feed
-    public), donc pas de risque de volume immédiat -- à revisiter si ça
-    devient un problème réel (même remarque que pour le feed).
+    Paginé via _recuperer_toutes_les_lignes (voir plus haut) pour ne pas
+    dépendre du plafond par défaut de l'API Supabase.
     """
     try:
-        lignes = (
-            supabase.table("historique_conversations")
+        lignes = _recuperer_toutes_les_lignes(
+            lambda: supabase.table("historique_conversations")
             .select("agent_id, role, content, created_at")
             .eq("user_id", utilisateur.id)
             .order("created_at", desc=True)
-            .execute()
-        ).data or []
+        )
     except Exception as e:
         logging.error(f"ERREUR SUPABASE (lister_conversations, user_id={utilisateur.id}) : {e}")
         raise erreur_api(500, "IMPOSSIBLE_DE_CHARGER_L_HISTORIQUE")
@@ -128,14 +161,13 @@ def obtenir_historique_agent(agent_id: str, utilisateur=Depends(utilisateur_cour
     utilisateur_courant).
     """
     try:
-        lignes = (
-            supabase.table("historique_conversations")
+        lignes = _recuperer_toutes_les_lignes(
+            lambda: supabase.table("historique_conversations")
             .select("role, content, created_at, meta")
             .eq("user_id", utilisateur.id)
             .eq("agent_id", agent_id)
             .order("created_at")
-            .execute()
-        ).data or []
+        )
     except Exception as e:
         logging.error(
             f"ERREUR SUPABASE (obtenir_historique_agent, user_id={utilisateur.id}, "
@@ -175,14 +207,13 @@ def lister_fils_conversation(agent_id: str, utilisateur=Depends(utilisateur_cour
     garde qu'une par agent pour le tableau de bord).
     """
     try:
-        lignes = (
-            supabase.table("historique_conversations")
+        lignes = _recuperer_toutes_les_lignes(
+            lambda: supabase.table("historique_conversations")
             .select("conversation_id, role, content, created_at")
             .eq("user_id", utilisateur.id)
             .eq("agent_id", agent_id)
             .order("created_at")
-            .execute()
-        ).data or []
+        )
     except Exception as e:
         logging.error(
             f"ERREUR SUPABASE (lister_fils_conversation, user_id={utilisateur.id}, "
@@ -231,7 +262,7 @@ def obtenir_fil_conversation(agent_id: str, conversation_id: str, utilisateur=De
     le fil des lignes d'avant cette fonctionnalité (conversation_id NULL en
     base) -- convention interne à cette route, jamais stockée telle quelle.
     """
-    try:
+    def _construire_requete():
         requete = (
             supabase.table("historique_conversations")
             .select("role, content, created_at, meta")
@@ -242,7 +273,10 @@ def obtenir_fil_conversation(agent_id: str, conversation_id: str, utilisateur=De
             requete = requete.is_("conversation_id", "null")
         else:
             requete = requete.eq("conversation_id", conversation_id)
-        lignes = requete.order("created_at").execute().data or []
+        return requete.order("created_at")
+
+    try:
+        lignes = _recuperer_toutes_les_lignes(_construire_requete)
     except Exception as e:
         logging.error(
             f"ERREUR SUPABASE (obtenir_fil_conversation, user_id={utilisateur.id}, "
