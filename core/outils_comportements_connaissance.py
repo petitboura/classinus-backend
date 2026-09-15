@@ -172,6 +172,12 @@ def gerer_comportement(
 
 
 
+# RAPPEL (Bourama, 15/09/2026) : cette base (table Supabase `documents`)
+# n'a plus aucune interface d'écriture, elle est modifiée directement dans
+# Supabase -- donc rien ne la met à jour automatiquement. À chaque
+# modification frontend/backend visible par l'utilisateur, vérifier si un
+# article existant ici en parle et doit être corrigé, sinon cette base se
+# désynchronise silencieusement du produit réel.
 @mcp_generation.tool()
 def gerer_base_connaissance(
     action: str,
