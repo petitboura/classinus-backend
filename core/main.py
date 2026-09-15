@@ -51,7 +51,7 @@ from construction_system_prompt import _construire_system_prompt, _est_timeout, 
 from persistance_echanges import _sauvegarder_echange, _finaliser_memoire_en_arriere_plan
 from historique_outils import enrichir_historique_avec_outils
 from execution_outils import _resultat_pour_affichage
-from boucle_agent import _agent_groq, _capturer_reponse
+from boucle_agent import _agent_groq, _capturer_reponse, _ajouter_segment_texte
 
 logging.basicConfig(level=logging.INFO)
 
@@ -1346,9 +1346,19 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             for chunk in response:
                 if chunk.text:
                     reponse_accumulee.append(chunk.text)
+                    _ajouter_segment_texte(meta_assistant, "texte", chunk.text)
                     yield {"type": "reponse", "texte": chunk.text}
             logging.info("Réponse via GEMINI")
-            ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GOOGLE_MODEL, meta_utilisateur=meta_utilisateur)
+            # CORRECTIF 15/09/2026 (demande Bourama, chantier structure
+            # chronologique de l'historique) : ce chemin de secours
+            # n'envoyait PAS meta_assistant a _sauvegarder_echange,
+            # contrairement aux 3 autres points de sauvegarde de la
+            # cascade juste au-dessus -- pour un message repondu via ce
+            # fallback precis, les outils (et desormais les segments)
+            # deja obtenus par un modele Groq/DeepSeek avant l'echec
+            # disparaissaient donc reellement a la reouverture de la
+            # conversation, meme s'ils restaient visibles en direct.
+            ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GOOGLE_MODEL, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant)
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
             _finaliser_memoire_en_arriere_plan(user_id, agent_id)
