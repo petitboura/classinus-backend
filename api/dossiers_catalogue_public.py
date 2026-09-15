@@ -20,6 +20,7 @@ from core.dossiers_catalogue_public import (
     lister_demandes_en_attente,
     lister_dossiers,
     lister_fichiers_ids_dossier,
+    lister_sous_dossiers,
     modifier_filtres_dossier,
     peut_ajouter_contenu,
     peut_retirer_contenu,
@@ -402,4 +403,8 @@ def obtenir_dossier_public(dossier_id: str, utilisateur=Depends(utilisateur_opti
     if not dossier:
         raise erreur_api(404, "DOSSIER_INTROUVABLE")
     dossier["fichier_ids"] = lister_fichiers_ids_dossier(dossier_id)
+    # 15/09/2026, demande Bourama : les sous-dossiers ne remontaient pas
+    # sur la page de consultation publique d'un dossier, seulement ses
+    # fichiers directs. Meme correctif que celui deja fait cote perso.
+    dossier["sous_dossiers"] = lister_sous_dossiers(dossier_id)
     return dossier
