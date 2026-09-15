@@ -36,9 +36,25 @@ logging.basicConfig(level=logging.INFO)
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
+class OutilHistorique(BaseModel):
+    """Un résultat d'outil attaché à un message assistant de l'historique
+    (voir core/historique_outils.py) -- même forme que meta.outils déjà
+    sauvegardé pour l'affichage (nomOutil/nomLisible/resultat, sans
+    sources/images : inutiles pour le modèle, uniquement pour l'UI)."""
+    nomOutil: str
+    nomLisible: str
+    resultat: str
+
+
 class MessageHistorique(BaseModel):
     role: Literal["user", "assistant"]
     content: str
+    # Ajouté 15/09/2026 (demande Bourama) : résultats des outils exécutés
+    # pendant CE message assistant (voir ChatIA.tsx:historiquePourApi),
+    # réinjectés au modèle au tour suivant -- voir
+    # core/historique_outils.py. Absent/vide pour un message user ou un
+    # message assistant sans outil, comportement inchangé dans ce cas.
+    outils: Optional[List[OutilHistorique]] = None
 
 
 class Localisation(BaseModel):

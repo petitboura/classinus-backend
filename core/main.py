@@ -49,6 +49,7 @@ from routage_outils import (
 )
 from construction_system_prompt import _construire_system_prompt, _est_timeout, _repli_si_reponse_partielle
 from persistance_echanges import _sauvegarder_echange, _finaliser_memoire_en_arriere_plan
+from historique_outils import enrichir_historique_avec_outils
 from execution_outils import _resultat_pour_affichage
 from boucle_agent import _agent_groq, _capturer_reponse
 
@@ -886,8 +887,15 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # l'historique via _sauvegarder_echange plus bas.
     message_pour_modele = _enrichir_message_avec_urls(message_utilisateur, user_id, urls_a_ignorer=toutes_les_urls_images)
 
+    # Chantier 15/09/2026 (demande Bourama) : reinjecte les resultats
+    # d'outils des tours precedents (lecture de bibliotheque, skill,
+    # recherche web, code recu...) dans ce qui part au modele -- avant, un
+    # outil deja execute etait "oublie" par le modele des le message
+    # suivant, meme si son resultat restait affiche a l'ecran cote
+    # utilisateur. Voir core/historique_outils.py pour le format choisi et
+    # le mecanisme de resume au-dela de SEUIL_CARACTERES_OUTILS_HISTORIQUE.
     messages_base = [{"role": "system", "content": system_final}]
-    messages_base += historique
+    messages_base += enrichir_historique_avec_outils(historique)
     messages_base.append({"role": "user", "content": message_pour_modele})
 
     # ETAPE 5 (11/09/2026) : meta_utilisateur (piece jointe pour affichage
