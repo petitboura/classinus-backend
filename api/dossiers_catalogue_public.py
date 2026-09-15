@@ -16,6 +16,7 @@ from core.dossiers_catalogue_public import (
     creer_dossier,
     deplacerait_en_boucle,
     deplacer_dossier,
+    dossiers_ids_pour_fichier,
     lister_demandes_en_attente,
     lister_dossiers,
     lister_fichiers_ids_dossier,
@@ -271,6 +272,17 @@ def deplacer(dossier_id: str, payload: DeplacerDossierPayload, response: Respons
         response.status_code = 202
         return demande
     raise erreur_api(403, "CE_DOSSIER_NE_T_APPARTIENT_PAS")
+
+
+@router.get("/fichiers/{fichier_id}")
+def lister_dossiers_du_fichier(fichier_id: str):
+    """
+    15/09/2026, demande Bourama (fichier attaché à plusieurs dossiers) :
+    renvoie tous les dossiers dans lesquels ce fichier est actuellement
+    rangé, pour pré-cocher la liste à cocher du frontend au moment de
+    gérer les dossiers d'un fichier (voir GererDossiersFichierModal.tsx).
+    """
+    return {"dossier_ids": dossiers_ids_pour_fichier(fichier_id)}
 
 
 @router.post("/{dossier_id}/fichiers", status_code=201)

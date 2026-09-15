@@ -52,7 +52,7 @@ from core.dossiers_catalogue_public import (
 )
 from core.dossiers_publics_attaches import propager_fichier_public_range_dossier as _propager_fichier_public_range_dossier
 from core.geolocalisation_pays import pays_utilisateur
-from core.listes_bibliotheque_publique import lister_valeurs, normaliser_et_enregistrer
+from core.listes_bibliotheque_publique import lister_valeurs, normaliser_et_enregistrer_liste
 
 router = APIRouter(prefix="/api/bibliotheque-publique", tags=["bibliotheque_publique"])
 
@@ -94,13 +94,18 @@ class EntreeBibliothequePublique(BaseModel):
     statut_vectorisation: str = "pret"
     # 02/09/2026, demande Bourama : 3 filtres cochables à la publication
     # (voir core/listes_bibliotheque_publique.py), optionnels.
-    pays: str | None = None
-    niveau: str | None = None
-    categorie: str | None = None
+    # 15/09/2026, demande Bourama : un fichier peut désormais avoir
+    # plusieurs valeurs par filtre, même principe que les dossiers
+    # depuis le 13/09/2026 (colonnes passées en text[] côté Supabase,
+    # voir migrations/2026_09_15_filtres_fichiers_catalogue_public_multi.sql).
+
+    pays: list[str] = []
+    niveau: list[str] = []
+    categorie: list[str] = []
     # 04/09/2026, demande Bourama : 2 filtres supplémentaires (voir
     # core/listes_bibliotheque_publique.py), même principe.
-    classe: str | None = None
-    specialite: str | None = None
+    classe: list[str] = []
+    specialite: list[str] = []
 
 
 @router.get("/listes")
@@ -167,11 +172,17 @@ def lister_bibliotheque_publique(
         # lui-même cette valeur, soit parce qu'un dossier ancêtre la
         # fait descendre jusqu'à lui (voir core/dossiers_catalogue_
         # public.py::dossiers_heritant_valeur, camp="fichiers").
+        #
+        # 15/09/2026 : `champ` est désormais un tableau (text[]) côté
+        # fichier aussi (comme déjà le cas côté dossier), donc "eq" est
+        # remplacé par "contains" (opérateur "cs" de PostgREST, teste
+        # qu'une valeur fait partie du tableau) au lieu d'une égalité
+        # stricte.
         dossiers_concernes = dossiers_heritant_valeur(champ, valeur, "fichiers")
         ids_heritage = fichier_ids_pour_dossiers(dossiers_concernes) if dossiers_concernes else []
         if not ids_heritage:
-            return requete.eq(champ, valeur)
-        return requete.or_(f"{champ}.eq.{_echapper_valeur_or(valeur)},id.in.({','.join(ids_heritage)})")
+            return requete.contains(champ, [valeur])
+        return requete.or_(f"{champ}.cs.{{{_echapper_valeur_or(valeur)}}},id.in.({','.join(ids_heritage)})")
 
     def _base(campos: str = _CAMPOS_ENTREE, count: str | None = None):
         requete = supabase.table("bibliotheque_publique").select(campos, count=count).eq("statut", "publie")
@@ -214,7 +225,7 @@ def lister_bibliotheque_publique(
     # quelle part de cette page vient de chaque groupe, sans jamais
     # sauter ni répéter une entrée d'une page à l'autre.
     try:
-        compte_prioritaire = _base(campos="id", count="exact").eq("pays", pays_prioritaire).limit(1).execute().count or 0
+        compte_prioritaire = _base(campos="id", count="exact").contains("pays", [pays_prioritaire]).limit(1).execute().count or 0
     except Exception as e:
         logging.error(f"ERREUR comptage priorite pays (bibliotheque publique) : {e}")
         compte_prioritaire = 0
@@ -227,7 +238,7 @@ def lister_bibliotheque_publique(
     if decalage < compte_prioritaire:
         a_prendre = min(limite, compte_prioritaire - decalage)
         res1 = (
-            _base().eq("pays", pays_prioritaire)
+            _base().contains("pays", [pays_prioritaire])
             .order("created_at", desc=True)
             .range(decalage, decalage + a_prendre - 1)
             .execute()
@@ -238,7 +249,11 @@ def lister_bibliotheque_publique(
         decalage_reste = max(0, decalage - compte_prioritaire)
         a_prendre = limite - len(resultats)
         res2 = (
-            _base().or_(f"pays.neq.{pays_prioritaire},pays.is.null")
+            # 15/09/2026 : "pays" est un tableau, donc "ne contient pas
+            # cette valeur" remplace l'ancien "pays != valeur OU pays
+            # est NULL" (un tableau vide n'est jamais NULL, il couvre
+            # déjà ce cas via not_.contains).
+            _base().not_.contains("pays", [pays_prioritaire])
             .order("created_at", desc=True)
             .range(decalage_reste, decalage_reste + a_prendre - 1)
             .execute()
@@ -303,11 +318,16 @@ async def ajouter_a_bibliotheque_publique(
     nom: str = Form(""),
     description: str = Form(""),
     dossier_id: str = Form(""),
-    pays: str = Form(""),
-    niveau: str = Form(""),
-    categorie: str = Form(""),
-    classe: str = Form(""),
-    specialite: str = Form(""),
+    # 15/09/2026, demande Bourama : plusieurs valeurs possibles par
+    # filtre, même principe que les dossiers. Le frontend envoie
+    # chaque valeur comme une entrée distincte du FormData sous le même
+    # nom de champ (ex. formData.append("pays", "Mali");
+    # formData.append("pays", "Sénégal")).
+    pays: list[str] = Form([]),
+    niveau: list[str] = Form([]),
+    categorie: list[str] = Form([]),
+    classe: list[str] = Form([]),
+    specialite: list[str] = Form([]),
     utilisateur=Depends(utilisateur_courant),
 ):
     # Nom optionnel (28/08, demande Bourama : "nom et description
@@ -368,11 +388,11 @@ async def ajouter_a_bibliotheque_publique(
                 ),
                 # 02/09/2026, demande Bourama : 3 filtres optionnels à la
                 # publication (voir core/listes_bibliotheque_publique.py).
-                "pays": normaliser_et_enregistrer("pays", pays),
-                "niveau": normaliser_et_enregistrer("niveau", niveau),
-                "categorie": normaliser_et_enregistrer("categorie", categorie),
-                "classe": normaliser_et_enregistrer("classe", classe),
-                "specialite": normaliser_et_enregistrer("specialite", specialite),
+                "pays": normaliser_et_enregistrer_liste("pays", pays),
+                "niveau": normaliser_et_enregistrer_liste("niveau", niveau),
+                "categorie": normaliser_et_enregistrer_liste("categorie", categorie),
+                "classe": normaliser_et_enregistrer_liste("classe", classe),
+                "specialite": normaliser_et_enregistrer_liste("specialite", specialite),
             })
             .execute()
         )
@@ -401,11 +421,11 @@ class AjouterLienPayload(BaseModel):
     nom: str = ""
     description: str = ""
     dossier_id: str = ""
-    pays: str = ""
-    niveau: str = ""
-    categorie: str = ""
-    classe: str = ""
-    specialite: str = ""
+    pays: list[str] = []
+    niveau: list[str] = []
+    categorie: list[str] = []
+    classe: list[str] = []
+    specialite: list[str] = []
 
 
 @router.post("/lien", response_model=EntreeBibliothequePublique, status_code=201)
@@ -426,11 +446,11 @@ def ajouter_lien_bibliotheque_publique(payload: AjouterLienPayload, utilisateur=
                 "url_publique": payload.url.strip(),
                 "type_mime": "text/uri-list",
                 "statut_vectorisation": "pret",  # un lien n'est jamais vectorisé
-                "pays": normaliser_et_enregistrer("pays", payload.pays),
-                "niveau": normaliser_et_enregistrer("niveau", payload.niveau),
-                "categorie": normaliser_et_enregistrer("categorie", payload.categorie),
-                "classe": normaliser_et_enregistrer("classe", payload.classe),
-                "specialite": normaliser_et_enregistrer("specialite", payload.specialite),
+                "pays": normaliser_et_enregistrer_liste("pays", payload.pays),
+                "niveau": normaliser_et_enregistrer_liste("niveau", payload.niveau),
+                "categorie": normaliser_et_enregistrer_liste("categorie", payload.categorie),
+                "classe": normaliser_et_enregistrer_liste("classe", payload.classe),
+                "specialite": normaliser_et_enregistrer_liste("specialite", payload.specialite),
             })
             .execute()
         )
@@ -452,11 +472,11 @@ class AjouterTextePayload(BaseModel):
     contenu: str
     nom: str = ""
     dossier_id: str = ""
-    pays: str = ""
-    niveau: str = ""
-    categorie: str = ""
-    classe: str = ""
-    specialite: str = ""
+    pays: list[str] = []
+    niveau: list[str] = []
+    categorie: list[str] = []
+    classe: list[str] = []
+    specialite: list[str] = []
 
 
 @router.post("/texte", response_model=EntreeBibliothequePublique, status_code=201)
@@ -491,11 +511,11 @@ def ajouter_texte_bibliotheque_publique(payload: AjouterTextePayload, utilisateu
                 "type_mime": "text/plain",
                 "taille_octets": len(contenu_octets),
                 "statut_vectorisation": "en_attente" if necessite_vectorisation_note() else "pret",
-                "pays": normaliser_et_enregistrer("pays", payload.pays),
-                "niveau": normaliser_et_enregistrer("niveau", payload.niveau),
-                "categorie": normaliser_et_enregistrer("categorie", payload.categorie),
-                "classe": normaliser_et_enregistrer("classe", payload.classe),
-                "specialite": normaliser_et_enregistrer("specialite", payload.specialite),
+                "pays": normaliser_et_enregistrer_liste("pays", payload.pays),
+                "niveau": normaliser_et_enregistrer_liste("niveau", payload.niveau),
+                "categorie": normaliser_et_enregistrer_liste("categorie", payload.categorie),
+                "classe": normaliser_et_enregistrer_liste("classe", payload.classe),
+                "specialite": normaliser_et_enregistrer_liste("specialite", payload.specialite),
             })
             .execute()
         )

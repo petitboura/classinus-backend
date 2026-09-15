@@ -211,6 +211,23 @@ def lister_fichiers_ids_dossier(dossier_id: str) -> list:
     return [ligne["fichier_id"] for ligne in res.data]
 
 
+def dossiers_ids_pour_fichier(fichier_id: str) -> list:
+    """
+    15/09/2026, demande Bourama (fichier attaché à plusieurs dossiers) :
+    inverse de lister_fichiers_ids_dossier ci-dessus, renvoie tous les
+    dossiers dans lesquels UN fichier donné est rangé, pour peupler la
+    liste à cocher du frontend (voir api/dossiers_catalogue_public.py::
+    lister_dossiers_du_fichier).
+    """
+    res = (
+        supabase.table("fichiers_dossiers_catalogue_public")
+        .select("dossier_id")
+        .eq("fichier_id", fichier_id)
+        .execute()
+    )
+    return [ligne["dossier_id"] for ligne in res.data]
+
+
 def fichier_ids_pour_dossiers(dossier_ids: set) -> list:
     """
     13/09/2026, demande Bourama (héritage des filtres) : même chose que

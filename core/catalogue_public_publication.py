@@ -35,7 +35,7 @@ from core.dossiers_catalogue_public import (
     peut_ajouter_contenu as _peut_ajouter_contenu_dossier,
 )
 from core.dossiers_publics_attaches import propager_fichier_public_range_dossier as _propager_fichier_public_range_dossier
-from core.listes_bibliotheque_publique import normaliser_et_enregistrer
+from core.listes_bibliotheque_publique import normaliser_et_enregistrer_liste
 from core.file_attente_vectorisation import (
     necessite_vectorisation_fichier_publique,
     necessite_extraction_texte_publique,
@@ -59,20 +59,38 @@ def _classer_si_autorise(fichier_id: str, dossier_id: str | None, utilisateur_id
         logging.error(f"ERREUR classement dossier catalogue public (fichier_id={fichier_id}, dossier_id={dossier_id}) : {e}")
 
 
+def _vers_liste(valeur) -> list[str]:
+    """
+    15/09/2026, demande Bourama (fichier multi-filtres) : l'outil MCP
+    (voir docstring du module) envoie aujourd'hui une seule chaîne par
+    filtre, donc cette fonction accepte les deux formes (chaîne unique
+    OU liste) pour ne RIEN casser côté MCP tant que son schéma n'a pas
+    été mis à jour, tout en écrivant systématiquement un tableau en
+    base (colonnes passées en text[] le même jour, voir
+    migrations/2026_09_15_filtres_fichiers_catalogue_public_multi.sql).
+    """
+    if valeur is None:
+        return []
+    if isinstance(valeur, list):
+        return [v.strip() for v in valeur if (v or "").strip()]
+    valeur = (valeur or "").strip()
+    return [valeur] if valeur else []
+
+
 def _filtres_normalises(pays, niveau, categorie, classe, specialite) -> dict:
     return {
-        "pays": normaliser_et_enregistrer("pays", pays),
-        "niveau": normaliser_et_enregistrer("niveau", niveau),
-        "categorie": normaliser_et_enregistrer("categorie", categorie),
-        "classe": normaliser_et_enregistrer("classe", classe),
-        "specialite": normaliser_et_enregistrer("specialite", specialite),
+        "pays": normaliser_et_enregistrer_liste("pays", _vers_liste(pays)),
+        "niveau": normaliser_et_enregistrer_liste("niveau", _vers_liste(niveau)),
+        "categorie": normaliser_et_enregistrer_liste("categorie", _vers_liste(categorie)),
+        "classe": normaliser_et_enregistrer_liste("classe", _vers_liste(classe)),
+        "specialite": normaliser_et_enregistrer_liste("specialite", _vers_liste(specialite)),
     }
 
 
 def publier_fichier_public(
     ajoute_par: str, contenu: bytes, nom_fichier: str, type_mime: str,
     nom: str = "", description: str = "", dossier_id: str = None,
-    pays: str = None, niveau: str = None, categorie: str = None, classe: str = None, specialite: str = None,
+    pays: str | list[str] | None = None, niveau: str | list[str] | None = None, categorie: str | list[str] | None = None, classe: str | list[str] | None = None, specialite: str | list[str] | None = None,
 ) -> dict:
     """Publie un fichier (octets déjà en main) dans le catalogue public. Voir docstring du module."""
     if len(contenu) == 0:
@@ -112,7 +130,7 @@ def publier_fichier_public(
 
 def publier_lien_public(
     ajoute_par: str, url: str, nom: str = "", description: str = "", dossier_id: str = None,
-    pays: str = None, niveau: str = None, categorie: str = None, classe: str = None, specialite: str = None,
+    pays: str | list[str] | None = None, niveau: str | list[str] | None = None, categorie: str | list[str] | None = None, classe: str | list[str] | None = None, specialite: str | list[str] | None = None,
 ) -> dict:
     """Publie un lien (pas de fichier réel, url_publique EST le lien) dans le catalogue public."""
     url_val = (url or "").strip()
@@ -137,7 +155,7 @@ def publier_lien_public(
 
 def publier_texte_public(
     ajoute_par: str, contenu: str, nom: str = "", dossier_id: str = None,
-    pays: str = None, niveau: str = None, categorie: str = None, classe: str = None, specialite: str = None,
+    pays: str | list[str] | None = None, niveau: str | list[str] | None = None, categorie: str | list[str] | None = None, classe: str | list[str] | None = None, specialite: str | list[str] | None = None,
 ) -> dict:
     """Publie une note de texte libre (stockée comme un .txt ordinaire) dans le catalogue public."""
     contenu_texte = (contenu or "").strip()
@@ -171,7 +189,7 @@ def publier_texte_public(
 
 def modifier_entree_publique(
     entree_id: str, utilisateur_id: str, description: str = None,
-    pays: str = None, niveau: str = None, categorie: str = None, classe: str = None, specialite: str = None,
+    pays: str | list[str] | None = None, niveau: str | list[str] | None = None, categorie: str | list[str] | None = None, classe: str | list[str] | None = None, specialite: str | list[str] | None = None,
 ) -> str | None:
     """
     Modifie la description et/ou les filtres d'une entrée déjà publiée
@@ -195,16 +213,20 @@ def modifier_entree_publique(
     maj = {}
     if description is not None:
         maj["description"] = description.strip()
+    # 15/09/2026 : chaque champ accepte toujours chaîne vide "" pour
+    # effacer le filtre (même contrat qu'avant), une chaîne ou liste
+    # non vide pour (re)définir les valeurs. Écrit toujours un tableau,
+    # jamais une chaîne, colonnes passées en text[] le même jour.
     if pays is not None:
-        maj["pays"] = normaliser_et_enregistrer("pays", pays) if pays.strip() else None
+        maj["pays"] = normaliser_et_enregistrer_liste("pays", _vers_liste(pays))
     if niveau is not None:
-        maj["niveau"] = normaliser_et_enregistrer("niveau", niveau) if niveau.strip() else None
+        maj["niveau"] = normaliser_et_enregistrer_liste("niveau", _vers_liste(niveau))
     if categorie is not None:
-        maj["categorie"] = normaliser_et_enregistrer("categorie", categorie) if categorie.strip() else None
+        maj["categorie"] = normaliser_et_enregistrer_liste("categorie", _vers_liste(categorie))
     if classe is not None:
-        maj["classe"] = normaliser_et_enregistrer("classe", classe) if classe.strip() else None
+        maj["classe"] = normaliser_et_enregistrer_liste("classe", _vers_liste(classe))
     if specialite is not None:
-        maj["specialite"] = normaliser_et_enregistrer("specialite", specialite) if specialite.strip() else None
+        maj["specialite"] = normaliser_et_enregistrer_liste("specialite", _vers_liste(specialite))
 
     if not maj:
         return "AUCUNE_MODIFICATION_FOURNIE"
