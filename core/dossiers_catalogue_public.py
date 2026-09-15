@@ -211,6 +211,23 @@ def lister_fichiers_ids_dossier(dossier_id: str) -> list:
     return [ligne["fichier_id"] for ligne in res.data]
 
 
+def lister_sous_dossiers(dossier_id: str) -> list:
+    """Renvoie les sous-dossiers directs (id, nom) d'un dossier du
+    catalogue public, sans filtre de statut (contribution_libre/privee
+    ne concerne que le droit d'ajouter du contenu, pas la visibilite).
+    Meme principe que core/dossiers_bibliotheque.py::lister_sous_dossiers
+    pour le perso (15/09/2026, demande Bourama : la page de consultation
+    publique d'un dossier n'affichait aucun sous-dossier)."""
+    res = (
+        supabase.table("dossiers_catalogue_public")
+        .select("id, nom, created_at")
+        .eq("dossier_parent_id", dossier_id)
+        .order("created_at")
+        .execute()
+    )
+    return res.data
+
+
 def dossiers_ids_pour_fichier(fichier_id: str) -> list:
     """
     15/09/2026, demande Bourama (fichier attaché à plusieurs dossiers) :
