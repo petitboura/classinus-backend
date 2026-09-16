@@ -79,6 +79,27 @@ async def uploader_fichier_dossier_designe(
     type_mime = fichier.content_type or "application/octet-stream"
     extension = nom_fichier.rsplit(".", 1)[-1] if "." in nom_fichier else "bin"
 
+    # 16/09/2026 (correctif orphelins, chantier quota Supabase) : cette
+    # route fait un upsert sur (user_id, plateforme, dossier_nom, chemin,
+    # nom_fichier) -- si le contenu a changé depuis le dernier envoi de
+    # CE MEME fichier, l'upsert remplace la ligne mais l'ANCIEN
+    # chemin_stockage n'était jusqu'ici jamais nettoyé : le fichier
+    # d'avant restait orphelin dans le Storage pour toujours. On lit
+    # l'ancienne ligne AVANT d'uploader pour pouvoir la nettoyer après
+    # coup si son chemin_stockage a changé.
+    ancienne_ligne = (
+        supabase.table("fichiers_dossier_designe")
+        .select("chemin_stockage")
+        .eq("user_id", utilisateur.id)
+        .eq("plateforme", plateforme)
+        .eq("dossier_nom", dossier_nom)
+        .eq("chemin", chemin_liste)
+        .eq("nom_fichier", nom_fichier)
+        .maybe_single()
+        .execute()
+    )
+    ancien_chemin_stockage = (ancienne_ligne.data or {}).get("chemin_stockage") if ancienne_ligne else None
+
     try:
         # 16/09/2026 (dedoublonnage, chantier quota Supabase) : passe
         # par stocker_avec_dedoublonnage au lieu d'un chemin fixe + hash
@@ -156,6 +177,15 @@ async def uploader_fichier_dossier_designe(
         raise erreur_api(500, "ECHEC_ENREGISTREMENT")
 
     entree = insertion.data[0]
+    # 16/09/2026 (correctif orphelins) : le nouveau contenu remplace
+    # l'ancien (upsert) -- si l'ancien fichier stocké était différent du
+    # nouveau, on le nettoie maintenant (après coup, pour ne jamais
+    # supprimer avant d'être sûr que la nouvelle ligne a bien été écrite).
+    if ancien_chemin_stockage and ancien_chemin_stockage != chemin_stockage:
+        try:
+            supprimer_stockage_si_dernier_usage(supabase, ancien_chemin_stockage)
+        except Exception as e:
+            logging.warning(f"Nettoyage ancien fichier Storage échoué ({ancien_chemin_stockage}), remplacement effectué quand même : {e}")
     # 16/09/2026 (chantier quota Supabase) : declenchement immediat en
     # arriere-plan au lieu d'attendre le passage suivant des boucles de
     # polling -- celles-ci restent le filet de securite.
