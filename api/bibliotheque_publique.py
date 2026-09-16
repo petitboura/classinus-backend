@@ -26,6 +26,7 @@ catalogue_public.py).
 import asyncio
 import logging
 import os
+import threading
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
@@ -37,6 +38,8 @@ from core.client_http_supabase import nouveau_client_http_supabase
 from api.auth import utilisateur_courant, utilisateur_optionnel
 from core.erreurs import erreur_api
 from core.file_attente_vectorisation import (
+    extraire_texte_maintenant_publique,
+    vectoriser_maintenant_publique,
     necessite_vectorisation_fichier_publique,
     necessite_extraction_texte_publique,
     necessite_vectorisation_note,
@@ -491,6 +494,16 @@ async def ajouter_a_bibliotheque_publique(
 
     entree = ligne.data[0]
     await asyncio.to_thread(_classer_si_autorise, entree["id"], dossier_id, utilisateur.id)
+
+    # 16/09/2026 (chantier quota Supabase) : déclenchement immédiat en
+    # arrière-plan (image -> vraie vectorisation ; pdf/word/excel/texte ->
+    # extraction gratuite) au lieu d'attendre le prochain passage des
+    # boucles de polling -- celles-ci restent le filet de sécurité.
+    if entree.get("statut_vectorisation") == "en_attente":
+        asyncio.create_task(asyncio.to_thread(vectoriser_maintenant_publique, entree["id"]))
+    if entree.get("statut_extraction_texte") == "en_attente":
+        asyncio.create_task(asyncio.to_thread(extraire_texte_maintenant_publique, entree["id"]))
+
     return _marquer_est_a_moi([entree], utilisateur)[0]
 
 
@@ -610,6 +623,10 @@ def ajouter_texte_bibliotheque_publique(payload: AjouterTextePayload, utilisateu
     _classer_si_autorise(entree["id"], payload.dossier_id, utilisateur.id)
     # Vectorisation en arrière-plan (29/08, voir core/file_attente_vectorisation.py) --
     # avant, indexer_texte_catalogue_public était appelé directement ici.
+    # 16/09/2026 : déclenchement immédiat -- route sync (def), thread
+    # simple comme pour la note privée (voir ajouter_texte, api/bibliotheque_utilisateur.py).
+    if entree.get("statut_vectorisation") == "en_attente":
+        threading.Thread(target=vectoriser_maintenant_publique, args=(entree["id"],), daemon=True).start()
     return _marquer_est_a_moi([entree], utilisateur)[0]
 
 
