@@ -1,5 +1,5 @@
 """Chantier "mode source" (voir contexte-mode-source-clovis.md), demande
-Bourama, 16/09/2026 -- voir core/mode_source_conversation.py. Leger : deux
+Bourama, 16/09/2026, voir core/mode_source_conversation.py. Leger : deux
 routes, lire et definir le mode source actif d'une conversation. Meme
 forme que api/persona_pedagogique_conversation.py, SANS regle de
 verrouillage mineur (ce groupe doit rester visible et modifiable par tout

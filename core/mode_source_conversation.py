@@ -1,6 +1,6 @@
 """Mode source actif par conversation (chantier "mode source", voir
 contexte-mode-source-clovis.md, demande Bourama, 16/09/2026) : Aucun,
-Recherche ou Sur pieces -- controle QUELLES SOURCES Clovis a le droit
+Recherche ou Sur pieces, controle QUELLES SOURCES Clovis a le droit
 d'utiliser pour repondre. Un eleve choisit ce mode explicitement (meme
 bouton que le persona pedagogique, groupe separe), jamais l'IA elle-meme
 en cours de conversation.
@@ -8,7 +8,7 @@ en cours de conversation.
 ATTENTION NOM (voir aussi la migration) : ce module est DISTINCT de
 core/mode_actif_conversation.py (rattachement enseignant/code de classe)
 et de core/persona_pedagogique_conversation.py (style d'enseignement de
-Clovis) -- trois concepts independants qui cohabitent sur la meme
+Clovis). Trois concepts independants qui cohabitent sur la meme
 conversation. Ne jamais fusionner ni faire ecrire ce module dans une de
 ces deux tables.
 
@@ -16,7 +16,7 @@ Table dediee conversation_mode_source (migration 2026_09_16c), meme
 schema de cache court que core/persona_pedagogique_conversation.py.
 
 "Aucun" (comportement actuel, rien ne change) correspond a mode_source
-valant None -- aucune ligne en base, ou une ligne avec mode_source=None
+valant None : aucune ligne en base, ou une ligne avec mode_source=None
 si l'eleve revient explicitement sur "Aucun" apres avoir choisi un mode
 (meme upsert que persona_pedagogique_conversation.py).
 """
@@ -30,7 +30,7 @@ from api.auth import supabase
 # lecture base a chaque message si evitable). Invalide immediatement des
 # qu'un changement est ecrit (voir definir_mode_source), TTL de secours
 # sinon. LIMITE CONNUE (meme limite que les autres caches courts de ce
-# type) : cache en memoire par process -- si Railway fait tourner
+# type) : cache en memoire par process. Si Railway fait tourner
 # plusieurs instances, un changement fait via une instance n'invalide pas
 # le cache des autres avant l'expiration du TTL.
 _DUREE_CACHE_SECONDES = 5 * 60
@@ -68,7 +68,7 @@ def obtenir_mode_source(conversation_id: str, user_id: str) -> str | None:
 def definir_mode_source(conversation_id: str, user_id: str, mode_source: str | None) -> dict | None:
     """Fixe (ou efface, si mode_source est None, c'est-a-dire "Aucun") le
     mode source actif de cette conversation pour cet eleve. Upsert sur
-    conversation_id seul (cle primaire) -- une conversation n'appartient
+    conversation_id seul (cle primaire). Une conversation n'appartient
     qu'a un seul utilisateur, jamais recreee pour un autre. None si
     mode_source est fourni mais ne fait pas partie de
     MODES_SOURCE_VALIDES (jamais d'ecriture d'une valeur invalide en

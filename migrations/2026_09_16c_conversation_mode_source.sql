@@ -12,8 +12,8 @@
 -- ATTENTION NOM (repete volontairement, meme point d'audit critique que
 -- les tables voisines) : NE PAS confondre avec conversation_mode_actif
 -- (migration 2026_09_06, rattachement enseignant/code de classe) ni avec
--- conversation_persona_pedagogique (style d'enseignement de Clovis) --
--- trois concepts independants qui cohabitent sur la meme conversation.
+-- conversation_persona_pedagogique (style d'enseignement de Clovis).
+-- Trois concepts independants qui cohabitent sur la meme conversation.
 -- D'ou le nom distinct conversation_mode_source ici, et
 -- core/mode_source_conversation.py cote code.
 --
