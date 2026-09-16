@@ -59,6 +59,7 @@ from api.historique_reponses_qcm import router_historique_reponses_qcm
 from api.outils_registre import router as outils_registre_router
 from api.appareils_mobiles import router as appareils_mobiles_router
 from api.canal_temps_reel import router as canal_temps_reel_router
+from api.canal_agent_applicatif import router as canal_agent_applicatif_router
 from api.webhooks_github import router as webhooks_github_router
 from api.dossiers_designes import router as dossiers_designes_router
 from api.programme_notions import router as programme_notions_router
@@ -718,6 +719,7 @@ app.include_router(router_historique_reponses_qcm)
 app.include_router(outils_registre_router)
 app.include_router(appareils_mobiles_router)
 app.include_router(canal_temps_reel_router)
+app.include_router(canal_agent_applicatif_router)
 app.include_router(dossiers_designes_router)
 app.include_router(webhooks_github_router)
 app.include_router(programme_notions_router)

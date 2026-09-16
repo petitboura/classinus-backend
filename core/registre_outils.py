@@ -567,5 +567,12 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # (0.383.0, meme situation que "ImageSearch" plus haut) -- repli
     # automatique sur Wrench sinon, rien d'autre ne casse.
     "demander_outils": {"label": "Recherche d'un outil", "icone": "PackageSearch", "onglet": None},
+
+    # --- Agent applicatif (chantier C, 16/09/2026) --- onglet=None,
+    # meme logique que les blocs ci-dessus : l'etudiant ne clique jamais
+    # ce bouton, c'est le modele qui l'appelle en autonomie. A activer
+    # via forcer_rechargement_catalogue_outils ou redemarrage Railway
+    # (cache 24h connu, voir plan-agent-applicatif-clovis.md section 2).
+    "executer_action_application": {"label": "Action dans l'application", "icone": "MousePointerClick", "onglet": None},
 }
 
