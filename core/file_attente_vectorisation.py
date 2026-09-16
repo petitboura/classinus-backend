@@ -435,6 +435,10 @@ def vectoriser_maintenant_publique(fichier_id: str) -> bool:
     try:
         supabase.table("bibliotheque_publique").update({"statut_vectorisation": "en_cours"}).eq("id", fichier_id).execute()
         _vectoriser_publique(ligne)
+        # 15/09/2026 : même correction que _traiter_lot ci-dessus, voir
+        # _a_produit_des_chunks.
+        if not _a_produit_des_chunks("documents_catalogue_public", fichier_id):
+            raise ValueError("aucun contenu exploitable n'a pu être extrait de ce fichier (0 chunk produit)")
         supabase.table("bibliotheque_publique").update({
             "statut_vectorisation": "pret",
             "erreur_vectorisation": None,
@@ -464,7 +468,37 @@ COLONNES_PRIVEE = "id, user_id, chemin_stockage, nom_fichier, type_mime, tentati
 COLONNES_PUBLIQUE = "id, chemin_stockage, nom_fichier, type_mime, tentatives_vectorisation"
 
 
-def _traiter_lot(table: str, colonnes: str, fonction_vectorisation, filtre_niveau: bool) -> int:
+def _a_produit_des_chunks(table_chunks: str, fichier_id: str) -> bool:
+    """
+    15/09/2026, correction bug Bourama (statut de vectorisation
+    trompeur) : jusqu'ici, dès que fonction_vectorisation() ne levait
+    pas d'exception, le fichier était marqué "pret" sans jamais
+    vérifier qu'un seul chunk avait réellement été inséré. Un PDF sans
+    texte extractible, une image dont la description a échoué
+    silencieusement, un type de fichier qui ne correspond à aucune
+    branche de _vectoriser_publique/_vectoriser_privee : tous ces cas
+    finissaient "pret" avec zéro chunk (voir vue_catalogue_public_
+    fichiers::anomalie_vectorisation, qui détectait déjà l'anomalie
+    sans jamais empêcher qu'elle se produise). Renvoie True seulement
+    si au moins un chunk existe vraiment pour ce fichier.
+    """
+    try:
+        res = (
+            supabase.table(table_chunks)
+            .select("id", count="exact")
+            .eq("fichier_id", fichier_id)
+            .limit(1)
+            .execute()
+        )
+        return (res.count or 0) > 0
+    except Exception as e:
+        logging.error(f"ERREUR vérification chunks ({table_chunks}, fichier_id={fichier_id}) : {e}")
+        # Prudence : en cas de doute (la vérification elle-même a
+        # échoué), ne PAS déclarer "pret" à tort.
+        return False
+
+
+def _traiter_lot(table: str, colonnes: str, table_chunks: str, fonction_vectorisation, filtre_niveau: bool) -> int:
     """
     Traite jusqu'à TAILLE_LOT fichiers "en_attente" de `table`, du plus
     ancien au plus récent (pour qu'une longue file ne fasse jamais
@@ -503,6 +537,12 @@ def _traiter_lot(table: str, colonnes: str, fonction_vectorisation, filtre_nivea
         try:
             supabase.table(table).update({"statut_vectorisation": "en_cours"}).eq("id", fichier_id).execute()
             fonction_vectorisation(ligne)
+            # 15/09/2026 : voir _a_produit_des_chunks ci-dessus. Un
+            # succès sans chunk n'est PAS un succès : on le traite
+            # comme n'importe quelle autre erreur (mêmes compteur de
+            # tentatives, même passage par "echec"/réessai à froid).
+            if not _a_produit_des_chunks(table_chunks, fichier_id):
+                raise ValueError("aucun contenu exploitable n'a pu être extrait de ce fichier (0 chunk produit)")
             supabase.table(table).update({
                 "statut_vectorisation": "pret",
                 "erreur_vectorisation": None,
@@ -548,8 +588,8 @@ def _traiter_lot(table: str, colonnes: str, fonction_vectorisation, filtre_nivea
 def traiter_file_attente_une_fois() -> int:
     """Un seul passage sur les deux bibliothèques -- voir api/main.py:_boucle_vectorisation pour la boucle continue."""
     total = 0
-    total += _traiter_lot("fichiers_uploades", COLONNES_PRIVEE, _vectoriser_privee, filtre_niveau=True)
-    total += _traiter_lot("bibliotheque_publique", COLONNES_PUBLIQUE, _vectoriser_publique, filtre_niveau=False)
+    total += _traiter_lot("fichiers_uploades", COLONNES_PRIVEE, "documents_bibliotheque", _vectoriser_privee, filtre_niveau=True)
+    total += _traiter_lot("bibliotheque_publique", COLONNES_PUBLIQUE, "documents_catalogue_public", _vectoriser_publique, filtre_niveau=False)
     return total
 
 

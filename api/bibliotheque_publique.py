@@ -34,7 +34,7 @@ from pydantic import BaseModel
 from supabase import create_client, ClientOptions
 from core.client_http_supabase import nouveau_client_http_supabase
 
-from api.auth import utilisateur_courant
+from api.auth import utilisateur_courant, utilisateur_optionnel
 from core.erreurs import erreur_api
 from core.file_attente_vectorisation import (
     necessite_vectorisation_fichier_publique,
@@ -51,6 +51,7 @@ from core.dossiers_catalogue_public import (
     fichier_ids_pour_dossiers,
 )
 from core.dossiers_publics_attaches import propager_fichier_public_range_dossier as _propager_fichier_public_range_dossier
+from core.catalogue_public_publication import modifier_entree_publique
 from core.geolocalisation_pays import pays_utilisateur
 from core.listes_bibliotheque_publique import lister_valeurs, normaliser_et_enregistrer_liste
 
@@ -106,6 +107,13 @@ class EntreeBibliothequePublique(BaseModel):
     # core/listes_bibliotheque_publique.py), même principe.
     classe: list[str] = []
     specialite: list[str] = []
+    # 15/09/2026, demande Bourama (modifier les filtres après
+    # publication) : True si l'utilisateur courant est le contributeur
+    # d'origine de cette entrée, jamais `ajoute_par` en clair (pas
+    # d'id d'un autre utilisateur exposé), juste ce booléen calculé
+    # côté serveur, pour que le frontend sache s'il doit proposer le
+    # bouton "Modifier les filtres" (qui échouerait en 403 sinon).
+    est_a_moi: bool = False
 
 
 @router.get("/listes")
@@ -122,8 +130,21 @@ def lister_listes_filtres():
 
 _CAMPOS_ENTREE = (
     "id, nom, description, nom_fichier, type_mime, taille_octets, url_publique, created_at, "
-    "statut_vectorisation, pays, niveau, categorie, classe, specialite"
+    "statut_vectorisation, pays, niveau, categorie, classe, specialite, ajoute_par"
 )
+
+
+def _marquer_est_a_moi(lignes: list, utilisateur) -> list:
+    """
+    15/09/2026, demande Bourama : calcule `est_a_moi` sur chaque ligne
+    juste avant de la renvoyer. `ajoute_par` reste sélectionné en base
+    (_CAMPOS_ENTREE) mais n'est jamais exposé tel quel : le modèle de
+    réponse EntreeBibliothequePublique ne déclare pas ce champ, donc
+    FastAPI le filtre automatiquement à la sérialisation.
+    """
+    for ligne in lignes:
+        ligne["est_a_moi"] = bool(utilisateur and ligne.get("ajoute_par") == utilisateur.id)
+    return lignes
 
 
 @router.get("", response_model=list[EntreeBibliothequePublique])
@@ -138,6 +159,7 @@ def lister_bibliotheque_publique(
     dossier_id: str | None = None,
     decalage: int = 0,
     limite: int = 30,
+    utilisateur=Depends(utilisateur_optionnel),
 ):
     # Filtre statut="publie" (22/08, chantier signalements) : une entrée
     # retirée par un admin suite à un signalement reste en base (trace
@@ -212,11 +234,11 @@ def lister_bibliotheque_publique(
 
     if pays_filtre:
         res = _filtrer_avec_heritage(_base(), "pays", pays_filtre).order("created_at", desc=True).range(decalage, decalage + limite - 1).execute()
-        return res.data or []
+        return _marquer_est_a_moi(res.data or [], utilisateur)
 
     if not pays_prioritaire:
         res = _base().order("created_at", desc=True).range(decalage, decalage + limite - 1).execute()
-        return res.data or []
+        return _marquer_est_a_moi(res.data or [], utilisateur)
 
     # Mise en avant en deux temps : d'abord les entrées du pays détecté
     # (les plus récentes en premier), puis le reste -- chaque groupe
@@ -232,7 +254,7 @@ def lister_bibliotheque_publique(
 
     if compte_prioritaire == 0:
         res = _base().order("created_at", desc=True).range(decalage, decalage + limite - 1).execute()
-        return res.data or []
+        return _marquer_est_a_moi(res.data or [], utilisateur)
 
     resultats: list = []
     if decalage < compte_prioritaire:
@@ -260,7 +282,7 @@ def lister_bibliotheque_publique(
         )
         resultats.extend(res2.data or [])
 
-    return resultats
+    return _marquer_est_a_moi(resultats, utilisateur)
 
 
 @router.get("/par-url")
@@ -290,7 +312,7 @@ def obtenir_entree_bibliotheque_publique_par_url(url: str):
 
 
 @router.get("/{entree_id}", response_model=EntreeBibliothequePublique)
-def obtenir_entree_bibliotheque_publique(entree_id: str):
+def obtenir_entree_bibliotheque_publique(entree_id: str, utilisateur=Depends(utilisateur_optionnel)):
     """Détail d'une entrée publiée, pour la page publique /bibliotheque/[id]
     (chantier "Clovis ouvert" du 10/09/2026, demande Bourama : chaque
     PDF retrouvable par son nom et téléchargeable via un lien propre).
@@ -309,7 +331,43 @@ def obtenir_entree_bibliotheque_publique(entree_id: str):
     )
     if not res or not res.data:
         raise erreur_api(404, "ENTREE_INTROUVABLE")
-    return res.data
+    return _marquer_est_a_moi([res.data], utilisateur)[0]
+
+
+class ModifierFiltresFichierPayload(BaseModel):
+    pays: list[str] = []
+    niveau: list[str] = []
+    categorie: list[str] = []
+    classe: list[str] = []
+    specialite: list[str] = []
+
+
+@router.patch("/{entree_id}/filtres", response_model=EntreeBibliothequePublique)
+def modifier_filtres_fichier(entree_id: str, payload: ModifierFiltresFichierPayload, utilisateur=Depends(utilisateur_courant)):
+    """
+    15/09/2026, demande Bourama : les filtres d'un fichier/lien/texte
+    déjà publié n'étaient modifiables nulle part côté API humaine
+    (seul l'outil MCP clovis_modifier_entree_catalogue_public le
+    pouvait, voir core/catalogue_public_publication.py::
+    modifier_entree_publique, réutilisé ici), réservé au
+    contributeur d'origine, même règle que supprimer ci-dessous.
+    Remplace toujours entièrement chaque filtre par la liste fournie
+    (liste vide efface ce filtre), même contrat que PATCH
+    /dossiers/{dossier_id}/filtres côté dossier.
+    """
+    erreur = modifier_entree_publique(
+        entree_id, utilisateur.id,
+        pays=payload.pays, niveau=payload.niveau, categorie=payload.categorie,
+        classe=payload.classe, specialite=payload.specialite,
+    )
+    if erreur == "ENTREE_INTROUVABLE":
+        raise erreur_api(404, "ENTREE_INTROUVABLE")
+    if erreur == "CETTE_ENTREE_NE_T_APPARTIENT_PAS":
+        raise erreur_api(403, "CETTE_ENTREE_NE_T_APPARTIENT_PAS")
+    res = supabase.table("bibliotheque_publique").select(_CAMPOS_ENTREE).eq("id", entree_id).maybe_single().execute()
+    if not res or not res.data:
+        raise erreur_api(404, "ENTREE_INTROUVABLE")
+    return _marquer_est_a_moi([res.data], utilisateur)[0]
 
 
 @router.post("", response_model=EntreeBibliothequePublique, status_code=201)
@@ -413,7 +471,7 @@ async def ajouter_a_bibliotheque_publique(
 
     entree = ligne.data[0]
     await asyncio.to_thread(_classer_si_autorise, entree["id"], dossier_id, utilisateur.id)
-    return entree
+    return _marquer_est_a_moi([entree], utilisateur)[0]
 
 
 class AjouterLienPayload(BaseModel):
@@ -465,7 +523,7 @@ def ajouter_lien_bibliotheque_publique(payload: AjouterLienPayload, utilisateur=
 
     entree = ligne.data[0]
     _classer_si_autorise(entree["id"], payload.dossier_id, utilisateur.id)
-    return entree
+    return _marquer_est_a_moi([entree], utilisateur)[0]
 
 
 class AjouterTextePayload(BaseModel):
@@ -532,7 +590,7 @@ def ajouter_texte_bibliotheque_publique(payload: AjouterTextePayload, utilisateu
     _classer_si_autorise(entree["id"], payload.dossier_id, utilisateur.id)
     # Vectorisation en arrière-plan (29/08, voir core/file_attente_vectorisation.py) --
     # avant, indexer_texte_catalogue_public était appelé directement ici.
-    return entree
+    return _marquer_est_a_moi([entree], utilisateur)[0]
 
 
 @router.post("/{entree_id}/reessayer-vectorisation", status_code=204)

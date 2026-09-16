@@ -1122,16 +1122,18 @@ def supprimer_dossier_catalogue_public(dossier_id: str, ctx: Context) -> str:
 def publier_fichier_catalogue_public(
     nom_fichier: str, type_mime: str, ctx: Context,
     nom: str = "", description: str = "", contenu_base64: str = "", url_fichier: str = "",
-    dossier_id: str = "", pays: str = "", niveau: str = "", categorie: str = "",
-    classe: str = "", specialite: str = "",
+    dossier_id: str = "", pays: list[str] = [], niveau: list[str] = [], categorie: list[str] = [],
+    classe: list[str] = [], specialite: list[str] = [],
 ) -> str:
     """
     Publie un fichier dans le catalogue public (visible par tout le
     monde), au nom de cet utilisateur -- mêmes règles que
     clovis_ajouter_document_bibliotheque pour nom_fichier/type_mime/
     url_fichier/contenu_base64 (jamais demandés à l'utilisateur, limite
-    50 Mo). `dossier_id` (dossier PUBLIC), `pays`, `niveau`,
-    `categorie`, `classe`, `specialite` optionnels.
+    50 Mo). `dossier_id` (dossier PUBLIC) optionnel. `pays`, `niveau`,
+    `categorie`, `classe`, `specialite` optionnels, chacun une liste de
+    valeurs (un fichier peut en avoir plusieurs par filtre, ex.
+    pays=["Mali", "Sénégal"]).
     """
     user_id = _user_id_authentifie(ctx)
     if not user_id:
@@ -1182,9 +1184,14 @@ def publier_fichier_catalogue_public(
 )
 def publier_lien_catalogue_public(
     url: str, ctx: Context, nom: str = "", description: str = "", dossier_id: str = "",
-    pays: str = "", niveau: str = "", categorie: str = "", classe: str = "", specialite: str = "",
+    pays: list[str] = [], niveau: list[str] = [], categorie: list[str] = [], classe: list[str] = [], specialite: list[str] = [],
 ) -> str:
-    """Publie un lien dans le catalogue public (pas de fichier réel : url_publique EST le lien lui-même)."""
+    """
+    Publie un lien dans le catalogue public (pas de fichier réel :
+    url_publique EST le lien lui-même). `pays`, `niveau`, `categorie`,
+    `classe`, `specialite` optionnels, chacun une liste de valeurs (un
+    fichier peut en avoir plusieurs par filtre).
+    """
     user_id = _user_id_authentifie(ctx)
     if not user_id:
         return "Erreur : utilisateur non authentifié."
@@ -1210,9 +1217,13 @@ def publier_lien_catalogue_public(
 )
 def publier_texte_catalogue_public(
     contenu: str, ctx: Context, nom: str = "", dossier_id: str = "",
-    pays: str = "", niveau: str = "", categorie: str = "", classe: str = "", specialite: str = "",
+    pays: list[str] = [], niveau: list[str] = [], categorie: list[str] = [], classe: list[str] = [], specialite: list[str] = [],
 ) -> str:
-    """Publie une note de texte libre dans le catalogue public."""
+    """
+    Publie une note de texte libre dans le catalogue public. `pays`,
+    `niveau`, `categorie`, `classe`, `specialite` optionnels, chacun une
+    liste de valeurs (un fichier peut en avoir plusieurs par filtre).
+    """
     user_id = _user_id_authentifie(ctx)
     if not user_id:
         return "Erreur : utilisateur non authentifié."
@@ -1237,13 +1248,15 @@ def publier_texte_catalogue_public(
     annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=True),
 )
 def modifier_entree_catalogue_public(
-    entree_id: str, ctx: Context, description: str = "", pays: str = "",
-    niveau: str = "", categorie: str = "", classe: str = "", specialite: str = "",
+    entree_id: str, ctx: Context, description: str = "", pays: list[str] = [],
+    niveau: list[str] = [], categorie: list[str] = [], classe: list[str] = [], specialite: list[str] = [],
 ) -> str:
     """
     Modifie la description et/ou les filtres d'une entrée déjà publiée
     dans le catalogue public. Réservé au contributeur d'origine. Seuls
-    les champs fournis (non vides) sont modifiés.
+    les champs fournis (non vides) sont modifiés -- un filtre fourni
+    REMPLACE entièrement ses valeurs actuelles (ex. pays=["Mali"]
+    remplace, il ne s'ajoute pas aux valeurs existantes).
     """
     user_id = _user_id_authentifie(ctx)
     if not user_id:
@@ -1252,11 +1265,11 @@ def modifier_entree_catalogue_public(
         erreur = _modifier_entree_publique(
             entree_id, user_id,
             description=description.strip() or None if description else None,
-            pays=pays.strip() or None if pays else None,
-            niveau=niveau.strip() or None if niveau else None,
-            categorie=categorie.strip() or None if categorie else None,
-            classe=classe.strip() or None if classe else None,
-            specialite=specialite.strip() or None if specialite else None,
+            pays=pays or None,
+            niveau=niveau or None,
+            categorie=categorie or None,
+            classe=classe or None,
+            specialite=specialite or None,
         )
     except Exception as e:
         logging.error(f"ERREUR outil modifier_entree_catalogue_public : {e}")
