@@ -26,16 +26,15 @@ jamais un ajout explicite fichier par fichier.
 """
 
 import asyncio
-import hashlib
 import json
 import logging
-import uuid
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from postgrest.exceptions import APIError
 
 from api.auth import utilisateur_courant, supabase
 from core.erreurs import erreur_api
+from core.dedoublonnage_stockage import stocker_avec_dedoublonnage, supprimer_stockage_si_dernier_usage
 from core.vectorisation_dossiers_designes import (
     BUCKET_DOSSIERS_DESIGNES,
     necessite_extraction_texte,
@@ -78,16 +77,18 @@ async def uploader_fichier_dossier_designe(
 
     nom_fichier = fichier.filename or "fichier"
     type_mime = fichier.content_type or "application/octet-stream"
-    hash_contenu = hashlib.sha256(contenu).hexdigest()
     extension = nom_fichier.rsplit(".", 1)[-1] if "." in nom_fichier else "bin"
-    chemin_stockage = f"dossiers_designes/{utilisateur.id}/{uuid.uuid4()}.{extension}"
 
     try:
-        supabase.storage.from_(BUCKET_DOSSIERS_DESIGNES).upload(
-            chemin_stockage, contenu, {"content-type": type_mime}
-        )
+        # 16/09/2026 (dedoublonnage, chantier quota Supabase) : passe
+        # par stocker_avec_dedoublonnage au lieu d'un chemin fixe + hash
+        # calculé seulement pour info -- réutilise le fichier existant
+        # si le contenu est identique à un fichier déjà présent
+        # (n'importe laquelle des 3 bibliothèques), au lieu de le
+        # réuploader dans un nouveau chemin "dossiers_designes/...".
+        chemin_stockage, hash_contenu = stocker_avec_dedoublonnage(supabase, contenu, extension, f"dossiers_designes/{utilisateur.id}", type_mime)
     except Exception as e:
-        logging.error(f"ERREUR SUPABASE STORAGE (upload dossier designe {chemin_stockage}) : {e}")
+        logging.error(f"ERREUR SUPABASE STORAGE (upload dossier designe, utilisateur {utilisateur.id}) : {e}")
         raise erreur_api(500, "ECHEC_DU_TRANSFERT")
 
     url_publique = supabase.storage.from_(BUCKET_DOSSIERS_DESIGNES).get_public_url(chemin_stockage)
@@ -144,8 +145,12 @@ async def uploader_fichier_dossier_designe(
         # fichier restait pour toujours dans le bucket, invisible et
         # inutilisable (rien ne le retrouve sans ligne chemin_stockage),
         # mais consommant quand meme le quota de stockage.
+        # 16/09/2026 (suite, dedoublonnage) : passe par
+        # supprimer_stockage_si_dernier_usage -- chemin_stockage peut
+        # desormais etre un fichier REUTILISE (partage avec une autre
+        # ligne, potentiellement dans une autre bibliotheque).
         try:
-            supabase.storage.from_(BUCKET_DOSSIERS_DESIGNES).remove([chemin_stockage])
+            supprimer_stockage_si_dernier_usage(supabase, chemin_stockage)
         except Exception as e2:
             logging.error(f"ECHEC ROLLBACK STORAGE apres echec BDD ({chemin_stockage}) : {e2}")
         raise erreur_api(500, "ECHEC_ENREGISTREMENT")

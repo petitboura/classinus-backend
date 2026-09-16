@@ -21,10 +21,10 @@ sans avoir besoin de l'ouvrir.
 
 import logging
 import os
-import uuid
 
 from supabase import create_client, ClientOptions
 from client_http_supabase import nouveau_client_http_supabase
+from dedoublonnage_stockage import stocker_avec_dedoublonnage, supprimer_stockage_si_dernier_usage
 
 BUCKET = "bibliotheque"
 
@@ -120,14 +120,11 @@ def enregistrer_fichier(
     Renvoie la ligne insérée (avec son id et son url_publique).
     """
     extension = nom_fichier.rsplit(".", 1)[-1] if "." in nom_fichier else "bin"
-    chemin_stockage = f"{niveau}/{uuid.uuid4()}.{extension}"
 
     try:
-        supabase.storage.from_(BUCKET).upload(
-            chemin_stockage, contenu, {"content-type": type_mime}
-        )
+        chemin_stockage, hash_contenu = stocker_avec_dedoublonnage(supabase, contenu, extension, niveau, type_mime)
     except Exception as e:
-        logging.error(f"ERREUR SUPABASE STORAGE (upload bibliothèque {chemin_stockage}) : {e}")
+        logging.error(f"ERREUR SUPABASE STORAGE (upload bibliothèque, niveau {niveau}) : {e}")
         raise
 
     url_publique = supabase.storage.from_(BUCKET).get_public_url(chemin_stockage)
@@ -139,6 +136,7 @@ def enregistrer_fichier(
             "user_id": user_id,
             "uploade_par": uploade_par,
             "chemin_stockage": chemin_stockage,
+            "hash_contenu": hash_contenu,
             "url_publique": url_publique,
             "nom_fichier": nom_fichier,
             "type_mime": type_mime,
@@ -158,8 +156,14 @@ def enregistrer_fichier(
         # chemin_stockage), mais consommant quand meme le quota de
         # stockage. On supprime le fichier fraichement uploade avant de
         # relancer l'erreur d'origine.
+        # 16/09/2026 (suite, dedoublonnage) : passe desormais par
+        # supprimer_stockage_si_dernier_usage plutot qu'un remove direct
+        # -- avec le dedoublonnage, chemin_stockage peut correspondre a
+        # un fichier REUTILISE (deja reference par une autre ligne,
+        # potentiellement dans une autre bibliotheque) ; un remove
+        # direct casserait alors l'acces de cet autre proprietaire.
         try:
-            supabase.storage.from_(BUCKET).remove([chemin_stockage])
+            supprimer_stockage_si_dernier_usage(supabase, chemin_stockage)
         except Exception as e2:
             logging.error(f"ECHEC ROLLBACK STORAGE apres echec BDD ({chemin_stockage}) : {e2}")
         raise
@@ -375,25 +379,31 @@ def supprimer_fichier(fichier_id: str) -> None:
     Storage. Ne lève pas d'erreur si l'objet Storage est déjà absent
     (suppression déjà faite ailleurs, ou incohérence mineure) -- seule
     la suppression de la ligne en base est considérée critique.
+
+    16/09/2026 (dedoublonnage) : la ligne BDD est supprimée AVANT de
+    toucher au Storage (ordre important -- supprimer_stockage_si_dernier_usage
+    vérifie s'il reste une ligne qui référence ce chemin ; si on
+    vérifiait avant d'avoir supprimé CETTE ligne, elle se trouverait
+    toujours elle-même et ne supprimerait jamais rien).
     """
     ligne = supabase.table("fichiers_uploades").select("chemin_stockage").eq("id", fichier_id).execute()
     if not ligne.data:
         return
 
     chemin_stockage = ligne.data[0]["chemin_stockage"]
+    supabase.table("fichiers_uploades").delete().eq("id", fichier_id).execute()
+
     try:
-        supabase.storage.from_(BUCKET).remove([chemin_stockage])
+        supprimer_stockage_si_dernier_usage(supabase, chemin_stockage)
     except Exception as e:
         logging.warning(f"Suppression Storage bibliothèque échouée ({chemin_stockage}), ligne supprimée quand même : {e}")
-
-    supabase.table("fichiers_uploades").delete().eq("id", fichier_id).execute()
 
 
 def supprimer_fichiers(fichier_ids: list[str]) -> None:
     """
     Même chose que supprimer_fichier, mais pour plusieurs fichiers d'un
-    coup : 1 SELECT + 1 suppression Storage groupée + 1 DELETE groupé,
-    au lieu de 3 appels PAR fichier.
+    coup : 1 SELECT + suppression Storage + 1 DELETE groupé, au lieu de
+    3 appels PAR fichier.
 
     Ajoutée le 2026-08-27 (bug remonté par Bourama : supprimer un
     dossier importé avec plusieurs dizaines de fichiers échouait avec
@@ -403,6 +413,12 @@ def supprimer_fichiers(fichier_ids: list[str]) -> None:
     de taille réelle). Ne lève pas d'erreur si la suppression Storage
     échoue pour tout ou partie des fichiers, même logique que la
     version unitaire -- seules les lignes en base sont critiques.
+
+    16/09/2026 (dedoublonnage) : lignes BDD supprimées AVANT le Storage
+    (même raison que supprimer_fichier), et chaque chemin (dédupliqué)
+    vérifié individuellement via supprimer_stockage_si_dernier_usage au
+    lieu d'un remove groupé -- un même chemin peut être partagé par
+    plusieurs fichiers désormais, un remove aveugle casserait les autres.
     """
     if not fichier_ids:
         return
@@ -413,11 +429,12 @@ def supprimer_fichiers(fichier_ids: list[str]) -> None:
         .in_("id", fichier_ids)
         .execute()
     )
-    chemins = [l["chemin_stockage"] for l in lignes.data if l.get("chemin_stockage")]
-    if chemins:
-        try:
-            supabase.storage.from_(BUCKET).remove(chemins)
-        except Exception as e:
-            logging.warning(f"Suppression Storage bibliothèque groupée échouée ({len(chemins)} fichiers), lignes supprimées quand même : {e}")
+    chemins = {l["chemin_stockage"] for l in lignes.data if l.get("chemin_stockage")}
 
     supabase.table("fichiers_uploades").delete().in_("id", fichier_ids).execute()
+
+    for chemin_stockage in chemins:
+        try:
+            supprimer_stockage_si_dernier_usage(supabase, chemin_stockage)
+        except Exception as e:
+            logging.warning(f"Suppression Storage bibliothèque échouée ({chemin_stockage}), ligne supprimée quand même : {e}")
