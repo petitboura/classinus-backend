@@ -635,14 +635,17 @@ def reessayer_vectorisation_publique(entree_id: str, utilisateur=Depends(utilisa
 @router.delete("/{entree_id}", status_code=204)
 def supprimer_de_bibliotheque_publique(entree_id: str, utilisateur=Depends(utilisateur_courant)):
     """Seul le contributeur d'origine peut retirer SA propre entrée --
-    même principe que declasser_document sur les plugins publics. Le
-    fichier dans Supabase Storage n'est pas explicitement retiré ici
-    (même choix que le reste de la bibliothèque -- voir
-    core/bibliotheque_fichiers.py, aucune suppression de storage n'y est
-    faite non plus au retrait d'une ligne)."""
+    même principe que declasser_document sur les plugins publics.
+
+    16/09/2026 : le fichier Storage est désormais explicitement retiré
+    ici (avant, seule la ligne était supprimée, laissant le fichier
+    orphelin dans le bucket -- cause identifiée du gonflement du
+    stockage). Même logique que core/bibliotheque_fichiers.py::
+    supprimer_fichier : un échec de suppression Storage n'empêche pas
+    la suppression de la ligne (seule celle-ci est critique)."""
     res = (
         supabase.table("bibliotheque_publique")
-        .select("ajoute_par")
+        .select("ajoute_par, chemin_stockage")
         .eq("id", entree_id)
         .maybe_single()
         .execute()
@@ -651,4 +654,14 @@ def supprimer_de_bibliotheque_publique(entree_id: str, utilisateur=Depends(utili
         raise erreur_api(404, "ENTREE_INTROUVABLE")
     if res.data["ajoute_par"] != utilisateur.id:
         raise erreur_api(403, "CETTE_ENTREE_NE_T_APPARTIENT_PAS")
+
+    chemin_stockage = res.data.get("chemin_stockage")
+    if chemin_stockage:
+        try:
+            supabase.storage.from_(BUCKET).remove([chemin_stockage])
+        except Exception as e:
+            logging.warning(
+                f"Suppression Storage bibliothèque publique échouée ({chemin_stockage}), ligne supprimée quand même : {e}"
+            )
+
     supabase.table("bibliotheque_publique").delete().eq("id", entree_id).execute()

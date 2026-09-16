@@ -239,14 +239,32 @@ def supprimer_entree_publique(entree_id: str, utilisateur_id: str) -> bool:
     """
     Supprime une entrée du catalogue public. Réplique à l'identique
     api/bibliotheque_publique.py::supprimer_de_bibliotheque_publique
-    (seul le contributeur d'origine peut retirer SA propre entrée) pour
-    être appelable directement par l'outil MCP. Renvoie True si
-    supprimée, False si introuvable ou si l'appelant n'en est pas
-    l'auteur.
+    (seul le contributeur d'origine peut retirer SA propre entrée, et
+    depuis le 16/09/2026 le fichier Storage est retiré avant la ligne,
+    même logique tolérante aux échecs -- voir la docstring de l'autre
+    fonction) pour être appelable directement par l'outil MCP. Renvoie
+    True si supprimée, False si introuvable ou si l'appelant n'en est
+    pas l'auteur.
     """
-    res = supabase.table("bibliotheque_publique").select("ajoute_par").eq("id", entree_id).maybe_single().execute()
+    res = (
+        supabase.table("bibliotheque_publique")
+        .select("ajoute_par, chemin_stockage")
+        .eq("id", entree_id)
+        .maybe_single()
+        .execute()
+    )
     if not res or not res.data or res.data["ajoute_par"] != utilisateur_id:
         return False
+
+    chemin_stockage = res.data.get("chemin_stockage")
+    if chemin_stockage:
+        try:
+            supabase.storage.from_(BUCKET).remove([chemin_stockage])
+        except Exception as e:
+            logging.warning(
+                f"Suppression Storage bibliothèque publique échouée ({chemin_stockage}), ligne supprimée quand même : {e}"
+            )
+
     supabase.table("bibliotheque_publique").delete().eq("id", entree_id).execute()
     return True
 
