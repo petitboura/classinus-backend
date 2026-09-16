@@ -149,6 +149,19 @@ def enregistrer_fichier(
         }).execute()
     except Exception as e:
         logging.error(f"ERREUR ECRITURE fichiers_uploades ({chemin_stockage}) : {e}")
+        # CORRECTIF 16/09/2026 (Bourama : fichiers orphelins dans le
+        # Storage sans ligne BDD, decouverts lors d'un depassement de
+        # quota Supabase) -- l'upload Storage ci-dessus a reussi mais
+        # l'insertion BDD echoue : sans ce rollback, le fichier restait
+        # pour toujours dans le bucket "bibliotheque", invisible et
+        # inutilisable (rien ne le retrouve jamais, faute de ligne
+        # chemin_stockage), mais consommant quand meme le quota de
+        # stockage. On supprime le fichier fraichement uploade avant de
+        # relancer l'erreur d'origine.
+        try:
+            supabase.storage.from_(BUCKET).remove([chemin_stockage])
+        except Exception as e2:
+            logging.error(f"ECHEC ROLLBACK STORAGE apres echec BDD ({chemin_stockage}) : {e2}")
         raise
 
     return insertion.data[0]

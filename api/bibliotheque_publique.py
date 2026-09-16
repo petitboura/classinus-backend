@@ -455,17 +455,37 @@ async def ajouter_a_bibliotheque_publique(
             .execute()
         )
 
+    def _rollback_storage():
+        # CORRECTIF 16/09/2026 (Bourama : fichiers orphelins dans le
+        # Storage sans ligne BDD, decouverts lors d'un depassement de
+        # quota Supabase -- 714 fichiers, ~2 Go, rien que sur ce dossier
+        # "publique"). _stocker_et_inserer uploade d'abord vers le
+        # Storage PUIS insere en base (une seule transaction cote appel,
+        # mais deux systemes distincts) ; si l'insertion echoue pour
+        # N'IMPORTE QUELLE raison (doublon de nom, coupure reseau,
+        # erreur Supabase...), le fichier deja uploade restait pour
+        # toujours dans le bucket, invisible et inutilisable puisque rien
+        # ne le retrouve sans ligne chemin_stockage, mais consommant quand
+        # meme le quota de stockage. On le supprime ici avant de relancer
+        # l'erreur d'origine vers le client.
+        try:
+            supabase.storage.from_(BUCKET).remove([chemin_stockage])
+        except Exception as e2:
+            logging.error(f"ECHEC ROLLBACK STORAGE apres echec BDD ({chemin_stockage}) : {e2}")
+
     try:
         ligne = await asyncio.to_thread(_stocker_et_inserer)
     except APIError as e:
         # CORRECTIF 02/09 (bug remonté par Bourama : aucun traitement
         # d'erreur à l'upload, notamment pour les doublons désormais
         # refusés par un index unique Supabase -- code Postgres 23505).
+        await asyncio.to_thread(_rollback_storage)
         if getattr(e, "code", None) == "23505":
             raise erreur_api(409, "NOM_DEJA_UTILISE_BIBLIOTHEQUE_PUBLIQUE", nom=nom_original)
         logging.error(f"ERREUR SUPABASE (upload bibliothèque publique {chemin_stockage}) : {e}")
         raise erreur_api(500, "ECHEC_DU_STOCKAGE_REESSAIE")
     except Exception as e:
+        await asyncio.to_thread(_rollback_storage)
         logging.error(f"ERREUR SUPABASE (upload bibliothèque publique {chemin_stockage}) : {e}")
         raise erreur_api(500, "ECHEC_DU_STOCKAGE_REESSAIE")
 

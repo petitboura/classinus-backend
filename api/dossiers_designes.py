@@ -129,6 +129,18 @@ async def uploader_fichier_dossier_designe(
         )
     except APIError as e:
         logging.error(f"ERREUR ECRITURE fichiers_dossier_designe ({chemin_stockage}) : {e}")
+        # CORRECTIF 16/09/2026 (Bourama : fichiers orphelins dans le
+        # Storage sans ligne BDD, decouverts lors d'un depassement de
+        # quota Supabase -- 141 fichiers, ~597 Mo, rien que sur ce
+        # dossier "dossiers_designes"). L'upload Storage ci-dessus a
+        # reussi mais l'insertion BDD echoue : sans ce rollback, le
+        # fichier restait pour toujours dans le bucket, invisible et
+        # inutilisable (rien ne le retrouve sans ligne chemin_stockage),
+        # mais consommant quand meme le quota de stockage.
+        try:
+            supabase.storage.from_(BUCKET_DOSSIERS_DESIGNES).remove([chemin_stockage])
+        except Exception as e2:
+            logging.error(f"ECHEC ROLLBACK STORAGE apres echec BDD ({chemin_stockage}) : {e2}")
         raise erreur_api(500, "ECHEC_ENREGISTREMENT")
 
     return insertion.data[0]
