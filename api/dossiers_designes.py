@@ -25,6 +25,7 @@ mobile.py), envoye automatiquement par le plugin natif (DossiersPlugin),
 jamais un ajout explicite fichier par fichier.
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -35,7 +36,13 @@ from postgrest.exceptions import APIError
 
 from api.auth import utilisateur_courant, supabase
 from core.erreurs import erreur_api
-from core.vectorisation_dossiers_designes import BUCKET_DOSSIERS_DESIGNES, necessite_extraction_texte, necessite_vectorisation
+from core.vectorisation_dossiers_designes import (
+    BUCKET_DOSSIERS_DESIGNES,
+    necessite_extraction_texte,
+    necessite_vectorisation,
+    vectoriser_maintenant,
+    extraire_texte_maintenant,
+)
 
 router = APIRouter(prefix="/api/dossiers-designes", tags=["dossiers-designes"])
 
@@ -143,7 +150,16 @@ async def uploader_fichier_dossier_designe(
             logging.error(f"ECHEC ROLLBACK STORAGE apres echec BDD ({chemin_stockage}) : {e2}")
         raise erreur_api(500, "ECHEC_ENREGISTREMENT")
 
-    return insertion.data[0]
+    entree = insertion.data[0]
+    # 16/09/2026 (chantier quota Supabase) : declenchement immediat en
+    # arriere-plan au lieu d'attendre le passage suivant des boucles de
+    # polling -- celles-ci restent le filet de securite.
+    if entree.get("statut_vectorisation") == "en_attente":
+        asyncio.create_task(asyncio.to_thread(vectoriser_maintenant, entree["id"]))
+    if entree.get("statut_extraction_texte") == "en_attente":
+        asyncio.create_task(asyncio.to_thread(extraire_texte_maintenant, entree["id"]))
+
+    return entree
 
 
 @router.get("/progression")

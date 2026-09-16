@@ -344,6 +344,51 @@ def relancer_echecs_extraction_a_froid() -> int:
         return 0
 
 
+def extraire_texte_maintenant(fichier_id: str) -> bool:
+    """
+    16/09/2026, demande Bourama (chantier quota Supabase depasse) :
+    version "a la demande" de traiter_extractions_texte_une_fois
+    ci-dessus, pour UN SEUL fichier -- appelee en tache de fond juste
+    apres l'ajout du fichier (voir api/dossiers_designes.py), au lieu
+    d'attendre le passage suivant de la boucle. Aucun appel Gemini/Groq
+    ici (extraction gratuite), pas de coupe-circuit quota. Idempotent :
+    si deja "fait", ne refait rien et renvoie True direct.
+    """
+    try:
+        ligne = (
+            supabase.table("fichiers_dossier_designe")
+            .select("id, chemin_stockage, nom_fichier, type_mime, statut_extraction_texte")
+            .eq("id", fichier_id)
+            .single()
+            .execute()
+        ).data
+    except Exception as e:
+        logging.error(f"ERREUR lecture fichier pour extraction texte immediate (dossiers designes, fichier_id={fichier_id}) : {e}")
+        return False
+
+    if not ligne:
+        return False
+    if ligne.get("statut_extraction_texte") == "fait":
+        return True
+
+    try:
+        supabase.table("fichiers_dossier_designe").update({"statut_extraction_texte": "en_cours"}).eq("id", fichier_id).execute()
+        contenu = _telecharger(ligne["chemin_stockage"])
+        texte = _extraire_texte_pour_extraction(ligne["type_mime"], _extension(ligne["nom_fichier"]), contenu)
+        supabase.table("fichiers_dossier_designe").update({
+            "texte_brut": texte or None,
+            "statut_extraction_texte": "fait",
+        }).eq("id", fichier_id).execute()
+        return True
+    except Exception as e:
+        logging.error(f"ERREUR extraction texte immediate (dossiers designes, fichier_id={fichier_id}) : {e}")
+        try:
+            supabase.table("fichiers_dossier_designe").update({"statut_extraction_texte": "echec"}).eq("id", fichier_id).execute()
+        except Exception as e2:
+            logging.error(f"ERREUR mise a jour statut echec extraction immediate (dossiers designes, fichier_id={fichier_id}) : {e2}")
+        return False
+
+
 def vectoriser_maintenant(fichier_id: str) -> bool:
     """
     06/09/2026, demande Bourama : VRAIE vectorisation A LA DEMANDE d'UN
