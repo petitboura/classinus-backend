@@ -71,6 +71,7 @@ from datetime import datetime, timedelta, timezone
 
 from supabase import create_client, ClientOptions
 from client_http_supabase import nouveau_client_http_supabase
+from core import stockage_r2
 
 sys.path.append(os.path.dirname(__file__))
 from embeddings import activer_pause_quota_gemini, decouper_texte, est_en_pause_quota_gemini, est_erreur_quota_gemini, vectoriser  # noqa: E402
@@ -159,7 +160,7 @@ def _extraire_texte_xlsx_bytes(contenu: bytes) -> str:
 
 
 def _telecharger(chemin_stockage: str) -> bytes:
-    return supabase.storage.from_(BUCKET_DOSSIERS_DESIGNES).download(chemin_stockage)
+    return stockage_r2.from_(BUCKET_DOSSIERS_DESIGNES).download(chemin_stockage)
 
 
 def _nettoyer_chunks_existants(fichier_id: str) -> None:

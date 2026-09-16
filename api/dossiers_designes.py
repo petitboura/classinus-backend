@@ -35,6 +35,7 @@ from postgrest.exceptions import APIError
 
 from api.auth import utilisateur_courant, supabase
 from core.erreurs import erreur_api
+from core import stockage_r2
 from core.vectorisation_dossiers_designes import BUCKET_DOSSIERS_DESIGNES, necessite_extraction_texte, necessite_vectorisation
 
 router = APIRouter(prefix="/api/dossiers-designes", tags=["dossiers-designes"])
@@ -76,14 +77,14 @@ async def uploader_fichier_dossier_designe(
     chemin_stockage = f"dossiers_designes/{utilisateur.id}/{uuid.uuid4()}.{extension}"
 
     try:
-        supabase.storage.from_(BUCKET_DOSSIERS_DESIGNES).upload(
+        stockage_r2.from_(BUCKET_DOSSIERS_DESIGNES).upload(
             chemin_stockage, contenu, {"content-type": type_mime}
         )
     except Exception as e:
         logging.error(f"ERREUR SUPABASE STORAGE (upload dossier designe {chemin_stockage}) : {e}")
         raise erreur_api(500, "ECHEC_DU_TRANSFERT")
 
-    url_publique = supabase.storage.from_(BUCKET_DOSSIERS_DESIGNES).get_public_url(chemin_stockage)
+    url_publique = stockage_r2.from_(BUCKET_DOSSIERS_DESIGNES).get_public_url(chemin_stockage)
 
     # Categorisation (06/09) : image = vraie vectorisation auto ;
     # pdf/word/excel/texte = extraction gratuite auto + vraie
@@ -138,7 +139,7 @@ async def uploader_fichier_dossier_designe(
         # inutilisable (rien ne le retrouve sans ligne chemin_stockage),
         # mais consommant quand meme le quota de stockage.
         try:
-            supabase.storage.from_(BUCKET_DOSSIERS_DESIGNES).remove([chemin_stockage])
+            stockage_r2.from_(BUCKET_DOSSIERS_DESIGNES).remove([chemin_stockage])
         except Exception as e2:
             logging.error(f"ECHEC ROLLBACK STORAGE apres echec BDD ({chemin_stockage}) : {e2}")
         raise erreur_api(500, "ECHEC_ENREGISTREMENT")

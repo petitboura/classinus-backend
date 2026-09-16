@@ -25,6 +25,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from google import genai
 
 from api.auth import supabase, utilisateur_courant, get_secret
+from core import stockage_r2
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "core"))
 from bibliotheque_fichiers import enregistrer_fichier, indexer_fichier_existant  # noqa: E402
@@ -69,7 +70,7 @@ async def uploader_image(
     chemin = f"{utilisateur.id}/{uuid.uuid4()}.{extension}"
 
     try:
-        supabase.storage.from_(BUCKET).upload(
+        stockage_r2.from_(BUCKET).upload(
             chemin,
             contenu,
             {"content-type": fichier.content_type},
@@ -78,7 +79,7 @@ async def uploader_image(
         logging.error(f"ERREUR SUPABASE STORAGE (upload {chemin}) : {e}")
         raise erreur_api(500, "ECHEC_DE_L_UPLOAD_REESSAIE")
 
-    url = supabase.storage.from_(BUCKET).get_public_url(chemin)
+    url = stockage_r2.from_(BUCKET).get_public_url(chemin)
     return {"url": url}
 
 
@@ -118,7 +119,7 @@ async def uploader_image_chat(
     chemin = f"chat/{utilisateur.id}/{uuid.uuid4()}.{extension}"
 
     try:
-        supabase.storage.from_(BUCKET).upload(
+        stockage_r2.from_(BUCKET).upload(
             chemin,
             contenu,
             {"content-type": fichier.content_type},
@@ -127,7 +128,7 @@ async def uploader_image_chat(
         logging.error(f"ERREUR SUPABASE STORAGE (upload chat {chemin}) : {e}")
         raise erreur_api(500, "ECHEC_DE_L_UPLOAD_REESSAIE")
 
-    url = supabase.storage.from_(BUCKET).get_public_url(chemin)
+    url = stockage_r2.from_(BUCKET).get_public_url(chemin)
 
     # Persistance bibliothèque (2026-07-22, demande de Bourama : un
     # fichier uploadé par un utilisateur en chat ne doit plus être
@@ -373,10 +374,10 @@ async def uploader_document_chat(
         try:
             pdf_bytes = convertir_en_pdf(contenu, fichier.filename or f"document.{extension}")
             chemin_apercu = f"apercus/{uuid.uuid4()}.pdf"
-            supabase.storage.from_("images-publiques").upload(
+            stockage_r2.from_("images-publiques").upload(
                 chemin_apercu, pdf_bytes, {"content-type": "application/pdf"}
             )
-            url_apercu = supabase.storage.from_("images-publiques").get_public_url(chemin_apercu)
+            url_apercu = stockage_r2.from_("images-publiques").get_public_url(chemin_apercu)
         except Exception as e:
             logging.warning(f"Aperçu PDF échoué pour document chat {fichier.filename} (extraction/stockage OK quand même) : {e}")
 
