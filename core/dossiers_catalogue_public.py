@@ -211,6 +211,41 @@ def lister_fichiers_ids_dossier(dossier_id: str) -> list:
     return [ligne["fichier_id"] for ligne in res.data]
 
 
+def compter_contenu_dossier(dossier_id: str) -> dict:
+    """16/09/2026, demande Bourama : "l'analytique dans l'app, combien
+    d'éléments, de liens, de fichiers, de dossiers" -- des vrais comptes
+    de contenu, pas des statistiques de fréquentation (vues/partages,
+    piste abandonnée le même jour après clarification).
+
+    Comptes EXACTS (jamais limités par une pagination frontend) :
+    - fichier_ids vient de la table de jonction, donc déjà exhaustif
+      quel que soit le nombre de fichiers dans le dossier.
+    - le partage fichiers/liens se fait via type_mime="text/uri-list"
+      (voir core/bibliotheque_fichiers.py), une seule requête groupée
+      sur bibliotheque_publique plutôt qu'un aller-retour par fichier.
+    - sous_dossiers réutilise lister_sous_dossiers, déjà exact (aucune
+      pagination sur les dossiers, voir sa docstring).
+    """
+    fichier_ids = lister_fichiers_ids_dossier(dossier_id)
+    nb_liens = 0
+    if fichier_ids:
+        res = (
+            supabase.table("bibliotheque_publique")
+            .select("id", count="exact")
+            .in_("id", fichier_ids)
+            .eq("type_mime", "text/uri-list")
+            .execute()
+        )
+        nb_liens = res.count or 0
+    nb_sous_dossiers = len(lister_sous_dossiers(dossier_id))
+    return {
+        "nb_fichiers": len(fichier_ids) - nb_liens,
+        "nb_liens": nb_liens,
+        "nb_sous_dossiers": nb_sous_dossiers,
+        "nb_elements": len(fichier_ids) + nb_sous_dossiers,
+    }
+
+
 def lister_sous_dossiers(dossier_id: str) -> list:
     """Renvoie les sous-dossiers directs (id, nom) d'un dossier du
     catalogue public, sans filtre de statut (contribution_libre/privee

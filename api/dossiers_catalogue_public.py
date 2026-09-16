@@ -11,6 +11,7 @@ from api.auth import utilisateur_courant, utilisateur_optionnel
 from core.erreurs import erreur_api
 from core.dossiers_catalogue_public import (
     _dossier,
+    compter_contenu_dossier,
     confirmer_demande,
     creer_demande,
     creer_dossier,
@@ -407,4 +408,23 @@ def obtenir_dossier_public(dossier_id: str, utilisateur=Depends(utilisateur_opti
     # sur la page de consultation publique d'un dossier, seulement ses
     # fichiers directs. Meme correctif que celui deja fait cote perso.
     dossier["sous_dossiers"] = lister_sous_dossiers(dossier_id)
+    # 16/09/2026, demande Bourama : compte de contenu (fichiers/liens/
+    # sous-dossiers) affiché sur la page de partage.
+    dossier["contenu"] = compter_contenu_dossier(dossier_id)
     return dossier
+
+
+# 16/09/2026, demande Bourama : même compte de contenu, mais pour l'usage
+# DANS l'app (bibliothèque publique, dossier actuellement ouvert) --
+# route dédiée plutôt qu'ajoutée à lister() ci-dessus, qui renvoie TOUS
+# les dossiers à plat : calculer ce compte pour chacun à chaque chargement
+# de la liste ferait une requête par dossier pour rien, alors que la
+# personne n'a besoin de ce détail que pour le dossier qu'elle a
+# réellement ouvert. "/{dossier_id}/contenu" a deux segments, donc aucun
+# risque qu'il soit intercepté par "/{dossier_id}" (un seul segment) --
+# contrairement au piège documenté plus haut pour "/demandes"/"/attaches".
+@router.get("/{dossier_id}/contenu")
+def obtenir_contenu_dossier(dossier_id: str):
+    if not _dossier(dossier_id):
+        raise erreur_api(404, "DOSSIER_INTROUVABLE")
+    return compter_contenu_dossier(dossier_id)
