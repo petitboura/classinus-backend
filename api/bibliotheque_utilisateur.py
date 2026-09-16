@@ -30,6 +30,7 @@ from pydantic import BaseModel
 from api.auth import utilisateur_courant, supabase
 from api.journal import journaliser
 from core.erreurs import erreur_api
+from core import stockage_r2
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "core"))
 from bibliotheque_fichiers import enregistrer_fichier, enregistrer_lien, lister_fichiers, obtenir_fichier, supprimer_fichier  # noqa: E402
@@ -197,7 +198,7 @@ async def copier_depuis_bibliotheque_publique(
 
     entree = res.data
     try:
-        contenu = supabase.storage.from_(BUCKET_BIBLIOTHEQUE_PUBLIQUE).download(entree["chemin_stockage"])
+        contenu = stockage_r2.from_(BUCKET_BIBLIOTHEQUE_PUBLIQUE).download(entree["chemin_stockage"])
     except Exception as e:
         logging.error(f"ERREUR téléchargement fichier bibliothèque publique ({entree_id}) : {e}")
         raise erreur_api(500, "ECHEC_DU_STOCKAGE_REESSAIE")

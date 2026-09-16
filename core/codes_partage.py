@@ -51,6 +51,7 @@ import sys
 import time
 
 from supabase import create_client, ClientOptions
+from core import stockage_r2
 from client_http_supabase import nouveau_client_http_supabase
 
 # Cache court (11/09/2026, demande explicite Bourama) : les skills reçus
@@ -378,7 +379,7 @@ def _copier_fichier_pour_receveur(fichier_id: str, receveur_id: str, proprietair
         return nouvelle["id"]
 
     try:
-        contenu = supabase.storage.from_("bibliotheque").download(f["chemin_stockage"])
+        contenu = stockage_r2.from_("bibliotheque").download(f["chemin_stockage"])
     except Exception as e:
         logging.error(f"ERREUR téléchargement fichier {fichier_id} (propagation dossier partagé) : {e}")
         return None

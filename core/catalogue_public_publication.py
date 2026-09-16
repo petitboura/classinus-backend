@@ -28,6 +28,7 @@ MCP, sans repasser par une requête HTTP interne).
 import logging
 import uuid
 
+from core import stockage_r2
 from core.dossiers_catalogue_public import (
     supabase,
     _dossier as _obtenir_dossier_catalogue_public,
@@ -101,8 +102,8 @@ def publier_fichier_public(
     extension = nom_fichier.rsplit(".", 1)[-1] if "." in (nom_fichier or "") else "bin"
     chemin_stockage = f"publique/{uuid.uuid4()}.{extension}"
 
-    supabase.storage.from_(BUCKET).upload(chemin_stockage, contenu, {"content-type": type_mime or "application/octet-stream"})
-    url_publique = supabase.storage.from_(BUCKET).get_public_url(chemin_stockage)
+    stockage_r2.from_(BUCKET).upload(chemin_stockage, contenu, {"content-type": type_mime or "application/octet-stream"})
+    url_publique = stockage_r2.from_(BUCKET).get_public_url(chemin_stockage)
 
     donnees = {
         "ajoute_par": ajoute_par,
@@ -166,8 +167,8 @@ def publier_texte_public(
     nom_fichier = f"{nom_final}.txt"
     chemin_stockage = f"publique/{uuid.uuid4()}.txt"
 
-    supabase.storage.from_(BUCKET).upload(chemin_stockage, contenu_octets, {"content-type": "text/plain"})
-    url_publique = supabase.storage.from_(BUCKET).get_public_url(chemin_stockage)
+    stockage_r2.from_(BUCKET).upload(chemin_stockage, contenu_octets, {"content-type": "text/plain"})
+    url_publique = stockage_r2.from_(BUCKET).get_public_url(chemin_stockage)
 
     donnees = {
         "ajoute_par": ajoute_par,
@@ -259,7 +260,7 @@ def supprimer_entree_publique(entree_id: str, utilisateur_id: str) -> bool:
     chemin_stockage = res.data.get("chemin_stockage")
     if chemin_stockage:
         try:
-            supabase.storage.from_(BUCKET).remove([chemin_stockage])
+            stockage_r2.from_(BUCKET).remove([chemin_stockage])
         except Exception as e:
             logging.warning(
                 f"Suppression Storage bibliothèque publique échouée ({chemin_stockage}), ligne supprimée quand même : {e}"
@@ -294,7 +295,7 @@ def copier_entree_publique_vers_perso(entree_id: str, utilisateur_id: str) -> di
     if not entree.get("chemin_stockage"):
         return "CE_DOCUMENT_EST_UN_LIEN_NON_COPIABLE"
     try:
-        contenu = supabase.storage.from_(BUCKET).download(entree["chemin_stockage"])
+        contenu = stockage_r2.from_(BUCKET).download(entree["chemin_stockage"])
     except Exception as e:
         logging.error(f"ERREUR téléchargement fichier bibliothèque publique ({entree_id}) : {e}")
         return "ECHEC_DU_STOCKAGE_REESSAIE"
