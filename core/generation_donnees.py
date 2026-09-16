@@ -15,6 +15,7 @@ from xml.etree.ElementTree import Element, SubElement, tostring
 from xml.dom.minidom import parseString
 
 from api.auth import supabase
+from core import stockage_r2
 from core.securite_chemins import chemin_relatif_sur
 
 BUCKET = "generations"
@@ -92,9 +93,9 @@ def exporter_donnees(nom: str, donnees, format: str = "json") -> str:
     nom_sur = chemin_relatif_sur(nom, repli="donnees")
     chemin = f"donnees/{uuid.uuid4()}-{nom_sur}.{extension}"
     try:
-        supabase.storage.from_(BUCKET).upload(chemin, contenu, {"content-type": content_type})
+        stockage_r2.from_(BUCKET).upload(chemin, contenu, {"content-type": content_type})
     except Exception as e:
         logging.error(f"ERREUR SUPABASE STORAGE (upload donnees {chemin}) : {e}")
         raise
 
-    return supabase.storage.from_(BUCKET).get_public_url(chemin)
+    return stockage_r2.from_(BUCKET).get_public_url(chemin)

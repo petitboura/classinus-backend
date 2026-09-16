@@ -17,6 +17,7 @@ import zipfile
 import requests
 
 from api.auth import supabase
+from core import stockage_r2
 from core.securite_chemins import chemin_relatif_sur
 
 BUCKET = "generations"
@@ -68,11 +69,11 @@ def generer_bundle(nom_projet: str, elements: list[dict]) -> str:
     tampon.seek(0)
     chemin_stockage = f"bundles/{uuid.uuid4()}-{nom_projet}.zip"
     try:
-        supabase.storage.from_(BUCKET).upload(
+        stockage_r2.from_(BUCKET).upload(
             chemin_stockage, tampon.read(), {"content-type": "application/zip"}
         )
     except Exception as e:
         logging.error(f"ERREUR SUPABASE STORAGE (upload bundle {chemin_stockage}) : {e}")
         raise
 
-    return supabase.storage.from_(BUCKET).get_public_url(chemin_stockage)
+    return stockage_r2.from_(BUCKET).get_public_url(chemin_stockage)

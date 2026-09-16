@@ -25,6 +25,7 @@ import uuid
 import requests
 
 from api.auth import supabase
+from core import stockage_r2
 
 BUCKET = "generations"
 MODELE = "wan/v2.6/text-to-video"
@@ -99,10 +100,10 @@ def statut_video(request_id: str) -> dict:
 
     chemin = f"videos/{uuid.uuid4()}.mp4"
     try:
-        supabase.storage.from_(BUCKET).upload(chemin, video_bytes, {"content-type": "video/mp4"})
+        stockage_r2.from_(BUCKET).upload(chemin, video_bytes, {"content-type": "video/mp4"})
     except Exception as e:
         logging.error(f"ERREUR SUPABASE STORAGE (upload video {chemin}) : {e}")
         raise
 
-    url_finale = supabase.storage.from_(BUCKET).get_public_url(chemin)
+    url_finale = stockage_r2.from_(BUCKET).get_public_url(chemin)
     return {"statut": "COMPLETED", "url": url_finale}

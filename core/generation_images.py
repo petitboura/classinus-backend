@@ -33,6 +33,7 @@ import uuid
 import requests
 
 from api.auth import supabase
+from core import stockage_r2
 
 BUCKET = "generations"
 MODELE_TOGETHER = "black-forest-labs/FLUX.1-schnell"
@@ -132,12 +133,12 @@ def generer_image(prompt: str) -> str:
 
     chemin = f"images/{uuid.uuid4()}.png"
     try:
-        supabase.storage.from_(BUCKET).upload(
+        stockage_r2.from_(BUCKET).upload(
             chemin, image_bytes, {"content-type": "image/png"}
         )
     except Exception as e:
         logging.error(f"ERREUR SUPABASE STORAGE (upload image {chemin}) : {e}")
         raise
 
-    return supabase.storage.from_(BUCKET).get_public_url(chemin)
+    return stockage_r2.from_(BUCKET).get_public_url(chemin)
 

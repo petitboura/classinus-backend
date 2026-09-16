@@ -36,6 +36,7 @@ import uuid
 import requests
 
 from api.auth import supabase
+from core import stockage_r2
 
 BUCKET = "generations"
 MODELE_GROQ = "canopylabs/orpheus-v1-english"
@@ -114,9 +115,9 @@ def generer_audio(texte: str, voix: str = VOIX_PAR_DEFAUT) -> str:
 
     chemin = f"audio/{uuid.uuid4()}.{extension}"
     try:
-        supabase.storage.from_(BUCKET).upload(chemin, audio_bytes, {"content-type": content_type})
+        stockage_r2.from_(BUCKET).upload(chemin, audio_bytes, {"content-type": content_type})
     except Exception as e:
         logging.error(f"ERREUR SUPABASE STORAGE (upload audio {chemin}) : {e}")
         raise
 
-    return supabase.storage.from_(BUCKET).get_public_url(chemin)
+    return stockage_r2.from_(BUCKET).get_public_url(chemin)

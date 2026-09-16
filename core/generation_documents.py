@@ -22,6 +22,7 @@ import markdown as md_lib
 from weasyprint import HTML
 
 from api.auth import supabase
+from core import stockage_r2
 from core.conversion_pdf import conversion_disponible, convertir_en_pdf
 
 BUCKET = "generations"
@@ -70,14 +71,14 @@ def generer_pdf_depuis_markdown(titre: str, contenu_markdown: str) -> str:
 
     chemin = f"documents/{uuid.uuid4()}.pdf"
     try:
-        supabase.storage.from_(BUCKET).upload(
+        stockage_r2.from_(BUCKET).upload(
             chemin, pdf_bytes, {"content-type": "application/pdf"}
         )
     except Exception as e:
         logging.error(f"ERREUR SUPABASE STORAGE (upload document {chemin}) : {e}")
         raise
 
-    return supabase.storage.from_(BUCKET).get_public_url(chemin)
+    return stockage_r2.from_(BUCKET).get_public_url(chemin)
 
 
 # --- Word / Excel / PowerPoint, ajoutés le 25/07 ---------------------------
@@ -124,19 +125,19 @@ def _uploader_avec_apercu(contenu_bytes: bytes, extension: str, content_type: st
     """
     chemin = f"documents/{uuid.uuid4()}.{extension}"
     try:
-        supabase.storage.from_(BUCKET).upload(chemin, contenu_bytes, {"content-type": content_type})
+        stockage_r2.from_(BUCKET).upload(chemin, contenu_bytes, {"content-type": content_type})
     except Exception as e:
         logging.error(f"ERREUR SUPABASE STORAGE (upload document {chemin}) : {e}")
         raise
-    url = supabase.storage.from_(BUCKET).get_public_url(chemin)
+    url = stockage_r2.from_(BUCKET).get_public_url(chemin)
 
     url_apercu = None
     if conversion_disponible():
         try:
             pdf_bytes = convertir_en_pdf(contenu_bytes, nom_fichier)
             chemin_apercu = f"documents/{uuid.uuid4()}_apercu.pdf"
-            supabase.storage.from_(BUCKET).upload(chemin_apercu, pdf_bytes, {"content-type": "application/pdf"})
-            url_apercu = supabase.storage.from_(BUCKET).get_public_url(chemin_apercu)
+            stockage_r2.from_(BUCKET).upload(chemin_apercu, pdf_bytes, {"content-type": "application/pdf"})
+            url_apercu = stockage_r2.from_(BUCKET).get_public_url(chemin_apercu)
         except Exception as e:
             logging.warning(f"Aperçu PDF échoué pour {nom_fichier} (fichier original OK quand même) : {e}")
 

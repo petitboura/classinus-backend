@@ -24,6 +24,7 @@ import re
 import uuid
 
 from api.auth import supabase
+from core import stockage_r2
 
 BUCKET = "generations"
 
@@ -97,7 +98,7 @@ def generer_fichier_latex(titre: str, contenu_latex: str) -> str:
     nom_fichier_sur = re.sub(r"[^a-zA-Z0-9-_]+", "_", titre).strip("_") or "document"
     chemin_stockage = f"latex/{uuid.uuid4()}-{nom_fichier_sur}.tex"
     try:
-        supabase.storage.from_(BUCKET).upload(
+        stockage_r2.from_(BUCKET).upload(
             chemin_stockage,
             document_complet.encode("utf-8"),
             {"content-type": "application/x-tex"},
@@ -106,4 +107,4 @@ def generer_fichier_latex(titre: str, contenu_latex: str) -> str:
         logging.error(f"ERREUR SUPABASE STORAGE (upload latex {chemin_stockage}) : {e}")
         raise
 
-    return supabase.storage.from_(BUCKET).get_public_url(chemin_stockage)
+    return stockage_r2.from_(BUCKET).get_public_url(chemin_stockage)
