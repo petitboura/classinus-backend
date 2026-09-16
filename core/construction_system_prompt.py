@@ -5,9 +5,10 @@ import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from configuration import get_system_prompt
-from profils_agents import INSTRUCTIONS_FORMATS_AFFICHAGE, INSTRUCTIONS_ARBITRAGE_CALCUL, REGLE_CONTEXTE_INVISIBLE, INSTRUCTIONS_LONGUEUR_REPONSE, MODES_PEDAGOGIQUES, REGLE_BASCULE_MODE_PEDAGOGIQUE
+from profils_agents import INSTRUCTIONS_FORMATS_AFFICHAGE, INSTRUCTIONS_ARBITRAGE_CALCUL, REGLE_CONTEXTE_INVISIBLE, INSTRUCTIONS_LONGUEUR_REPONSE, MODES_PEDAGOGIQUES, REGLE_BASCULE_MODE_PEDAGOGIQUE, construire_instruction_guide
+from guide_conversation import obtenir_sections_guide
 
-def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None):
+def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=False):
     # Restauré le 14/08 (voir commentaire des constantes plus haut) : la
     # page Notion de l'agent (get_system_prompt) ne doit plus contenir QUE
     # la personnalité/le comportement propre à l'agent -- les 3 blocs fixes
@@ -108,6 +109,17 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # différent, déjà géré ailleurs dans ce fichier.
     if persona_pedagogique and persona_pedagogique in MODES_PEDAGOGIQUES:
         system_final += "\n\n" + MODES_PEDAGOGIQUES[persona_pedagogique] + REGLE_BASCULE_MODE_PEDAGOGIQUE
+
+    # Etape 3 du chantier "guide de decouverte" (voir
+    # specs-guide-decouverte.md dans clovis-frontend), 16/09/2026, demande
+    # Bourama. guide_actif vient de obtenir_guide_actif(conversation_id,
+    # user_id) (core/guide_conversation.py), calcule dans chat() et recu
+    # ici en parametre -- meme patron que persona_pedagogique juste
+    # au-dessus, jamais recalcule ici. Pas de mode par defaut : False tant
+    # que l'utilisateur n'a rien active explicitement (bouton flottant ou
+    # menu "+" du chat, etapes 4/5, pas encore poussees).
+    if guide_actif:
+        system_final += construire_instruction_guide(obtenir_sections_guide())
 
     # Injection de la structure "Programme" (classe/matière/chapitre) dans
     # le system prompt retirée le 29/08/2026 (demande Bourama) -- la
