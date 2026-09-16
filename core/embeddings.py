@@ -102,6 +102,20 @@ def _get_supabase_parametres():
     return _supabase_parametres
 
 
+# Ajoute le 16/09/2026, demande Bourama : cette vérification était
+# appelée à CHAQUE passage de CHAQUE boucle de vectorisation (toutes les
+# 2-5s, plusieurs boucles en parallèle) -- une requête Supabase à chaque
+# fois, alors que la pause elle-même dure 24h une fois activée. Un
+# cache mémoire de courte durée (DUREE_CACHE_PAUSE) suffit largement :
+# la pause n'a pas besoin d'être détectée à la seconde près par les
+# autres process/boucles, 60s de retard max est négligeable face à 24h.
+# Portée : mémoire du process seulement (pas partagé entre plusieurs
+# instances Railway s'il y en a plusieurs -- chaque instance vérifie
+# Supabase au pire toutes les 60s, jamais plus).
+DUREE_CACHE_PAUSE = timedelta(seconds=60)
+_cache_pause = {"valeur": False, "verifie_a": None}
+
+
 def est_en_pause_quota_gemini() -> bool:
     """
     True si la "porte est fermee" -- un quota a ete tape il y a moins de
@@ -109,7 +123,15 @@ def est_en_pause_quota_gemini() -> bool:
     erreur de lecture (table injoignable, ligne absente) est traitee
     comme "pas en pause" -- on ne bloque jamais tout le systeme a cause
     d'un probleme sur ce mecanisme lui-meme.
+
+    Reutilise le resultat en memoire pendant DUREE_CACHE_PAUSE (60s) au
+    lieu de retaper Supabase a chaque appel -- voir commentaire au-dessus
+    de DUREE_CACHE_PAUSE.
     """
+    maintenant = datetime.now(timezone.utc)
+    if _cache_pause["verifie_a"] is not None and maintenant - _cache_pause["verifie_a"] < DUREE_CACHE_PAUSE:
+        return _cache_pause["valeur"]
+
     try:
         res = (
             _get_supabase_parametres()
@@ -120,12 +142,18 @@ def est_en_pause_quota_gemini() -> bool:
             .execute()
         )
         valeur = (res.data or {}).get("valeur") if res else None
-        if not valeur:
-            return False
-        pause_jusqua = datetime.fromisoformat(valeur)
-        return datetime.now(timezone.utc) < pause_jusqua
+        en_pause = False
+        if valeur:
+            pause_jusqua = datetime.fromisoformat(valeur)
+            en_pause = maintenant < pause_jusqua
+        _cache_pause["valeur"] = en_pause
+        _cache_pause["verifie_a"] = maintenant
+        return en_pause
     except Exception as e:
         logging.error(f"ERREUR lecture pause quota Gemini : {e}")
+        # Erreur de lecture : ne pas mettre en cache un "False" trompeur
+        # (on veut retenter au prochain appel, pas attendre 60s de plus
+        # sur un etat qu'on n'a pas reussi a lire).
         return False
 
 
@@ -133,9 +161,12 @@ def activer_pause_quota_gemini() -> None:
     """
     Ferme la porte pour DUREE_PAUSE_QUOTA (24h) a partir de MAINTENANT --
     appelee des la premiere detection d'un quota epuise, par n'importe
-    laquelle des files de vectorisation.
+    laquelle des files de vectorisation. Met aussi a jour le cache
+    memoire immediatement (pas d'attente de 60s dans CE process avant
+    que la pause soit respectee).
     """
-    pause_jusqua = (datetime.now(timezone.utc) + DUREE_PAUSE_QUOTA).isoformat()
+    maintenant = datetime.now(timezone.utc)
+    pause_jusqua = (maintenant + DUREE_PAUSE_QUOTA).isoformat()
     try:
         _get_supabase_parametres().table("parametres_outils").upsert(
             {"cle": _CLE_PAUSE_QUOTA, "valeur": pause_jusqua}
@@ -143,6 +174,8 @@ def activer_pause_quota_gemini() -> None:
         logging.error(f"QUOTA GEMINI épuisé : pause de toute vectorisation jusqu'à {pause_jusqua}.")
     except Exception as e:
         logging.error(f"ERREUR activation pause quota Gemini : {e}")
+    _cache_pause["valeur"] = True
+    _cache_pause["verifie_a"] = maintenant
 
 
 def decouper_texte(texte, taille=500):
