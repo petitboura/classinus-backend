@@ -395,3 +395,56 @@ REGLE_BASCULE_MODE_PEDAGOGIQUE = """
 <regle_bascule_mode_pedagogique>
 Le mode pédagogique actif (Socratique, Professeur, Tuteur, ou Examinateur) reste inchangé tant que l'étudiant ne l'a pas changé explicitement via le bouton ou le raccourci dédiés. Ne réinterprète jamais une phrase de l'étudiant dans la conversation comme une demande implicite de changer de mode, même si son ton ou sa formulation évoque un mode différent -- reste dans le mode actif jusqu'à un changement explicite de sa part.
 </regle_bascule_mode_pedagogique>"""
+
+
+# Etape 3 du chantier "guide de decouverte" (voir specs-guide-decouverte.md
+# dans clovis-frontend), demande Bourama, 16/09/2026.
+#
+# INSTRUCTION_GUIDE_INTRODUCTION : partie fixe de l'instruction, injectee
+# dans _construire_system_prompt (core/construction_system_prompt.py) via
+# construire_instruction_guide, quand obtenir_guide_actif(...)
+# (core/guide_conversation.py) renvoie True. La liste des sections, elle,
+# est dynamique (table guide_sections, etape 1) -- jamais figee ici en
+# dur, reconstruite a chaque appel par construire_instruction_guide.
+#
+# ATTENTION NOM : ne pas confondre avec MODES_PEDAGOGIQUES ci-dessus
+# (Socratique/Professeur/Tuteur/Examinateur), un mecanisme totalement
+# different -- le guide de decouverte explique l'application elle-meme,
+# ce n'est pas un style pedagogique pour reviser une matiere.
+#
+# Reutilise le mecanisme deja existant du bloc ```question``` (convention
+# documentee dans INSTRUCTIONS_FORMATS_AFFICHAGE plus haut dans ce
+# fichier) pour TOUTE interaction du guide -- jamais de nouveau mecanisme
+# de boutons.
+INSTRUCTION_GUIDE_INTRODUCTION = """
+
+<mode_guide_decouverte>
+Tu es en mode guide de decouverte. Ton but est de presenter Clovis a l'utilisateur, section par section, en t'appuyant sur l'outil gerer_base_connaissance (action "lire_article") pour lire le contenu exact de chaque section avant de l'expliquer -- ne devine jamais le contenu d'une section a partir de son seul nom.
+
+Regles :
+- Jamais un long pave de texte. Explique chaque section en plusieurs messages courts, une idee a la fois, pas tout d'un coup.
+- Termine systematiquement chaque message du guide par un bloc ```question``` de type "choix_unique" pour laisser l'utilisateur decider de la suite (par exemple "Continuer", "Revenir a la section precedente", "Choisir une autre section", "Terminer le guide"), jamais une question a repondre en texte libre pour naviguer.
+- Si l'utilisateur n'a encore rien choisi dans cette conversation, ta toute premiere reponse propose un bloc ```question``` de type "choix_unique" avec exactement deux options : "Je commence" et "Je veux comprendre une section".
+- Si l'utilisateur choisit "Je commence" : parcours les sections dans l'ordre ci-dessous (de la premiere a la derniere), mais propose toujours, dans le bloc ```question``` de fin de message, la possibilite de sauter a une autre section plutot que d'avancer une par une de facon rigide.
+- Si l'utilisateur choisit "Je veux comprendre une section" : propose un bloc ```question``` de type "choix_unique" listant les libelles des sections ci-dessous (jamais les noms de fichiers techniques), puis explique uniquement la section choisie.
+- Quand tu arrives a la section "Le chat" : ne te contente pas de decrire, demontre concretement absolument tout ce que tu sais faire, regroupe par categorie ("Generer", "Rechercher", "Action app", "Utilitaires"), et pour chaque outil ou groupe d'outils propose un bloc ```question``` de type "choix_unique" avec deux options : "Essayer maintenant" (tu executes reellement l'outil pour l'utilisateur) et "Juste un exemple" (tu decris/demontres sans executer). Respecte le choix de l'utilisateur avant de continuer.
+- Les confirmations deja obligatoires sur les actions sensibles (GitHub, Notion, Google Drive) restent obligatoires meme en mode guide, y compris quand l'utilisateur choisit "Essayer maintenant" -- ne les contourne jamais.
+- Le mode guide ne s'active ni ne se desactive jamais de ta propre initiative : reste actif jusqu'a ce qu'un signal exterieur au prompt te dise le contraire.
+
+Sections disponibles (nom technique -> libelle -> accroche), dans l'ordre :
+{liste_sections}
+</mode_guide_decouverte>"""
+
+
+def construire_instruction_guide(sections: list[dict]) -> str:
+    """Construit le texte complet a injecter dans le system prompt quand
+    le mode guide est actif (voir INSTRUCTION_GUIDE_INTRODUCTION juste au
+    dessus). `sections` vient de obtenir_sections_guide()
+    (core/guide_conversation.py), deja triees par ordre. Liste vide -> le
+    bloc <mode_guide_decouverte> est quand meme injecte, sans section
+    listee (ne devrait pas arriver en pratique, la table etant peuplee)."""
+    liste_sections = "\n".join(
+        f"- {s['nom_article']} -> {s['libelle_utilisateur']} : {s['accroche_courte']}"
+        for s in sections
+    )
+    return INSTRUCTION_GUIDE_INTRODUCTION.format(liste_sections=liste_sections or "(aucune section trouvee)")

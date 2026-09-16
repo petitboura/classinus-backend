@@ -13,11 +13,13 @@ fusionner ni faire ecrire ce module dans une de ces deux tables.
 Table dediee conversation_guide_actif (migration 2026_09_16b), meme
 schema de cache court que core/persona_pedagogique_conversation.py.
 
-PAS ENCORE BRANCHE : obtenir_guide_actif n'est pas encore appele dans
-core/main.py ni passe a _construire_system_prompt. C'est le travail de
-l'etape 3 (redaction de l'instruction de prompt), qui doit s'appuyer sur
-ce module comme persona_pedagogique_conversation.py a ete branche le
-14/09/2026 apres sa creation le 12/09/2026.
+BRANCHE le 16/09/2026 (etape 3) : obtenir_guide_actif est appele dans
+core/main.py et passe a _construire_system_prompt
+(core/construction_system_prompt.py), qui injecte
+construire_instruction_guide(obtenir_sections_guide()) (core/
+profils_agents.py) quand ce mode est actif. Meme patron que
+persona_pedagogique_conversation.py, branche le 14/09/2026 apres sa
+creation le 12/09/2026.
 """
 import logging
 import time
@@ -34,6 +36,38 @@ from api.auth import supabase
 # le cache des autres avant l'expiration du TTL.
 _DUREE_CACHE_SECONDES = 5 * 60
 _cache_guide = {}  # conversation_id -> {"valeur": bool, "expire_a": ts}
+
+# Cache separe pour le referentiel des sections (table guide_sections,
+# etape 1) : contenu global, pas par conversation, meme duree de cache
+# que le reste de ce module.
+_cache_sections_guide = {}  # "valeur" -> {"valeur": list[dict], "expire_a": ts}
+
+
+def obtenir_sections_guide() -> list:
+    """Referentiel des sections du guide (table guide_sections, etape 1),
+    trie par ordre croissant. Utilise pour construire l'instruction du
+    mode guide (construire_instruction_guide, core/profils_agents.py) --
+    contenu quasi statique mais modifiable sans redeploiement (demande
+    Bourama), donc jamais recopie en dur dans le code. Renvoie une liste
+    vide en cas d'erreur, jamais une exception propagee (meme principe
+    defensif qu'obtenir_guide_actif ci-dessous)."""
+    maintenant = time.time()
+    entree = _cache_sections_guide.get("valeur")
+    if entree is not None and entree["expire_a"] > maintenant:
+        return entree["valeur"]
+    try:
+        res = (
+            supabase.table("guide_sections")
+            .select("nom_article, libelle_utilisateur, accroche_courte, ordre")
+            .order("ordre")
+            .execute()
+        )
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (lecture guide_sections) : {e}")
+        return []
+    valeur = res.data or []
+    _cache_sections_guide["valeur"] = {"valeur": valeur, "expire_a": maintenant + _DUREE_CACHE_SECONDES}
+    return valeur
 
 
 def obtenir_guide_actif(conversation_id: str, user_id: str) -> bool:
