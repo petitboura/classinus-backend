@@ -53,6 +53,7 @@ from api.codes_partage import router_mes_codes, router_rattachements
 from api.etablissements import router_etablissements
 from api.mode_actif_conversation import router_mode_actif
 from api.persona_pedagogique_conversation import router_persona_pedagogique
+from api.mode_source_conversation import router_mode_source
 from api.guide_conversation import router_guide_conversation
 from api.historique_reponses_qcm import router_historique_reponses_qcm
 from api.outils_registre import router as outils_registre_router
@@ -710,6 +711,7 @@ app.include_router(router_mes_codes)
 app.include_router(router_rattachements)
 app.include_router(router_mode_actif)
 app.include_router(router_persona_pedagogique)
+app.include_router(router_mode_source)
 app.include_router(router_guide_conversation)
 app.include_router(router_historique_reponses_qcm)
 app.include_router(outils_registre_router)
