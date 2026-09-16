@@ -33,6 +33,7 @@ from postgrest.exceptions import APIError
 from pydantic import BaseModel
 from supabase import create_client, ClientOptions
 from core.client_http_supabase import nouveau_client_http_supabase
+from core import stockage_r2
 
 from api.auth import utilisateur_courant, utilisateur_optionnel
 from core.erreurs import erreur_api
@@ -410,10 +411,10 @@ async def ajouter_a_bibliotheque_publique(
         # synchrones/bloquants, et appelés tels quels dans cette route
         # async, ils bloquaient tout le serveur (event loop) pendant
         # toute la durée de l'upload.
-        supabase.storage.from_(BUCKET).upload(
+        stockage_r2.from_(BUCKET).upload(
             chemin_stockage, contenu, {"content-type": fichier.content_type or "application/octet-stream"}
         )
-        url_publique = supabase.storage.from_(BUCKET).get_public_url(chemin_stockage)
+        url_publique = stockage_r2.from_(BUCKET).get_public_url(chemin_stockage)
         return (
             supabase.table("bibliotheque_publique")
             .insert({
@@ -469,7 +470,7 @@ async def ajouter_a_bibliotheque_publique(
         # meme le quota de stockage. On le supprime ici avant de relancer
         # l'erreur d'origine vers le client.
         try:
-            supabase.storage.from_(BUCKET).remove([chemin_stockage])
+            stockage_r2.from_(BUCKET).remove([chemin_stockage])
         except Exception as e2:
             logging.error(f"ECHEC ROLLBACK STORAGE apres echec BDD ({chemin_stockage}) : {e2}")
 
@@ -569,12 +570,12 @@ def ajouter_texte_bibliotheque_publique(payload: AjouterTextePayload, utilisateu
     chemin_stockage = f"publique/{uuid.uuid4()}.txt"
 
     try:
-        supabase.storage.from_(BUCKET).upload(chemin_stockage, contenu_octets, {"content-type": "text/plain"})
+        stockage_r2.from_(BUCKET).upload(chemin_stockage, contenu_octets, {"content-type": "text/plain"})
     except Exception as e:
         logging.error(f"ERREUR SUPABASE STORAGE (note texte bibliothèque publique {chemin_stockage}) : {e}")
         raise erreur_api(500, "ECHEC_DU_STOCKAGE_REESSAIE")
 
-    url_publique = supabase.storage.from_(BUCKET).get_public_url(chemin_stockage)
+    url_publique = stockage_r2.from_(BUCKET).get_public_url(chemin_stockage)
 
     try:
         ligne = (
@@ -658,7 +659,7 @@ def supprimer_de_bibliotheque_publique(entree_id: str, utilisateur=Depends(utili
     chemin_stockage = res.data.get("chemin_stockage")
     if chemin_stockage:
         try:
-            supabase.storage.from_(BUCKET).remove([chemin_stockage])
+            stockage_r2.from_(BUCKET).remove([chemin_stockage])
         except Exception as e:
             logging.warning(
                 f"Suppression Storage bibliothèque publique échouée ({chemin_stockage}), ligne supprimée quand même : {e}"

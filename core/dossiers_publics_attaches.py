@@ -43,6 +43,7 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__)))
 from bibliotheque_fichiers import enregistrer_fichier, enregistrer_lien, supabase, BUCKET  # noqa: E402
+from core import stockage_r2
 from dossiers_bibliotheque import creer_dossier, lister_dossiers, lister_fichiers_ids_dossier, ranger_fichier  # noqa: E402
 from dossiers_catalogue_public import _dossier, lister_dossiers as lister_dossiers_publics, lister_fichiers_ids_dossier as lister_fichiers_ids_dossier_public  # noqa: E402
 from file_attente_vectorisation import necessite_vectorisation_fichier_privee  # noqa: E402
@@ -150,7 +151,7 @@ def _copier_fichier_public_pour_receveur(fichier_id: str, receveur_id: str) -> s
         return nouvelle["id"]
 
     try:
-        contenu = supabase.storage.from_(BUCKET).download(f["chemin_stockage"])
+        contenu = stockage_r2.from_(BUCKET).download(f["chemin_stockage"])
     except Exception as e:
         logging.error(f"ERREUR téléchargement fichier public {fichier_id} (copie miroir -> {receveur_id}) : {e}")
         return None

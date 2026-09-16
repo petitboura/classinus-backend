@@ -1,0 +1,27 @@
+"""
+Route de service des fichiers stockés sur Cloudflare R2 (voir
+core/stockage_r2.py). Le bucket R2 est privé par défaut, sans accès
+public direct : cette route est le point d'accès public unique aux
+objets, en relais via ce backend. Elle remplace le rôle que jouait
+l'URL publique directe renvoyée par Supabase Storage.
+"""
+
+import mimetypes
+
+from fastapi import APIRouter, Response
+
+from core import stockage_r2
+from core.erreurs import erreur_api
+
+router = APIRouter(prefix="/fichiers/r2", tags=["fichiers"])
+
+
+@router.get("/{bucket_logique}/{chemin:path}")
+async def servir_fichier_r2(bucket_logique: str, chemin: str):
+    try:
+        contenu = stockage_r2.from_(bucket_logique).download(chemin)
+    except Exception:
+        raise erreur_api(404, "FICHIER_INTROUVABLE")
+
+    type_mime = mimetypes.guess_type(chemin)[0] or "application/octet-stream"
+    return Response(content=contenu, media_type=type_mime)

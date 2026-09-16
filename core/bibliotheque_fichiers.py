@@ -25,6 +25,7 @@ import uuid
 
 from supabase import create_client, ClientOptions
 from client_http_supabase import nouveau_client_http_supabase
+from core import stockage_r2
 
 BUCKET = "bibliotheque"
 
@@ -123,14 +124,14 @@ def enregistrer_fichier(
     chemin_stockage = f"{niveau}/{uuid.uuid4()}.{extension}"
 
     try:
-        supabase.storage.from_(BUCKET).upload(
+        stockage_r2.from_(BUCKET).upload(
             chemin_stockage, contenu, {"content-type": type_mime}
         )
     except Exception as e:
-        logging.error(f"ERREUR SUPABASE STORAGE (upload bibliothèque {chemin_stockage}) : {e}")
+        logging.error(f"ERREUR R2 STORAGE (upload bibliothèque {chemin_stockage}) : {e}")
         raise
 
-    url_publique = supabase.storage.from_(BUCKET).get_public_url(chemin_stockage)
+    url_publique = stockage_r2.from_(BUCKET).get_public_url(chemin_stockage)
 
     try:
         insertion = supabase.table("fichiers_uploades").insert({
@@ -159,7 +160,7 @@ def enregistrer_fichier(
         # stockage. On supprime le fichier fraichement uploade avant de
         # relancer l'erreur d'origine.
         try:
-            supabase.storage.from_(BUCKET).remove([chemin_stockage])
+            stockage_r2.from_(BUCKET).remove([chemin_stockage])
         except Exception as e2:
             logging.error(f"ECHEC ROLLBACK STORAGE apres echec BDD ({chemin_stockage}) : {e2}")
         raise
@@ -382,7 +383,7 @@ def supprimer_fichier(fichier_id: str) -> None:
 
     chemin_stockage = ligne.data[0]["chemin_stockage"]
     try:
-        supabase.storage.from_(BUCKET).remove([chemin_stockage])
+        stockage_r2.from_(BUCKET).remove([chemin_stockage])
     except Exception as e:
         logging.warning(f"Suppression Storage bibliothèque échouée ({chemin_stockage}), ligne supprimée quand même : {e}")
 
@@ -416,7 +417,7 @@ def supprimer_fichiers(fichier_ids: list[str]) -> None:
     chemins = [l["chemin_stockage"] for l in lignes.data if l.get("chemin_stockage")]
     if chemins:
         try:
-            supabase.storage.from_(BUCKET).remove(chemins)
+            stockage_r2.from_(BUCKET).remove(chemins)
         except Exception as e:
             logging.warning(f"Suppression Storage bibliothèque groupée échouée ({len(chemins)} fichiers), lignes supprimées quand même : {e}")
 

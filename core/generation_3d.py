@@ -25,6 +25,7 @@ import uuid
 import requests
 
 from api.auth import supabase
+from core import stockage_r2
 
 BUCKET = "generations"
 MODELE = "fal-ai/hunyuan3d-v3/text-to-3d"
@@ -109,12 +110,12 @@ def statut_modele_3d(request_id: str) -> dict:
 
     chemin = f"3d/{uuid.uuid4()}.glb"
     try:
-        supabase.storage.from_(BUCKET).upload(
+        stockage_r2.from_(BUCKET).upload(
             chemin, fichier_bytes, {"content-type": "model/gltf-binary"}
         )
     except Exception as e:
         logging.error(f"ERREUR SUPABASE STORAGE (upload 3d {chemin}) : {e}")
         raise
 
-    url_finale = supabase.storage.from_(BUCKET).get_public_url(chemin)
+    url_finale = stockage_r2.from_(BUCKET).get_public_url(chemin)
     return {"statut": "COMPLETED", "url": url_finale}

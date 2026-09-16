@@ -3,6 +3,7 @@ uvicorn[standard]
 slowapi
 python-multipart
 supabase
+boto3
 PyPDF2
 python-docx
 openpyxl

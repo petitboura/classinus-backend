@@ -84,6 +84,7 @@ from datetime import datetime, timedelta, timezone
 
 from supabase import create_client, ClientOptions
 from client_http_supabase import nouveau_client_http_supabase
+from core import stockage_r2
 
 sys.path.append(os.path.dirname(__file__))
 from bibliotheque_rag import (  # noqa: E402
@@ -199,7 +200,7 @@ def _extraire_texte_xlsx_bytes(contenu: bytes) -> str:
 
 
 def _telecharger(chemin_stockage: str) -> bytes:
-    return supabase.storage.from_(BUCKET_BIBLIOTHEQUE).download(chemin_stockage)
+    return stockage_r2.from_(BUCKET_BIBLIOTHEQUE).download(chemin_stockage)
 
 
 def _nettoyer_chunks_existants(table_chunks: str, colonne_scope: str | None, valeur_scope, fichier_id: str) -> None:

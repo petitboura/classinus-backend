@@ -14,6 +14,7 @@ import uuid
 import zipfile
 
 from api.auth import supabase
+from core import stockage_r2
 from core.securite_chemins import chemin_relatif_sur
 
 BUCKET = "generations"
@@ -63,13 +64,13 @@ def generer_zip_depuis_fichiers(nom_projet: str, fichiers: dict[str, str]) -> st
         chemin_fichier = chemin_relatif_sur(chemin_fichier, repli="fichier.txt")
         chemin_stockage = f"code/{uuid.uuid4()}-{chemin_fichier}"
         try:
-            supabase.storage.from_(BUCKET).upload(
+            stockage_r2.from_(BUCKET).upload(
                 chemin_stockage, contenu.encode("utf-8"), {"content-type": _content_type(chemin_fichier)}
             )
         except Exception as e:
             logging.error(f"ERREUR SUPABASE STORAGE (upload code {chemin_stockage}) : {e}")
             raise
-        return supabase.storage.from_(BUCKET).get_public_url(chemin_stockage)
+        return stockage_r2.from_(BUCKET).get_public_url(chemin_stockage)
 
     tampon = io.BytesIO()
     with zipfile.ZipFile(tampon, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -82,11 +83,11 @@ def generer_zip_depuis_fichiers(nom_projet: str, fichiers: dict[str, str]) -> st
 
     chemin_stockage = f"code/{uuid.uuid4()}-{nom_projet}.zip"
     try:
-        supabase.storage.from_(BUCKET).upload(
+        stockage_r2.from_(BUCKET).upload(
             chemin_stockage, tampon.read(), {"content-type": "application/zip"}
         )
     except Exception as e:
         logging.error(f"ERREUR SUPABASE STORAGE (upload code {chemin_stockage}) : {e}")
         raise
 
-    return supabase.storage.from_(BUCKET).get_public_url(chemin_stockage)
+    return stockage_r2.from_(BUCKET).get_public_url(chemin_stockage)
