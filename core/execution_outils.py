@@ -403,7 +403,24 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
 
     if appels_surs:
         for appel in appels_surs:
-            yield {"type": "statut", "texte": f"{_nom_lisible_appel(appel)}..."}
+            # id_appel/nom_outil ajoutés (15/09/2026, demande Bourama --
+            # chantier "ligne connectrice" côté clovis-frontend) :
+            # appel["id"] est le tool_call_id, déjà unique par appel (voir
+            # plus bas, messages_agent). Sans ça, le frontend ne pouvait
+            # recoller un "statut_termine"/"outil_resultat" qu'au DERNIER
+            # "en cours" de la liste (par position), ce qui donne le
+            # mauvais résultat dès que plusieurs outils tournent
+            # VRAIMENT en parallèle ici (ThreadPoolExecutor juste en
+            # dessous) et finissent dans le désordre (as_completed, pas
+            # l'ordre de soumission). nom_outil permet aussi au frontend
+            # d'afficher tout de suite la bonne icône de l'outil pendant
+            # qu'il est encore "en cours", au lieu d'un rond générique.
+            yield {
+                "type": "statut",
+                "texte": f"{_nom_lisible_appel(appel)}...",
+                "id_appel": appel["id"],
+                "nom_outil": appel["name"],
+            }
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(appels_surs)) as executor:
             futures = {
@@ -435,12 +452,13 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                     # au lieu de changer de personnalite en silence.
                     logging.error(f"ERREUR OUTIL ({appel['name']}) : {e}")
                     resultat = f"Erreur : {_nom_lisible_appel(appel)} a échoué ({e})."
-                    yield {"type": "statut_termine", "texte": f"{_nom_lisible_appel(appel)} a échoué"}
+                    yield {"type": "statut_termine", "texte": f"{_nom_lisible_appel(appel)} a échoué", "id_appel": appel["id"]}
                     yield {
                         "type": "outil_resultat",
                         "nom_outil": appel["name"],
                         "nom_lisible": _nom_lisible_appel(appel),
                         "resultat": resultat,
+                        "id_appel": appel["id"],
                     }
                     messages_agent.append({
                         "role": "tool",
@@ -448,7 +466,7 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                         "content": resultat,
                     })
                     continue
-                yield {"type": "statut_termine", "texte": f"{_nom_lisible_appel(appel)} effectuée"}
+                yield {"type": "statut_termine", "texte": f"{_nom_lisible_appel(appel)} effectuée", "id_appel": appel["id"]}
                 # Généralisé (26/07, demande Bourama) : pour N'IMPORTE QUEL
                 # outil, présent ou futur -- pas de liste à maintenir, voir
                 # docstring de _resultat_pour_affichage.
@@ -457,6 +475,7 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                     "nom_outil": appel["name"],
                     "nom_lisible": _nom_lisible_appel(appel),
                     "resultat": _resultat_pour_affichage(resultat),
+                    "id_appel": appel["id"],
                 }
                 # Garanti indépendamment de ce que le modèle écrira ensuite
                 # dans sa propre réponse -- voir _extraire_fichiers_generes
