@@ -448,3 +448,62 @@ def construire_instruction_guide(sections: list[dict]) -> str:
         for s in sections
     )
     return INSTRUCTION_GUIDE_INTRODUCTION.format(liste_sections=liste_sections or "(aucune section trouvee)")
+
+
+# Chantier "mode source" (voir contexte-mode-source-clovis.md), demande
+# Bourama, 16/09/2026 : controle quelles sources Clovis a le droit
+# d'utiliser pour repondre pendant une conversation (Aucun, Recherche, ou
+# Sur pieces). Un eleve choisit ce mode explicitement (meme bouton que le
+# persona pedagogique, groupe separe, voir SelecteurPersonaPedagogique.tsx
+# cote frontend), jamais l'IA elle-meme en cours de conversation.
+#
+# BRANCHE le 16/09/2026 : injecte dans _construire_system_prompt via
+# obtenir_mode_source (core/mode_source_conversation.py), calcule dans
+# chat() (core/main.py).
+#
+# ATTENTION NOM : totalement independant de MODES_PEDAGOGIQUES ci-dessus
+# (style d'enseignement) et de core/mode_actif_conversation.py
+# (rattachement enseignant/code de classe). Les trois cohabitent sur la
+# meme conversation, aucun des trois ne doit influencer les deux autres.
+#
+# PAS DE MODE PAR DEFAUT : obtenir_mode_source renvoie None ("Aucun",
+# comportement actuel inchange) tant que l'eleve n'a rien choisi, et
+# aucun mode n'est alors injecte dans le prompt.
+#
+# La base de connaissances interne de Clovis (outil gerer_base_connaissance)
+# reste disponible normalement dans les deux modes ci-dessous, sans
+# exception : ce systeme ne la concerne pas, elle n'est jamais restreinte
+# ni forcee par ce chantier.
+MODES_SOURCE = {
+    "recherche": """
+
+<mode_source_recherche>
+Tu es en mode source "Recherche" pour cette conversation. Il regle uniquement quelles sources tu as le droit de consulter, il ne remplace pas ton style pedagogique habituel.
+
+OBLIGATION, sans exception : avant de repondre a la question de l'eleve (sauf si elle n'appelle manifestement aucune recherche, par exemple une simple salutation ou une question sur toi-meme), appelle systematiquement :
+- un outil de recherche web (tavily_search), et
+- gerer_document_bibliotheque avec action="trouver_catalogue_public", pour verifier ce que dit la bibliotheque publique sur le sujet.
+Ce n'est pas laisse a ton appreciation : tant que ce mode est actif, ces deux recherches sont un passage obligatoire, meme si tu penses deja connaitre la reponse.
+
+Regles par source :
+- Tes connaissances propres (ton entrainement general) : autorisees normalement, tu peux t'en servir librement en complement.
+- Recherche web : automatique comme indique ci-dessus.
+- Bibliotheque publique : automatique comme indique ci-dessus, via trouver_catalogue_public. Cet outil ne renvoie jamais le contenu d'un document, seulement son nom, sa description et son lien : ne cite ni ne paraphrase jamais le contenu d'un document trouve ainsi, contente-toi de signaler son existence et, si utile, d'ecrire son lien reel en markdown pour que l'eleve puisse l'ouvrir lui-meme.
+- Bibliotheque personnelle de l'eleve (gerer_document_bibliotheque, action="chercher") : jamais automatique dans ce mode. N'y touche que si l'eleve te le demande explicitement.
+</mode_source_recherche>""",
+    "sur_pieces": """
+
+<mode_source_sur_pieces>
+Tu es en mode source "Sur pieces" pour cette conversation. Il regle uniquement quelles sources tu as le droit de consulter, il ne remplace pas ton style pedagogique habituel.
+
+OBLIGATION, sans exception : avant de repondre a la question de l'eleve (sauf si elle n'appelle manifestement aucune recherche, par exemple une simple salutation ou une question sur toi-meme), appelle systematiquement gerer_document_bibliotheque avec action="chercher" pour chercher dans sa bibliotheque personnelle. C'est la source par defaut de ce mode, ce n'est pas laisse a ton appreciation.
+
+Regles par source :
+- Bibliotheque personnelle de l'eleve : source par defaut, cherchee automatiquement comme indique ci-dessus.
+- Tes connaissances propres (ton entrainement general) : interdites par defaut. Tu peux t'en servir seulement si l'eleve le demande explicitement, et tu peux aussi lui proposer toi-meme cette option quand la bibliotheque personnelle ne suffit pas (par exemple : "je peux aussi repondre avec mes connaissances generales si tu veux").
+- Recherche web (tavily_search) : interdite par defaut. Utilisable seulement si l'eleve le demande explicitement lui-meme. Difference importante avec le point precedent : tu ne dois JAMAIS proposer toi-meme la recherche web dans ce mode, meme quand la bibliotheque personnelle ne suffit pas.
+- Bibliotheque publique : jamais lue ni citee directement dans ce mode. Si l'eleve la demande explicitement, appelle gerer_document_bibliotheque avec action="trouver_catalogue_public" pour la localiser, puis propose-lui de l'ajouter d'abord a sa bibliotheque personnelle avant de pouvoir t'en servir : ecris le vrai lien du document (url_publique) en markdown avec son vrai nom dans ta reponse, exactement comme la consigne generale de gerer_document_bibliotheque te le demande deja pour tout document, ce qui fait alors apparaitre automatiquement le bouton d'ajout a la bibliotheque personnelle a cote de sa carte. Une fois que l'eleve confirme l'avoir ajoute, ressers-toi normalement de gerer_document_bibliotheque action="chercher" pour le retrouver.
+
+Regle de fond, valable pour toute reponse construite a partir d'un document trouve (personnel, ou web si l'eleve l'a demande explicitement) : n'ajoute jamais une information qui n'est pas ecrite dans ce document, meme si tu la "connais" par ton entrainement general.
+</mode_source_sur_pieces>""",
+}

@@ -5,10 +5,10 @@ import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from configuration import get_system_prompt
-from profils_agents import INSTRUCTIONS_FORMATS_AFFICHAGE, INSTRUCTIONS_ARBITRAGE_CALCUL, REGLE_CONTEXTE_INVISIBLE, INSTRUCTIONS_LONGUEUR_REPONSE, MODES_PEDAGOGIQUES, REGLE_BASCULE_MODE_PEDAGOGIQUE, construire_instruction_guide
+from profils_agents import INSTRUCTIONS_FORMATS_AFFICHAGE, INSTRUCTIONS_ARBITRAGE_CALCUL, REGLE_CONTEXTE_INVISIBLE, INSTRUCTIONS_LONGUEUR_REPONSE, MODES_PEDAGOGIQUES, REGLE_BASCULE_MODE_PEDAGOGIQUE, construire_instruction_guide, MODES_SOURCE
 from guide_conversation import obtenir_sections_guide
 
-def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=False):
+def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=False, mode_source=None):
     # Restauré le 14/08 (voir commentaire des constantes plus haut) : la
     # page Notion de l'agent (get_system_prompt) ne doit plus contenir QUE
     # la personnalité/le comportement propre à l'agent -- les 3 blocs fixes
@@ -120,6 +120,23 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # menu "+" du chat, etapes 4/5, pas encore poussees).
     if guide_actif:
         system_final += construire_instruction_guide(obtenir_sections_guide())
+
+    # Chantier "mode source" (voir contexte-mode-source-clovis.md),
+    # 16/09/2026, demande Bourama. mode_source vient de
+    # obtenir_mode_source(conversation_id, user_id)
+    # (core/mode_source_conversation.py), calcule dans chat() et recu ici
+    # en parametre, meme patron que persona_pedagogique et guide_actif
+    # juste au-dessus, jamais recalcule ici.
+    #
+    # Pas de mode par defaut : mode_source vaut None ("Aucun", comportement
+    # actuel inchange) tant que l'eleve n'a rien choisi explicitement,
+    # et dans ce cas aucun texte n'est injecte ici.
+    #
+    # Independant du persona pedagogique et du guide de decouverte
+    # ci-dessus : les trois peuvent etre actifs en meme temps sur la meme
+    # conversation, ce sont trois reglages separes qui cohabitent.
+    if mode_source and mode_source in MODES_SOURCE:
+        system_final += MODES_SOURCE[mode_source]
 
     # Injection de la structure "Programme" (classe/matière/chapitre) dans
     # le system prompt retirée le 29/08/2026 (demande Bourama) -- la

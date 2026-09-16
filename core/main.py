@@ -20,6 +20,7 @@ from comportements_etudiants import (
 from codes_partage import lister_comportements_recus
 from core.mode_actif_conversation import rattachement_actif_pour_prompt
 from core.persona_pedagogique_conversation import obtenir_persona_pedagogique
+from core.mode_source_conversation import obtenir_mode_source
 from core.guide_conversation import obtenir_guide_actif
 from avancement_notions_ia import notions_pertinentes_pour_eleve, resoudre_code_actif_eleve
 from signalements import signalements_pertinents_pour_injection
@@ -509,10 +510,16 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # meme principe que persona_pedagogique juste au-dessus, ne
             # depend d'aucun des autres, lance dans le meme lot parallele.
             f_guide_actif = executor.submit(obtenir_guide_actif, conversation_id, user_id) if conversation_id else None
+            # Mode source (chantier "mode source", 16/09/2026, demande
+            # Bourama) : Aucun/Recherche/Sur pieces, ne depend d'aucun des
+            # autres, lance dans le meme lot parallele que persona_pedagogique
+            # et guide_actif juste au-dessus.
+            f_mode_source = executor.submit(obtenir_mode_source, conversation_id, user_id) if conversation_id else None
             rattachement_id_actif = f_rattachement_actif.result() if f_rattachement_actif else None
             comportements_etudiant_bruts = f_comportements_etudiant.result()
             persona_pedagogique = f_persona_pedagogique.result() if f_persona_pedagogique else None
             guide_actif = f_guide_actif.result() if f_guide_actif else False
+            mode_source = f_mode_source.result() if f_mode_source else None
 
         # rattachement_id_actif (voir core/mode_actif_conversation.py) vaut :
         # - None si conversation_id est absent ou si aucun mode actif n'a
@@ -608,6 +615,20 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # = ~8500 caractères à elle seule -- à réactiver dès les tests
         # terminés (voir conversation du 05/09/2026 pour le contexte).
         # outils_forces_contexte.append("gerer_document_bibliotheque")
+        #
+        # Chantier "mode source" (16/09/2026, demande Bourama) : force
+        # gerer_document_bibliotheque UNIQUEMENT quand un mode source est
+        # actif (Recherche ou Sur pieces). Sans ca, rien ne garantit que
+        # le petit routeur le suggere ce tour-ci, or le bloc de prompt
+        # MODE SOURCE plus bas (_construire_system_prompt) dit au modele
+        # d'appeler systematiquement une de ses actions
+        # (trouver_catalogue_public en Recherche, chercher en Sur pieces).
+        # Portee volontairement etroite (pas pour tout le monde comme la
+        # ligne desactivee juste au-dessus) pour ne pas rouvrir le
+        # probleme de budget tokens qui a fait desactiver cette ligne le
+        # 05/09/2026.
+        if mode_source in ("recherche", "sur_pieces"):
+            outils_forces_contexte.append("gerer_document_bibliotheque")
         if natif:
             # Paire indissociable (voir règle "monde téléphone" dans
             # _router_outils) : explorer_dossier a besoin des noms
@@ -709,7 +730,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id)
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force_contexte_seul)
             outil_force_verifie_optimiste = [o["function"]["name"] for o in outils_mcp] if outil_force_contexte_seul else None
-            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif)
+            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source)
             return outils_mcp, table_routage, system_final, catalogue_complet, table_routage_complet
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -828,7 +849,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id)
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force)
             outil_force_verifie = [o["function"]["name"] for o in outils_mcp] if outil_force else outil_force
-        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif)
+        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source)
 
         # PERF (10/08) : second (et dernier) point de vérification --
         # couvre tous les chemins qui ne passent PAS par le premier
