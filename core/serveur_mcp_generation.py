@@ -83,3 +83,4 @@ import core.outils_signalements  # noqa: F401
 import core.outils_concentration  # noqa: F401
 import core.outils_avancement_notions  # noqa: F401
 import core.outils_verification_code_actif  # noqa: F401
+import core.outils_action_agent  # noqa: F401
