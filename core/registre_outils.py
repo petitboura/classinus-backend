@@ -579,5 +579,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "lister_actions_disponibles": {"label": "Liste des actions disponibles", "icone": "MousePointerClick", "onglet": None},
     # Chantier F : filet de securite generique, meme rappel de cache 24h.
     "executer_clic_generique": {"label": "Clic générique dans l'application", "icone": "MousePointerClick", "onglet": None},
+    # Chantier G : mode guidage, meme rappel de cache 24h.
+    "montrer_element_application": {"label": "Pointer un élément de l'application", "icone": "MousePointerClick", "onglet": None},
 }
 

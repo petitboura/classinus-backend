@@ -16,6 +16,7 @@ import json
 from core.canal_agent_applicatif import (
     demander_execution_action as _demander_execution_action,
     demander_clic_generique as _demander_clic_generique,
+    demander_pointage_action as _demander_pointage_action,
     obtenir_actions_disponibles as _obtenir_actions_disponibles,
 )
 from core.outils_generation_commun import mcp_generation, Context
@@ -138,3 +139,42 @@ async def executer_clic_generique(selecteur: str, description: str, ctx: Context
     if isinstance(resultat, dict) and resultat.get("refuse"):
         return "L'étudiant a refusé cette action dans la fenêtre de confirmation."
     return "Action exécutée avec succès."
+
+
+@mcp_generation.tool()
+async def montrer_element_application(action_id: str, ctx: Context) -> str:
+    """
+    Chantier G : mode guidage / visite guidée. Déplace UNIQUEMENT le
+    curseur virtuel vers l'élément de l'action `action_id` (issu de
+    lister_actions_disponibles), SANS jamais l'exécuter -- pour montrer
+    une nouveauté ou un endroit précis de l'application à l'étudiant.
+    Décrire ce que fait cet élément dans le message envoyé à l'étudiant
+    au même moment, cet outil ne fait qu'un pointage visuel silencieux.
+
+    Pour une visite en plusieurs étapes, appeler cet outil une fois par
+    étape, en laissant l'étudiant lire l'explication entre deux (pause
+    à chaque étape, décision Bourama) -- ne jamais enchaîner plusieurs
+    pointages sans texte explicatif entre eux.
+
+    Si l'étudiant doit ensuite cliquer lui même, ne pas appeler
+    executer_action_application à sa place : laisser l'étudiant agir.
+    Si Clovis doit agir à sa place, utiliser executer_action_application
+    séparément après (ou à la place de) ce pointage.
+    """
+    user_id = ctx.request_context.request.query_params.get("user_id")
+    if not user_id:
+        return "Erreur : impossible d'identifier l'utilisateur."
+
+    if not action_id:
+        return "Erreur : paramètre 'action_id' manquant."
+
+    resultat = await _demander_pointage_action(user_id, action_id)
+
+    if resultat is None:
+        return (
+            "Aucune réponse de l'application : soit elle n'est ouverte nulle part pour ce compte, "
+            "soit cette action n'est plus disponible à l'écran nulle part où elle est ouverte."
+        )
+    if isinstance(resultat, dict) and resultat.get("erreur"):
+        return f"Erreur : {resultat['erreur']}"
+    return "Curseur déplacé vers l'élément avec succès."

@@ -247,3 +247,22 @@ async def demander_clic_generique(
         on_statut,
         on_timeout_log=f"selecteur={selecteur}",
     )
+
+
+async def demander_pointage_action(user_id: str, action_id: str, on_statut=None) -> Any | None:
+    """
+    Chantier G (mode guidage). Diffuse {montrer_action_id} : demande
+    UNIQUEMENT de deplacer le curseur virtuel vers l'element de
+    `action_id`, sans jamais l'executer -- pour que Clovis puisse
+    montrer une nouveaute a l'etudiant en l'expliquant dans le chat,
+    sans agir a sa place. Jamais de confirmation cote frontend pour ce
+    cas (voir lib/canalAgentApplicatif.ts) : un pointage visuel n'a
+    aucun effet sur les donnees de l'etudiant.
+    """
+    correlation_id = str(uuid.uuid4())
+    return await _diffuser_et_attendre(
+        user_id,
+        {"id": correlation_id, "montrer_action_id": action_id},
+        on_statut,
+        on_timeout_log=f"pointage action={action_id}",
+    )
