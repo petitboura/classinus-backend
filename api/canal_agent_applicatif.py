@@ -9,7 +9,7 @@ import logging
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from api.auth import supabase
-from core.canal_agent_applicatif import connecter, deconnecter, recevoir_reponse
+from core.canal_agent_applicatif import connecter, deconnecter, mettre_a_jour_etat_actions, recevoir_reponse
 
 router = APIRouter(prefix="/api/canal-agent-applicatif", tags=["canal-agent-applicatif"])
 
@@ -34,10 +34,13 @@ async def canal_agent_applicatif(
     """
     CONTRAT FRONTEND : ouvrir cette connexion des que l'app est au
     premier plan (meme cycle de vie que le canal temps reel existant,
-    voir lib/canalAgentApplicatif.ts). Deux formes de message recues :
+    voir lib/canalAgentApplicatif.ts). Trois formes de message recues :
     - {"id": ..., "action_id": ...} : demande d'execution (chantier C) ;
     - {"id": ..., "resultat": ...} : reponse de CE frontend a une
-      demande d'execution.
+      demande d'execution ;
+    - {"etat_actions": [...]} : poussee de l'etat courant des actions
+      disponibles sur CETTE connexion (chantier D), envoyee a
+      l'ouverture puis a chaque changement cote frontend.
     """
     utilisateur = _verifier_token(token)
     if utilisateur is None:
@@ -53,6 +56,8 @@ async def canal_agent_applicatif(
             correlation_id = message.get("id")
             if correlation_id is not None and "resultat" in message:
                 recevoir_reponse(correlation_id, message.get("resultat"))
+            elif "etat_actions" in message and isinstance(message.get("etat_actions"), list):
+                mettre_a_jour_etat_actions(utilisateur.id, appareil_id, message["etat_actions"])
     except WebSocketDisconnect:
         pass
     except Exception as e:

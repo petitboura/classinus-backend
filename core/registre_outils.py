@@ -574,5 +574,10 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # via forcer_rechargement_catalogue_outils ou redemarrage Railway
     # (cache 24h connu, voir plan-agent-applicatif-clovis.md section 2).
     "executer_action_application": {"label": "Action dans l'application", "icone": "MousePointerClick", "onglet": None},
+    # Chantier D : lecture de l'etat pousse en continu, meme rappel de
+    # cache 24h que ci-dessus.
+    "lister_actions_disponibles": {"label": "Liste des actions disponibles", "icone": "MousePointerClick", "onglet": None},
+    # Chantier F : filet de securite generique, meme rappel de cache 24h.
+    "executer_clic_generique": {"label": "Clic générique dans l'application", "icone": "MousePointerClick", "onglet": None},
 }
 
