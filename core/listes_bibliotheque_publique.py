@@ -25,6 +25,7 @@ strip -- "Mali" et "mali" créeraient deux entrées distinctes.
 import logging
 import os
 import sys
+import unicodedata
 
 from postgrest.exceptions import APIError
 
@@ -43,15 +44,28 @@ TABLES = {
 }
 
 
+def _cle_tri_alphabetique(valeur: str) -> str:
+    """16/09/2026, demande Bourama : "il faut les trier par ordre
+    alphabétique partout où ils sont". `.order("nom")` côté Supabase
+    (ci-dessous) trie déjà, mais selon la collation de la base, qui peut
+    placer les accents n'importe où (une valeur commençant par "É"
+    pourrait finir après "Z"). Un tri fait ici, une fois pour toutes,
+    insensible aux accents et à la casse, garantit le même ordre partout
+    où cette liste est utilisée côté frontend, quelle que soit la
+    collation de la base."""
+    sans_accents = unicodedata.normalize("NFKD", valeur).encode("ascii", "ignore").decode("ascii")
+    return sans_accents.casefold()
+
+
 def lister_valeurs(champ: str) -> list[str]:
-    """Valeurs déjà connues pour un champ ("pays"/"niveau"/"categorie"), pour peupler les suggestions du formulaire côté frontend."""
+    """Valeurs déjà connues pour un champ ("pays"/"niveau"/"categorie"), triées par ordre alphabétique, pour peupler les suggestions du formulaire côté frontend."""
     table = TABLES[champ]
     try:
         res = supabase.table(table).select("nom").order("nom").execute()
     except Exception as e:
         logging.error(f"ERREUR SUPABASE (lecture {table}) : {e}")
         return []
-    return [ligne["nom"] for ligne in (res.data or [])]
+    return sorted((ligne["nom"] for ligne in (res.data or [])), key=_cle_tri_alphabetique)
 
 
 def normaliser_et_enregistrer(champ: str, valeur: str | None) -> str | None:

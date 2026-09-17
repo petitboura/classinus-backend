@@ -415,13 +415,13 @@ def obtenir_dossier_public(dossier_id: str, utilisateur=Depends(utilisateur_opti
 
 
 # 16/09/2026, demande Bourama : même compte de contenu, mais pour l'usage
-# DANS l'app (bibliothèque publique, dossier actuellement ouvert) --
+# DANS l'app (bibliothèque publique, dossier actuellement ouvert) :
 # route dédiée plutôt qu'ajoutée à lister() ci-dessus, qui renvoie TOUS
 # les dossiers à plat : calculer ce compte pour chacun à chaque chargement
 # de la liste ferait une requête par dossier pour rien, alors que la
 # personne n'a besoin de ce détail que pour le dossier qu'elle a
 # réellement ouvert. "/{dossier_id}/contenu" a deux segments, donc aucun
-# risque qu'il soit intercepté par "/{dossier_id}" (un seul segment) --
+# risque qu'il soit intercepté par "/{dossier_id}" (un seul segment),
 # contrairement au piège documenté plus haut pour "/demandes"/"/attaches".
 @router.get("/{dossier_id}/contenu")
 def obtenir_contenu_dossier(dossier_id: str):

@@ -213,7 +213,7 @@ def lister_fichiers_ids_dossier(dossier_id: str) -> list:
 
 def compter_contenu_dossier(dossier_id: str) -> dict:
     """16/09/2026, demande Bourama : "l'analytique dans l'app, combien
-    d'éléments, de liens, de fichiers, de dossiers" -- des vrais comptes
+    d'éléments, de liens, de fichiers, de dossiers" : des vrais comptes
     de contenu, pas des statistiques de fréquentation (vues/partages,
     piste abandonnée le même jour après clarification).
 
