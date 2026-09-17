@@ -404,6 +404,52 @@ def relancer_echecs_extraction_a_froid_publique() -> int:
         return 0
 
 
+def extraire_texte_maintenant_publique(fichier_id: str) -> bool:
+    """
+    16/09/2026, demande Bourama (chantier quota Supabase dépassé) :
+    version "à la demande" de traiter_extractions_texte_publique_une_fois
+    ci-dessus, pour UN SEUL fichier -- appelée en tâche de fond juste
+    après l'ajout dans la bibliothèque publique (voir api/bibliotheque_
+    publique.py), au lieu d'attendre le passage suivant de
+    _boucle_extraction_texte_publique. Aucun appel Gemini/Groq ici
+    (extraction gratuite), donc pas de coupe-circuit quota à vérifier.
+    Idempotent : si déjà "fait", ne refait rien et renvoie True direct.
+    """
+    try:
+        ligne = (
+            supabase.table("bibliotheque_publique")
+            .select("id, chemin_stockage, nom_fichier, type_mime, statut_extraction_texte")
+            .eq("id", fichier_id)
+            .single()
+            .execute()
+        ).data
+    except Exception as e:
+        logging.error(f"ERREUR lecture fichier pour extraction texte immédiate (bibliotheque_publique, fichier_id={fichier_id}) : {e}")
+        return False
+
+    if not ligne:
+        return False
+    if ligne.get("statut_extraction_texte") == "fait":
+        return True
+
+    try:
+        supabase.table("bibliotheque_publique").update({"statut_extraction_texte": "en_cours"}).eq("id", fichier_id).execute()
+        contenu = _telecharger(ligne["chemin_stockage"])
+        texte = _extraire_texte_pour_extraction_publique(ligne["type_mime"], contenu)
+        supabase.table("bibliotheque_publique").update({
+            "texte_brut": texte or None,
+            "statut_extraction_texte": "fait",
+        }).eq("id", fichier_id).execute()
+        return True
+    except Exception as e:
+        logging.error(f"ERREUR extraction texte immédiate (bibliotheque_publique, fichier_id={fichier_id}) : {e}")
+        try:
+            supabase.table("bibliotheque_publique").update({"statut_extraction_texte": "echec"}).eq("id", fichier_id).execute()
+        except Exception as e2:
+            logging.error(f"ERREUR mise à jour statut échec extraction immédiate (bibliotheque_publique, fichier_id={fichier_id}) : {e2}")
+        return False
+
+
 def vectoriser_maintenant_publique(fichier_id: str) -> bool:
     """
     06/09/2026, demande Bourama : VRAIE vectorisation A LA DEMANDE d'UN
@@ -462,6 +508,72 @@ def vectoriser_maintenant_publique(fichier_id: str) -> bool:
             }).eq("id", fichier_id).execute()
         except Exception as e2:
             logging.error(f"ERREUR mise à jour statut échec (vectorisation à la demande, bibliotheque_publique, fichier_id={fichier_id}) : {e2}")
+        return False
+
+
+def vectoriser_maintenant_privee(fichier_id: str) -> bool:
+    """
+    16/09/2026, demande Bourama (chantier quota Supabase dépassé) :
+    déclenchement IMMÉDIAT de la vectorisation d'UN SEUL fichier de la
+    bibliothèque PRIVÉE, appelée en tâche de fond juste après l'upload
+    (voir api/bibliotheque_utilisateur.py) -- au lieu d'attendre que la
+    boucle de polling (_boucle_vectorisation, api/main.py) le ramasse au
+    passage suivant (jusqu'à 5s plus tard). La boucle de polling reste
+    en place inchangée : elle ne sert plus que de FILET DE SÉCURITÉ
+    (redémarrage serveur en plein traitement, cette tâche de fond perdue
+    si le process redémarre avant qu'elle tourne, pause quota Gemini en
+    cours au moment de l'upload) -- exactement le même principe que
+    vectoriser_maintenant_publique ci-dessus, dupliqué ici plutôt que
+    généralisé pour ne pas mélanger les deux tables/bibliothèques.
+    Idempotent : si déjà "pret", ne refait rien et renvoie True direct.
+    """
+    try:
+        ligne = (
+            supabase.table("fichiers_uploades")
+            .select("id, user_id, chemin_stockage, nom_fichier, type_mime, tentatives_vectorisation, statut_vectorisation")
+            .eq("id", fichier_id)
+            .single()
+            .execute()
+        ).data
+    except Exception as e:
+        logging.error(f"ERREUR lecture fichier pour vectorisation immédiate (fichiers_uploades, fichier_id={fichier_id}) : {e}")
+        return False
+
+    if not ligne:
+        return False
+    if ligne.get("statut_vectorisation") == "pret":
+        return True
+    if est_en_pause_quota_gemini():
+        return False
+
+    maintenant_iso = datetime.now(timezone.utc).isoformat()
+    try:
+        supabase.table("fichiers_uploades").update({"statut_vectorisation": "en_cours"}).eq("id", fichier_id).execute()
+        _vectoriser_privee(ligne)
+        if not _a_produit_des_chunks("documents_bibliotheque", fichier_id):
+            raise ValueError("aucun contenu exploitable n'a pu être extrait de ce fichier (0 chunk produit)")
+        supabase.table("fichiers_uploades").update({
+            "statut_vectorisation": "pret",
+            "erreur_vectorisation": None,
+            "derniere_tentative_vectorisation_a": maintenant_iso,
+        }).eq("id", fichier_id).execute()
+        return True
+    except Exception as e:
+        tentatives = (ligne.get("tentatives_vectorisation") or 0) + 1
+        if est_erreur_quota_gemini(str(e)):
+            activer_pause_quota_gemini()
+            logging.error(f"QUOTA GEMINI épuisé (vectorisation immédiate, fichiers_uploades, fichier_id={fichier_id}) : pause de 24h.")
+        else:
+            logging.error(f"ERREUR vectorisation immédiate (fichiers_uploades, fichier_id={fichier_id}, tentative {tentatives}) : {e}")
+        try:
+            supabase.table("fichiers_uploades").update({
+                "statut_vectorisation": "echec" if tentatives >= MAX_TENTATIVES else "en_attente",
+                "tentatives_vectorisation": tentatives,
+                "erreur_vectorisation": str(e)[:500],
+                "derniere_tentative_vectorisation_a": maintenant_iso,
+            }).eq("id", fichier_id).execute()
+        except Exception as e2:
+            logging.error(f"ERREUR mise à jour statut échec (vectorisation immédiate, fichiers_uploades, fichier_id={fichier_id}) : {e2}")
         return False
 
 

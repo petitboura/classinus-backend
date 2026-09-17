@@ -26,7 +26,7 @@ catalogue_public.py).
 import asyncio
 import logging
 import os
-import uuid
+import threading
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from postgrest.exceptions import APIError
@@ -37,7 +37,10 @@ from core import stockage_r2
 
 from api.auth import utilisateur_courant, utilisateur_optionnel
 from core.erreurs import erreur_api
+from core.dedoublonnage_stockage import stocker_avec_dedoublonnage, supprimer_stockage_si_dernier_usage
 from core.file_attente_vectorisation import (
+    extraire_texte_maintenant_publique,
+    vectoriser_maintenant_publique,
     necessite_vectorisation_fichier_publique,
     necessite_extraction_texte_publique,
     necessite_vectorisation_note,
@@ -402,7 +405,8 @@ async def ajouter_a_bibliotheque_publique(
 
     nom_original = fichier.filename or "fichier"
     extension = nom_original.rsplit(".", 1)[-1] if "." in nom_original else "bin"
-    chemin_stockage = f"publique/{uuid.uuid4()}.{extension}"
+    chemin_stockage = None
+    hash_contenu = None
 
     def _stocker_et_inserer():
         # Factorisé le 02/09 (bug remonté par Bourama : upload perçu
@@ -411,8 +415,13 @@ async def ajouter_a_bibliotheque_publique(
         # synchrones/bloquants, et appelés tels quels dans cette route
         # async, ils bloquaient tout le serveur (event loop) pendant
         # toute la durée de l'upload.
-        stockage_r2.from_(BUCKET).upload(
-            chemin_stockage, contenu, {"content-type": fichier.content_type or "application/octet-stream"}
+        nonlocal chemin_stockage, hash_contenu
+        # 16/09/2026 (dedoublonnage, chantier quota Supabase) : passe
+        # par stocker_avec_dedoublonnage au lieu d'un chemin fixe --
+        # réutilise le fichier existant si le contenu est identique à
+        # un fichier déjà présent (n'importe laquelle des 3 bibliothèques).
+        chemin_stockage, hash_contenu = stocker_avec_dedoublonnage(
+            supabase, contenu, extension, "publique", fichier.content_type or "application/octet-stream"
         )
         url_publique = stockage_r2.from_(BUCKET).get_public_url(chemin_stockage)
         return (
@@ -423,6 +432,7 @@ async def ajouter_a_bibliotheque_publique(
                 "description": (description or "").strip(),
                 "nom_fichier": nom_original,
                 "chemin_stockage": chemin_stockage,
+                "hash_contenu": hash_contenu,
                 "url_publique": url_publique,
                 "type_mime": fichier.content_type,
                 "taille_octets": len(contenu),
@@ -469,8 +479,14 @@ async def ajouter_a_bibliotheque_publique(
         # ne le retrouve sans ligne chemin_stockage, mais consommant quand
         # meme le quota de stockage. On le supprime ici avant de relancer
         # l'erreur d'origine vers le client.
+        # 16/09/2026 (dedoublonnage) : passe par
+        # supprimer_stockage_si_dernier_usage plutot qu'un remove direct
+        # -- chemin_stockage peut desormais correspondre a un fichier
+        # REUTILISE (deja reference par une autre ligne, potentiellement
+        # dans une autre bibliotheque) ; un remove direct casserait
+        # alors l'acces de cet autre proprietaire.
         try:
-            stockage_r2.from_(BUCKET).remove([chemin_stockage])
+            supprimer_stockage_si_dernier_usage(supabase, chemin_stockage)
         except Exception as e2:
             logging.error(f"ECHEC ROLLBACK STORAGE apres echec BDD ({chemin_stockage}) : {e2}")
 
@@ -492,6 +508,16 @@ async def ajouter_a_bibliotheque_publique(
 
     entree = ligne.data[0]
     await asyncio.to_thread(_classer_si_autorise, entree["id"], dossier_id, utilisateur.id)
+
+    # 16/09/2026 (chantier quota Supabase) : déclenchement immédiat en
+    # arrière-plan (image -> vraie vectorisation ; pdf/word/excel/texte ->
+    # extraction gratuite) au lieu d'attendre le prochain passage des
+    # boucles de polling -- celles-ci restent le filet de sécurité.
+    if entree.get("statut_vectorisation") == "en_attente":
+        asyncio.create_task(asyncio.to_thread(vectoriser_maintenant_publique, entree["id"]))
+    if entree.get("statut_extraction_texte") == "en_attente":
+        asyncio.create_task(asyncio.to_thread(extraire_texte_maintenant_publique, entree["id"]))
+
     return _marquer_est_a_moi([entree], utilisateur)[0]
 
 
@@ -567,12 +593,11 @@ def ajouter_texte_bibliotheque_publique(payload: AjouterTextePayload, utilisateu
     nom_final = (payload.nom or "").strip() or (contenu_texte[:80] + ("…" if len(contenu_texte) > 80 else ""))
     contenu_octets = contenu_texte.encode("utf-8")
     nom_fichier = f"{nom_final}.txt"
-    chemin_stockage = f"publique/{uuid.uuid4()}.txt"
 
     try:
-        stockage_r2.from_(BUCKET).upload(chemin_stockage, contenu_octets, {"content-type": "text/plain"})
+        chemin_stockage, hash_contenu = stocker_avec_dedoublonnage(supabase, contenu_octets, "txt", "publique", "text/plain")
     except Exception as e:
-        logging.error(f"ERREUR SUPABASE STORAGE (note texte bibliothèque publique {chemin_stockage}) : {e}")
+        logging.error(f"ERREUR SUPABASE STORAGE (note texte bibliothèque publique) : {e}")
         raise erreur_api(500, "ECHEC_DU_STOCKAGE_REESSAIE")
 
     url_publique = stockage_r2.from_(BUCKET).get_public_url(chemin_stockage)
@@ -586,6 +611,7 @@ def ajouter_texte_bibliotheque_publique(payload: AjouterTextePayload, utilisateu
                 "description": "",
                 "nom_fichier": nom_fichier,
                 "chemin_stockage": chemin_stockage,
+                "hash_contenu": hash_contenu,
                 "url_publique": url_publique,
                 "type_mime": "text/plain",
                 "taille_octets": len(contenu_octets),
@@ -611,6 +637,10 @@ def ajouter_texte_bibliotheque_publique(payload: AjouterTextePayload, utilisateu
     _classer_si_autorise(entree["id"], payload.dossier_id, utilisateur.id)
     # Vectorisation en arrière-plan (29/08, voir core/file_attente_vectorisation.py) --
     # avant, indexer_texte_catalogue_public était appelé directement ici.
+    # 16/09/2026 : déclenchement immédiat -- route sync (def), thread
+    # simple comme pour la note privée (voir ajouter_texte, api/bibliotheque_utilisateur.py).
+    if entree.get("statut_vectorisation") == "en_attente":
+        threading.Thread(target=vectoriser_maintenant_publique, args=(entree["id"],), daemon=True).start()
     return _marquer_est_a_moi([entree], utilisateur)[0]
 
 
@@ -643,7 +673,13 @@ def supprimer_de_bibliotheque_publique(entree_id: str, utilisateur=Depends(utili
     orphelin dans le bucket -- cause identifiée du gonflement du
     stockage). Même logique que core/bibliotheque_fichiers.py::
     supprimer_fichier : un échec de suppression Storage n'empêche pas
-    la suppression de la ligne (seule celle-ci est critique)."""
+    la suppression de la ligne (seule celle-ci est critique).
+
+    16/09/2026 (suite, dedoublonnage) : ligne BDD supprimée AVANT le
+    Storage, et passage par supprimer_stockage_si_dernier_usage --
+    même raison que supprimer_fichier (vérifier "plus personne ne
+    référence ce fichier" avant d'avoir supprimé CETTE ligne le
+    trouverait toujours lui-même)."""
     res = (
         supabase.table("bibliotheque_publique")
         .select("ajoute_par, chemin_stockage")
@@ -657,12 +693,12 @@ def supprimer_de_bibliotheque_publique(entree_id: str, utilisateur=Depends(utili
         raise erreur_api(403, "CETTE_ENTREE_NE_T_APPARTIENT_PAS")
 
     chemin_stockage = res.data.get("chemin_stockage")
+    supabase.table("bibliotheque_publique").delete().eq("id", entree_id).execute()
+
     if chemin_stockage:
         try:
-            stockage_r2.from_(BUCKET).remove([chemin_stockage])
+            supprimer_stockage_si_dernier_usage(supabase, chemin_stockage)
         except Exception as e:
             logging.warning(
                 f"Suppression Storage bibliothèque publique échouée ({chemin_stockage}), ligne supprimée quand même : {e}"
             )
-
-    supabase.table("bibliotheque_publique").delete().eq("id", entree_id).execute()

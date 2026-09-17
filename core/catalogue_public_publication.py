@@ -44,6 +44,7 @@ from core.file_attente_vectorisation import (
     necessite_vectorisation_fichier_privee,
 )
 from core.bibliotheque_fichiers import enregistrer_fichier as _enregistrer_fichier_perso
+from core.dedoublonnage_stockage import supprimer_stockage_si_dernier_usage
 
 BUCKET = "bibliotheque"
 TAILLE_MAX_OCTETS = 50 * 1024 * 1024  # 50 Mo, même limite que le reste de la bibliothèque publique/perso
@@ -258,15 +259,20 @@ def supprimer_entree_publique(entree_id: str, utilisateur_id: str) -> bool:
         return False
 
     chemin_stockage = res.data.get("chemin_stockage")
+    # 16/09/2026 (dedoublonnage, chantier quota Supabase) : ligne
+    # supprimée AVANT le Storage + supprimer_stockage_si_dernier_usage
+    # au lieu d'un remove direct -- chemin_stockage peut être partagé
+    # avec une autre ligne (n'importe laquelle des 3 bibliothèques).
+    supabase.table("bibliotheque_publique").delete().eq("id", entree_id).execute()
+
     if chemin_stockage:
         try:
-            stockage_r2.from_(BUCKET).remove([chemin_stockage])
+            supprimer_stockage_si_dernier_usage(supabase, chemin_stockage)
         except Exception as e:
             logging.warning(
                 f"Suppression Storage bibliothèque publique échouée ({chemin_stockage}), ligne supprimée quand même : {e}"
             )
 
-    supabase.table("bibliotheque_publique").delete().eq("id", entree_id).execute()
     return True
 
 

@@ -22,6 +22,7 @@ import asyncio
 import logging
 import os
 import sys
+import threading
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from postgrest.exceptions import APIError
@@ -38,6 +39,7 @@ from file_attente_vectorisation import (  # noqa: E402
     necessite_vectorisation_fichier_privee,
     necessite_vectorisation_note,
     reinitialiser_pour_reessai,
+    vectoriser_maintenant_privee,
 )
 
 router = APIRouter(prefix="/api/bibliotheque", tags=["bibliotheque-utilisateur"])
@@ -162,6 +164,14 @@ async def uploader_document(
     except Exception:
         raise erreur_api(500, "ECHEC_DU_STOCKAGE_REESSAIE")
 
+    # 16/09/2026 (chantier quota Supabase) : déclenche la vectorisation
+    # tout de suite en arrière-plan (sans attendre la réponse -- create_task
+    # ne bloque pas) au lieu de laisser la boucle de polling la ramasser
+    # jusqu'à 5s plus tard. La boucle reste le filet de sécurité (voir
+    # docstring de vectoriser_maintenant_privee).
+    if ligne.get("statut_vectorisation") == "en_attente":
+        asyncio.create_task(asyncio.to_thread(vectoriser_maintenant_privee, ligne["id"]))
+
     return _journaliser_ajout(contenu, fichier.content_type, nom_original, description_finale, ligne, utilisateur, request)
 
 
@@ -235,6 +245,9 @@ async def copier_depuis_bibliotheque_publique(
         raise erreur_api(500, "ECHEC_DU_STOCKAGE_REESSAIE")
     except Exception:
         raise erreur_api(500, "ECHEC_DU_STOCKAGE_REESSAIE")
+
+    if ligne.get("statut_vectorisation") == "en_attente":
+        asyncio.create_task(asyncio.to_thread(vectoriser_maintenant_privee, ligne["id"]))
 
     return _journaliser_ajout(
         contenu, entree["type_mime"], nom_original, description_finale, ligne, utilisateur, request
@@ -358,6 +371,12 @@ def ajouter_texte(
 
     # Vectorisation en arrière-plan (29/08, voir core/file_attente_vectorisation.py) --
     # avant, indexer_texte_bibliotheque était appelé directement ici.
+    # 16/09/2026 : déclenchement immédiat (voir uploader_document ci-dessus
+    # pour le détail) -- route sync (def, pas async def) donc thread
+    # simple plutôt que asyncio.create_task (pas de boucle asyncio à
+    # récupérer depuis ce contexte).
+    if ligne.get("statut_vectorisation") == "en_attente":
+        threading.Thread(target=vectoriser_maintenant_privee, args=(ligne["id"],), daemon=True).start()
 
     journaliser(
         action="bibliotheque_perso.ajoute",
