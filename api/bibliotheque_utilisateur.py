@@ -28,7 +28,7 @@ from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from postgrest.exceptions import APIError
 from pydantic import BaseModel
 
-from api.auth import utilisateur_courant, supabase
+from api.auth import utilisateur_courant, utilisateur_optionnel, supabase
 from api.journal import journaliser
 from core.erreurs import erreur_api
 from core import stockage_r2
@@ -408,13 +408,19 @@ def lister(utilisateur=Depends(utilisateur_courant)):
 
 
 @router.get("/{fichier_id}/consultation")
-def consulter(fichier_id: str, utilisateur=Depends(utilisateur_courant)):
+def consulter(fichier_id: str, utilisateur=Depends(utilisateur_optionnel)):
     """11/09/2026, demande Bourama : lien de partage direct pour un
     fichier perso, lecture seule, ouvert par N'IMPORTE QUEL utilisateur
     connecté (pas seulement le propriétaire), aucune vérification de
     propriété volontairement. N'ajoute rien chez celui qui consulte,
     même principe que la consultation d'une entrée de la bibliothèque
-    publique (voir api/bibliotheque_publique.py)."""
+    publique (voir api/bibliotheque_publique.py).
+
+    17/09/2026, changement d'avis de Bourama : compte non obligatoire
+    pour consulter (simple suggestion ensuite côté frontend), même
+    principe que la bibliothèque publique -- utilisateur_optionnel au
+    lieu de utilisateur_courant, valeur de `utilisateur` jamais utilisée
+    ici de toute façon."""
     fichier = obtenir_fichier(fichier_id)
     if fichier is None:
         raise erreur_api(404, "FICHIER_INTROUVABLE")
