@@ -933,14 +933,19 @@ def consulter_dossier_catalogue_public(dossier_id: str, ctx: Context) -> str:
         lignes.append(f"- [dossier] {sd['nom']} [id: {sd['id']}] (statut: {sd['statut']})")
     for f_id in fichier_ids:
         try:
-            res = _supabase_catalogue_public.table("bibliotheque_publique").select("nom, description, type_mime").eq("id", f_id).maybe_single().execute()
+            res = _supabase_catalogue_public.table("bibliotheque_publique").select("nom, description, type_mime, url_publique").eq("id", f_id).maybe_single().execute()
         except Exception as e:
             logging.error(f"ERREUR outil consulter_dossier_catalogue_public (lecture fichier {f_id}) : {e}")
             continue
         if not res or not res.data:
             continue
         f = res.data
-        lignes.append(f"- [fichier] {f.get('nom')} ({f.get('type_mime', 'inconnu')}) [id: {f_id}]" + (f" -- {f['description']}" if f.get("description") else ""))
+        ligne = f"- [fichier] {f.get('nom')} ({f.get('type_mime', 'inconnu')}) [id: {f_id}]"
+        if f.get("description"):
+            ligne += f" -- {f['description']}"
+        if f.get("url_publique"):
+            ligne += f" ({f['url_publique']})"
+        lignes.append(ligne)
     if len(lignes) == 1:
         lignes.append("Ce dossier est vide.")
     return "\n".join(lignes)
