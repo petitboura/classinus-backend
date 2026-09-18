@@ -25,12 +25,20 @@ from core.outils_generation_commun import mcp_generation, Context
 @mcp_generation.tool()
 async def lister_actions_disponibles(ctx: Context) -> str:
     """
-    Chantier D. Renvoie la liste, a jour a l'instant present, des
-    actions que Clovis peut declencher dans l'application pour cet
-    etudiant (id, description, sensible, continuerEnArrierePlan) --
-    UNIQUEMENT celles reellement montees et actives a l'ecran en ce
-    moment meme, jamais une liste apprise ou memorisee d'un tour
-    precedent.
+    Chantier D, revise le 17/09/2026 (scan generique, voir
+    plan-scan-generique-agent-applicatif.md) : renvoie la liste, a jour
+    a l'instant present, des elements cliquables (bouton, lien, champ)
+    reellement visibles et actifs a l'ecran de l'etudiant en ce moment
+    meme (id, description, sensible, continuerEnArrierePlan) -- plus
+    aucun element n'est declare a la main, tout est detecte
+    automatiquement par un scan du DOM cote frontend.
+
+    La description de chaque element est generee automatiquement (texte
+    visible du bouton/lien, ou a defaut son libelle d'accessibilite) --
+    elle peut donc etre generique, courte, ou ambigue (ex. deux boutons
+    "Modifier" sur le meme ecran). Se fier au contexte de la conversation
+    pour choisir le bon element, et consulter la base de connaissance de
+    Clovis en cas de doute reel plutot que de deviner.
 
     A appeler avant executer_action_application des que la liste
     connue pourrait etre perimee (nouvelle demande de l'etudiant,
@@ -39,8 +47,8 @@ async def lister_actions_disponibles(ctx: Context) -> str:
     dans cette liste.
 
     Renvoie une liste vide (pas une erreur) si l'application n'est
-    ouverte nulle part pour ce compte, ou si aucune action declaree
-    n'est actuellement montee.
+    ouverte nulle part pour ce compte, ou si l'ecran actuel ne contient
+    aucun element cliquable detecte par le scan.
     """
     user_id = ctx.request_context.request.query_params.get("user_id")
     if not user_id:
@@ -53,19 +61,19 @@ async def lister_actions_disponibles(ctx: Context) -> str:
 @mcp_generation.tool()
 async def executer_action_application(action_id: str, ctx: Context) -> str:
     """
-    Declenche une action dans l'application Clovis a la place de
-    l'etudiant (clic, navigation), pour l'action `action_id`. `action_id`
-    DOIT etre un identifiant renvoye par la liste des actions
-    actuellement disponibles a l'ecran (mecanisme de poussee d'etat,
-    chantier D) -- ne jamais deviner ni inventer un identifiant : une
-    action qui n'est plus montee a l'ecran echoue proprement plutot que
-    de risquer un effet inattendu.
+    Declenche un clic dans l'application Clovis a la place de
+    l'etudiant, sur l'element `action_id`. `action_id` DOIT etre un
+    identifiant renvoye par lister_actions_disponibles (mecanisme de
+    poussee d'etat, chantier D) -- ne jamais deviner ni inventer un
+    identifiant : un element qui n'est plus a l'ecran echoue proprement
+    plutot que de risquer un effet inattendu.
 
-    Si l'action est sensible (marquee comme telle, ou non qualifiee --
-    sensible par defaut), une fenetre de confirmation s'affiche cote
-    etudiant AVANT toute execution reelle : l'etudiant doit cliquer
-    Autoriser. Un refus renvoie un resultat clair, ne pas re-proposer la
-    meme action immediatement sans que l'etudiant l'ait redemande.
+    Revise le 17/09/2026 (scan generique) : TOUT element detecte par le
+    scan est sensible par defaut, sans exception possible -- une fenetre
+    de confirmation s'affiche donc TOUJOURS cote etudiant avant toute
+    execution reelle, l'etudiant doit cliquer Autoriser. Un refus renvoie
+    un resultat clair, ne pas re-proposer la meme action immediatement
+    sans que l'etudiant l'ait redemande.
 
     NECESSITE que l'application soit ouverte quelque part pour ce
     compte (peu importe l'onglet ou l'appareil, voir
@@ -96,12 +104,18 @@ async def executer_action_application(action_id: str, ctx: Context) -> str:
 @mcp_generation.tool()
 async def executer_clic_generique(selecteur: str, description: str, ctx: Context) -> str:
     """
-    Chantier F : filet de sécurité UNIQUEMENT pour un élément qui n'a
-    PAS encore d'action déclarée (voir lister_actions_disponibles).
-    Vérifie TOUJOURS lister_actions_disponibles en premier, et n'utilise
-    cet outil que si rien dans cette liste ne correspond à ce que
-    l'étudiant a demandé -- ne jamais l'utiliser en doublon d'une action
-    déjà déclarée.
+    Chantier F, revise le 17/09/2026 (scan generique -- voir
+    plan-scan-generique-agent-applicatif.md, etape 4 : decision produit
+    a confirmer avec Bourama sur l'utilite de conserver cet outil
+    maintenant que lister_actions_disponibles detecte deja
+    automatiquement bouton/lien/champ). Filet de securite UNIQUEMENT
+    pour un element cliquable qui n'apparait PAS dans
+    lister_actions_disponibles (ex. un element sans semantique standard,
+    hors des types couverts par le scan). Vérifie TOUJOURS
+    lister_actions_disponibles en premier, et n'utilise cet outil que si
+    rien dans cette liste ne correspond à ce que l'étudiant a demandé --
+    ne jamais l'utiliser en doublon d'un élément déjà détecté par le
+    scan.
 
     `selecteur` est un sélecteur CSS visant un unique élément cliquable
     (bouton, lien...) actuellement affiché. `description` est une
@@ -145,9 +159,10 @@ async def executer_clic_generique(selecteur: str, description: str, ctx: Context
 async def montrer_element_application(action_id: str, ctx: Context) -> str:
     """
     Chantier G : mode guidage / visite guidée. Déplace UNIQUEMENT le
-    curseur virtuel vers l'élément de l'action `action_id` (issu de
-    lister_actions_disponibles), SANS jamais l'exécuter -- pour montrer
-    une nouveauté ou un endroit précis de l'application à l'étudiant.
+    curseur virtuel vers l'élément `action_id` (identifiant issu de
+    lister_actions_disponibles, détecté automatiquement par le scan
+    générique), SANS jamais l'exécuter -- pour montrer une nouveauté ou
+    un endroit précis de l'application à l'étudiant.
     Décrire ce que fait cet élément dans le message envoyé à l'étudiant
     au même moment, cet outil ne fait qu'un pointage visuel silencieux.
 
