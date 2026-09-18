@@ -167,7 +167,7 @@ def _copier_fichier_public_pour_receveur(fichier_id: str, receveur_id: str) -> s
             uploade_par=receveur_id,
             user_id=receveur_id,
             description=description_finale,
-            statut_vectorisation="en_attente" if necessite_vectorisation_fichier_privee(f["type_mime"]) else "pret",
+            statut_vectorisation="en_attente" if necessite_vectorisation_fichier_privee(f["type_mime"], f["nom_fichier"] or f["nom"]) else "pret",
             origine="publique",
         )
     except Exception as e:

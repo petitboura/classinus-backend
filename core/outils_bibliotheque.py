@@ -7,9 +7,7 @@ fichier de 2524 lignes) -- aucun changement de comportement, uniquement un
 déplacement de code.
 """
 
-import os
 import logging
-import tempfile
 import base64
 import requests
 
@@ -24,11 +22,10 @@ from core.bibliotheque_rag import (
     chercher_bibliotheque_combinee as _chercher_bibliotheque_combinee,
     chercher_bibliotheque_publique as _chercher_bibliotheque_publique,
     lire_document_bibliotheque_en_entier as _lire_document_bibliotheque_en_entier,
-    indexer_pdf_bibliotheque as _indexer_pdf_bibliotheque,
     indexer_texte_bibliotheque as _indexer_texte_bibliotheque,
-    indexer_transcription_bibliotheque as _indexer_transcription_bibliotheque,
     formater_source_bibliotheque as _formater_source_bibliotheque,
 )
+from core.extraction_contenu import extraire_segments as _extraire_segments
 from core.catalogue_public_rag import (
     chercher_catalogue_public as _chercher_catalogue_public,
     lire_document_catalogue_public as _lire_document_catalogue_public,
@@ -53,11 +50,6 @@ from core.dossiers_bibliotheque import (
     retirer_fichier as _retirer_fichier,
     supprimer_dossier as _supprimer_dossier,
 )
-from core.description_multimedia import (
-    decrire_image_bibliotheque as _decrire_image_bibliotheque,
-    transcrire_audio_bibliotheque as _transcrire_audio_bibliotheque,
-)
-
 from core.outils_generation_commun import (
     mcp_generation,
     Context,
@@ -364,6 +356,20 @@ def gerer_document_bibliotheque(
     if action == "lire_catalogue_public":
         texte = _lire_document_catalogue_public(fichier_id)
         if texte is None:
+            # 18/09/2026, demande Bourama (correctif bug D, étape 3 du
+            # chantier extraction/vectorisation) : avant, une lecture
+            # directe par ID sur un document jamais recherché via
+            # "trouver_catalogue_public" renvoyait toujours "rien à
+            # lire", même si le document existe bel et bien -- il
+            # n'avait simplement jamais été vectorisé. On déclenche
+            # maintenant la vectorisation à la demande ICI aussi, avant
+            # de conclure à un échec définitif.
+            try:
+                if _vectoriser_maintenant_publique(fichier_id):
+                    texte = _lire_document_catalogue_public(fichier_id)
+            except Exception as e:
+                logging.error(f"ERREUR vectorisation à la demande (lire_catalogue_public, fichier_id={fichier_id}) : {e}")
+        if texte is None:
             return "Rien à lire pour ce document : soit il n'existe pas, soit son contenu n'a pas pu être vectorisé (vidéo, ou lien externe)."
         return texte
 
@@ -543,35 +549,25 @@ def gerer_document_bibliotheque(
         except Exception as e:
             logging.error(f"ERREUR gerer_document_bibliotheque (ajouter_fichier) : {e}")
             return "Erreur : impossible d'enregistrer ce fichier, réessaie."
-        if type_mime_val == "application/pdf":
-            chemin_temp = None
-            try:
-                with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-                    tmp.write(contenu_fichier)
-                    chemin_temp = tmp.name
-                _indexer_pdf_bibliotheque(chemin_temp, fichier_id=ligne["id"], user_id=user_id)
-            except Exception as e:
-                logging.error(f"ERREUR vectorisation gerer_document_bibliotheque (ajouter_fichier, fichier_id={ligne['id']}) : {e}")
-            finally:
-                if chemin_temp:
-                    try:
-                        os.remove(chemin_temp)
-                    except OSError:
-                        pass
-        elif type_mime_val.startswith("image/"):
-            try:
-                description_image = _decrire_image_bibliotheque(contenu_fichier, type_mime_val)
-                if description_image:
-                    _indexer_texte_bibliotheque(description_image, fichier_id=ligne["id"], user_id=user_id)
-            except Exception as e:
-                logging.error(f"ERREUR vectorisation image gerer_document_bibliotheque (ajouter_fichier, fichier_id={ligne['id']}) : {e}")
-        elif type_mime_val.startswith("audio/"):
-            try:
-                segments_audio = _transcrire_audio_bibliotheque(contenu_fichier, nom_original)
-                if segments_audio:
-                    _indexer_transcription_bibliotheque(segments_audio, fichier_id=ligne["id"], user_id=user_id)
-            except Exception as e:
-                logging.error(f"ERREUR vectorisation audio gerer_document_bibliotheque (ajouter_fichier, fichier_id={ligne['id']}) : {e}")
+        # 18/09/2026 (demande Bourama) : délègue désormais à
+        # core/extraction_contenu.py (module central, étapes 1+2 du
+        # chantier) au lieu d'une dispatch locale limitée à
+        # pdf/image/audio -- couvre maintenant aussi Word/Excel/vidéo/
+        # texte quelconque (.md, code...) quand le modèle ajoute un
+        # fichier directement en chat, comme pour l'upload via l'UI.
+        # Reste SYNCHRONE comme avant (pas de passage par la file
+        # d'attente "en_attente" ici) : un gros fichier vidéo peut donc
+        # rendre cette réponse plus lente qu'avant -- signalé à Bourama,
+        # pas encore arbitré.
+        try:
+            for segment in _extraire_segments(contenu_fichier, type_mime_val, nom_original):
+                _indexer_texte_bibliotheque(
+                    segment["texte"], fichier_id=ligne["id"], user_id=user_id,
+                    page_debut=segment.get("page_debut"), page_fin=segment.get("page_fin"),
+                    timestamp_debut=segment.get("timestamp_debut"), timestamp_fin=segment.get("timestamp_fin"),
+                )
+        except Exception as e:
+            logging.error(f"ERREUR vectorisation gerer_document_bibliotheque (ajouter_fichier, fichier_id={ligne['id']}) : {e}")
         message = f"Fichier ajouté (id {ligne['id']})."
         # Classement dans le programme désactivé le 29/08/2026 (demande
         # Bourama, voir _desactive_programme/LISEZ_MOI_NE_JAMAIS_REUTILISER.md).

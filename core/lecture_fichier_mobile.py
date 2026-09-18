@@ -44,10 +44,7 @@ sauf pour le texte brut ou aucun seuil n'existait deja.
 import base64
 import logging
 
-from core.description_multimedia import (
-    decrire_image_bibliotheque,
-    transcrire_audio_bibliotheque,
-)
+from core.extraction_contenu import extraire_segments as _extraire_segments
 
 # Seuils alignes sur ceux deja en place dans api/uploads.py pour le meme
 # type de fichier cote upload de chat. Volontairement pas de nouveau
@@ -78,43 +75,6 @@ EXTENSIONS_TEXTE_BRUT = {
 
 def _extension(nom_fichier: str) -> str:
     return nom_fichier.rsplit(".", 1)[-1].lower() if "." in (nom_fichier or "") else ""
-
-
-def _extraire_texte_pdf_bytes(contenu: bytes) -> str:
-    import io
-    import PyPDF2
-
-    reader = PyPDF2.PdfReader(io.BytesIO(contenu))
-    return "\n".join(page.extract_text() or "" for page in reader.pages)
-
-
-def _extraire_texte_docx_bytes(contenu: bytes) -> str:
-    import io
-    import docx
-
-    document = docx.Document(io.BytesIO(contenu))
-    morceaux = [p.text for p in document.paragraphs]
-
-    # Meme correction que api/uploads.py::_extraire_texte_docx (21/07) :
-    # python-docx n'inclut pas les cellules de tableau dans .paragraphs.
-    for table in document.tables:
-        for ligne in table.rows:
-            morceaux.append("\t".join(cellule.text for cellule in ligne.cells))
-
-    return "\n".join(morceaux)
-
-
-def _extraire_texte_xlsx_bytes(contenu: bytes) -> str:
-    import io
-    import openpyxl
-
-    classeur = openpyxl.load_workbook(io.BytesIO(contenu), data_only=True)
-    morceaux = []
-    for feuille in classeur.worksheets:
-        morceaux.append(f"=== Feuille : {feuille.title} ===")
-        for ligne in feuille.iter_rows(values_only=True):
-            morceaux.append("\t".join("" if v is None else str(v) for v in ligne))
-    return "\n".join(morceaux)
 
 
 def fichier_trop_volumineux(type_mime: str, taille_octets: int | None) -> bool:
@@ -148,6 +108,18 @@ def lire_contenu_fichier(contenu_base64: str, type_mime: str, nom_fichier: str) 
     convention que le reste du chantier (voir
     00-commun-exploration-dossier.md, "un seul essai par
     recherche/lecture").
+
+    18/09/2026 (étape 3 du chantier extraction/vectorisation centralisée,
+    demande Bourama) : l'extraction elle-même délègue désormais à
+    core/extraction_contenu.py (même module central que la bibliothèque
+    privée et le catalogue public) au lieu d'une dispatch locale
+    dupliquée. La liste de types couverts ici reste volontairement
+    identique à avant (image/audio/PDF/Word/Excel/texte -- PAS la vidéo,
+    jamais prise en charge côté téléphone jusqu'ici) : le module central
+    sait aussi traiter la vidéo, mais l'étendre au téléphone n'a pas été
+    demandé par Bourama, donc ce type continue de tomber dans le message
+    "non pris en charge" ci-dessous plutôt que d'être silencieusement
+    activé.
     """
     try:
         contenu = base64.b64decode(contenu_base64)
@@ -155,46 +127,35 @@ def lire_contenu_fichier(contenu_base64: str, type_mime: str, nom_fichier: str) 
         logging.error(f"ERREUR decodage base64 lecture fichier ({nom_fichier}) : {e}")
         return {"erreur": "Contenu du fichier illisible (erreur de transfert)."}
 
-    try:
-        if type_mime in TYPES_IMAGE:
-            description = decrire_image_bibliotheque(contenu, type_mime)
-            if description is None:
-                return {"erreur": "Impossible de décrire cette image."}
-            return {"texte": description}
-
-        if type_mime in TYPES_AUDIO:
-            segments = transcrire_audio_bibliotheque(contenu, nom_fichier)
-            if not segments:
-                return {"erreur": "Impossible de transcrire cet audio (silencieux ou illisible)."}
-            return {"texte": " ".join(segment["text"] for segment in segments)}
-
-        if type_mime == TYPE_PDF:
-            texte = _extraire_texte_pdf_bytes(contenu).strip()
-            if not texte:
-                return {"erreur": "Aucun texte trouvé dans ce PDF (probablement un scan sans OCR)."}
-            return {"texte": texte}
-
-        if type_mime == TYPE_DOCX:
-            texte = _extraire_texte_docx_bytes(contenu).strip()
-            if not texte:
-                return {"erreur": "Ce document Word semble vide."}
-            return {"texte": texte}
-
-        if type_mime == TYPE_XLSX:
-            texte = _extraire_texte_xlsx_bytes(contenu).strip()
-            if not texte:
-                return {"erreur": "Ce fichier Excel semble vide."}
-            return {"texte": texte}
-
-        if _extension(nom_fichier) in EXTENSIONS_TEXTE_BRUT or (type_mime or "").startswith("text/"):
-            try:
-                return {"texte": contenu.decode("utf-8")}
-            except UnicodeDecodeError:
-                return {"texte": contenu.decode("latin-1", errors="replace")}
-
+    type_reconnu = (
+        type_mime in TYPES_IMAGE
+        or type_mime in TYPES_AUDIO
+        or type_mime in (TYPE_PDF, TYPE_DOCX, TYPE_XLSX)
+        or _extension(nom_fichier) in EXTENSIONS_TEXTE_BRUT
+        or (type_mime or "").startswith("text/")
+    )
+    if not type_reconnu:
         return {
             "erreur": f"Type de fichier non pris en charge pour la lecture pour l'instant ({type_mime or 'inconnu'})."
         }
+
+    try:
+        segments = _extraire_segments(contenu, type_mime, nom_fichier)
     except Exception as e:
         logging.error(f"ERREUR lecture fichier ({nom_fichier}, {type_mime}) : {e}")
         return {"erreur": "Échec de la lecture de ce fichier."}
+
+    texte = "\n\n".join(segment["texte"] for segment in segments if (segment.get("texte") or "").strip())
+    if not texte:
+        if type_mime in TYPES_IMAGE:
+            return {"erreur": "Impossible de décrire cette image."}
+        if type_mime in TYPES_AUDIO:
+            return {"erreur": "Impossible de transcrire cet audio (silencieux ou illisible)."}
+        if type_mime == TYPE_PDF:
+            return {"erreur": "Aucun texte trouvé dans ce PDF (probablement un scan sans OCR)."}
+        if type_mime == TYPE_DOCX:
+            return {"erreur": "Ce document Word semble vide."}
+        if type_mime == TYPE_XLSX:
+            return {"erreur": "Ce fichier Excel semble vide."}
+        return {"erreur": "Ce fichier semble vide."}
+    return {"texte": texte}
