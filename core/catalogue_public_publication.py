@@ -320,7 +320,7 @@ def copier_entree_publique_vers_perso(entree_id: str, utilisateur_id: str) -> di
         uploade_par=utilisateur_id,
         user_id=utilisateur_id,
         description=description_finale,
-        statut_vectorisation="en_attente" if necessite_vectorisation_fichier_privee(entree["type_mime"]) else "pret",
+        statut_vectorisation="en_attente" if necessite_vectorisation_fichier_privee(entree["type_mime"], nom_original) else "pret",
         origine="publique",
     )
     return ligne

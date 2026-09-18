@@ -85,12 +85,16 @@ from datetime import datetime, timedelta, timezone
 from supabase import create_client, ClientOptions
 from client_http_supabase import nouveau_client_http_supabase
 from core import stockage_r2
+from core.extraction_contenu import (
+    extraire_segments as _extraire_segments,
+    extraire_texte_docx as _extraire_texte_docx,
+    extraire_texte_xlsx as _extraire_texte_xlsx,
+    type_extractible as _type_extractible,
+)
 
 sys.path.append(os.path.dirname(__file__))
 from bibliotheque_rag import (  # noqa: E402
-    indexer_pdf_bibliotheque,
     indexer_texte_bibliotheque,
-    indexer_transcription_bibliotheque,
 )
 from catalogue_public_rag import (  # noqa: E402
     indexer_pdf_catalogue_public,
@@ -126,23 +130,25 @@ def _get_secret(cle):
 supabase = create_client(_get_secret("SUPABASE_URL"), _get_secret("SUPABASE_SECRET"), options=ClientOptions(httpx_client=nouveau_client_http_supabase()))
 
 
-def necessite_vectorisation_fichier_privee(type_mime: str | None) -> bool:
+def necessite_vectorisation_fichier_privee(type_mime: str | None, nom_fichier: str = "") -> bool:
     """
-    Types vectorisés à l'ajout d'un FICHIER dans la bibliothèque PRIVÉE
-    (route POST /api/bibliotheque) -- EXACTEMENT comme l'ancien
-    _indexer_et_propager : pdf/image/audio uniquement. Un texte/plain
-    envoyé comme fichier via cette route n'a jamais été vectorisé ici
-    (seule la note tapée directement, route /texte, l'est -- voir
-    necessite_vectorisation_note) : comportement inchangé.
+    18/09/2026 (demande Bourama, suite au signalement "plein d'éléments
+    que Clovis prétend ne pas pouvoir lire") -- AVANT cette date, seuls
+    pdf/image/audio étaient vectorisés automatiquement à l'ajout d'un
+    fichier dans la bibliothèque PRIVÉE : tout le reste (.md, Word,
+    Excel, vidéo, code...) n'était jamais vectorisé, ni automatiquement
+    ni à la demande (aucun mécanisme "à la demande" équivalent à la
+    bibliothèque publique n'existe côté privé). Bourama a tranché :
+    côté privé, TOUT type doit être vectorisé automatiquement à
+    l'ajout, jamais à la demande -- voir core/extraction_contenu.py
+    (module central partagé, étapes 1+2 du chantier du 18/09).
 
-    HORS SCOPE du chantier du 06/09 (extraction gratuite + vectorisation
-    à la demande) -- Bourama a confirmé que ce chantier ne concerne QUE
-    les dossiers désignés (téléphone) et la bibliothèque publique,
-    jamais cette bibliothèque privée manuelle. Comportement inchangé.
+    Ne reste False que pour un type réellement non extractible (zip,
+    exe, binaire inconnu...), pour ne jamais déclencher un échec de
+    vectorisation trompeur sur un fichier qui n'a de toute façon rien à
+    en tirer (voir _a_produit_des_chunks plus bas dans ce module).
     """
-    if not type_mime:
-        return False
-    return type_mime == "application/pdf" or type_mime.startswith("image/") or type_mime.startswith("audio/")
+    return _type_extractible(type_mime, nom_fichier)
 
 
 def necessite_vectorisation_fichier_publique(type_mime: str | None) -> bool:
@@ -173,30 +179,19 @@ def necessite_vectorisation_note() -> bool:
 
 
 def _extraire_texte_docx_bytes(contenu: bytes) -> str:
-    """Même logique que core/vectorisation_dossiers_designes.py::_extraire_texte_docx_bytes, dupliquée volontairement (pas de dépendance croisée entre circuits)."""
-    import io
-    import docx
-
-    document = docx.Document(io.BytesIO(contenu))
-    morceaux = [p.text for p in document.paragraphs]
-    for table in document.tables:
-        for ligne in table.rows:
-            morceaux.append("\t".join(cellule.text for cellule in ligne.cells))
-    return "\n".join(morceaux)
+    """
+    18/09/2026 : ne fait plus que déléguer à core/extraction_contenu.py
+    (module central, étape 1 du chantier) -- gardé comme fine wrapper
+    ici pour ne pas toucher les appelants publics existants
+    (_vectoriser_publique, _extraire_texte_pour_extraction_publique,
+    hors scope des étapes 1+2), même comportement qu'avant.
+    """
+    return _extraire_texte_docx(contenu)
 
 
 def _extraire_texte_xlsx_bytes(contenu: bytes) -> str:
-    """Même logique que core/vectorisation_dossiers_designes.py::_extraire_texte_xlsx_bytes, dupliquée volontairement."""
-    import io
-    import openpyxl
-
-    classeur = openpyxl.load_workbook(io.BytesIO(contenu), data_only=True)
-    morceaux = []
-    for feuille in classeur.worksheets:
-        morceaux.append(f"--- Feuille : {feuille.title} ---")
-        for ligne in feuille.iter_rows(values_only=True):
-            morceaux.append("\t".join("" if v is None else str(v) for v in ligne))
-    return "\n".join(morceaux)
+    """Même principe que _extraire_texte_docx_bytes ci-dessus."""
+    return _extraire_texte_xlsx(contenu)
 
 
 def _telecharger(chemin_stockage: str) -> bytes:
@@ -217,6 +212,18 @@ def _nettoyer_chunks_existants(table_chunks: str, colonne_scope: str | None, val
 
 
 def _vectoriser_privee(ligne: dict) -> None:
+    """
+    18/09/2026 (demande Bourama) : délègue désormais l'extraction à
+    core/extraction_contenu.py (module central, étapes 1+2 du chantier)
+    au lieu d'une dispatch locale limitée à pdf/image/audio/text-plain
+    -- couvre maintenant aussi Word/Excel/vidéo/texte quelconque (.md,
+    code...), jamais vectorisés automatiquement avant. L'indexation
+    elle-même (embeddings, écriture des chunks) reste inchangée
+    (indexer_texte_bibliotheque), un appel par segment, avec sa
+    position d'origine si le segment en a une (page PDF, timestamp
+    audio/vidéo) -- même résultat qu'avant pour pdf/image/audio/texte,
+    juste réécrit pour passer par les segments génériques.
+    """
     fichier_id = ligne["id"]
     user_id = ligne["user_id"]
     type_mime = ligne["type_mime"] or ""
@@ -224,29 +231,12 @@ def _vectoriser_privee(ligne: dict) -> None:
 
     _nettoyer_chunks_existants("documents_bibliotheque", "user_id", user_id, fichier_id)
 
-    if type_mime == "application/pdf":
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-            tmp.write(contenu)
-            chemin_temp = tmp.name
-        try:
-            indexer_pdf_bibliotheque(chemin_temp, fichier_id=fichier_id, user_id=user_id)
-        finally:
-            try:
-                os.remove(chemin_temp)
-            except OSError:
-                pass
-    elif type_mime.startswith("image/"):
-        description_image = decrire_image_bibliotheque(contenu, type_mime)
-        if description_image:
-            indexer_texte_bibliotheque(description_image, fichier_id=fichier_id, user_id=user_id)
-    elif type_mime.startswith("audio/"):
-        segments_audio = transcrire_audio_bibliotheque(contenu, ligne["nom_fichier"])
-        if segments_audio:
-            indexer_transcription_bibliotheque(segments_audio, fichier_id=fichier_id, user_id=user_id)
-    elif type_mime == "text/plain":
-        # Note tapée directement (route /texte) -- déjà du texte, pas
-        # besoin d'extraction.
-        indexer_texte_bibliotheque(contenu.decode("utf-8", errors="ignore"), fichier_id=fichier_id, user_id=user_id)
+    for segment in _extraire_segments(contenu, type_mime, ligne["nom_fichier"]):
+        indexer_texte_bibliotheque(
+            segment["texte"], fichier_id, user_id,
+            page_debut=segment.get("page_debut"), page_fin=segment.get("page_fin"),
+            timestamp_debut=segment.get("timestamp_debut"), timestamp_fin=segment.get("timestamp_fin"),
+        )
 
 
 def _vectoriser_publique(ligne: dict) -> None:

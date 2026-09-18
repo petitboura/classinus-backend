@@ -152,7 +152,7 @@ async def uploader_document(
             uploade_par=utilisateur.id,
             user_id=utilisateur.id,
             description=description_finale,
-            statut_vectorisation="en_attente" if necessite_vectorisation_fichier_privee(fichier.content_type) else "pret",
+            statut_vectorisation="en_attente" if necessite_vectorisation_fichier_privee(fichier.content_type, nom_original) else "pret",
         )
     except APIError as e:
         # CORRECTIF 02/09 (bug remonté par Bourama : aucun traitement
@@ -236,7 +236,7 @@ async def copier_depuis_bibliotheque_publique(
             uploade_par=utilisateur.id,
             user_id=utilisateur.id,
             description=description_finale,
-            statut_vectorisation="en_attente" if necessite_vectorisation_fichier_privee(entree["type_mime"]) else "pret",
+            statut_vectorisation="en_attente" if necessite_vectorisation_fichier_privee(entree["type_mime"], nom_original) else "pret",
             origine="publique",
         )
     except APIError as e:
