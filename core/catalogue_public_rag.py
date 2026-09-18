@@ -128,8 +128,22 @@ def lire_document_catalogue_public(fichier_id: str) -> str | None:
     (28/08, demande Bourama : "l'IA doit aussi pouvoir lire le contenu
     intégral si l'utilisateur le demande explicitement" -- à n'appeler
     QUE sur demande explicite, jamais automatiquement depuis
-    trouver_catalogue_public). None si aucun chunk indexé pour ce
-    fichier_id (vidéo par exemple, ou lien -- pas de contenu textuel).
+    trouver_catalogue_public).
+
+    CORRECTIF 18/09/2026 (bug remonté par Bourama, même correctif que
+    core/bibliotheque_rag.py::lire_document_bibliotheque_en_entier) : un
+    lien publié (publier_lien_public, type_mime="text/uri-list") n'est
+    JAMAIS vectorisé, donc aucun chunk n'existe jamais pour lui -- on
+    renvoyait "rien à lire" sans même donner l'URL réelle à l'IA. Si
+    aucun chunk n'est trouvé, on va chercher les métadonnées de
+    l'entrée : si c'est un lien, on tente de lire son contenu via
+    _lire_url (voir core/lecture_urls_externes.py) et on le renvoie ; si
+    l'extraction échoue, on renvoie quand même l'URL telle quelle,
+    jamais None dans ce cas.
+
+    None reste le résultat uniquement si l'entrée n'existe pas ou n'est
+    ni un document vectorisé ni un lien (ex. vidéo pas encore
+    vectorisée).
     """
     try:
         res = (
@@ -143,9 +157,33 @@ def lire_document_catalogue_public(fichier_id: str) -> str | None:
         logging.error(f"ERREUR SUPABASE (lecture intégrale catalogue public fichier_id={fichier_id}) : {e}")
         return None
 
-    if not res.data:
+    if res.data:
+        return "\n\n".join(ligne["contenu"] for ligne in res.data)
+
+    try:
+        meta = (
+            supabase.table("bibliotheque_publique")
+            .select("type_mime, url_publique")
+            .eq("id", fichier_id)
+            .maybe_single()
+            .execute()
+        )
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (lecture métadonnées catalogue public fichier_id={fichier_id}) : {e}")
         return None
-    return "\n\n".join(ligne["contenu"] for ligne in res.data)
+
+    if not meta or not meta.data or meta.data.get("type_mime") != "text/uri-list":
+        return None
+
+    url = (meta.data.get("url_publique") or "").strip()
+    if not url:
+        return None
+
+    from core.lecture_urls_externes import _lire_url
+    contenu_url = _lire_url(url)
+    if contenu_url:
+        return contenu_url
+    return f"[Ceci est un lien publié dans le catalogue public, extraction automatique de son contenu échouée -- voici l'URL telle quelle : {url}]"
 
 
 def lister_catalogue_public(

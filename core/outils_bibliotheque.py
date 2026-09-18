@@ -370,7 +370,10 @@ def gerer_document_bibliotheque(
             except Exception as e:
                 logging.error(f"ERREUR vectorisation à la demande (lire_catalogue_public, fichier_id={fichier_id}) : {e}")
         if texte is None:
-            return "Rien à lire pour ce document : soit il n'existe pas, soit son contenu n'a pas pu être vectorisé (vidéo, ou lien externe)."
+            # 18/09/2026 : un lien est désormais géré directement par
+            # _lire_document_catalogue_public (voir son docstring), donc
+            # None ici ne signifie plus jamais "c'est un lien".
+            return "Rien à lire pour ce document : soit il n'existe pas, soit son contenu n'a pas pu être vectorisé (vidéo par exemple)."
         return texte
 
     if action == "lister_catalogue_public":
@@ -653,7 +656,10 @@ def gerer_document_bibliotheque(
     if action == "lire_entier":
         texte = _lire_document_bibliotheque_en_entier(fichier_id, user_id=user_id)
         if texte is None:
-            return "Rien à lire pour ce fichier : soit il n'existe pas ou ne t'appartient pas, soit ce n'est pas un PDF/texte indexé."
+            # 18/09/2026 : un lien est désormais géré directement par
+            # _lire_document_bibliotheque_en_entier (voir son docstring),
+            # donc None ici ne signifie plus jamais "c'est un lien".
+            return "Rien à lire pour ce fichier : soit il n'existe pas ou ne t'appartient pas, soit son contenu n'est pas encore indexé (vidéo par exemple)."
         return texte
 
     return (
