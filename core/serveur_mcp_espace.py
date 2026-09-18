@@ -177,6 +177,7 @@ from core.catalogue_public_publication import (
     supprimer_entree_publique as _supprimer_entree_publique,
     copier_entree_publique_vers_perso as _copier_entree_publique_vers_perso,
 )
+from core.etoiles_catalogue_public import basculer_etoile as _basculer_etoile
 from main import chat as _chat_generateur  # core/main.py:chat() -- import bare comme dans api/chat.py (core/ deja sur sys.path a ce point, voir api/main.py : api.chat importe avant core.serveur_mcp_espace)
 from core.confirmations_mcp import (
     creer_confirmation as _creer_confirmation,
@@ -1327,6 +1328,38 @@ def copier_entree_catalogue_public_vers_perso(entree_id: str, ctx: Context) -> s
     if resultat in ("ECHEC_DU_STOCKAGE_REESSAIE", "FICHIER_VIDE"):
         return "Erreur : impossible de copier ce document, réessaie."
     return "Document copié dans ta bibliothèque personnelle."
+
+
+@mcp_espace.tool(
+    name="clovis_basculer_etoile_catalogue_public",
+    title="Mettre/retirer une étoile sur un élément du catalogue public",
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=True),
+)
+def basculer_etoile_catalogue_public(type_element: str, element_id: str, ctx: Context) -> str:
+    """
+    Pose l'étoile de l'utilisateur sur un fichier, un dossier ou un
+    skill du catalogue public s'il ne l'a pas encore, la retire sinon
+    (toggle, comme sur GitHub) -- jamais de note 1 à 5, seul le nombre
+    total d'étoiles compte. `type_element` : "fichier", "dossier" ou
+    "skill". `element_id` : l'id de cet élément.
+    """
+    user_id = _user_id_authentifie(ctx)
+    if not user_id:
+        return "Erreur : utilisateur non authentifié."
+    try:
+        resultat = _basculer_etoile(type_element, (element_id or "").strip(), user_id)
+    except ValueError as e:
+        if str(e) == "TYPE_ELEMENT_INCONNU":
+            return "Erreur : type_element invalide, doit être 'fichier', 'dossier' ou 'skill'."
+        if str(e) == "ELEMENT_INTROUVABLE":
+            return "Cet élément du catalogue public est introuvable."
+        raise
+    except Exception as e:
+        logging.error(f"ERREUR outil clovis_basculer_etoile_catalogue_public ({type_element} {element_id}) : {e}")
+        return "Erreur : impossible de basculer l'étoile, réessaie."
+    if resultat["etoile"]:
+        return f"Étoile posée. Total : {resultat['etoiles_count']} étoile(s)."
+    return f"Étoile retirée. Total : {resultat['etoiles_count']} étoile(s)."
 
 
 
