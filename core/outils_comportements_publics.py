@@ -22,6 +22,7 @@ from core.comportements_etudiants import (
     publier_comportement_public as _publier_comportement_public,
     activer_comportement_public as _activer_comportement_public,
     retirer_skill_public as _retirer_skill_public,
+    obtenir_comportement_public as _obtenir_comportement_public,
 )
 
 
@@ -50,6 +51,12 @@ def gerer_comportement_public(
       publiée est indépendante : la modifier ensuite en personnel ne
       change plus la version publique. Paramètre : `comportement_id`
       (id du skill PERSONNEL à publier, PAS un id du catalogue public).
+    - "consulter" : lit le contenu COMPLET (frontmatter + instructions)
+      d'un skill du catalogue public, SANS l'activer chez cet utilisateur
+      (voir "activer" pour ça). Utilise cette action quand l'étudiant
+      veut essayer/discuter d'un skill public depuis sa page ou sa carte,
+      avant de décider de l'ajouter à ses propres skills ou non.
+      Paramètre : `comportement_public_id`.
     - "activer" : active un skill du catalogue public chez cet
       utilisateur -- crée une copie indépendante dans SES skills
       personnels (section "Mes comportements"/"Mes skills" de "Mon
@@ -94,6 +101,18 @@ def gerer_comportement_public(
             return "Erreur : ce skill est introuvable, ou ne t'appartient pas."
         return f"Skill publié dans le catalogue public [id: {entree['id']}]."
 
+    if action == "consulter":
+        if not (comportement_public_id or "").strip():
+            return "Erreur : comportement_public_id manquant."
+        try:
+            entree = _obtenir_comportement_public(comportement_public_id)
+        except Exception as e:
+            logging.error(f"ERREUR gerer_comportement_public (consulter) : {e}")
+            return "Erreur : impossible de consulter ce skill, réessaie."
+        if entree is None:
+            return "Ce skill public est introuvable (id invalide, ou retiré par son auteur)."
+        return entree.get("skill_md") or entree.get("texte") or "Ce skill n'a pas de contenu."
+
     if action == "activer":
         if not (comportement_public_id or "").strip():
             return "Erreur : comportement_public_id manquant."
@@ -118,4 +137,4 @@ def gerer_comportement_public(
             return "Erreur : ce skill public est introuvable, ou tu n'en es pas l'auteur."
         return "Skill retiré du catalogue public."
 
-    return f"Erreur : action '{action}' inconnue. Actions valides : chercher, publier, activer, retirer."
+    return f"Erreur : action '{action}' inconnue. Actions valides : chercher, consulter, publier, activer, retirer."
