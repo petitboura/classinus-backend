@@ -45,6 +45,7 @@ from api.comportements_etudiants import router as comportements_etudiants_router
 from api.comportements_publics import router as comportements_publics_router
 from api.bibliotheque_publique import router as bibliotheque_publique_router
 from api.dossiers_catalogue_public import router as dossiers_catalogue_public_router
+from api.etoiles_catalogue_public import router as etoiles_catalogue_public_router
 from api.signalements import router as signalements_router
 from api.signalements_pedagogiques import router as signalements_pedagogiques_router
 from api.audit_hebdomadaire_corrections import router as audit_hebdomadaire_corrections_router
@@ -706,6 +707,7 @@ app.include_router(comportements_publics_router)
 # (500). Bug remonte par Bourama le 12/09/2026 (onglet Dossiers vide).
 app.include_router(dossiers_catalogue_public_router)
 app.include_router(bibliotheque_publique_router)
+app.include_router(etoiles_catalogue_public_router)
 app.include_router(signalements_router)
 app.include_router(signalements_pedagogiques_router)
 app.include_router(audit_hebdomadaire_corrections_router)

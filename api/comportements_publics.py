@@ -21,6 +21,7 @@ from core.comportements_etudiants import (
     uploader_comportement_public,
 )
 from core.erreurs import erreur_api
+from core.etoiles_catalogue_public import etoiles_utilisateur
 
 router = APIRouter(prefix="/api/comportements-publics", tags=["comportements_publics"])
 
@@ -33,6 +34,10 @@ class ComportementPublic(BaseModel):
     skill_md: str = ""
     activations_count: int
     est_a_moi: bool = False
+    # 17/09/2026, demande Bourama : étoiles façon GitHub, voir
+    # core/etoiles_catalogue_public.py.
+    etoiles_count: int = 0
+    mon_etoile: bool = False
 
 
 class ComportementActive(BaseModel):
@@ -53,8 +58,10 @@ def rechercher_comportements_publics(q: str | None = None, utilisateur=Depends(u
     obtenir_profil_public (api/profiles.py)."""
     lignes = lister_comportements_publics(mot_cle=q)
     mon_id = utilisateur.id if utilisateur else None
+    mes_etoiles = etoiles_utilisateur("skill", [ligne["id"] for ligne in lignes], mon_id)
     for ligne in lignes:
         ligne["est_a_moi"] = mon_id is not None and ligne.get("auteur_id") == mon_id
+        ligne["mon_etoile"] = ligne["id"] in mes_etoiles
     return lignes
 
 
@@ -68,6 +75,9 @@ def obtenir_comportement_public_detail(comportement_public_id: str, utilisateur=
     if not ligne:
         raise erreur_api(404, "COMPORTEMENT_INTROUVABLE")
     ligne["est_a_moi"] = utilisateur is not None and ligne.get("auteur_id") == utilisateur.id
+    ligne["mon_etoile"] = utilisateur is not None and bool(
+        etoiles_utilisateur("skill", [comportement_public_id], utilisateur.id)
+    )
     return ligne
 
 

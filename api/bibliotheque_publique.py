@@ -38,6 +38,7 @@ from core import stockage_r2
 from api.auth import utilisateur_courant, utilisateur_optionnel
 from core.erreurs import erreur_api
 from core.dedoublonnage_stockage import stocker_avec_dedoublonnage, supprimer_stockage_si_dernier_usage
+from core.etoiles_catalogue_public import etoiles_utilisateur
 from core.file_attente_vectorisation import (
     extraire_texte_maintenant_publique,
     vectoriser_maintenant_publique,
@@ -118,6 +119,13 @@ class EntreeBibliothequePublique(BaseModel):
     # côté serveur, pour que le frontend sache s'il doit proposer le
     # bouton "Modifier les filtres" (qui échouerait en 403 sinon).
     est_a_moi: bool = False
+    # 17/09/2026, demande Bourama : étoiles façon GitHub sur le
+    # catalogue public, voir core/etoiles_catalogue_public.py.
+    # etoiles_count vient directement de la colonne dénormalisée ;
+    # mon_etoile est calculé côté serveur (jamais les ids des autres
+    # utilisateurs qui ont étoilé, même logique que est_a_moi).
+    etoiles_count: int = 0
+    mon_etoile: bool = False
 
 
 @router.get("/listes")
@@ -134,7 +142,7 @@ def lister_listes_filtres():
 
 _CAMPOS_ENTREE = (
     "id, nom, description, nom_fichier, type_mime, taille_octets, url_publique, created_at, "
-    "statut_vectorisation, pays, niveau, categorie, classe, specialite, ajoute_par"
+    "statut_vectorisation, pays, niveau, categorie, classe, specialite, ajoute_par, etoiles_count"
 )
 
 
@@ -145,9 +153,16 @@ def _marquer_est_a_moi(lignes: list, utilisateur) -> list:
     (_CAMPOS_ENTREE) mais n'est jamais exposé tel quel : le modèle de
     réponse EntreeBibliothequePublique ne déclare pas ce champ, donc
     FastAPI le filtre automatiquement à la sérialisation.
+
+    17/09/2026 : calcule aussi `mon_etoile` en un seul aller-retour pour
+    toute la page (etoiles_utilisateur), plutôt qu'une requête par ligne.
     """
     for ligne in lignes:
         ligne["est_a_moi"] = bool(utilisateur and ligne.get("ajoute_par") == utilisateur.id)
+    ids = [ligne["id"] for ligne in lignes]
+    mes_etoiles = etoiles_utilisateur("fichier", ids, utilisateur.id if utilisateur else None)
+    for ligne in lignes:
+        ligne["mon_etoile"] = ligne["id"] in mes_etoiles
     return lignes
 
 

@@ -38,7 +38,7 @@ from core.notifications import creer_notification
 
 _CAMPOS_DOSSIER = (
     "id, cree_par, nom, description, statut, dossier_parent_id, created_at, "
-    "pays, niveau, categorie, classe, specialite, "
+    "pays, niveau, categorie, classe, specialite, etoiles_count, "
     # 13/09/2026, demande Bourama : réglages d'héritage vers sous-dossiers/fichiers, par filtre.
     "pays_heritage_sous_dossiers, pays_heritage_fichiers, "
     "niveau_heritage_sous_dossiers, niveau_heritage_fichiers, "

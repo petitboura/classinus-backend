@@ -37,6 +37,7 @@ from core.dossiers_publics_attaches import (
     lister_dossiers_attaches,
     propager_fichier_public_range_dossier,
 )
+from core.etoiles_catalogue_public import etoiles_utilisateur
 from core.geolocalisation_pays import pays_utilisateur
 from core.listes_bibliotheque_publique import normaliser_et_enregistrer, normaliser_et_enregistrer_liste
 
@@ -123,8 +124,10 @@ def lister(request: Request, utilisateur=Depends(utilisateur_optionnel)):
     # 08/09/2026, demande Bourama : les dossiers du pays détecté de
     # l'utilisateur remontent en tête de liste (voir core/geolocalisation_pays.py).
     dossiers = lister_dossiers(pays_prioritaire=pays_utilisateur(request))
+    mes_etoiles = etoiles_utilisateur("dossier", [d["id"] for d in dossiers], utilisateur.id if utilisateur else None)
     for d in dossiers:
         d["fichier_ids"] = lister_fichiers_ids_dossier(d["id"])
+        d["mon_etoile"] = d["id"] in mes_etoiles
     return dossiers
 
 
@@ -411,6 +414,9 @@ def obtenir_dossier_public(dossier_id: str, utilisateur=Depends(utilisateur_opti
     # 16/09/2026, demande Bourama : compte de contenu (fichiers/liens/
     # sous-dossiers) affiché sur la page de partage.
     dossier["contenu"] = compter_contenu_dossier(dossier_id)
+    dossier["mon_etoile"] = utilisateur is not None and bool(
+        etoiles_utilisateur("dossier", [dossier_id], utilisateur.id)
+    )
     return dossier
 
 
