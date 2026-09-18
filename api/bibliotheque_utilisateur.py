@@ -32,6 +32,7 @@ from api.auth import utilisateur_courant, utilisateur_optionnel, supabase
 from api.journal import journaliser
 from core.erreurs import erreur_api
 from core import stockage_r2
+from core.compteurs_catalogue_public import incrementer_enregistrement_fichier
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "core"))
 from bibliotheque_fichiers import enregistrer_fichier, enregistrer_lien, lister_fichiers, obtenir_fichier, supprimer_fichier  # noqa: E402
@@ -248,6 +249,11 @@ async def copier_depuis_bibliotheque_publique(
 
     if ligne.get("statut_vectorisation") == "en_attente":
         asyncio.create_task(asyncio.to_thread(vectoriser_maintenant_privee, ligne["id"]))
+
+    # 18/09/2026, chantier "profil contributeur bibliotheque publique",
+    # étape 3/7 : compteur d'enregistrements pour l'analytique publique.
+    # Best effort, jamais bloquant pour la copie elle-même.
+    incrementer_enregistrement_fichier(entree_id)
 
     return _journaliser_ajout(
         contenu, entree["type_mime"], nom_original, description_finale, ligne, utilisateur, request
