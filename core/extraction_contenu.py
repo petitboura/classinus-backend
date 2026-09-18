@@ -55,7 +55,7 @@ _EXTENSIONS_TEXTE_CONNUES = {
     "md", "markdown", "txt", "csv", "tsv", "json", "yml", "yaml", "xml",
     "py", "js", "jsx", "ts", "tsx", "html", "htm", "css", "scss", "sql",
     "sh", "bash", "java", "c", "cpp", "h", "hpp", "go", "rs", "rb", "php",
-    "ini", "toml", "log",
+    "ini", "toml", "log", "kt",
 }
 
 

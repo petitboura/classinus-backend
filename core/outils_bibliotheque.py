@@ -356,6 +356,20 @@ def gerer_document_bibliotheque(
     if action == "lire_catalogue_public":
         texte = _lire_document_catalogue_public(fichier_id)
         if texte is None:
+            # 18/09/2026, demande Bourama (correctif bug D, étape 3 du
+            # chantier extraction/vectorisation) : avant, une lecture
+            # directe par ID sur un document jamais recherché via
+            # "trouver_catalogue_public" renvoyait toujours "rien à
+            # lire", même si le document existe bel et bien -- il
+            # n'avait simplement jamais été vectorisé. On déclenche
+            # maintenant la vectorisation à la demande ICI aussi, avant
+            # de conclure à un échec définitif.
+            try:
+                if _vectoriser_maintenant_publique(fichier_id):
+                    texte = _lire_document_catalogue_public(fichier_id)
+            except Exception as e:
+                logging.error(f"ERREUR vectorisation à la demande (lire_catalogue_public, fichier_id={fichier_id}) : {e}")
+        if texte is None:
             return "Rien à lire pour ce document : soit il n'existe pas, soit son contenu n'a pas pu être vectorisé (vidéo, ou lien externe)."
         return texte
 

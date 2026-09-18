@@ -70,10 +70,20 @@ automatique à l'ajout pour tout sauf l'image :
   (recherche_catalogue_public_mots_cles cherche déjà dans texte_brut).
   La vraie vectorisation reste à la demande (vectoriser_maintenant_
   publique), déclenchée depuis core/outils_bibliotheque.py quand
-  l'action "trouver_catalogue_public" trouve une vraie correspondance.
-- Audio / Vidéo : plus rien d'automatique, tout à la demande (y compris
-  la vidéo désormais, réutilise les briques ffmpeg/Whisper/Gemini de
-  core/description_multimedia.py::transcrire_et_decrire_video_bibliotheque).
+  l'action "trouver_catalogue_public" trouve une vraie correspondance,
+  et désormais aussi depuis l'action "lire_catalogue_public" si le
+  document visé n'est pas encore vectorisé (étape 3 ci-dessous).
+- Audio / Vidéo : plus rien d'automatique, tout à la demande.
+
+MIS A JOUR le 18/09/2026 (étape 3 du chantier extraction/vectorisation
+centralisée, demande Bourama) : _vectoriser_publique (la VRAIE
+vectorisation à la demande, pas l'extraction gratuite ci-dessus) délègue
+désormais à core/extraction_contenu.py -- même module central que la
+bibliothèque privée (étapes 1+2) -- au lieu de sa propre dispatch par
+type dupliquée. Couverture inchangée pour l'instant côté public (Bourama
+n'a pas demandé d'étendre la vectorisation automatique à l'ajout,
+seulement d'unifier le CODE d'extraction) ; le module central absorbe
+aussi Word/Excel/vidéo qui étaient déjà couverts ici.
 """
 
 import logging
@@ -97,12 +107,9 @@ from bibliotheque_rag import (  # noqa: E402
     indexer_texte_bibliotheque,
 )
 from catalogue_public_rag import (  # noqa: E402
-    indexer_pdf_catalogue_public,
     indexer_texte_catalogue_public,
-    indexer_transcription_catalogue_public,
     extraire_pages_pdf as extraire_pages_pdf_catalogue_public,
 )
-from description_multimedia import decrire_image_bibliotheque, transcrire_audio_bibliotheque, transcrire_et_decrire_video_bibliotheque  # noqa: E402
 from embeddings import activer_pause_quota_gemini, est_en_pause_quota_gemini, est_erreur_quota_gemini  # noqa: E402
 
 BUCKET_BIBLIOTHEQUE = "bibliotheque"
@@ -240,53 +247,28 @@ def _vectoriser_privee(ligne: dict) -> None:
 
 
 def _vectoriser_publique(ligne: dict) -> None:
+    """
+    18/09/2026 (étape 3 du chantier extraction/vectorisation, demande
+    Bourama) : délègue désormais l'extraction à
+    core/extraction_contenu.py (module central, même brique que
+    _vectoriser_privee ci-dessus) au lieu d'une dispatch locale dupliquée
+    -- même couverture de types que la bibliothèque privée pour la VRAIE
+    vectorisation à la demande, sans rien réécrire des extracteurs
+    eux-mêmes. L'indexation (embeddings, écriture des chunks) reste
+    inchangée (indexer_texte_catalogue_public), un appel par segment.
+    """
     fichier_id = ligne["id"]
     type_mime = ligne["type_mime"] or ""
     contenu = _telecharger(ligne["chemin_stockage"])
 
     _nettoyer_chunks_existants("documents_catalogue_public", None, None, fichier_id)
 
-    if type_mime == "application/pdf":
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-            tmp.write(contenu)
-            chemin_temp = tmp.name
-        try:
-            indexer_pdf_catalogue_public(chemin_temp, fichier_id=fichier_id)
-        finally:
-            try:
-                os.remove(chemin_temp)
-            except OSError:
-                pass
-    elif type_mime.startswith("image/"):
-        description_image = decrire_image_bibliotheque(contenu, type_mime)
-        if description_image:
-            indexer_texte_catalogue_public(description_image, fichier_id=fichier_id)
-    elif type_mime.startswith("audio/"):
-        segments_audio = transcrire_audio_bibliotheque(contenu, ligne["nom_fichier"])
-        if segments_audio:
-            indexer_transcription_catalogue_public(segments_audio, fichier_id=fichier_id)
-    elif type_mime.startswith("video/"):
-        # 06/09/2026 : vidéo A LA DEMANDE uniquement (voir docstring du
-        # module) -- réutilise les mêmes briques que la vidéo de chat.
-        extension = (ligne.get("nom_fichier") or "").rsplit(".", 1)[-1].lower() or "mp4"
-        resultat = transcrire_et_decrire_video_bibliotheque(contenu, ligne["nom_fichier"], extension)
-        for segment in (resultat or {}).get("segments_audio") or []:
-            texte = (segment.get("text") or "").strip()
-            if texte:
-                indexer_texte_catalogue_public(texte, fichier_id=fichier_id, timestamp_debut=segment.get("start"), timestamp_fin=segment.get("end"))
-        for description in (resultat or {}).get("descriptions_frames") or []:
-            if description.strip():
-                indexer_texte_catalogue_public(description, fichier_id=fichier_id)
-    elif type_mime == TYPES_MIME_WORD:
-        texte = _extraire_texte_docx_bytes(contenu)
-        if texte.strip():
-            indexer_texte_catalogue_public(texte, fichier_id=fichier_id)
-    elif type_mime == TYPES_MIME_EXCEL:
-        texte = _extraire_texte_xlsx_bytes(contenu)
-        if texte.strip():
-            indexer_texte_catalogue_public(texte, fichier_id=fichier_id)
-    elif type_mime == "text/plain":
-        indexer_texte_catalogue_public(contenu.decode("utf-8", errors="ignore"), fichier_id=fichier_id)
+    for segment in _extraire_segments(contenu, type_mime, ligne["nom_fichier"]):
+        indexer_texte_catalogue_public(
+            segment["texte"], fichier_id=fichier_id,
+            page_debut=segment.get("page_debut"), page_fin=segment.get("page_fin"),
+            timestamp_debut=segment.get("timestamp_debut"), timestamp_fin=segment.get("timestamp_fin"),
+        )
 
 
 def _extraire_texte_pour_extraction_publique(type_mime: str | None, contenu: bytes) -> str:
