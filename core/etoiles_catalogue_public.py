@@ -1,10 +1,13 @@
 """
 Étoiles sur le catalogue public (17/09/2026, demande Bourama : "comme
 sur GitHub, une étoile par personne, seul le nombre compte"). S'applique
-aux 3 types d'éléments du catalogue public :
+aux 4 types d'éléments du catalogue public :
   - "fichier" -> bibliotheque_publique
   - "dossier" -> dossiers_catalogue_public
   - "skill"   -> comportements_publics
+  - "clovis"  -> clovis_infos (18/09/2026, étape 13 : Clovis lui-même,
+    table singleton à une seule ligne -- il n'y a plus de système
+    "agent" dans Clovis, ce n'est PAS agent_comments/agent_ratings)
 
 Toggle simple (basculer_etoile) : pose l'étoile de cet utilisateur si
 elle n'existe pas encore, la retire sinon -- jamais de note 1 à 5,
@@ -23,6 +26,7 @@ TABLES_PAR_TYPE = {
     "fichier": "bibliotheque_publique",
     "dossier": "dossiers_catalogue_public",
     "skill": "comportements_publics",
+    "clovis": "clovis_infos",
 }
 
 
