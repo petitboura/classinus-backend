@@ -236,9 +236,9 @@ async def demander_clic_generique(
     Chantier F. Meme principe que demander_execution_action, mais pour
     le mode generique (DOM + selecteur) : diffuse {selecteur_generique,
     description} a toutes les connexions actives, la premiere connexion
-    qui trouve un element correspondant, VISIBLE et ACTIF, gere la
-    confirmation (toujours requise en mode generique, voir
-    lib/canalAgentApplicatif.ts) puis le clic reel.
+    qui trouve un element correspondant, VISIBLE et ACTIF, execute le
+    clic reel directement (plus de confirmation, decision Bourama du
+    19/09/2026, voir lib/canalAgentApplicatif.ts).
     """
     correlation_id = str(uuid.uuid4())
     return await _diffuser_et_attendre(

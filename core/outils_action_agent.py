@@ -26,11 +26,12 @@ from core.outils_generation_commun import mcp_generation, Context
 async def lister_actions_disponibles(ctx: Context) -> str:
     """
     Chantier D, revise le 17/09/2026 (scan generique, voir
-    plan-scan-generique-agent-applicatif.md) : renvoie la liste, a jour
-    a l'instant present, des elements cliquables (bouton, lien, champ)
-    reellement visibles et actifs a l'ecran de l'etudiant en ce moment
-    meme (id, description, sensible, continuerEnArrierePlan) -- plus
-    aucun element n'est declare a la main, tout est detecte
+    plan-scan-generique-agent-applicatif.md) puis le 19/09/2026 (retrait
+    de la confirmation, voir plan-canal-agent-applicatif-v1.md) : renvoie
+    la liste, a jour a l'instant present, des elements cliquables
+    (bouton, lien, champ) reellement visibles et actifs a l'ecran de
+    l'etudiant en ce moment meme (id, description, continuerEnArrierePlan)
+    -- plus aucun element n'est declare a la main, tout est detecte
     automatiquement par un scan du DOM cote frontend.
 
     La description de chaque element est generee automatiquement (texte
@@ -68,12 +69,11 @@ async def executer_action_application(action_id: str, ctx: Context) -> str:
     identifiant : un element qui n'est plus a l'ecran echoue proprement
     plutot que de risquer un effet inattendu.
 
-    Revise le 17/09/2026 (scan generique) : TOUT element detecte par le
-    scan est sensible par defaut, sans exception possible -- une fenetre
-    de confirmation s'affiche donc TOUJOURS cote etudiant avant toute
-    execution reelle, l'etudiant doit cliquer Autoriser. Un refus renvoie
-    un resultat clair, ne pas re-proposer la meme action immediatement
-    sans que l'etudiant l'ait redemande.
+    Revise le 19/09/2026 (decision Bourama) : plus aucune confirmation
+    cote etudiant, l'execution est immediate des l'appel de cet outil.
+    A utiliser en consequence uniquement quand l'etudiant a reellement
+    demande cette action (ou l'a clairement acceptee dans la
+    conversation), jamais de facon spontanee.
 
     NECESSITE que l'application soit ouverte quelque part pour ce
     compte (peu importe l'onglet ou l'appareil, voir
@@ -96,8 +96,6 @@ async def executer_action_application(action_id: str, ctx: Context) -> str:
         )
     if isinstance(resultat, dict) and resultat.get("erreur"):
         return f"Erreur : {resultat['erreur']}"
-    if isinstance(resultat, dict) and resultat.get("refuse"):
-        return "L'étudiant a refusé cette action dans la fenêtre de confirmation."
     return "Action exécutée avec succès."
 
 
@@ -119,13 +117,11 @@ async def executer_clic_generique(selecteur: str, description: str, ctx: Context
 
     `selecteur` est un sélecteur CSS visant un unique élément cliquable
     (bouton, lien...) actuellement affiché. `description` est une
-    phrase courte et claire décrivant l'action pour l'étudiant (montrée
-    dans la fenêtre de confirmation).
+    phrase courte et claire décrivant l'action, affichée à l'étudiant
+    dans la bulle de dialogue du canal en direct pendant l'exécution.
 
-    Contrairement à executer_action_application, ce mode n'a aucune
-    métadonnée de sensibilité déclarée : la confirmation est donc
-    TOUJOURS demandée à l'étudiant, sans exception, jamais d'exécution
-    silencieuse.
+    Revise le 19/09/2026 (decision Bourama) : plus aucune confirmation
+    cote etudiant, l'execution est immediate des l'appel de cet outil.
 
     Si l'élément n'est pas trouvé, ou trouvé mais désactivé/invisible,
     l'application le traite comme indisponible plutôt que de risquer un
@@ -150,8 +146,6 @@ async def executer_clic_generique(selecteur: str, description: str, ctx: Context
         )
     if isinstance(resultat, dict) and resultat.get("erreur"):
         return f"Erreur : {resultat['erreur']}"
-    if isinstance(resultat, dict) and resultat.get("refuse"):
-        return "L'étudiant a refusé cette action dans la fenêtre de confirmation."
     return "Action exécutée avec succès."
 
 
