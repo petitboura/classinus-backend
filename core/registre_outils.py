@@ -249,6 +249,21 @@ OUTILS_SENSIBLES = {
     "notion-create-view",
     "notion-update-view",
     "notion-create-attachment",
+    # 19/09/2026 (demande Bourama, répartition validée) -- les 8 outils
+    # parmi les 25 nouveaux (voir REGISTRE_AFFICHAGE_OUTILS plus bas) qui
+    # écrivent réellement quelque chose ou déclenchent une action côté
+    # Notion (création/modification de dossier ou fichier, transformation
+    # d'une page, lancement/pilotage d'une session d'agent tiers) : même
+    # logique que les outils d'écriture Notion ci-dessus, TOUJOURS
+    # interrompus pour confirmation avant exécution.
+    "notion-create-folder",
+    "notion-update-folder",
+    "notion-create-file-upload",
+    "notion-convert-page-to-skill",
+    "notion-upload-skill",
+    "notion-spawn-session",
+    "notion-send-message-to-session",
+    "notion-stop-session",
     # Google Drive (01/09) -- ÉCRIVENT réellement dans le Drive de
     # l'utilisateur (creation/copie de fichier), meme logique que les
     # outils d'ecriture Notion/GitHub ci-dessus : TOUJOURS interrompus
@@ -407,7 +422,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "notion-fetch": {"label": "Ouverture d'une page/base Notion", "icone": "FileSearch", "onglet": "action_app", "appli": "notion"},
     "notion-query-data-sources": {"label": "Interrogation d'une base Notion (SQL)", "icone": "Table2", "onglet": "action_app", "appli": "notion"},
     "notion-query-database-view": {"label": "Interrogation d'une vue Notion", "icone": "LayoutGrid", "onglet": "action_app", "appli": "notion"},
-    "notion-query-meeting-notes": {"label": "Recherche dans les notes de réunion", "icone": "StickyNote", "onglet": "action_app", "appli": "notion"},
+    "notion-query-meeting-notes": {"label": "Recherche dans les notes de réunion Notion", "icone": "StickyNote", "onglet": "action_app", "appli": "notion"},
     "notion-get-comments": {"label": "Lecture des commentaires Notion", "icone": "MessagesSquare", "onglet": "action_app", "appli": "notion"},
     "notion-get-async-task": {"label": "Suivi d'une tâche Notion en cours", "icone": "Clock", "onglet": "action_app", "appli": "notion"},
     "notion-get-teams": {"label": "Liste des équipes Notion", "icone": "Users", "onglet": "action_app", "appli": "notion"},
@@ -423,6 +438,45 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "notion-create-attachment": {"label": "Ajout d'une pièce jointe Notion", "icone": "Paperclip", "onglet": "action_app", "appli": "notion"},
     "notion-create-view": {"label": "Création d'une vue Notion", "icone": "PanelsTopLeft", "onglet": "action_app", "appli": "notion"},
     "notion-update-view": {"label": "Modification d'une vue Notion", "icone": "SlidersHorizontal", "onglet": "action_app", "appli": "notion"},
+
+    # --- Action dans l'app : Notion (25 outils supplémentaires, 19/09/2026,
+    # demande Bourama) --- le connecteur Notion en expose désormais 45 au
+    # total (contre 20 avant, bloc ci-dessus), écart constaté en comparant
+    # ce registre au catalogue Notion actuel. Ces 25 n'avaient encore aucune
+    # entrée ici : invisibles à la recherche interne d'outils (le libellé
+    # français de CE registre est ce qui sert de libelle_supplementaire à
+    # rechercher_outils_pertinents, voir core/boucle_agent.py) et non
+    # couverts par OUTILS_SENSIBLES. Tous les libellés incluent explicitement
+    # le mot "Notion" (demande Bourama : sans ça, une recherche en français
+    # matche mal -- même problème déjà rencontré avec Tavily).
+    # Icônes vérifiées une à une dans lucide-react 0.383.0 installé
+    # (classgpt-frontend/package.json), pas de repli Wrench attendu.
+    "notion-ai-search": {"label": "Recherche IA dans Notion", "icone": "Sparkles", "onglet": "action_app", "appli": "notion"},
+    "notion-search-agents": {"label": "Recherche d'agents Notion", "icone": "Users", "onglet": "action_app", "appli": "notion"},
+    "notion-search-sessions": {"label": "Recherche de sessions d'agent Notion", "icone": "Search", "onglet": "action_app", "appli": "notion"},
+    "notion-search-skills": {"label": "Recherche de skills Notion", "icone": "ScrollText", "onglet": "action_app", "appli": "notion"},
+    "notion-query-multiple-data-sources": {"label": "Interrogation de plusieurs bases Notion", "icone": "Layers", "onglet": "action_app", "appli": "notion"},
+    "notion-query-sessions": {"label": "Liste des sessions d'agent Notion", "icone": "ListChecks", "onglet": "action_app", "appli": "notion"},
+    "notion-read-session-event": {"label": "Lecture d'un évènement de session Notion", "icone": "FileText", "onglet": "action_app", "appli": "notion"},
+    "notion-list-favorite-pages": {"label": "Liste des pages favorites Notion", "icone": "Star", "onglet": "action_app", "appli": "notion"},
+    "notion-list-private-pages": {"label": "Liste des pages privées Notion", "icone": "Lock", "onglet": "action_app", "appli": "notion"},
+    "notion-list-recent-pages": {"label": "Liste des pages Notion récentes", "icone": "Clock", "onglet": "action_app", "appli": "notion"},
+    "notion-list-session-events": {"label": "Historique d'une session d'agent Notion", "icone": "History", "onglet": "action_app", "appli": "notion"},
+    "notion-list-shared-pages": {"label": "Liste des pages partagées Notion", "icone": "Share2", "onglet": "action_app", "appli": "notion"},
+    "notion-get-session-status": {"label": "Statut d'une session d'agent Notion", "icone": "Activity", "onglet": "action_app", "appli": "notion"},
+    "notion-get-tool-access": {"label": "Vérification des droits d'accès Notion", "icone": "ShieldCheck", "onglet": "action_app", "appli": "notion"},
+    "notion-check-mcp-next-steps": {"label": "Vérification des étapes suivantes Notion", "icone": "ArrowRight", "onglet": "action_app", "appli": "notion"},
+    "notion-download-skill": {"label": "Téléchargement d'un skill Notion", "icone": "Download", "onglet": "action_app", "appli": "notion"},
+    "notion-show-advanced-analysis-next-steps": {"label": "Étapes suivantes d'analyse avancée Notion", "icone": "ArrowRight", "onglet": "action_app", "appli": "notion"},
+    # --- Écriture/action (marqués sensibles, voir OUTILS_SENSIBLES plus haut) ---
+    "notion-create-folder": {"label": "Création d'un dossier Notion", "icone": "FolderPlus", "onglet": "action_app", "appli": "notion"},
+    "notion-update-folder": {"label": "Modification d'un dossier Notion", "icone": "FolderCog", "onglet": "action_app", "appli": "notion"},
+    "notion-create-file-upload": {"label": "Envoi d'un fichier dans Notion", "icone": "UploadCloud", "onglet": "action_app", "appli": "notion"},
+    "notion-convert-page-to-skill": {"label": "Conversion d'une page Notion en skill", "icone": "Wand2", "onglet": "action_app", "appli": "notion"},
+    "notion-upload-skill": {"label": "Import d'un skill dans Notion", "icone": "Upload", "onglet": "action_app", "appli": "notion"},
+    "notion-spawn-session": {"label": "Lancement d'une session d'agent Notion", "icone": "PlayCircle", "onglet": "action_app", "appli": "notion"},
+    "notion-send-message-to-session": {"label": "Envoi d'un message à une session d'agent Notion", "icone": "MessageSquare", "onglet": "action_app", "appli": "notion"},
+    "notion-stop-session": {"label": "Arrêt d'une session d'agent Notion", "icone": "StopCircle", "onglet": "action_app", "appli": "notion"},
 
     # --- Action dans l'app : Google Drive ---
     # Noms d'outils NON VÉRIFIÉS en conditions réelles, voir le
