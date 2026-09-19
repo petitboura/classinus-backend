@@ -12,7 +12,7 @@ Deux règles, seulement quand est_majeur vaut explicitement False :
   conversation une fois un premier choix fait (voir
   api/mode_actif_conversation.py).
 
-Version "neutre par défaut configurée par l'équipe Classinus" pour un
+Version "neutre par défaut configurée par l'équipe Clovis" pour un
 mineur sans code explicitement HORS PÉRIMÈTRE (voir vision, Point 3) --
 un mineur sans code voit juste l'accès bloqué, pas de version dégradée.
 """
