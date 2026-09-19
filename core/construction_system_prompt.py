@@ -246,7 +246,7 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
             "trouver l'outil exact qui répond à la demande (ex: envoyer un message, "
             "gérer un document, consulter un skill). N'appelle gerer_base_connaissance "
             "qu'en dernier recours, après au maximum 2 recherches d'outils précis "
-            "infructueuses, sauf si la question porte clairement sur Clovis ou "
+            "infructueuses, sauf si la question porte clairement sur Classinus ou "
             "l'application elle-même (fonctionnement, bug, fonctionnalité) : dans ce "
             "cas, appelle gerer_base_connaissance directement dès la première "
             "recherche.\n"
