@@ -14,6 +14,7 @@ notion d'appareil cible, voir core/canal_agent_applicatif.py.
 import json
 
 from core.canal_agent_applicatif import (
+    pousser_texte_clovis as _pousser_texte_clovis,
     demander_execution_action as _demander_execution_action,
     demander_clic_generique as _demander_clic_generique,
     demander_pointage_action as _demander_pointage_action,
@@ -187,3 +188,55 @@ async def montrer_element_application(action_id: str, ctx: Context) -> str:
     if isinstance(resultat, dict) and resultat.get("erreur"):
         return f"Erreur : {resultat['erreur']}"
     return "Curseur déplacé vers l'élément avec succès."
+
+
+# Plafond de longueur d'un commentaire en direct : la bulle du canal est
+# faite pour une ou deux phrases lues en passant, pas pour un paragraphe.
+LONGUEUR_MAX_TEXTE_DIRECT = 400
+
+
+@mcp_generation.tool()
+async def dire_a_l_etudiant(texte: str, ctx: Context) -> str:
+    """
+    Chantier P (canal en direct, decision Bourama du 19/09/2026) :
+    affiche un court commentaire dans une bulle qui suit la souris de
+    l'etudiant, PENDANT que tu agis dans l'application. C'est toi qui vois
+    l'ecran et qui sais ce que tu fais : utilise cet outil pour dire, au
+    bon moment, ce qu'un guide humain dirait a voix haute a cote de
+    quelqu'un (ce que tu vois, ce que tu vas faire, pourquoi, ce qui
+    bloque).
+
+    A appeler entre deux actions, avant ou apres un executer_action_application
+    ou un montrer_element_application, seulement quand ca apporte
+    quelque chose a l'etudiant. Une ou deux phrases courtes, dans la langue
+    de l'etudiant, en texte brut (pas de mise en forme). Ne pas repeter la
+    description de l'action en cours (l'application l'affiche deja), ne pas
+    commenter chaque clic, ne pas s'en servir pour la reponse finale : celle-ci
+    reste dans ta reponse normale du chat.
+
+    Le texte est aussi garde dans le resultat de l'appel, donc visible
+    dans l'historique de la conversation meme si l'etudiant n'a pas vu la
+    bulle. Si l'application n'est ouverte nulle part pour ce compte, la
+    bulle ne peut pas s'afficher : le dire alors dans ta reponse normale.
+    """
+    user_id = ctx.request_context.request.query_params.get("user_id")
+    if not user_id:
+        return "Erreur : impossible d'identifier l'utilisateur."
+
+    propre = (texte or "").strip()
+    if not propre:
+        return "Erreur : paramètre 'texte' manquant."
+    if len(propre) > LONGUEUR_MAX_TEXTE_DIRECT:
+        return (
+            f"Erreur : texte trop long ({len(propre)} caractères, maximum {LONGUEUR_MAX_TEXTE_DIRECT}). "
+            "Reformule en une ou deux phrases courtes."
+        )
+
+    atteintes = await _pousser_texte_clovis(user_id, propre)
+
+    if atteintes == 0:
+        return (
+            "Aucun affichage : l'application n'est ouverte nulle part pour ce compte, "
+            "l'étudiant n'a rien vu. Dis-le dans ta réponse normale à la place."
+        )
+    return f"Message affiché à l'étudiant : {propre}"

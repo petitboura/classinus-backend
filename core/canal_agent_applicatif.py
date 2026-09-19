@@ -266,3 +266,35 @@ async def demander_pointage_action(user_id: str, action_id: str, on_statut=None)
         on_statut,
         on_timeout_log=f"pointage action={action_id}",
     )
+
+
+async def pousser_texte_clovis(user_id: str, texte: str) -> int:
+    """
+    Chantier P (19/09/2026, decision Bourama) : commentaire libre de
+    Clovis pendant qu'il agit. Contrairement aux demandes ci-dessus, rien
+    n'est attendu en retour : le texte est simplement diffuse a TOUTES les
+    connexions actives de `user_id` (meme principe, aucune cible unique),
+    et chacune l'affiche dans la bulle de dialogue du canal en direct
+    (voir lib/canalAgentApplicatif.ts cote frontend).
+
+    Le texte vient du modele du tour de conversation en cours, via
+    l'outil dire_a_l_etudiant (core/outils_action_agent.py) : c'est lui
+    qui voit et sait ce qu'il fait, donc lui qui juge ce qui vaut la peine
+    d'etre dit. Pas de nouvel appel LLM dedie.
+
+    Renvoie le nombre de connexions atteintes (0 si l'application n'est
+    ouverte nulle part pour ce compte).
+    """
+    async with _verrou_connexions:
+        connexions = [(cle, ws) for cle, ws in _connexions.items() if cle[0] == user_id]
+
+    atteintes = 0
+    for cle, websocket in connexions:
+        verrou_envoi = await _verrou_envoi_pour(cle)
+        try:
+            async with verrou_envoi:
+                await websocket.send_json({"texte_clovis": texte})
+            atteintes += 1
+        except Exception as e:
+            logging.error(f"ERREUR poussee texte Clovis canal agent applicatif (user={user_id}, appareil={cle[1]}) : {e}")
+    return atteintes

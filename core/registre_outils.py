@@ -581,5 +581,8 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "executer_clic_generique": {"label": "Clic générique dans l'application", "icone": "MousePointerClick", "onglet": None},
     # Chantier G : mode guidage, meme rappel de cache 24h.
     "montrer_element_application": {"label": "Pointer un élément de l'application", "icone": "MousePointerClick", "onglet": None},
+    # Chantier P (canal en direct, 19/09/2026) : commentaire libre pendant
+    # une action, meme rappel de cache 24h.
+    "dire_a_l_etudiant": {"label": "Message en direct à l'étudiant", "icone": "MousePointerClick", "onglet": None},
 }
 

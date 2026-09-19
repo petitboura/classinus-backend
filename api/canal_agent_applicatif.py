@@ -41,6 +41,11 @@ async def canal_agent_applicatif(
     - {"etat_actions": [...]} : poussee de l'etat courant des actions
       disponibles sur CETTE connexion (chantier D), envoyee a
       l'ouverture puis a chaque changement cote frontend.
+
+    Une forme de message ENVOYEE par le serveur sans reponse attendue
+    (chantier P) : {"texte_clovis": "..."}, commentaire libre de Clovis
+    a afficher dans la bulle de dialogue, voir
+    core/canal_agent_applicatif.py:pousser_texte_clovis.
     """
     utilisateur = _verifier_token(token)
     if utilisateur is None:
