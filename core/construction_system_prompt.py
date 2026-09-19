@@ -83,7 +83,7 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
         )
         system_final += (
             "\n\nINSTRUCTIONS PERSONNELLES POTENTIELLEMENT PERTINENTES POUR CE MESSAGE -- appelées "
-            "\"skill(s)\" dans TOUTE l'interface Clovis, \"comportement\" seulement en interne (écrites par cet "
+            "\"skill(s)\" dans TOUTE l'interface Classinus, \"comportement\" seulement en interne (écrites par cet "
             "utilisateur lui-même, ou reçues d'un autre utilisateur via un code -- la description précise "
             "\"(reçu de ...)\" dans ce second cas) :\n"
             f"{candidats}\n"
@@ -246,7 +246,7 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
             "trouver l'outil exact qui répond à la demande (ex: envoyer un message, "
             "gérer un document, consulter un skill). N'appelle gerer_base_connaissance "
             "qu'en dernier recours, après au maximum 2 recherches d'outils précis "
-            "infructueuses, sauf si la question porte clairement sur Clovis ou "
+            "infructueuses, sauf si la question porte clairement sur Classinus ou "
             "l'application elle-même (fonctionnement, bug, fonctionnalité) : dans ce "
             "cas, appelle gerer_base_connaissance directement dès la première "
             "recherche.\n"
