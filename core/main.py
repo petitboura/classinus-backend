@@ -25,6 +25,7 @@ from core.guide_conversation import obtenir_guide_actif
 from avancement_notions_ia import notions_pertinentes_pour_eleve, resoudre_code_actif_eleve
 from signalements import signalements_pertinents_pour_injection
 from mcp_tools import lister_outils_autorises_pour_agent, filtrer_catalogue_par_outil_force, appeler_outil
+from registre_outils import CATEGORIES_OUTILS
 from fournisseurs_llm import generer_reponse_premium
 
 # 05/09/2026 (demande Bourama) : main.py decoupe en plusieurs fichiers pour
@@ -110,7 +111,7 @@ def _bloc_fichiers_generes(fichiers):
 # present en prod malgre le fix deja present sur main.
 
 
-def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False):
+def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False):
     """
     Generateur d'evenements. Chaque element produit est un dictionnaire :
     - {"type": "statut", "texte": "..."}         -> un outil MCP est en cours d'utilisation (ou, depuis le 11/09/2026, Gemini en train de lire une image/video jointe)
@@ -634,6 +635,22 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # _router_outils) : explorer_dossier a besoin des noms
             # listés par gerer_dossier_telephone pour fonctionner.
             outils_forces_contexte += ["gerer_dossier_telephone", "explorer_dossier"]
+
+    # Canal en direct (19/09/2026, decision Bourama : "dès que le canal
+    # est actif ces outils sont automatiquement envoyés au LLM, c'est le
+    # coeur du canal") : tant que canal_en_direct est vrai (envoyé par
+    # clovis-frontend sur CHAQUE message, pas seulement ceux du canal
+    # lui-même -- voir api/chat.py), les outils de clic (catégorie
+    # agent_applicatif : lister_actions_disponibles,
+    # executer_action_application, executer_clic_generique,
+    # montrer_element_application) et dire_a_l_etudiant (bulle) sont
+    # forcés directement, sans dépendre de demander_outils ni du petit
+    # routeur (désactivé de toute façon, voir ROUTEUR_OUTILS_AUTO_DESACTIVE).
+    # Condition indépendante de agent_id == "clovis" ci-dessus : le canal
+    # en direct n'existe que sur Clovis en pratique, mais rien ici ne
+    # doit le supposer en dur.
+    if canal_en_direct:
+        outils_forces_contexte += CATEGORIES_OUTILS.get("agent_applicatif", []) + ["dire_a_l_etudiant"]
 
     # Outils gardés par le grand modèle au tour précédent (2026-09-04,
     # demande Bourama) : voir _outil_garder_outils/_lire_outils_retenus.

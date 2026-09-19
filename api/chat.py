@@ -150,6 +150,16 @@ class EnvoyerMessagePayload(BaseModel):
     # gerer_dossier_telephone systématiquement quand l'app est installée --
     # voir core/main.py:chat(), outils_forces_contexte.
     natif: Optional[bool] = False
+    # Canal en direct (19/09/2026, demande Bourama : "dès que le canal
+    # est actif ces outils sont automatiquement envoyés au LLM, c'est le
+    # coeur du canal") : envoyé par clovis-frontend tant que le canal en
+    # direct est actif (voir lib/contexteCanalEnDirect.tsx), sur CHAQUE
+    # message pendant ce temps, pas seulement ceux qui viennent du canal
+    # lui-même. Force les outils de la catégorie agent_applicatif (clic)
+    # et dire_a_l_etudiant (bulle) dans outils_forces_contexte -- voir
+    # core/main.py:chat() -- sans dépendre de ce que le grand modèle
+    # pense de demander via demander_outils.
+    canal_en_direct: Optional[bool] = False
 
 
 def _resoudre_modele_force(agent_id, modele_demande):
@@ -228,6 +238,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
                 modele_force=_resoudre_modele_force(payload.agent_id, payload.modele),
                 sans_enseignant=payload.sans_enseignant or False,
                 natif=payload.natif or False,
+                canal_en_direct=payload.canal_en_direct or False,
             )
         for evenement in generateur:
             yield f"data: {json.dumps(evenement)}\n\n"
