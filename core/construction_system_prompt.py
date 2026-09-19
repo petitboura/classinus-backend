@@ -83,7 +83,7 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
         )
         system_final += (
             "\n\nINSTRUCTIONS PERSONNELLES POTENTIELLEMENT PERTINENTES POUR CE MESSAGE -- appelées "
-            "\"skill(s)\" dans TOUTE l'interface Clovis, \"comportement\" seulement en interne (écrites par cet "
+            "\"skill(s)\" dans TOUTE l'interface Classinus, \"comportement\" seulement en interne (écrites par cet "
             "utilisateur lui-même, ou reçues d'un autre utilisateur via un code -- la description précise "
             "\"(reçu de ...)\" dans ce second cas) :\n"
             f"{candidats}\n"
