@@ -52,9 +52,9 @@ from core.mcp_auth_public import (
 
 mcp_public = FastMCP(
     name="clovis_public",
-    title="Clovis",
+    title="Classinus",
     description=(
-        "Assistant pedagogique Clovis : consultez et gerez votre "
+        "Assistant pedagogique Classinus : consultez et gerez votre "
         "bibliotheque de documents, votre memoire, vos comportements "
         "personnalises et votre historique de conversation, directement "
         "depuis Claude."
@@ -80,7 +80,7 @@ def ping() -> str:
     (client MCP externe -> ce serveur) fonctionne de bout en bout, avant
     authentification. Reste utile comme sonde de santé.
     """
-    return "pong depuis Clovis"
+    return "pong depuis Classinus"
 
 
 @mcp_public.tool()
@@ -94,4 +94,4 @@ def qui_suis_je(ctx: Context) -> str:
     user_id = _user_id_depuis_contexte(ctx)
     if not user_id:
         return "Aucune identité vérifiée -- authentification manquante ou invalide."
-    return f"Authentifié avec succès sur Clovis (id utilisateur : {user_id})."
+    return f"Authentifié avec succès sur Classinus (id utilisateur : {user_id})."
