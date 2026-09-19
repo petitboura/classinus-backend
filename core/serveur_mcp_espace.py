@@ -1,15 +1,15 @@
 """
 Serveur MCP public "Mon espace" (Partie 3 du chantier MCP externe --
-Bourama, 16/08/2026), pour Classinus exclusivement (dépôts clovis-backend +
+Bourama, 16/08/2026), pour Clovis exclusivement (dépôts clovis-backend +
 classgpt-frontend, sans rapport avec djiguigne-backend/djiguigne-ai).
 
 But : exposer à un client MCP externe (Claude, connecté par
-l'utilisateur en dehors de l'app Classinus) les fonctionnalités de "Mon
+l'utilisateur en dehors de l'app Clovis) les fonctionnalités de "Mon
 espace" -- Bibliothèque, Ma mémoire, Mes comportements, Historique --
 pour qu'il puisse les consulter/gérer sans repasser par l'interface web.
 
 Différence fondamentale avec core/serveur_mcp_generation.py (serveur MCP
-INTERNE, utilisé par la boucle d'appel d'outils du LLM de Classinus
+INTERNE, utilisé par la boucle d'appel d'outils du LLM de Clovis
 lui-même pendant une conversation dans l'app, monté en localhost
 uniquement -- voir _url_generation dans registre_outils.py) : ce
 serveur-ci est destiné à être monté sur une route PUBLIQUE (voir Partie
@@ -36,7 +36,7 @@ de comportement). documents_programme (ancien mécanisme titre+lien
 rattaché uniquement à un chapitre) n'est pas touché ni remplacé -- ce
 qui suit s'ajoute en parallèle, la coexistence est assumée.
 
-Classinus est mono-agent (agent Lirinus de l'ancien système
+Clovis est mono-agent (agent Lirinus de l'ancien système
 établissement/enseignant/étudiant : n'existe pas ici, résidu
 djiguigne/api/roles.py obsolète depuis l'isolation du 12/08) --
 AGENT_ID_ESPACE ci-dessous est une constante fixe ("clovis"), jamais un
@@ -191,7 +191,7 @@ _SUPABASE_URL = os.environ.get("SUPABASE_URL")
 _SUPABASE_SECRET = os.environ.get("SUPABASE_SECRET")
 _supabase = create_client(_SUPABASE_URL, _SUPABASE_SECRET, options=ClientOptions(httpx_client=nouveau_client_http_supabase()))
 
-# Classinus mono-agent : voir docstring en tête de fichier. Fixe, jamais un
+# Clovis mono-agent : voir docstring en tête de fichier. Fixe, jamais un
 # paramètre exposé aux outils ci-dessous.
 AGENT_ID_ESPACE = "clovis"
 
@@ -1384,7 +1384,7 @@ def basculer_etoile_catalogue_public(type_element: str, element_id: str, ctx: Co
 )
 def lire_memoire(ctx: Context) -> str:
     """
-    Lit le résumé long-terme que Classinus garde de cet utilisateur (section
+    Lit le résumé long-terme que Clovis garde de cet utilisateur (section
     "Ma mémoire" de "Mon espace"), valable pour toutes ses conversations.
     """
     user_id = _user_id_authentifie(ctx)
@@ -1412,7 +1412,7 @@ def lire_memoire(ctx: Context) -> str:
 )
 def modifier_memoire(resume: str, ctx: Context) -> str:
     """
-    Réécrit intégralement le résumé long-terme que Classinus garde de cet
+    Réécrit intégralement le résumé long-terme que Clovis garde de cet
     utilisateur (remplace le texte existant, ne le complète pas).
     """
     user_id = _user_id_authentifie(ctx)
@@ -1436,7 +1436,7 @@ def modifier_memoire(resume: str, ctx: Context) -> str:
 )
 def effacer_memoire(ctx: Context) -> str:
     """
-    Efface DÉFINITIVEMENT le résumé long-terme que Classinus garde de cet
+    Efface DÉFINITIVEMENT le résumé long-terme que Clovis garde de cet
     utilisateur ("oublie tout ce que tu sais de moi"). SENSIBLE : le
     client doit confirmer avec l'utilisateur avant d'appeler cet outil.
     """
@@ -1461,7 +1461,7 @@ def effacer_memoire(ctx: Context) -> str:
 def consulter_comportement(comportement_id: str, ctx: Context) -> str:
     """
     Lit le contenu COMPLET (frontmatter + instructions) d'une instruction
-    personnelle -- appelée "skill" dans TOUTE l'interface Classinus,
+    personnelle -- appelée "skill" dans TOUTE l'interface Clovis,
     "comportement" seulement en interne -- que cet utilisateur l'ait
     écrite lui-même (section "Mes comportements"), ou qu'il l'ait reçue
     d'un autre utilisateur via un code (id préfixé "recu:") -- à partir
@@ -1491,8 +1491,8 @@ def consulter_comportement(comportement_id: str, ctx: Context) -> str:
 def lister_comportements(ctx: Context, limit: int = 20, offset: int = 0) -> str:
     """
     Liste les instructions personnelles que cet utilisateur a écrites
-    lui-même (section "Mes comportements" de "Mon espace") pour Classinus --
-    appelées "skill(s)" dans TOUTE l'interface Classinus, "comportement"
+    lui-même (section "Mes comportements" de "Mon espace") pour Clovis --
+    appelées "skill(s)" dans TOUTE l'interface Clovis, "comportement"
     seulement en interne. Utilise cet outil dès que l'utilisateur demande
     "mes skills", "quels sont mes skills", "montre-moi mes skills/mes
     comportements", etc. -- une vraie demande d'énumération, à ne pas
@@ -1725,9 +1725,9 @@ def retirer_comportement_public_espace(comportement_public_id: str, ctx: Context
 
 
 # --- Historique (lecture seule, agent_id fixe "clovis") ----------------
-# Classinus mono-agent : lister_conversations (multi-agent, tableau de bord
+# Clovis mono-agent : lister_conversations (multi-agent, tableau de bord
 # djiguigne) n'a pas de sens ici -- seuls les fils de discussion avec
-# l'unique agent Classinus sont exposés (voir SidebarChatLite.tsx côté
+# l'unique agent Clovis sont exposés (voir SidebarChatLite.tsx côté
 # frontend, qui consomme exactement ce même regroupement).
 
 _LONGUEUR_MAX_TITRE = 42
@@ -1741,7 +1741,7 @@ _LONGUEUR_MAX_TITRE = 42
 def lister_conversations_historique(ctx: Context, limit: int = 20, offset: int = 0) -> str:
     """
     Liste les fils de discussion distincts entre cet utilisateur et
-    Classinus (section "Historique"), le plus récemment actif en premier.
+    Clovis (section "Historique"), le plus récemment actif en premier.
     Renvoie pour chacun : conversation_id ("legacy" pour les échanges
     d'avant l'historique par fil), titre (début du premier message),
     dernière activité.
@@ -1812,7 +1812,7 @@ def lister_conversations_historique(ctx: Context, limit: int = 20, offset: int =
 def lire_conversation_historique(conversation_id: str, ctx: Context) -> str:
     """
     Contenu complet d'un fil de discussion précis entre cet utilisateur
-    et Classinus, à partir de son conversation_id (voir
+    et Clovis, à partir de son conversation_id (voir
     lister_conversations_historique -- utilise littéralement "legacy"
     pour recharger les échanges d'avant l'historique par fil).
     """
@@ -1845,7 +1845,7 @@ def lire_conversation_historique(conversation_id: str, ctx: Context) -> str:
 # Ajouté le 18/08/2026 (demande Bourama) : mêmes outils que côté agent
 # interne (core/serveur_mcp_generation.py), pour qu'un client MCP
 # externe puisse aussi chercher dans le contenu préparé à l'avance par
-# l'équipe Classinus (pas propre à un utilisateur -- agent_id fixe
+# l'équipe Clovis (pas propre à un utilisateur -- agent_id fixe
 # "clovis" comme partout ailleurs dans ce fichier).
 
 @mcp_espace.tool(
@@ -1856,7 +1856,7 @@ def lire_conversation_historique(conversation_id: str, ctx: Context) -> str:
 def chercher_dans_base_connaissances(question: str, ctx: Context) -> str:
     """
     Cherche dans la base de connaissances de l'agent (documents et
-    instructions spécifiques préparés par l'équipe Classinus) les passages
+    instructions spécifiques préparés par l'équipe Clovis) les passages
     pertinents pour répondre à `question`. À utiliser quand la question
     touche un sujet précis où un contenu de référence a pu être préparé
     à l'avance. Renvoie les extraits trouvés ou un message si rien de
@@ -2004,18 +2004,18 @@ def consulter_matiere_active(message_utilisateur: str, ctx: Context) -> str:
 # _desactive_programme/LISEZ_MOI_NE_JAMAIS_REUTILISER.md. NE JAMAIS
 # réintroduire ces outils sans redemander la spécification à Bourama.
 
-# --- Discuter avec Classinus ------------------------------------------------
+# --- Discuter avec Clovis ------------------------------------------------
 # Ajouté le 17/08/2026 (demande Bourama) : jusqu'ici ce fichier ne gérait
-# que les données annexes de Classinus (bibliothèque/mémoire/comportements/
+# que les données annexes de Clovis (bibliothèque/mémoire/comportements/
 # historique/programme) -- rien ne permettait à Claude d'envoyer un
-# message dans une conversation et de voir la réponse réelle de Classinus,
+# message dans une conversation et de voir la réponse réelle de Clovis,
 # comme le ferait l'utilisateur depuis l'app. C'est ce que couvrent
 # discuter_avec_clovis et confirmer_action_clovis ci-dessous, en
 # réutilisant tel quel core.main.chat() (même fonction que api/chat.py,
 # aucune logique dupliquée).
 #
 # Point d'attention traité ici (voir migrations/2026_08_17_confirmations_mcp_espace.sql
-# et core/confirmations_mcp.py) : quand Classinus veut utiliser un outil
+# et core/confirmations_mcp.py) : quand Clovis veut utiliser un outil
 # sensible en répondant, chat() s'arrête et renvoie un evenement
 # "confirmation_requise" contenant etat_reprise -- qui embarque
 # table_routage, donc des secrets en clair (clé API Tavily, jetons
@@ -2057,7 +2057,7 @@ def _historique_pour_conversation(conversation_id: str, user_id: str) -> list[di
 def _derouler_chat(**kwargs_chat) -> tuple[str, dict | None]:
     """
     Consomme entièrement le générateur chat() et renvoie soit
-    (texte_final, None), soit ("", evenement_confirmation) si Classinus
+    (texte_final, None), soit ("", evenement_confirmation) si Clovis
     s'est arrêté pour demander une confirmation avant d'aller plus loin.
     """
     reponse = []
@@ -2073,12 +2073,12 @@ def _derouler_chat(**kwargs_chat) -> tuple[str, dict | None]:
 
 @mcp_espace.tool(
     name="clovis_discuter_avec_clovis",
-    title="Discuter avec Classinus",
+    title="Discuter avec Clovis",
     annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=True),
 )
 def discuter_avec_clovis(message: str, ctx: Context, conversation_id: str = "") -> str:
     """
-    Envoie un message à Classinus et renvoie sa vraie réponse, exactement
+    Envoie un message à Clovis et renvoie sa vraie réponse, exactement
     comme si cet utilisateur avait tapé ce message dans l'app -- pas une
     simulation. `conversation_id` optionnel : fourni, continue ce fil
     précis (l'historique est rechargé automatiquement, inutile d'appeler
@@ -2086,7 +2086,7 @@ def discuter_avec_clovis(message: str, ctx: Context, conversation_id: str = "") 
     (son id est indiqué au début de la réponse pour pouvoir continuer la
     discussion ensuite).
 
-    Si Classinus veut utiliser un outil sensible pour répondre, cet outil
+    Si Clovis veut utiliser un outil sensible pour répondre, cet outil
     s'arrête et te demande de confirmer via confirmer_action_clovis avant
     de continuer -- toujours redemander confirmation à l'utilisateur
     humain dans ce cas, ne jamais décider seul.
@@ -2112,7 +2112,7 @@ def discuter_avec_clovis(message: str, ctx: Context, conversation_id: str = "") 
         )
     except Exception as e:
         logging.error(f"ERREUR outil discuter_avec_clovis : {e}")
-        return "Erreur : Classinus n'a pas pu répondre, réessaie."
+        return "Erreur : Clovis n'a pas pu répondre, réessaie."
 
     entete = f"[conversation_id: {conv_id}{' (nouveau fil)' if nouveau_fil else ''}]\n\n"
 
@@ -2125,16 +2125,16 @@ def discuter_avec_clovis(message: str, ctx: Context, conversation_id: str = "") 
             etat_reprise=confirmation.get("etat_reprise", {}),
         )
         if not id_confirmation:
-            return entete + "Erreur : Classinus voulait demander une confirmation mais elle n'a pas pu être enregistrée, réessaie."
+            return entete + "Erreur : Clovis voulait demander une confirmation mais elle n'a pas pu être enregistrée, réessaie."
         return (
             entete
-            + f"{confirmation.get('message', 'Classinus veut effectuer une action.')}\n"
+            + f"{confirmation.get('message', 'Clovis veut effectuer une action.')}\n"
             + f"Arguments : {confirmation.get('arguments', {})}\n\n"
             + f"Demande confirmation à l'utilisateur, puis utilise confirmer_action_clovis "
             + f"avec id_confirmation=\"{id_confirmation}\" et approuve=true/false."
         )
 
-    return entete + (texte or "(Classinus n'a rien répondu.)")
+    return entete + (texte or "(Clovis n'a rien répondu.)")
 
 
 @mcp_espace.tool(
@@ -2144,10 +2144,10 @@ def discuter_avec_clovis(message: str, ctx: Context, conversation_id: str = "") 
 )
 def confirmer_action_clovis(id_confirmation: str, approuve: bool, ctx: Context) -> str:
     """
-    Confirme ou annule une action que Classinus voulait effectuer, signalée
+    Confirme ou annule une action que Clovis voulait effectuer, signalée
     par discuter_avec_clovis (id_confirmation fourni à ce moment-là).
-    `approuve` : true pour laisser Classinus exécuter l'action et continuer
-    sa réponse, false pour l'annuler (Classinus répond alors sans
+    `approuve` : true pour laisser Clovis exécuter l'action et continuer
+    sa réponse, false pour l'annuler (Clovis répond alors sans
     l'utiliser). Ne jamais mettre approuve=true sans confirmation
     explicite de l'utilisateur humain.
     """
@@ -2176,15 +2176,15 @@ def confirmer_action_clovis(id_confirmation: str, approuve: bool, ctx: Context) 
             etat_reprise=confirmation.get("etat_reprise", {}),
         )
         if not id_suivant:
-            return "Erreur : Classinus voulait redemander une confirmation mais elle n'a pas pu être enregistrée, réessaie."
+            return "Erreur : Clovis voulait redemander une confirmation mais elle n'a pas pu être enregistrée, réessaie."
         return (
-            f"{confirmation.get('message', 'Classinus veut effectuer une autre action.')}\n"
+            f"{confirmation.get('message', 'Clovis veut effectuer une autre action.')}\n"
             + f"Arguments : {confirmation.get('arguments', {})}\n\n"
             + f"Demande confirmation à l'utilisateur, puis utilise confirmer_action_clovis "
             + f"avec id_confirmation=\"{id_suivant}\" et approuve=true/false."
         )
 
-    return texte or "(Classinus n'a rien répondu.)"
+    return texte or "(Clovis n'a rien répondu.)"
 
 
 # Toujours actif : Pollinations (gratuit, sans clé) par défaut, bascule
