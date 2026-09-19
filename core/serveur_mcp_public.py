@@ -1,7 +1,7 @@
 """
-Serveur MCP PUBLIC de Clovis -- destine a etre ajoute comme connecteur
+Serveur MCP PUBLIC de Classinus -- destine a etre ajoute comme connecteur
 personnalise dans un client MCP externe (Claude), pas un serveur interne
-consomme par l'agent Clovis lui-meme (voir core/serveur_mcp_generation.py
+consomme par l'agent Classinus lui-meme (voir core/serveur_mcp_generation.py
 et core/serveur_mcp_github.py pour ceux-la).
 
 Difference cle avec les serveurs internes : celui-ci EST vu directement
@@ -52,9 +52,9 @@ from core.mcp_auth_public import (
 
 mcp_public = FastMCP(
     name="clovis_public",
-    title="Clovis",
+    title="Classinus",
     description=(
-        "Assistant pedagogique Clovis : consultez et gerez votre "
+        "Assistant pedagogique Classinus : consultez et gerez votre "
         "bibliotheque de documents, votre memoire, vos comportements "
         "personnalises et votre historique de conversation, directement "
         "depuis Claude."
@@ -74,13 +74,13 @@ mcp_public = FastMCP(
 
 @mcp_public.tool()
 def ping() -> str:
-    """Outil de test : confirme que le serveur MCP public de Clovis répond.
+    """Outil de test : confirme que le serveur MCP public de Classinus répond.
 
     Aucune donnée utilisateur -- sert uniquement à valider que la connexion
     (client MCP externe -> ce serveur) fonctionne de bout en bout, avant
     authentification. Reste utile comme sonde de santé.
     """
-    return "pong depuis Clovis"
+    return "pong depuis Classinus"
 
 
 @mcp_public.tool()
@@ -94,4 +94,4 @@ def qui_suis_je(ctx: Context) -> str:
     user_id = _user_id_depuis_contexte(ctx)
     if not user_id:
         return "Aucune identité vérifiée -- authentification manquante ou invalide."
-    return f"Authentifié avec succès sur Clovis (id utilisateur : {user_id})."
+    return f"Authentifié avec succès sur Classinus (id utilisateur : {user_id})."
