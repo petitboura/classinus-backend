@@ -168,7 +168,7 @@ def _outil_demander_outils():
     budget d'aller-retours ni dans la detection de repetition (voir
     _separer_appels_demander_outils juste en dessous). Permet au grand
     modele de demander, EN PLEIN MILIEU de sa reponse en cours, un outil
-    qui existe reellement dans le catalogue de Clovis mais qui ne fait
+    qui existe reellement dans le catalogue de Classinus mais qui ne fait
     pas partie de ce qui lui a ete propose ce tour-ci (ni outils forces
     de contexte, ni gardes du tour precedent, ni suggeres par le routeur
     automatique -- voir _outils_deja_en_main juste en dessous).
@@ -192,7 +192,7 @@ def _outil_demander_outils():
                 "partie des outils qui te sont proposes ce tour-ci. "
                 "Decris en une phrase claire ce que tu cherches a faire "
                 "(jamais un nom d'outil que tu devinerais). Si un outil "
-                "correspondant existe dans le catalogue de Clovis, il "
+                "correspondant existe dans le catalogue de Classinus, il "
                 "t'est ajoute immediatement et tu peux l'appeler dans la "
                 "foulee, sans attendre le prochain message de "
                 "l'utilisateur. Si rien ne correspond, on te le dit "
@@ -206,7 +206,7 @@ def _outil_demander_outils():
                 "chercher sur le web). N'utilise gerer_base_connaissance "
                 "qu'en dernier recours, apres au maximum 2 recherches "
                 "d'outils precis infructueuses -- sauf si la question "
-                "porte clairement sur Clovis ou l'application elle-meme "
+                "porte clairement sur Classinus ou l'application elle-meme "
                 "(fonctionnement, bug, fonctionnalite), auquel cas "
                 "demande directement gerer_base_connaissance des la "
                 "premiere recherche."
@@ -441,7 +441,7 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         # explicitement calcul simple, connaissance générale stable et
         # salutation/conversation normale.
         # UNIFICATION 2026-08-29 (signalé par Bourama : "il mélange le
-        # privé et le public avec la base de connaissance de Clovis" --
+        # privé et le public avec la base de connaissance de Classinus" --
         # même si chaque monde de documents avait déjà reçu sa propre
         # règle au fil des bugs (15/08 bibliothèque perso, 18/08 base de
         # connaissance, 28/08 catalogue public/plugins publics), ces
@@ -456,7 +456,7 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "différents. Pour CHAQUE question, commence par identifier à "
         "quel monde elle appartient AVANT de choisir un outil -- ne te "
         "fie JAMAIS à un mot-clé ('bibliothèque', 'public', 'catalogue', "
-        "'Clovis'...), base-toi sur l'intention réelle :\n\n"
+        "'Classinus'...), base-toi sur l'intention réelle :\n\n"
         "1) MES DOCUMENTS À MOI -- cours, exercice, fichier que "
         "L'ÉTUDIANT LUI-MÊME a uploadé dans SA bibliothèque personnelle. "
         "-> gerer_document_bibliotheque (action \"chercher\"). "
@@ -464,21 +464,21 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "sur les intégrales\", \"qu'est-ce que dit mon document sur la "
         "photosynthèse ?\", \"aide-moi avec l'exercice 4\".\n\n"
         "2) CLOVIS / L'APPLICATION ELLE-MÊME -- comment fonctionne "
-        "Clovis, ses fonctionnalités, un bug, une question sur "
+        "Classinus, ses fonctionnalités, un bug, une question sur "
         "l'application, même vaguement. L'utilisateur ne sait pas que "
         "cette base de connaissances existe, ne connaît aucun nom "
         "d'outil, et ne dira jamais \"cherche dans la base de "
         "connaissance\" -- mets-toi à sa place. "
         "-> gerer_base_connaissance. "
         "Exemples : \"comment fonctionne le partage de code sur "
-        "Clovis ?\", \"est-ce que tu peux générer un PDF ?\", \"c'est "
+        "Classinus ?\", \"est-ce que tu peux générer un PDF ?\", \"c'est "
         "quoi la bibliothèque dans l'appli ?\", \"comment je crée un "
         "programme ?\", \"ça bug chez moi, tu peux m'aider ?\", \"c'est "
-        "quoi Clovis ?\", \"je comprends pas comment marche cette "
+        "quoi Classinus ?\", \"je comprends pas comment marche cette "
         "fonctionnalité\".\n\n"
         "3) CATALOGUE PUBLIC -- LOCALISER un document dans la section "
         "\"Bibliothèque publique\", ouverte à tout le monde, PAS "
-        "l'étudiant qui l'a uploadé, PAS Clovis lui-même. "
+        "l'étudiant qui l'a uploadé, PAS Classinus lui-même. "
         "-> gerer_document_bibliotheque (action "
         "\"trouver_catalogue_public\"). "
         "Exemples : \"trouve-moi un document sur la thermodynamique "
@@ -507,9 +507,9 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "document de la bibliothèque publique dans ma bibliothèque\", "
         "\"télécharge ce document public chez moi\".\n\n"
         "4) WEB -- tout ce qui n'est NI un document de l'étudiant, NI "
-        "Clovis/l'application, NI le catalogue public : actualité, "
+        "Classinus/l'application, NI le catalogue public : actualité, "
         "information générale externe, sujet "
-        "sans rapport avec Clovis ou les documents de l'étudiant. "
+        "sans rapport avec Classinus ou les documents de l'étudiant. "
         "-> tavily_search. "
         "Exemples : \"quelle est la capitale du Japon ?\", \"donne-moi "
         "les dernières nouvelles sur X\", \"c'est quoi la photosynthèse "
@@ -518,7 +518,7 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "connaissance générale stable que tu connais déjà sans "
         "recherche (ex: \"1+1\", \"capitale de la France\") -- même "
         "règle que plus haut, une info ne devient pas une recherche web "
-        "juste parce qu'elle est \"externe\" à Clovis.\n\n"
+        "juste parce qu'elle est \"externe\" à Classinus.\n\n"
         "Piège fréquent à éviter : une question généraliste et une "
         "question sur LES documents personnels de l'étudiant peuvent se "
         "ressembler en surface (\"c'est quoi la mitose ?\" = web ou "
@@ -545,7 +545,7 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         # répondait à côté (confusion avec "compétences personnelles").
         "IMPORTANT : gerer_comportement (action \"lister\") DOIT être "
         "suggéré dès que l'utilisateur demande à voir/lister ses "
-        "\"skills\" (le SEUL mot utilisé dans toute l'interface Clovis "
+        "\"skills\" (le SEUL mot utilisé dans toute l'interface Classinus "
         "pour cette fonctionnalité -- \"comportement\" est un nom interne, "
         "ignore-le pour reconnaître l'intention). Exemples qui DOIVENT "
         "suggérer cet outil : \"quels sont mes skills ?\", \"montre-moi "
@@ -579,13 +579,13 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         # plus cher ici est de rester silencieux, pas de suggérer un
         # outil de trop.
         "IMPORTANT : ne confonds JAMAIS un dossier de la BIBLIOTHÈQUE "
-        "Clovis PERSONNELLE (documents/liens/notes privés de "
+        "Classinus PERSONNELLE (documents/liens/notes privés de "
         "l'étudiant -> gerer_dossier_bibliotheque), un dossier du "
         "CATALOGUE PUBLIC (visible par tout le monde, statut "
         "contribution_libre/privee -> gerer_dossier_catalogue_public, "
         "AJOUT 09/09/2026), et un dossier PHYSIQUE sur le TÉLÉPHONE de "
         "l'étudiant (fichiers réels de son appareil, aucun rapport avec "
-        "la bibliothèque Clovis -> gerer_dossier_telephone + "
+        "la bibliothèque Classinus -> gerer_dossier_telephone + "
         "explorer_dossier). Exemples bibliothèque personnelle : "
         "\"crée-moi un dossier pour mes cours de maths\", \"range ce "
         "document dans un nouveau dossier\", \"supprime mon dossier "
@@ -634,7 +634,7 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "pièces jointes de conversation) : suggère TOUJOURS "
         "gerer_fichier_conversation à la place. Si le fichier demandé est "
         "physiquement SUR LE TÉLÉPHONE de l'étudiant plutôt que dans sa "
-        "bibliothèque Clovis, suggère plutôt la paire gerer_dossier_telephone + "
+        "bibliothèque Classinus, suggère plutôt la paire gerer_dossier_telephone + "
         "explorer_dossier (voir règle du monde téléphone plus haut) --"
         " explorer_dossier a une action dédiée \"donner_fichier\" pour "
         "ce cas précis. Signal de reconnaissance : "
