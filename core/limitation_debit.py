@@ -1,5 +1,5 @@
 """
-Limitation de débit (rate limiting) centralisée pour l'API Clovis.
+Limitation de débit (rate limiting) centralisée pour l'API Classinus.
 
 Objectif : empêcher qu'un utilisateur (ou un bot/spam anonyme) puisse
 envoyer un nombre illimité de requêtes par minute sur les endpoints

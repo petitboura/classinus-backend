@@ -114,7 +114,7 @@ def gerer_dossier_telephone(
 
     NE PAS CONFONDRE avec :
     - gerer_dossier_bibliotheque : gère les dossiers de la bibliothèque
-      PERSONNELLE de l'étudiant dans Clovis (organisation de SES
+      PERSONNELLE de l'étudiant dans Classinus (organisation de SES
       documents/liens/notes uploadés dans l'app) -- aucun rapport avec
       son téléphone physique.
     - gerer_document_bibliotheque : cherche/lit des documents, y compris
@@ -127,7 +127,7 @@ def gerer_dossier_telephone(
 
     `action` doit être l'une de :
     - "lister_dossiers" : liste les noms des dossiers que l'étudiant a
-      désignés sur son téléphone (accessibles à l'app Clovis mobile).
+      désignés sur son téléphone (accessibles à l'app Classinus mobile).
       Utilise TOUJOURS cette action avant "executer" pour un type
       "dossier_*", afin de cibler un nom qui existe vraiment, ne devine
       jamais un nom de dossier. Chaque ligne renvoyée est le nom EXACT à
@@ -302,11 +302,11 @@ async def explorer_dossier(
     Explore EN DIRECT le contenu d'un dossier désigné par l'étudiant sur
     son téléphone (contrairement à gerer_dossier_telephone, qui est
     asynchrone et fire-and-forget, et sert à AGIR sur les dossiers, pas
-    à les lire ou les explorer). NÉCESSITE que l'app Clovis soit ouverte
+    à les lire ou les explorer). NÉCESSITE que l'app Classinus soit ouverte
     sur le téléphone au moment de l'appel, sinon échoue avec un message
     clair à relayer à l'étudiant. NE PAS CONFONDRE non plus avec
     gerer_dossier_bibliotheque/gerer_document_bibliotheque, qui portent
-    sur la bibliothèque Clovis (privée ou catalogue public), jamais sur
+    sur la bibliothèque Classinus (privée ou catalogue public), jamais sur
     le téléphone physique de l'étudiant.
 
     `action` doit être l'une de :
@@ -578,7 +578,7 @@ async def explorer_dossier(
     # relayer à l'étudiant, jamais une erreur technique brute.
     if resultat is None:
         return (
-            "L'app Clovis n'est pas ouverte sur le téléphone de l'étudiant "
+            "L'app Classinus n'est pas ouverte sur le téléphone de l'étudiant "
             "en ce moment : dis-lui exactement ceci : \"Ouvre l'app pour "
             "que je regarde.\""
         )

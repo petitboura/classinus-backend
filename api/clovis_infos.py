@@ -1,5 +1,5 @@
 """
-Route REST pour l'état "étoiles" de Clovis lui-même (18/09/2026, étape
+Route REST pour l'état "étoiles" de Classinus lui-même (18/09/2026, étape
 13 du chantier "profil contributeur bibliotheque publique"). Le nombre
 de commentaires est déjà couvert par GET /api/commentaires-catalogue-
 public (type_element="clovis") -- cet endpoint ne renvoie que ce que ce

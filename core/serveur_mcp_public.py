@@ -1,7 +1,7 @@
 """
-Serveur MCP PUBLIC de Clovis -- destine a etre ajoute comme connecteur
+Serveur MCP PUBLIC de Classinus -- destine a etre ajoute comme connecteur
 personnalise dans un client MCP externe (Claude), pas un serveur interne
-consomme par l'agent Clovis lui-meme (voir core/serveur_mcp_generation.py
+consomme par l'agent Classinus lui-meme (voir core/serveur_mcp_generation.py
 et core/serveur_mcp_github.py pour ceux-la).
 
 Difference cle avec les serveurs internes : celui-ci EST vu directement
@@ -74,7 +74,7 @@ mcp_public = FastMCP(
 
 @mcp_public.tool()
 def ping() -> str:
-    """Outil de test : confirme que le serveur MCP public de Clovis répond.
+    """Outil de test : confirme que le serveur MCP public de Classinus répond.
 
     Aucune donnée utilisateur -- sert uniquement à valider que la connexion
     (client MCP externe -> ce serveur) fonctionne de bout en bout, avant

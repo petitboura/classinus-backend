@@ -1,12 +1,12 @@
 """
-Cree le 02/09/2026, Bourama : centre de notifications Clovis (bouton
+Cree le 02/09/2026, Bourama : centre de notifications Classinus (bouton
 cloche dans le header, web + mobile). Voir core/notifications.py pour la
 creation (appelee depuis les 3 points d'accrochage automatiques :
 rappels, actions IA en arriere-plan, documents recus par code) et
 core/canal_temps_reel.py::notifier_utilisateur pour la diffusion en
 direct via WebSocket.
 
-Ne liste/modifie QUE les 4 nouveaux types Clovis (voir
+Ne liste/modifie QUE les 4 nouveaux types Classinus (voir
 core.notifications.TYPES_VALIDES) -- les anciens types de la table
 (follow, comment, rating, ...) restent hors de ce centre pour l'instant
 (decision explicite de Bourama, 02/09/2026).
@@ -28,7 +28,7 @@ _TYPES_LISTE = list(TYPES_VALIDES)
 @router.get("")
 def lister_mes_notifications(utilisateur=Depends(utilisateur_courant)):
     """
-    Les 50 plus recentes (recentes d'abord), tous types Clovis
+    Les 50 plus recentes (recentes d'abord), tous types Classinus
     confondus. Pas de pagination pour ce premier lot -- un panneau de
     notifications n'a pas vocation a remonter un historique infini.
     """

@@ -12,7 +12,7 @@ notifications_push_tables et 2026_08_23_push_natif_appareils_mobiles) :
 - abonnements_push : qui est abonné, sur quel navigateur (endpoint +
   clés p256dh/auth fournies par le navigateur, Web Push standard)
 - appareils_mobiles_push_tokens : token natif FCM (Android) ou APNs
-  (iOS) fourni par l'app mobile Clovis (dépôt clovis-mobile, Lot 3
+  (iOS) fourni par l'app mobile Classinus (dépôt clovis-mobile, Lot 3
   Partie 3 -- voir 03-notifications-rappels.md). Un token opaque, rien
   à voir avec le schéma Web Push -- table séparée exprès.
 - rappels : les notifications programmées par l'agent, pas encore
@@ -24,7 +24,7 @@ ne fait qu'exposer les fonctions, pas la boucle elle-même.
 
 Canal natif (23/08/2026, Lot 3 Partie 3 mobile) : envoyer_notification_push
 livre maintenant à TOUS les canaux dont l'utilisateur dispose (navigateur
-ET mobile), pas seulement Web Push -- l'app mobile Clovis reçoit donc
+ET mobile), pas seulement Web Push -- l'app mobile Classinus reçoit donc
 automatiquement les mêmes rappels que le navigateur, sans changement côté
 appelant (planifier_rappel, proactivité, etc.). Gaté indépendamment par
 canal : un utilisateur peut recevoir un rappel sur son téléphone même si
@@ -547,7 +547,7 @@ def notifier_nouvelle_version_disponible(version: str, url_telechargement: str |
     (la création des notifications in-app est best-effort, comptée à
     part -- voir les logs).
     """
-    titre = "Nouvelle version de Clovis disponible"
+    titre = "Nouvelle version de Classinus disponible"
     corps = f"La version {version} est prête à être installée."
     lien = url_telechargement or url_page
 

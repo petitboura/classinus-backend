@@ -16,7 +16,7 @@ executer_action_mobile, voir core/serveur_mcp_generation.py), types
 core/dossiers_designes_mobile.py) et "accessibilite_*" (flavor Android
 externe uniquement).
 
-Canal dedie entre l'app mobile Clovis (Android/iOS, depot
+Canal dedie entre l'app mobile Classinus (Android/iOS, depot
 clovis-mobile) et ce backend. Reutilise l'auth Supabase standard deja
 en place (voir api/auth.py) : l'app mobile se connecte directement a
 Supabase avec le SDK natif, puis envoie son access_token en Bearer sur
@@ -174,7 +174,7 @@ def enregistrer_push_token(payload: TokenPush, utilisateur=Depends(utilisateur_c
 def desinscrire_push_token(token: str, utilisateur=Depends(utilisateur_courant)):
     """
     CONTRAT APP MOBILE : appeler a la deconnexion (l'utilisateur se
-    deconnecte de son compte Clovis sur ce telephone) pour ne plus
+    deconnecte de son compte Classinus sur ce telephone) pour ne plus
     recevoir de rappels sur cet appareil.
     """
     try:
@@ -195,7 +195,7 @@ def desinscrire_push_token(token: str, utilisateur=Depends(utilisateur_courant))
 def obtenir_actions_en_attente(appareil_id: str = "", utilisateur=Depends(utilisateur_courant)):
     """
     CONTRAT APP MOBILE : filet de secours a appeler a chaque ouverture de
-    l'app, pour rattraper les actions decidees par Clovis pendant qu'elle
+    l'app, pour rattraper les actions decidees par Classinus pendant qu'elle
     etait fermee/hors ligne (le push peut ne pas etre arrive). Passer
     `appareil_id` (depuis le 04/09/2026) : une action ciblant un AUTRE
     appareil du meme compte (dossier possede par un autre telephone)

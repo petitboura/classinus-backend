@@ -1,6 +1,6 @@
 """Mode source actif par conversation (chantier "mode source", voir
 contexte-mode-source-clovis.md, demande Bourama, 16/09/2026) : Aucun,
-Recherche ou Sur pieces, controle QUELLES SOURCES Clovis a le droit
+Recherche ou Sur pieces, controle QUELLES SOURCES Classinus a le droit
 d'utiliser pour repondre. Un eleve choisit ce mode explicitement (meme
 bouton que le persona pedagogique, groupe separe), jamais l'IA elle-meme
 en cours de conversation.
@@ -8,7 +8,7 @@ en cours de conversation.
 ATTENTION NOM (voir aussi la migration) : ce module est DISTINCT de
 core/mode_actif_conversation.py (rattachement enseignant/code de classe)
 et de core/persona_pedagogique_conversation.py (style d'enseignement de
-Clovis). Trois concepts independants qui cohabitent sur la meme
+Classinus). Trois concepts independants qui cohabitent sur la meme
 conversation. Ne jamais fusionner ni faire ecrire ce module dans une de
 ces deux tables.
 

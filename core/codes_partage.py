@@ -1,7 +1,7 @@
 """
 Codes de partage (14/08/2026, demande Bourama) : remplace le système
 "un code = une matière" (core/contenu_dynamique_matiere.py, jamais
-branché sur Clovis -- voir historique) par un système plus riche et
+branché sur Classinus -- voir historique) par un système plus riche et
 générique. Un utilisateur peut créer PLUSIEURS codes (pour ne pas
 mélanger "à qui j'envoie quoi"), chacun pouvant porter, tous optionnels
 et combinables librement :
