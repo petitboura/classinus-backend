@@ -20,7 +20,7 @@ MESSAGES_FR: dict[str, str] = {
     "ARTICLE_SANS_PHOTOS_SUPP": "Un article n'a pas de photos supplémentaires.",
     "ARTICLE_SANS_TITRE": "Un article doit avoir un titre.",
     "AUCUNE_FORMULE_DETECTEE_DANS_CETTE_IMAGE": "Aucune formule détectée dans cette image.",
-    "AUCUN_COMPTE_AVEC_CET_EMAIL": "Aucun compte Djiguignè n'utilise cet email.",
+    "AUCUN_COMPTE_AVEC_CET_EMAIL": "Aucun compte Classinus n'utilise cet email.",
     "AUCUN_TEXTE_TROUVE_DOCUMENT_SCANNE_IMAGE": "Aucun texte trouvé (document scanné/image sans OCR ?).",
     "AUDIO_TROP_LONG_20_MO_MAX": "Audio trop long (20 Mo max).",
     "CATEGORIE_INCONNUE": "Catégorie inconnue.",
