@@ -71,8 +71,8 @@ def _message_clair_erreur_notion(erreur_brute: str) -> str:
         return "La page Notion est introuvable. Vérifie que le lien est correct."
     if "HTTP 401" in erreur_brute or "HTTP 403" in erreur_brute:
         return (
-            "Djiguignè n'a pas accès à cette page Notion. Vérifie qu'elle est bien "
-            "partagée avec l'intégration Djiguignè dans Notion."
+            "Classinus n'a pas accès à cette page Notion. Vérifie qu'elle est bien "
+            "partagée avec l'intégration Classinus dans Notion."
         )
     if "réseau injoignable" in erreur_brute:
         return "Impossible de contacter Notion pour le moment. Réessaie dans quelques minutes."
