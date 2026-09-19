@@ -140,7 +140,7 @@ supabase = create_client(_get_secret("SUPABASE_URL"), _get_secret("SUPABASE_SECR
 def necessite_vectorisation_fichier_privee(type_mime: str | None, nom_fichier: str = "") -> bool:
     """
     18/09/2026 (demande Bourama, suite au signalement "plein d'éléments
-    que Clovis prétend ne pas pouvoir lire") -- AVANT cette date, seuls
+    que Classinus prétend ne pas pouvoir lire") -- AVANT cette date, seuls
     pdf/image/audio étaient vectorisés automatiquement à l'ajout d'un
     fichier dans la bibliothèque PRIVÉE : tout le reste (.md, Word,
     Excel, vidéo, code...) n'était jamais vectorisé, ni automatiquement
