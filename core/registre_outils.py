@@ -637,3 +637,103 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "montrer_element_application": {"label": "Pointer un élément de l'application", "icone": "MousePointerClick", "onglet": None},
 }
 
+# --- Categorisation pour demander_outils (19/09/2026, demande Bourama) ---
+# Le pool total d'outils actifs (verifie en base le 19/09 : 40 sur le
+# serveur "generation" + 45 Notion + 7 Drive + github/tavily) est devenu
+# trop grand pour une seule recherche BM25 a plat : les 45 outils Notion
+# se melangeaient entre eux et avec le reste, certains ne remontant
+# quasiment jamais (signale par Bourama). Categories statiques, decidees
+# a la main : un outil peut apparaitre dans plusieurs categories si
+# besoin (simple liste Python, pas un mapping outil -> categorie unique).
+#
+# "notion" n'a volontairement AUCUNE liste figee ici : les 45 outils
+# partagent tous le prefixe "notion-", verifie par prefixe dans
+# outils_de_la_categorie() plus bas -- fiable meme si Notion ajoute encore
+# des outils au connecteur, contrairement a une liste a remettre a jour a
+# la main a chaque fois.
+CATEGORIES_OUTILS = {
+    "generation_documents": [
+        "generer_document", "generer_document_word", "generer_document_excel",
+        "generer_document_powerpoint", "generer_document_latex", "generer_code",
+        "generer_site_zip", "generer_bundle", "generer_image", "deployer_site",
+        "exporter_donnees", "calculer_symbolique",
+    ],
+    # rechercher_image range ici (avec Tavily), pas dans generation_documents :
+    # onglet="rechercher" dans REGISTRE_AFFICHAGE_OUTILS ci-dessus, c'est une
+    # recherche d'image EXISTANTE sur le web, pas une creation (voir
+    # generer_image, qui lui reste dans generation_documents).
+    "recherche_web": [
+        "tavily_search", "tavily_extract", "tavily_crawl", "tavily_map",
+        "tavily_research", "rechercher_image",
+    ],
+    "bibliotheque": [
+        "gerer_document_bibliotheque", "gerer_dossier_bibliotheque",
+        "gerer_fichier_conversation",
+    ],
+    "catalogue_public": [
+        "gerer_entree_catalogue_public", "gerer_dossier_catalogue_public",
+    ],
+    "base_connaissance": ["gerer_base_connaissance"],
+    "pedagogie": [
+        "gerer_avancement_notions", "consulter_avancement_notion",
+        "verifier_consignes_code_actif", "consulter_signalement",
+        "consulter_signalements_pertinents", "enregistrer_note_signalement",
+        "rattacher_signalement_notion",
+    ],
+    "comportement": ["gerer_comportement", "gerer_comportement_public"],
+    "memoire": ["gerer_memoire_utilisateur"],
+    "telephone_etudiant": [
+        "gerer_dossier_telephone", "explorer_dossier", "gerer_action_mobile",
+        "lire_temps_ecran", "gerer_session_concentration",
+    ],
+    "historique": ["lister_conversations_historique", "lire_conversation_historique"],
+    "agent_applicatif": [
+        "executer_action_application", "lister_actions_disponibles",
+        "executer_clic_generique", "montrer_element_application",
+    ],
+    "github": ["gerer_depot_github"],
+    "google_drive": [
+        "search_files", "read_file_content", "download_file_content",
+        "list_recent_files", "get_file_metadata", "create_file", "copy_file",
+    ],
+}
+
+# Categories reconnues par prefixe de nom d'outil plutot que par liste
+# figee (voir commentaire au-dessus de CATEGORIES_OUTILS).
+CATEGORIES_OUTILS_PAR_PREFIXE = {
+    "notion": "notion-",
+}
+
+NOMS_CATEGORIES_OUTILS = list(CATEGORIES_OUTILS.keys()) + list(CATEGORIES_OUTILS_PAR_PREFIXE.keys())
+
+# Texte compact envoye dans la description de demander_outils (voir
+# routage_outils._outil_demander_outils) : les categories evidentes sont
+# nommees seules, les autres ont une parenthese pour lever l'ambiguite.
+INDEX_CATEGORIES_OUTILS = (
+    "Catégories : notion, google_drive, github, generation_documents, "
+    "recherche_web (web + recherche d'image), bibliotheque (documents/dossiers "
+    "personnels), catalogue_public, base_connaissance (Classinus lui même), "
+    "pedagogie (avancement, signalements), comportement (skills), memoire, "
+    "telephone_etudiant (mobile, écran, concentration), historique "
+    "(conversations passées), agent_applicatif (actions dans l'appli)."
+)
+
+
+def outils_de_la_categorie(nom_categorie, outils_candidats):
+    """
+    Sous-ensemble de `outils_candidats` (liste au format outils_pour_llm,
+    voir mcp_tools.py) appartenant a `nom_categorie`. Verifie d'abord
+    CATEGORIES_OUTILS (liste figee de noms), puis
+    CATEGORIES_OUTILS_PAR_PREFIXE (prefixe de nom, voir "notion").
+    Categorie inconnue -> liste vide : jamais un repli silencieux sur
+    toute la liste, un nom de categorie invalide doit rester sans
+    resultat plutot que de chercher partout sans que personne ne le sache.
+    """
+    noms_fixes = set(CATEGORIES_OUTILS.get(nom_categorie, []))
+    prefixe = CATEGORIES_OUTILS_PAR_PREFIXE.get(nom_categorie)
+    return [
+        o for o in outils_candidats
+        if o["function"]["name"] in noms_fixes
+        or (prefixe and o["function"]["name"].startswith(prefixe))
+    ]
+

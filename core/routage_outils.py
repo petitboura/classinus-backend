@@ -7,6 +7,7 @@ import logging
 from groq import Groq
 from constantes_agent import get_secret, supabase, MODELE_ROUTEUR_OUTILS, MODELE_ROUTEUR_OUTILS_REPLI, DELAI_MAX_PAR_APPEL
 from mcp_tools import lister_outils_autorises_pour_agent
+from registre_outils import NOMS_CATEGORIES_OUTILS, INDEX_CATEGORIES_OUTILS
 
 def _resume_description_outil(description, max_caracteres=200):
     """
@@ -173,12 +174,23 @@ def _outil_demander_outils():
     de contexte, ni gardes du tour precedent, ni suggeres par le routeur
     automatique -- voir _outils_deja_en_main juste en dessous).
 
-    Contrairement a _outil_garder_outils, PAS de liste fermee en enum :
-    le modele ne connait pas les noms exacts des outils qu'il n'a pas, il
-    decrit son besoin en langage libre. C'est l'etape 3 (branchement,
-    dans _agent_groq) qui compare ensuite ce texte par recherche
-    mots-cles (voir recherche_outils.rechercher_outils_pertinents) au
-    reste du catalogue complet deja recupere ailleurs (voir
+    REVISION (19/09/2026, demande Bourama) : le catalogue total (40+
+    outils generation + 45 Notion + 7 Drive + github/tavily) est devenu
+    trop grand pour une seule recherche BM25 a plat, qui melangeait les
+    outils Notion entre eux et avec le reste (certains ne remontaient
+    quasiment jamais). Le modele peut desormais preciser une ou plusieurs
+    categories (voir registre_outils.CATEGORIES_OUTILS), chacune avec sa
+    propre phrase de besoin, recherchees INDEPENDAMMENT les unes des
+    autres (voir le branchement dans _agent_groq). La categorie reste
+    facultative par recherche : sans elle, comportement inchange
+    (recherche sur tout le catalogue).
+
+    Toujours PAS de liste fermee en enum pour "besoin" : le modele ne
+    connait pas les noms exacts des outils qu'il n'a pas, il decrit son
+    besoin en langage libre. C'est l'etape 3 (branchement, dans
+    _agent_groq) qui compare ensuite ce texte par recherche mots-cles
+    (voir recherche_outils.rechercher_outils_pertinents) au reste du
+    catalogue complet deja recupere ailleurs (voir
     mcp_tools.lister_outils_autorises_pour_agent) -- cette fonction-ci ne
     fait que decrire l'outil, aucune recherche.
     """
@@ -187,19 +199,28 @@ def _outil_demander_outils():
         "function": {
             "name": NOM_OUTIL_DEMANDER_OUTILS,
             "description": (
-                "Demande un outil dont tu as besoin MAINTENANT pour "
-                "continuer ta reponse en cours, mais qui ne fait pas "
-                "partie des outils qui te sont proposes ce tour-ci. "
-                "Decris en une phrase claire ce que tu cherches a faire "
-                "(jamais un nom d'outil que tu devinerais). Si un outil "
-                "correspondant existe dans le catalogue de Classinus, il "
-                "t'est ajoute immediatement et tu peux l'appeler dans la "
-                "foulee, sans attendre le prochain message de "
-                "l'utilisateur. Si rien ne correspond, on te le dit "
-                "clairement -- adapte-toi alors plutot que de rester "
-                "bloque en silence. A utiliser seulement quand tu es "
-                "reellement bloque par l'absence d'un outil, pas "
+                "Demande un ou plusieurs outils dont tu as besoin "
+                "MAINTENANT pour continuer ta reponse en cours, mais qui "
+                "ne font pas partie des outils qui te sont proposes ce "
+                "tour-ci. Une entree par besoin dans `recherches` : "
+                "decris en une phrase claire ce que tu cherches a faire "
+                "(jamais un nom d'outil que tu devinerais), et precise la "
+                "categorie si tu sais ou chercher -- ca evite que ta "
+                "recherche se noie parmi tous les autres outils. Si "
+                "plusieurs besoins te bloquent en meme temps (par ex. un "
+                "outil Notion ET un outil de generation), mets une entree "
+                "par besoin dans le meme appel plutot que d'enchainer "
+                "plusieurs appels : chaque entree est cherchee "
+                "independamment, dans SA categorie si elle en a une. Si "
+                "un outil correspondant existe dans le catalogue de "
+                "Classinus, il t'est ajoute immediatement et tu peux "
+                "l'appeler dans la foulee, sans attendre le prochain "
+                "message de l'utilisateur. Si rien ne correspond, on te "
+                "le dit clairement -- adapte-toi alors plutot que de "
+                "rester bloque en silence. A utiliser seulement quand tu "
+                "es reellement bloque par l'absence d'un outil, pas "
                 "systematiquement au debut de chaque tache. "
+                f"{INDEX_CATEGORIES_OUTILS} "
                 "PRIORITE (12/09/2026, demande Bourama) : decris d'abord "
                 "l'outil precis dont tu as besoin pour la tache demandee "
                 "(ex: envoyer un message, gerer un document, un skill, "
@@ -214,16 +235,44 @@ def _outil_demander_outils():
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "besoin": {
-                        "type": "string",
+                    "recherches": {
+                        "type": "array",
+                        "minItems": 1,
                         "description": (
-                            "Description libre, en une phrase, de ce que "
-                            "tu cherches a faire (ex : \"un outil pour "
-                            "envoyer un email\"), pas un nom d'outil."
+                            "Une entree par besoin d'outil, cherchee "
+                            "independamment des autres."
                         ),
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "besoin": {
+                                    "type": "string",
+                                    "description": (
+                                        "Description libre, en une phrase, "
+                                        "de ce que tu cherches a faire "
+                                        "(ex : \"un outil pour envoyer un "
+                                        "email\"), pas un nom d'outil."
+                                    ),
+                                },
+                                "categorie": {
+                                    "type": "string",
+                                    "enum": NOMS_CATEGORIES_OUTILS,
+                                    "description": (
+                                        "Facultatif. Categorie dans "
+                                        "laquelle chercher CE besoin "
+                                        "precis, si tu sais ou regarder "
+                                        "(voir la liste des categories "
+                                        "dans la description de cet "
+                                        "outil). Omis -> recherche sur "
+                                        "tout le catalogue."
+                                    ),
+                                },
+                            },
+                            "required": ["besoin"],
+                        },
                     }
                 },
-                "required": ["besoin"],
+                "required": ["recherches"],
             },
         },
     }
@@ -237,17 +286,20 @@ def _separer_appels_demander_outils(appels):
     table_routage/_traiter_appels, jamais comptes dans le budget ni la
     detection de repetition.
 
-    REVISION (etape 3, meme jour) : contrairement a la premiere version
-    (poussee avec l'etape 2), ne renvoie plus une simple liste de textes
-    "besoin" -- chaque appel demander_outils du lot peut chercher quelque
-    chose de DIFFERENT et doit recevoir sa propre reponse individuelle
-    (voir _agent_groq), pas une reponse generique partagee comme
-    garder_outils. Renvoie donc (appels_normaux, demandes), demandes
-    etant la liste (dans l'ordre, un element par appel demander_outils du
-    lot -- rare qu'il y en ait plus d'un, mais couvert) de dicts
-    {"id": tool_call_id, "besoin": texte_ou_chaine_vide}. Un besoin
-    vide/illisible reste dans la liste (jamais ignore silencieusement
-    cette fois) : l'API Groq exige un message "tool" pour CHAQUE
+    REVISION (19/09/2026, demande Bourama, categorisation) : chaque appel
+    demander_outils transporte desormais une LISTE de recherches
+    ({"besoin": ..., "categorie": ... ou absente}), chacune cherchee
+    independamment (voir le branchement dans _agent_groq). Renvoie donc
+    (appels_normaux, demandes), demandes etant la liste (dans l'ordre, un
+    element par appel demander_outils du lot) de dicts {"id":
+    tool_call_id, "recherches": [...]}. Compatibilite : un appel qui
+    enverrait encore l'ancien format a plat ({"besoin": "..."}) est
+    accepte et transforme en une recherche unique sans categorie, au cas
+    ou un modele en cours de conversation aurait encore l'ancien schema
+    en tete.
+
+    Une recherche vide/illisible reste dans la liste (jamais ignoree
+    silencieusement) : l'API Groq exige un message "tool" pour CHAQUE
     tool_call_id emis par l'assistant, sinon le prochain appel a Groq
     echoue -- charge donc a l'appelant de repondre "je n'ai pas compris"
     plutot que rien.
@@ -258,11 +310,19 @@ def _separer_appels_demander_outils(appels):
         if appel["name"] == NOM_OUTIL_DEMANDER_OUTILS:
             try:
                 arguments = json.loads(appel["arguments"] or "{}")
-                besoin = (arguments.get("besoin") or "").strip()
+                brutes = arguments.get("recherches")
+                if brutes is None and arguments.get("besoin"):
+                    # Compatibilite ancien format (voir docstring).
+                    brutes = [{"besoin": arguments.get("besoin")}]
+                recherches = []
+                for r in (brutes or []):
+                    besoin = (r.get("besoin") or "").strip()
+                    categorie = (r.get("categorie") or "").strip() or None
+                    recherches.append({"besoin": besoin, "categorie": categorie})
             except Exception as e:
                 logging.error(f"ERREUR arguments demander_outils illisibles : {e}")
-                besoin = ""
-            demandes.append({"id": appel["id"], "besoin": besoin})
+                recherches = []
+            demandes.append({"id": appel["id"], "recherches": recherches})
         else:
             appels_normaux.append(appel)
     return appels_normaux, demandes
