@@ -1,5 +1,5 @@
 """
-Outils MCP publics pour qu'un prof connecté à Clovis via un client MCP
+Outils MCP publics pour qu'un prof connecté à Classinus via un client MCP
 externe puisse consulter et discuter de ses signalements pédagogiques
 sans repasser par l'interface web (refonte du 10/09/2026, voir
 core/outils_signalements.py pour l'équivalent interne).

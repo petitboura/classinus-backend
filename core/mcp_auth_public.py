@@ -1,5 +1,5 @@
 """
-Vérification des jetons OAuth pour les serveurs MCP PUBLICS de Clovis
+Vérification des jetons OAuth pour les serveurs MCP PUBLICS de Classinus
 (core/serveur_mcp_public.py, core/serveur_mcp_espace.py -- tout serveur
 destiné à être appelé depuis l'extérieur par un client MCP tiers comme
 Claude, PAS les serveurs internes core/serveur_mcp_generation.py et

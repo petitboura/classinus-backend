@@ -1,5 +1,5 @@
 """
-Cree le 02/09/2026, Bourama : centre de notifications Clovis (bouton
+Cree le 02/09/2026, Bourama : centre de notifications Classinus (bouton
 cloche dans le header, web + mobile). Voir migration
 notifications_ajout_types_clovis_et_colonnes_affichage (Supabase) pour
 le contexte complet -- la table notifications existait deja pour un

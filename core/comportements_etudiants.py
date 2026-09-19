@@ -893,7 +893,7 @@ def lister_comportements_publics(mot_cle: str | None = None) -> list[dict]:
 
 
 def obtenir_comportement_public(comportement_public_id: str) -> dict | None:
-    """10/09/2026, chantier "Clovis ouvert" (demande Bourama : chaque
+    """10/09/2026, chantier "Classinus ouvert" (demande Bourama : chaque
     skill publique retrouvable par son nom, avec son propre lien) --
     detail d'une seule ligne, pour /api/comportements-publics/{id} et
     la page publique /skills/[id]. Meme filtre statut="publie" que la

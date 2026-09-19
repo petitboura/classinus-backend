@@ -7,7 +7,7 @@ Extrait de core/serveur_mcp_generation.py le 05/09/2026 (découpage d'un
 fichier de 2524 lignes) -- aucun changement de comportement, uniquement un
 déplacement de code.
 
-Clovis (12/08) : memoire/profil/RAG/matiere ne sont plus pre-fetches et
+Classinus (12/08) : memoire/profil/RAG/matiere ne sont plus pre-fetches et
 injectes systematiquement dans le system prompt (voir core/main.py,
 _construire_system_prompt) -- ce sont maintenant des outils que le
 modele appelle lui-meme s'il juge pertinent, au meme titre que les
@@ -134,7 +134,7 @@ def gerer_memoire_utilisateur(
 def lister_conversations_historique(ctx: Context) -> str:
     """
     Liste les fils de discussion distincts entre CET utilisateur et
-    Clovis (section "Historique"), le plus récemment actif en premier.
+    Classinus (section "Historique"), le plus récemment actif en premier.
     Renvoie pour chacun : conversation_id ("legacy" pour les échanges
     d'avant l'historique par fil), titre (début du premier message),
     dernière activité.
@@ -184,7 +184,7 @@ def lister_conversations_historique(ctx: Context) -> str:
 def lire_conversation_historique(conversation_id: str, ctx: Context) -> str:
     """
     Contenu complet d'un fil de discussion précis entre CET utilisateur
-    et Clovis, à partir de son conversation_id (voir
+    et Classinus, à partir de son conversation_id (voir
     lister_conversations_historique -- utilise littéralement "legacy"
     pour recharger les échanges d'avant l'historique par fil).
     """
@@ -218,7 +218,7 @@ def lire_conversation_historique(conversation_id: str, ctx: Context) -> str:
 @mcp_generation.tool()
 def consulter_profil_utilisateur(ctx: Context) -> str:
     """
-    Consulte le profil connu de CET utilisateur pour Clovis (données
+    Consulte le profil connu de CET utilisateur pour Classinus (données
     déjà extraites au fil des conversations : qui il est, son contexte
     scolaire, etc.). À utiliser si ça peut aider à personnaliser ta
     réponse. Renvoie un JSON (peut être vide).

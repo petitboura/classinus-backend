@@ -1,7 +1,7 @@
 """
 Protection contre le SSRF (Server-Side Request Forgery).
 
-Contexte : Clovis va chercher lui-même le contenu des liens collés dans
+Contexte : Classinus va chercher lui-même le contenu des liens collés dans
 un message de chat (page web, image) ou envoyés en upload (image). Sans
 vérification, un lien pointant vers une adresse interne (le serveur
 lui-même, le réseau privé de l'hébergeur, ou l'adresse "metadata" propre
@@ -54,7 +54,7 @@ def _ip_est_interdite(ip_str: str) -> bool:
 def valider_url_externe(url: str) -> None:
     """
     Vérifie qu'une URL fournie par un utilisateur peut être récupérée
-    sans danger pour l'infrastructure de Clovis. Ne renvoie rien si OK ;
+    sans danger pour l'infrastructure de Classinus. Ne renvoie rien si OK ;
     lève UrlNonAutorisee sinon.
 
     Résout le nom de domaine en IP et vérifie l'IP RÉELLE (pas juste le

@@ -81,7 +81,7 @@ DELAI_STATUT_1_SECONDES = 5
 DELAI_STATUT_2_SECONDES = 15
 DELAI_ABANDON_SECONDES = 30
 
-TEXTE_STATUT_1 = "Clovis regarde toujours..."
+TEXTE_STATUT_1 = "Classinus regarde toujours..."
 TEXTE_STATUT_2 = "Ça prend un peu plus de temps que prévu..."
 
 
@@ -136,7 +136,7 @@ def recevoir_reponse(correlation_id: str, reponse: Any) -> None:
 
 async def notifier_utilisateur(user_id: str, notification: dict) -> bool:
     """
-    Ajoute le 02/09/2026, Bourama : centre de notifications Clovis.
+    Ajoute le 02/09/2026, Bourama : centre de notifications Classinus.
     Diffuse `notification` en direct sur la MEME connexion WebSocket que
     poser_question_appareil, mais sans jamais toucher a sa logique de
     correlation/attente -- ceci est un envoi serveur->client simple,

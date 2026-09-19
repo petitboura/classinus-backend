@@ -610,9 +610,9 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     statut_fin = f"{nom_lisible_demande} effectuée"
                     resultat_affichage = f"Besoin exprimé : {demande['besoin']}\n\nTrouvé : {noms_trouves}."
                 else:
-                    contenu_reponse = "Aucun outil correspondant à ce besoin n'existe dans le catalogue de Clovis."
+                    contenu_reponse = "Aucun outil correspondant à ce besoin n'existe dans le catalogue de Classinus."
                     statut_fin = f"{nom_lisible_demande} : rien trouvé"
-                    resultat_affichage = f"Besoin exprimé : {demande['besoin']}\n\nAucun outil correspondant trouvé dans le catalogue de Clovis."
+                    resultat_affichage = f"Besoin exprimé : {demande['besoin']}\n\nAucun outil correspondant trouvé dans le catalogue de Classinus."
 
             yield {"type": "statut_termine", "texte": statut_fin, "id_appel": demande["id"]}
             yield {

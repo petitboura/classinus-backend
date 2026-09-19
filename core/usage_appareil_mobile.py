@@ -1,7 +1,7 @@
 """
 Ajoute le 23/08/2026, Bourama : Lot 1 Partie 3 (app mobile), socle.
 
-Stocke le temps passe par app, remonte par l'app mobile Clovis
+Stocke le temps passe par app, remonte par l'app mobile Classinus
 (Android via UsageStatsManager, iOS via Screen Time/Family Controls si
 l'entitlement est obtenu -- voir 01-socle-app-android.md dans le
 chantier "programme adaptatif etudiant, partie 3").

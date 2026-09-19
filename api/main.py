@@ -423,7 +423,7 @@ async def _lifespan(app: FastAPI):
         tache_vectorisation_documents_agent.cancel()
 
 
-app = FastAPI(title="Clovis API", version="0.1.0", lifespan=_lifespan)
+app = FastAPI(title="Classinus API", version="0.1.0", lifespan=_lifespan)
 
 # Limitation de débit (rate limiting) -- voir core/limitation_debit.py.
 # Empêche qu'un utilisateur (ou un spam anonyme) puisse envoyer un nombre

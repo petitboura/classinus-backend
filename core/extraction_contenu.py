@@ -3,7 +3,7 @@ Module central d'extraction de contenu (bibliothèque privée, bibliothèque
 publique, dossiers téléphone).
 
 Chantier du 18/09/2026 (demande Bourama, suite au signalement "plein
-d'éléments que Clovis prétend ne pas pouvoir lire") : jusqu'ici, chaque
+d'éléments que Classinus prétend ne pas pouvoir lire") : jusqu'ici, chaque
 bibliothèque réimplémentait sa propre dispatch "quel extracteur pour quel
 type de fichier", avec une couverture différente et divergente selon
 l'endroit -- notamment Word/Excel/vidéo jamais vectorisés côté PRIVÉ

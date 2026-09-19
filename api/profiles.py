@@ -531,7 +531,7 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
     "Exporter mes données" (droit d'accès/portabilité) -- pendant de
     supprimer_mon_compte juste en dessous, demande de Bourama 2026-09-02 :
     donner à chaque utilisateur un moyen concret de récupérer une copie
-    de tout ce que Clovis sait sur lui, sans passer par un administrateur.
+    de tout ce que Classinus sait sur lui, sans passer par un administrateur.
 
     Rassemble, pour l'utilisateur connecté uniquement (jamais un autre
     user_id, même passé en paramètre), toutes ses données personnelles à

@@ -66,7 +66,7 @@ def _cache_expire(agent_id):
 
 def _recuperer_notion_page_id(agent_id):
     """
-    Clovis (12/08) : source unique, Notion uniquement -- plus de repli sur
+    Classinus (12/08) : source unique, Notion uniquement -- plus de repli sur
     la colonne agents.system_prompt, plus de bloc créateur (pas de notion
     de "créateur tiers" pour un produit à un seul agent indépendant).
     """
@@ -102,7 +102,7 @@ def _echec(agent_id, garder_ancien_prompt=True):
 
 def _charger_depuis_notion(agent_id):
     """
-    Clovis (12/08) : source unique, notion_page_id. Un seul bloc déjà
+    Classinus (12/08) : source unique, notion_page_id. Un seul bloc déjà
     entièrement construit dans la page Notion (comportement, outils
     disponibles, formats enrichis, arbitrage calcul, contexte invisible --
     tout écrit une fois pour toutes) -- plus aucun assemblage ici, juste

@@ -43,7 +43,7 @@ def gerer_comportement(
     """
     Gère les instructions personnelles ("skills" dans toute l'interface,
     "comportement" seulement en interne) que CET étudiant a écrites pour
-    Clovis, section "Mes comportements" de "Mon espace" -- consolidé le
+    Classinus, section "Mes comportements" de "Mon espace" -- consolidé le
     26/08, un seul outil, plusieurs actions.
 
     `action` doit être l'une de :
@@ -187,8 +187,8 @@ def gerer_base_connaissance(
 ) -> str:
     """
     Cherche et lit dans la base de connaissances de l'agent (documents et
-    instructions de référence préparés à l'avance par l'équipe Clovis SUR
-    Clovis et l'application elle-même, PAS les documents personnels de
+    instructions de référence préparés à l'avance par l'équipe Classinus SUR
+    Classinus et l'application elle-même, PAS les documents personnels de
     l'utilisateur, voir gerer_document_bibliotheque pour ça), consolidé
     le 26/08, un seul outil, plusieurs actions qui fonctionnaient déjà
     ensemble comme un mécanisme à plusieurs étapes.

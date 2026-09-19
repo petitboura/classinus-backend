@@ -67,7 +67,7 @@ def rechercher_comportements_publics(q: str | None = None, utilisateur=Depends(u
 
 @router.get("/{comportement_public_id}", response_model=ComportementPublic)
 def obtenir_comportement_public_detail(comportement_public_id: str, utilisateur=Depends(utilisateur_optionnel)):
-    """10/09/2026, chantier "Clovis ouvert" : detail d'un skill publie,
+    """10/09/2026, chantier "Classinus ouvert" : detail d'un skill publie,
     pour la page publique /skills/[id]. Public, aucune auth requise --
     meme philosophie que la recherche ci-dessus. est_a_moi calcule de la
     meme facon (bouton "Retirer" reserve au vrai proprietaire)."""
