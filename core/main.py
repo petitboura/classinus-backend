@@ -22,6 +22,7 @@ from core.mode_actif_conversation import rattachement_actif_pour_prompt
 from core.persona_pedagogique_conversation import obtenir_persona_pedagogique
 from core.mode_source_conversation import obtenir_mode_source
 from core.guide_conversation import obtenir_guide_actif
+from core.canal_agent_applicatif import obtenir_diff_actions_disponibles
 from avancement_notions_ia import notions_pertinentes_pour_eleve, resoudre_code_actif_eleve
 from signalements import signalements_pertinents_pour_injection
 from mcp_tools import lister_outils_autorises_pour_agent, filtrer_catalogue_par_outil_force, appeler_outil
@@ -516,11 +517,17 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # autres, lance dans le meme lot parallele que persona_pedagogique
             # et guide_actif juste au-dessus.
             f_mode_source = executor.submit(obtenir_mode_source, conversation_id, user_id) if conversation_id else None
+            # Chantier "agent applicatif continu" (19/09/2026, demande
+            # Bourama) : meme principe que guide_actif/mode_source
+            # juste au-dessus, ne depend d'aucun des autres, lance dans
+            # le meme lot parallele.
+            f_actions_diff = executor.submit(obtenir_diff_actions_disponibles, conversation_id, user_id) if conversation_id else None
             rattachement_id_actif = f_rattachement_actif.result() if f_rattachement_actif else None
             comportements_etudiant_bruts = f_comportements_etudiant.result()
             persona_pedagogique = f_persona_pedagogique.result() if f_persona_pedagogique else None
             guide_actif = f_guide_actif.result() if f_guide_actif else False
             mode_source = f_mode_source.result() if f_mode_source else None
+            actions_diff = f_actions_diff.result() if f_actions_diff else None
 
         # rattachement_id_actif (voir core/mode_actif_conversation.py) vaut :
         # - None si conversation_id est absent ou si aucun mode actif n'a
@@ -747,7 +754,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id)
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force_contexte_seul)
             outil_force_verifie_optimiste = [o["function"]["name"] for o in outils_mcp] if outil_force_contexte_seul else None
-            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source)
+            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_diff)
             return outils_mcp, table_routage, system_final, catalogue_complet, table_routage_complet
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -866,7 +873,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id)
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force)
             outil_force_verifie = [o["function"]["name"] for o in outils_mcp] if outil_force else outil_force
-        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source)
+        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_diff)
 
         # PERF (10/08) : second (et dernier) point de vérification --
         # couvre tous les chemins qui ne passent PAS par le premier

@@ -124,6 +124,70 @@ def obtenir_actions_disponibles(user_id: str) -> list[dict[str, Any]]:
     return list(fusion.values())
 
 
+# Chantier "agent applicatif continu" (19/09/2026, decision Bourama :
+# retrait de l'outil lister_actions_disponibles, le modele ne doit plus
+# jamais avoir a le demander explicitement). Dernier etat des actions
+# MONTRE AU MODELE, par conversation -- distinct de _etat_actions
+# (poussee brute du frontend, jamais filtree). Sert a calculer un delta
+# (ajouts/retraits) au lieu de renvoyer la liste complete a chaque tour
+# de conversation, pour ne pas exploser le cout en tokens sur une
+# conversation longue. Cle = conversation_id, jamais user_id seul : deux
+# conversations differentes du meme compte ne partagent pas ce qui a
+# deja ete montre a l'une ou l'autre.
+#
+# Limite connue, assumee : jamais nettoye (contrairement a _etat_actions,
+# vide a la deconnexion) -- grandit d'une petite entree par conversation
+# ayant deja eu un tour avec des actions disponibles, pour la duree de
+# vie du processus serveur. Volume attendu faible (juste id+description
+# des elements, pas l'historique), redemarrages Railway reguliers
+# limitent l'accumulation -- a revisiter seulement si ca devient un
+# vrai probleme memoire en pratique.
+_dernier_etat_modele: dict[str, dict[str, dict[str, Any]]] = {}
+_verrou_dernier_etat_modele = threading.Lock()
+
+
+def obtenir_diff_actions_disponibles(conversation_id: str, user_id: str) -> dict[str, Any] | None:
+    """
+    Chantier "agent applicatif continu" (19/09/2026) : calcule ce qui a
+    change dans les actions disponibles (obtenir_actions_disponibles,
+    chantier D) depuis le dernier tour de CETTE conversation ou le
+    modele en a ete informe -- remplace l'outil lister_actions_disponibles
+    retire, que le modele devait auparavant appeler explicitement avant
+    chaque clic.
+
+    Premiere fois pour cette conversation (rien connu encore -- tout
+    debut, ou apres un redemarrage serveur qui a vide cette memoire) :
+    renvoie tout comme liste complete plutot qu'un delta, jamais une
+    supposition sur un etat anterieur inconnu.
+
+    Renvoie None si rien n'a change depuis la derniere fois (jamais un
+    dict vide) -- l'appelant (construction du prompt systeme) ne doit
+    alors rien injecter du tout ce tour-ci.
+    """
+    actuel = {a["id"]: a for a in obtenir_actions_disponibles(user_id) if isinstance(a.get("id"), str)}
+
+    with _verrou_dernier_etat_modele:
+        precedent = _dernier_etat_modele.get(conversation_id)
+        _dernier_etat_modele[conversation_id] = actuel
+
+    if precedent is None:
+        if not actuel:
+            return None
+        return {"complet": True, "actions": list(actuel.values())}
+
+    ajoutees = [
+        action
+        for aid, action in actuel.items()
+        if aid not in precedent or precedent[aid].get("description") != action.get("description")
+    ]
+    retirees = [aid for aid in precedent if aid not in actuel]
+
+    if not ajoutees and not retirees:
+        return None
+
+    return {"complet": False, "ajoutees": ajoutees, "retirees": retirees}
+
+
 def recevoir_reponse(correlation_id: str, reponse: Any) -> None:
     """
     Appelee a chaque reponse recue d'UNE connexion. Comme la demande est

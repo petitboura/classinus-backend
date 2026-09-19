@@ -1,6 +1,7 @@
 # Extrait de main.py le 05/09/2026 (demande Bourama : diviser les fichiers
 # trop longs). Construction du prompt systeme envoye au modele, et
 # utilitaires de repli en cas de timeout/reponse partielle.
+import json
 import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -8,7 +9,46 @@ from configuration import get_system_prompt
 from profils_agents import INSTRUCTIONS_FORMATS_AFFICHAGE, INSTRUCTIONS_ARBITRAGE_CALCUL, REGLE_CONTEXTE_INVISIBLE, INSTRUCTIONS_LONGUEUR_REPONSE, MODES_PEDAGOGIQUES, REGLE_BASCULE_MODE_PEDAGOGIQUE, construire_instruction_guide, MODES_SOURCE
 from guide_conversation import obtenir_sections_guide
 
-def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=False, mode_source=None):
+
+def _texte_actions_application(diff):
+    """
+    Chantier "agent applicatif continu" (19/09/2026, decision Bourama) :
+    construit le texte injecte dans le prompt systeme a partir du diff
+    calcule par obtenir_diff_actions_disponibles
+    (core/canal_agent_applicatif.py). Remplace l'outil
+    lister_actions_disponibles retire -- le modele n'a plus a demander,
+    il recoit deja cette information ici, tenue a jour a chaque tour.
+    """
+    instruction = (
+        "\n\n## Actions disponibles dans l'application\n"
+        "Dès que tu dois cliquer sur quelque chose pour l'étudiant, utilise directement "
+        "executer_action_application avec l'id correspondant (ou executer_clic_generique en "
+        "dernier recours si rien ici ne correspond) -- tu n'as plus besoin de demander la liste, "
+        "elle t'est fournie ici et tenue à jour automatiquement à chaque message. Aucune confirmation "
+        "n'est nécessaire par défaut, agis directement. Demande confirmation à l'étudiant dans ta "
+        "réponse normale seulement s'il te l'a explicitement demandé, ou si tu juges toi-même plus "
+        "prudent de confirmer avant d'agir.\n"
+    )
+    if diff.get("complet"):
+        instruction += "Éléments cliquables actuellement à l'écran :\n"
+        instruction += json.dumps(diff.get("actions", []), ensure_ascii=False)
+        return instruction
+
+    ajoutees = diff.get("ajoutees") or []
+    retirees = diff.get("retirees") or []
+    if ajoutees:
+        instruction += "Nouveaux éléments apparus depuis ton dernier message :\n"
+        instruction += json.dumps(ajoutees, ensure_ascii=False) + "\n"
+    if retirees:
+        instruction += (
+            "Éléments qui ont disparu depuis ton dernier message (ids à ne plus utiliser) : "
+            + json.dumps(retirees, ensure_ascii=False) + "\n"
+        )
+    instruction += "(tout ce qui n'est pas listé ici n'a pas changé depuis ton dernier message.)\n"
+    return instruction
+
+
+def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=False, mode_source=None, actions_diff=None):
     # Restauré le 14/08 (voir commentaire des constantes plus haut) : la
     # page Notion de l'agent (get_system_prompt) ne doit plus contenir QUE
     # la personnalité/le comportement propre à l'agent -- les 3 blocs fixes
@@ -137,6 +177,18 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # conversation, ce sont trois reglages separes qui cohabitent.
     if mode_source and mode_source in MODES_SOURCE:
         system_final += MODES_SOURCE[mode_source]
+
+    # Chantier "agent applicatif continu" (19/09/2026, decision Bourama :
+    # retrait de l'outil lister_actions_disponibles, plus jamais demande
+    # explicitement par le modele). actions_diff vient de
+    # obtenir_diff_actions_disponibles(conversation_id, user_id)
+    # (core/canal_agent_applicatif.py), calcule dans chat() et recu ici
+    # en parametre, meme patron que guide_actif/mode_source juste
+    # au-dessus. None si rien de disponible ou rien de change depuis le
+    # dernier tour de cette conversation -- dans ce cas, rien n'est
+    # injecte du tout.
+    if actions_diff:
+        system_final += _texte_actions_application(actions_diff)
 
     # Injection de la structure "Programme" (classe/matière/chapitre) dans
     # le system prompt retirée le 29/08/2026 (demande Bourama) -- la

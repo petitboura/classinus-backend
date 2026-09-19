@@ -11,70 +11,39 @@ decision Bourama) en "executer_action_application" : il n'y a plus de
 notion d'appareil cible, voir core/canal_agent_applicatif.py.
 """
 
-import json
-
 from core.canal_agent_applicatif import (
     pousser_texte_clovis as _pousser_texte_clovis,
     demander_execution_action as _demander_execution_action,
     demander_clic_generique as _demander_clic_generique,
     demander_pointage_action as _demander_pointage_action,
-    obtenir_actions_disponibles as _obtenir_actions_disponibles,
 )
 from core.outils_generation_commun import mcp_generation, Context
-
-
-@mcp_generation.tool()
-async def lister_actions_disponibles(ctx: Context) -> str:
-    """
-    Chantier D, revise le 17/09/2026 (scan generique, voir
-    plan-scan-generique-agent-applicatif.md) puis le 19/09/2026 (retrait
-    de la confirmation, voir plan-canal-agent-applicatif-v1.md) : renvoie
-    la liste, a jour a l'instant present, des elements cliquables
-    (bouton, lien, champ) reellement visibles et actifs a l'ecran de
-    l'etudiant en ce moment meme (id, description, continuerEnArrierePlan)
-    -- plus aucun element n'est declare a la main, tout est detecte
-    automatiquement par un scan du DOM cote frontend.
-
-    La description de chaque element est generee automatiquement (texte
-    visible du bouton/lien, ou a defaut son libelle d'accessibilite) --
-    elle peut donc etre generique, courte, ou ambigue (ex. deux boutons
-    "Modifier" sur le meme ecran). Se fier au contexte de la conversation
-    pour choisir le bon element, et consulter la base de connaissance de
-    Classinus en cas de doute reel plutot que de deviner.
-
-    A appeler avant executer_action_application des que la liste
-    connue pourrait etre perimee (nouvelle demande de l'etudiant,
-    changement d'ecran probable) -- ne jamais reutiliser un action_id
-    obtenu il y a plusieurs tours sans revalider qu'il est toujours
-    dans cette liste.
-
-    Renvoie une liste vide (pas une erreur) si l'application n'est
-    ouverte nulle part pour ce compte, ou si l'ecran actuel ne contient
-    aucun element cliquable detecte par le scan.
-    """
-    user_id = ctx.request_context.request.query_params.get("user_id")
-    if not user_id:
-        return "Erreur : impossible d'identifier l'utilisateur."
-
-    actions = _obtenir_actions_disponibles(user_id)
-    return json.dumps(actions, ensure_ascii=False)
 
 
 @mcp_generation.tool()
 async def executer_action_application(action_id: str, ctx: Context) -> str:
     """
     Declenche un clic dans l'application Classinus a la place de
-    l'etudiant, sur l'element `action_id`. `action_id` DOIT etre un
-    identifiant renvoye par lister_actions_disponibles (mecanisme de
-    poussee d'etat, chantier D) -- ne jamais deviner ni inventer un
-    identifiant : un element qui n'est plus a l'ecran echoue proprement
-    plutot que de risquer un effet inattendu.
+    l'etudiant, sur l'element `action_id`.
 
-    Revise le 19/09/2026 (decision Bourama) : plus aucune confirmation
-    cote etudiant, l'execution est immediate des l'appel de cet outil.
-    A utiliser en consequence uniquement quand l'etudiant a reellement
-    demande cette action (ou l'a clairement acceptee dans la
-    conversation), jamais de facon spontanee.
+    Revise le 19/09/2026 (decision Bourama, chantier "agent applicatif
+    continu") : plus d'outil separe a appeler avant celui-ci pour
+    obtenir la liste -- les elements cliquables actuellement a l'ecran
+    (id, description) sont deja fournis directement dans ce prompt
+    systeme, tenus a jour automatiquement a chaque message (mecanisme de
+    poussee d'etat, chantier D). Des que l'etudiant a besoin que tu
+    cliques sur quelque chose, utilise cet outil DIRECTEMENT avec l'id
+    correspondant -- ne jamais deviner ni inventer un identifiant, et ne
+    jamais reutiliser un id qui n'apparait plus dans la liste la plus
+    recente qui t'a ete fournie.
+
+    Plus aucune confirmation cote etudiant par defaut : l'execution est
+    immediate des l'appel de cet outil, sans etape intermediaire. N'agis
+    que quand l'etudiant a reellement demande cette action (ou l'a
+    clairement acceptee dans la conversation), jamais de facon spontanee.
+    Tu peux quand meme demander confirmation dans ta reponse normale du
+    chat avant d'appeler cet outil si l'etudiant te l'a explicitement
+    demande, ou si tu juges toi-meme plus prudent de confirmer d'abord.
 
     NECESSITE que l'application soit ouverte quelque part pour ce
     compte (peu importe l'onglet ou l'appareil, voir
@@ -103,18 +72,15 @@ async def executer_action_application(action_id: str, ctx: Context) -> str:
 @mcp_generation.tool()
 async def executer_clic_generique(selecteur: str, description: str, ctx: Context) -> str:
     """
-    Chantier F, revise le 17/09/2026 (scan generique -- voir
-    plan-scan-generique-agent-applicatif.md, etape 4 : decision produit
-    a confirmer avec Bourama sur l'utilite de conserver cet outil
-    maintenant que lister_actions_disponibles detecte deja
-    automatiquement bouton/lien/champ). Filet de securite UNIQUEMENT
-    pour un element cliquable qui n'apparait PAS dans
-    lister_actions_disponibles (ex. un element sans semantique standard,
-    hors des types couverts par le scan). Vérifie TOUJOURS
-    lister_actions_disponibles en premier, et n'utilise cet outil que si
-    rien dans cette liste ne correspond à ce que l'étudiant a demandé --
-    ne jamais l'utiliser en doublon d'un élément déjà détecté par le
-    scan.
+    Chantier F, revise le 17/09/2026 (scan generique) puis le 19/09/2026
+    (chantier "agent applicatif continu", retrait de l'outil
+    lister_actions_disponibles). Filet de securite UNIQUEMENT pour un
+    element cliquable qui n'apparait PAS dans la liste fournie
+    automatiquement dans ce prompt systeme (ex. un element sans
+    semantique standard, hors des types couverts par le scan). Verifie
+    TOUJOURS cette liste en premier, et n'utilise cet outil que si rien
+    dedans ne correspond à ce que l'étudiant a demandé -- ne jamais
+    l'utiliser en doublon d'un élément déjà présent dans la liste.
 
     `selecteur` est un sélecteur CSS visant un unique élément cliquable
     (bouton, lien...) actuellement affiché. `description` est une
@@ -154,8 +120,8 @@ async def executer_clic_generique(selecteur: str, description: str, ctx: Context
 async def montrer_element_application(action_id: str, ctx: Context) -> str:
     """
     Chantier G : mode guidage / visite guidée. Déplace UNIQUEMENT le
-    curseur virtuel vers l'élément `action_id` (identifiant issu de
-    lister_actions_disponibles, détecté automatiquement par le scan
+    curseur virtuel vers l'élément `action_id` (identifiant fourni
+    automatiquement dans ce prompt systeme, detecte par le scan
     générique), SANS jamais l'exécuter -- pour montrer une nouveauté ou
     un endroit précis de l'application à l'étudiant.
     Décrire ce que fait cet élément dans le message envoyé à l'étudiant

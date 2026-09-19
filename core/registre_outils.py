@@ -628,9 +628,6 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # via forcer_rechargement_catalogue_outils ou redemarrage Railway
     # (cache 24h connu, voir plan-agent-applicatif-clovis.md section 2).
     "executer_action_application": {"label": "Action dans l'application", "icone": "MousePointerClick", "onglet": None},
-    # Chantier D : lecture de l'etat pousse en continu, meme rappel de
-    # cache 24h que ci-dessus.
-    "lister_actions_disponibles": {"label": "Liste des actions disponibles", "icone": "MousePointerClick", "onglet": None},
     # Chantier F : filet de securite generique, meme rappel de cache 24h.
     "executer_clic_generique": {"label": "Clic générique dans l'application", "icone": "MousePointerClick", "onglet": None},
     # Chantier G : mode guidage, meme rappel de cache 24h.
@@ -690,8 +687,12 @@ CATEGORIES_OUTILS = {
         "lire_temps_ecran", "gerer_session_concentration",
     ],
     "historique": ["lister_conversations_historique", "lire_conversation_historique"],
+    # lister_actions_disponibles retire le 19/09/2026 (chantier "agent
+    # applicatif continu", decision Bourama) : la liste des actions est
+    # desormais injectee automatiquement dans le prompt systeme, plus
+    # jamais demandee par un outil.
     "agent_applicatif": [
-        "executer_action_application", "lister_actions_disponibles",
+        "executer_action_application",
         "executer_clic_generique", "montrer_element_application",
     ],
     "github": ["gerer_depot_github"],
