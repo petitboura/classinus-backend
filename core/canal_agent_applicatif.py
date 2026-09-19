@@ -124,68 +124,61 @@ def obtenir_actions_disponibles(user_id: str) -> list[dict[str, Any]]:
     return list(fusion.values())
 
 
-# Chantier "agent applicatif continu" (19/09/2026, decision Bourama :
-# retrait de l'outil lister_actions_disponibles, le modele ne doit plus
-# jamais avoir a le demander explicitement). Dernier etat des actions
-# MONTRE AU MODELE, par conversation -- distinct de _etat_actions
-# (poussee brute du frontend, jamais filtree). Sert a calculer un delta
-# (ajouts/retraits) au lieu de renvoyer la liste complete a chaque tour
-# de conversation, pour ne pas exploser le cout en tokens sur une
-# conversation longue. Cle = conversation_id, jamais user_id seul : deux
-# conversations differentes du meme compte ne partagent pas ce qui a
-# deja ete montre a l'une ou l'autre.
-#
-# Limite connue, assumee : jamais nettoye (contrairement a _etat_actions,
-# vide a la deconnexion) -- grandit d'une petite entree par conversation
-# ayant deja eu un tour avec des actions disponibles, pour la duree de
-# vie du processus serveur. Volume attendu faible (juste id+description
-# des elements, pas l'historique), redemarrages Railway reguliers
-# limitent l'accumulation -- a revisiter seulement si ca devient un
-# vrai probleme memoire en pratique.
-_dernier_etat_modele: dict[str, dict[str, dict[str, Any]]] = {}
-_verrou_dernier_etat_modele = threading.Lock()
+# Correctif du 19/09/2026 (Bourama : "dans beaucoup de cas Clovis n'arrive
+# pas a cliquer") : l'ancien mecanisme d'injection par DIFFERENCE
+# (ajouts/retraits depuis le dernier tour) est retire. Le prompt systeme
+# est reconstruit de zero a CHAQUE tour et l'historique ne contient que
+# les messages de la conversation, jamais les anciens prompts : apres le
+# premier tour, le modele ne voyait donc plus que les changements, pas la
+# liste de base, et ne connaissait plus les id de la plupart des elements.
+# Le prompt recoit maintenant la liste COMPLETE et actuelle a chaque tour
+# (voir core/construction_system_prompt.py), et le resultat de chaque clic
+# decrit ce qui a change a l'ecran (voir observer_changement_ecran).
+
+# Delai laisse a l'application pour reagir a un clic (ouverture d'un menu,
+# animation) et repousser son nouvel etat : le frontend attend 200 ms de
+# calme apres un changement du DOM avant de repousser (voir
+# lib/canalAgentApplicatif.ts), plus le temps de l'animation.
+DELAI_OBSERVATION_ECRAN_SECONDES = 0.9
+NB_MAX_ELEMENTS_CITES_APRES_CLIC = 40
 
 
-def obtenir_diff_actions_disponibles(conversation_id: str, user_id: str) -> dict[str, Any] | None:
+def photographier_ecran(user_id: str) -> dict[str, str]:
+    """id -> description des elements cliquables actuellement a l'ecran."""
+    return {
+        a["id"]: str(a.get("description", ""))
+        for a in obtenir_actions_disponibles(user_id)
+        if isinstance(a.get("id"), str)
+    }
+
+
+async def observer_changement_ecran(user_id: str, avant: dict[str, str]) -> str:
     """
-    Chantier "agent applicatif continu" (19/09/2026) : calcule ce qui a
-    change dans les actions disponibles (obtenir_actions_disponibles,
-    chantier D) depuis le dernier tour de CETTE conversation ou le
-    modele en a ete informe -- remplace l'outil lister_actions_disponibles
-    retire, que le modele devait auparavant appeler explicitement avant
-    chaque clic.
-
-    Premiere fois pour cette conversation (rien connu encore -- tout
-    debut, ou apres un redemarrage serveur qui a vide cette memoire) :
-    renvoie tout comme liste complete plutot qu'un delta, jamais une
-    supposition sur un etat anterieur inconnu.
-
-    Renvoie None si rien n'a change depuis la derniere fois (jamais un
-    dict vide) -- l'appelant (construction du prompt systeme) ne doit
-    alors rien injecter du tout ce tour-ci.
+    Apres un clic reussi : attend que l'ecran se stabilise, puis decrit au
+    modele ce qui est apparu ou disparu par rapport a `avant`
+    (photographier_ecran pris juste avant le clic). C'est ce qui lui
+    permet de continuer apres l'ouverture d'un menu ou d'un tiroir sans
+    deviner : il voit les nouveaux elements avec leurs id.
     """
-    actuel = {a["id"]: a for a in obtenir_actions_disponibles(user_id) if isinstance(a.get("id"), str)}
+    await asyncio.sleep(DELAI_OBSERVATION_ECRAN_SECONDES)
+    apres = photographier_ecran(user_id)
+    apparus = [(aid, desc) for aid, desc in apres.items() if aid not in avant]
+    disparus = [aid for aid in avant if aid not in apres]
 
-    with _verrou_dernier_etat_modele:
-        precedent = _dernier_etat_modele.get(conversation_id)
-        _dernier_etat_modele[conversation_id] = actuel
+    if not apparus and not disparus:
+        return "L'écran n'a pas visiblement changé après ce clic."
 
-    if precedent is None:
-        if not actuel:
-            return None
-        return {"complet": True, "actions": list(actuel.values())}
-
-    ajoutees = [
-        action
-        for aid, action in actuel.items()
-        if aid not in precedent or precedent[aid].get("description") != action.get("description")
-    ]
-    retirees = [aid for aid in precedent if aid not in actuel]
-
-    if not ajoutees and not retirees:
-        return None
-
-    return {"complet": False, "ajoutees": ajoutees, "retirees": retirees}
+    texte = ""
+    if apparus:
+        cites = apparus[:NB_MAX_ELEMENTS_CITES_APRES_CLIC]
+        texte += "Éléments apparus à l'écran après ce clic :\n"
+        texte += "\n".join(f"- {aid} : {desc}" for aid, desc in cites)
+        if len(apparus) > len(cites):
+            texte += f"\n(et {len(apparus) - len(cites)} autres)"
+        texte += "\n"
+    if disparus:
+        texte += "Ids qui ne sont plus à l'écran (ne les réutilise pas) : " + ", ".join(disparus[:NB_MAX_ELEMENTS_CITES_APRES_CLIC]) + "\n"
+    return texte.strip()
 
 
 def recevoir_reponse(correlation_id: str, reponse: Any) -> None:

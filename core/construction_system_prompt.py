@@ -10,45 +10,46 @@ from profils_agents import INSTRUCTIONS_FORMATS_AFFICHAGE, INSTRUCTIONS_ARBITRAG
 from guide_conversation import obtenir_sections_guide
 
 
-def _texte_actions_application(diff):
+def _texte_actions_application(actions):
     """
-    Chantier "agent applicatif continu" (19/09/2026, decision Bourama) :
-    construit le texte injecte dans le prompt systeme a partir du diff
-    calcule par obtenir_diff_actions_disponibles
-    (core/canal_agent_applicatif.py). Remplace l'outil
-    lister_actions_disponibles retire -- le modele n'a plus a demander,
-    il recoit deja cette information ici, tenue a jour a chaque tour.
+    Agent applicatif (19/09/2026, decision Bourama : retrait de l'outil
+    lister_actions_disponibles, le modele ne le demande plus). Texte injecte
+    dans le prompt systeme : la liste COMPLETE et actuelle des elements
+    cliquables a l'ecran, a chaque tour (voir
+    core/canal_agent_applicatif.py pour la raison de l'abandon de
+    l'injection par difference), et les regles pour cliquer sans jamais
+    forcer un element qu'on ne voit pas.
     """
     instruction = (
         "\n\n## Actions disponibles dans l'application\n"
         "Dès que tu dois cliquer sur quelque chose pour l'étudiant, utilise directement "
-        "executer_action_application avec l'id correspondant (ou executer_clic_generique en "
-        "dernier recours si rien ici ne correspond) -- tu n'as plus besoin de demander la liste, "
-        "elle t'est fournie ici et tenue à jour automatiquement à chaque message. Aucune confirmation "
-        "n'est nécessaire par défaut, agis directement. Demande confirmation à l'étudiant dans ta "
-        "réponse normale seulement s'il te l'a explicitement demandé, ou si tu juges toi-même plus "
-        "prudent de confirmer avant d'agir.\n"
+        "executer_action_application avec l'id correspondant de la liste ci-dessous. Cette liste est "
+        "actuelle à cet instant : c'est TOUT ce que tu vois à l'écran. Aucune confirmation n'est "
+        "nécessaire par défaut, agis directement. Demande confirmation à l'étudiant dans ta réponse "
+        "normale seulement s'il te l'a explicitement demandé, ou si tu juges toi-même plus prudent de "
+        "confirmer avant d'agir.\n\n"
+        "Règles pour cliquer :\n"
+        "- Ne force JAMAIS un clic sur un élément que tu ne vois pas dans la liste : n'invente aucun "
+        "id, ne devine aucun sélecteur.\n"
+        "- Si ce que tu cherches n'est pas dans la liste, c'est probablement caché derrière un menu, un "
+        "tiroir, un panneau replié, un onglet ou une fenêtre fermée. Cherche dans la liste les boutons "
+        "qui ouvrent quelque chose (menu, ☰, « plus », « … », tiroir, panneau latéral, onglet, flèche, "
+        "options), clique dessus, puis lis ce qui est apparu : le résultat de ton clic te donne les "
+        "nouveaux éléments avec leur id. Continue ainsi étape par étape.\n"
+        "- Si après avoir essayé les ouvreurs plausibles rien ne correspond, arrête-toi et dis "
+        "honnêtement à l'étudiant que tu ne le trouves pas, plutôt que de cliquer au hasard.\n"
+        "- executer_clic_generique n'est PAS un moyen de deviner : uniquement si un sélecteur exact t'a "
+        "été donné par l'étudiant ou par un résultat d'outil.\n\n"
     )
-    if diff.get("complet"):
-        instruction += "Éléments cliquables actuellement à l'écran :\n"
-        instruction += json.dumps(diff.get("actions", []), ensure_ascii=False)
-        return instruction
-
-    ajoutees = diff.get("ajoutees") or []
-    retirees = diff.get("retirees") or []
-    if ajoutees:
-        instruction += "Nouveaux éléments apparus depuis ton dernier message :\n"
-        instruction += json.dumps(ajoutees, ensure_ascii=False) + "\n"
-    if retirees:
-        instruction += (
-            "Éléments qui ont disparu depuis ton dernier message (ids à ne plus utiliser) : "
-            + json.dumps(retirees, ensure_ascii=False) + "\n"
-        )
-    instruction += "(tout ce qui n'est pas listé ici n'a pas changé depuis ton dernier message.)\n"
-    return instruction
+    lignes = "\n".join(
+        f"- {a.get('id')} : {str(a.get('description', ''))[:100]}"
+        for a in actions
+        if isinstance(a.get("id"), str)
+    )
+    return instruction + "Éléments cliquables actuellement à l'écran (id : description) :\n" + lignes + "\n"
 
 
-def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=False, mode_source=None, actions_diff=None):
+def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=False, mode_source=None, actions_ecran=None):
     # Restauré le 14/08 (voir commentaire des constantes plus haut) : la
     # page Notion de l'agent (get_system_prompt) ne doit plus contenir QUE
     # la personnalité/le comportement propre à l'agent -- les 3 blocs fixes
@@ -180,15 +181,13 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
 
     # Chantier "agent applicatif continu" (19/09/2026, decision Bourama :
     # retrait de l'outil lister_actions_disponibles, plus jamais demande
-    # explicitement par le modele). actions_diff vient de
-    # obtenir_diff_actions_disponibles(conversation_id, user_id)
-    # (core/canal_agent_applicatif.py), calcule dans chat() et recu ici
-    # en parametre, meme patron que guide_actif/mode_source juste
-    # au-dessus. None si rien de disponible ou rien de change depuis le
-    # dernier tour de cette conversation -- dans ce cas, rien n'est
+    # explicitement par le modele). actions_ecran vient de
+    # obtenir_actions_disponibles(user_id) (core/canal_agent_applicatif.py),
+    # lu dans chat() et recu ici en parametre. None ou liste vide (canal
+    # en direct inactif, ou application ouverte nulle part) : rien n'est
     # injecte du tout.
-    if actions_diff:
-        system_final += _texte_actions_application(actions_diff)
+    if actions_ecran:
+        system_final += _texte_actions_application(actions_ecran)
 
     # Injection de la structure "Programme" (classe/matière/chapitre) dans
     # le system prompt retirée le 29/08/2026 (demande Bourama) -- la

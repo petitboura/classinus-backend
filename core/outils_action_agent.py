@@ -16,6 +16,8 @@ from core.canal_agent_applicatif import (
     demander_execution_action as _demander_execution_action,
     demander_clic_generique as _demander_clic_generique,
     demander_pointage_action as _demander_pointage_action,
+    observer_changement_ecran as _observer_changement_ecran,
+    photographier_ecran as _photographier_ecran,
 )
 from core.outils_generation_commun import mcp_generation, Context
 
@@ -37,6 +39,14 @@ async def executer_action_application(action_id: str, ctx: Context) -> str:
     jamais reutiliser un id qui n'apparait plus dans la liste la plus
     recente qui t'a ete fournie.
 
+    Ne force JAMAIS un clic sur un element que tu ne vois pas dans cette
+    liste. Si ce que tu cherches n'y est pas, cherche les boutons qui
+    ouvrent quelque chose (menu, "plus", tiroir, panneau, onglet...),
+    clique dessus, puis lis le resultat : apres chaque clic reussi, ce
+    resultat decrit les elements apparus (avec leur id) et disparus. Si
+    rien ne correspond apres avoir essaye les ouvreurs plausibles, dis-le
+    a l'etudiant au lieu de deviner.
+
     Plus aucune confirmation cote etudiant par defaut : l'execution est
     immediate des l'appel de cet outil, sans etape intermediaire. N'agis
     que quand l'etudiant a reellement demande cette action (ou l'a
@@ -57,6 +67,7 @@ async def executer_action_application(action_id: str, ctx: Context) -> str:
     if not action_id:
         return "Erreur : paramètre 'action_id' manquant."
 
+    avant = _photographier_ecran(user_id)
     resultat = await _demander_execution_action(user_id, action_id)
 
     if resultat is None:
@@ -66,7 +77,7 @@ async def executer_action_application(action_id: str, ctx: Context) -> str:
         )
     if isinstance(resultat, dict) and resultat.get("erreur"):
         return f"Erreur : {resultat['erreur']}"
-    return "Action exécutée avec succès."
+    return "Action exécutée avec succès.\n" + await _observer_changement_ecran(user_id, avant)
 
 
 @mcp_generation.tool()
@@ -74,13 +85,14 @@ async def executer_clic_generique(selecteur: str, description: str, ctx: Context
     """
     Chantier F, revise le 17/09/2026 (scan generique) puis le 19/09/2026
     (chantier "agent applicatif continu", retrait de l'outil
-    lister_actions_disponibles). Filet de securite UNIQUEMENT pour un
-    element cliquable qui n'apparait PAS dans la liste fournie
-    automatiquement dans ce prompt systeme (ex. un element sans
-    semantique standard, hors des types couverts par le scan). Verifie
-    TOUJOURS cette liste en premier, et n'utilise cet outil que si rien
-    dedans ne correspond à ce que l'étudiant a demandé -- ne jamais
-    l'utiliser en doublon d'un élément déjà présent dans la liste.
+    lister_actions_disponibles). Filet de securite EXCEPTIONNEL : ne
+    JAMAIS s'en servir pour deviner un element qui n'apparait pas dans la
+    liste fournie dans ce prompt systeme (cliquer au hasard sur un
+    selecteur invente est interdit). A n'utiliser que si un selecteur
+    exact t'a ete donne explicitement (par l'etudiant, ou par un resultat
+    d'outil). Sinon, explore l'application avec executer_action_application
+    en ouvrant les menus, tiroirs et onglets visibles dans la liste. Ne
+    jamais l'utiliser en doublon d'un élément déjà présent dans la liste.
 
     `selecteur` est un sélecteur CSS visant un unique élément cliquable
     (bouton, lien...) actuellement affiché. `description` est une
@@ -104,6 +116,7 @@ async def executer_clic_generique(selecteur: str, description: str, ctx: Context
     if not description:
         return "Erreur : paramètre 'description' manquant."
 
+    avant = _photographier_ecran(user_id)
     resultat = await _demander_clic_generique(user_id, selecteur, description)
 
     if resultat is None:
@@ -113,7 +126,7 @@ async def executer_clic_generique(selecteur: str, description: str, ctx: Context
         )
     if isinstance(resultat, dict) and resultat.get("erreur"):
         return f"Erreur : {resultat['erreur']}"
-    return "Action exécutée avec succès."
+    return "Action exécutée avec succès.\n" + await _observer_changement_ecran(user_id, avant)
 
 
 @mcp_generation.tool()
