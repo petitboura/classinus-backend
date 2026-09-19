@@ -1,17 +1,21 @@
 """
 Commentaires sur le catalogue public (18/09/2026, chantier "profil
-contributeur bibliotheque publique"). S'applique aux 3 types d'éléments
+contributeur bibliotheque publique"). S'applique aux 4 types d'éléments
 du catalogue public, même mapping que core/etoiles_catalogue_public.py :
   - "fichier" -> bibliotheque_publique
   - "dossier" -> dossiers_catalogue_public
   - "skill"   -> comportements_publics
+  - "clovis"  -> clovis_infos (étape 13 : Clovis lui-même, table
+    singleton à une seule ligne)
 
 Système totalement séparé du système d'étoiles (qui n'est pas une note
 chiffrée mais un simple compteur "une étoile par personne", voir
-core/etoiles_catalogue_public.py) et de agent_comments/agent_ratings
-(avis sur Clovis lui-même, hors scope de ce chantier -- décision
-Bourama du 18/09/2026, voir aussi core/serveur_mcp_espace.py pour ce
-système historique, non touché ici).
+core/etoiles_catalogue_public.py). 18/09/2026 : le type "clovis" ci-
+dessus est la réutilisation prévue à l'étape 13, mais sur les tables
+génériques de CE chantier -- pas de lien avec agent_comments/
+agent_ratings (ancien système historique, voir
+core/serveur_mcp_espace.py) : il n'y a plus de système "agent" dans
+Clovis, ce nommage est volontairement banni de ce chantier.
 
 Poster un commentaire exige profil_public = true (décision Bourama,
 étape 5) : un commentaire affiche toujours l'auteur, donc son profil
@@ -27,6 +31,7 @@ TABLES_PAR_TYPE = {
     "fichier": "bibliotheque_publique",
     "dossier": "dossiers_catalogue_public",
     "skill": "comportements_publics",
+    "clovis": "clovis_infos",
 }
 
 TAILLE_PAGE_MAX = 50
