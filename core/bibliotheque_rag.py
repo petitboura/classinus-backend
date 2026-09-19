@@ -178,10 +178,47 @@ def lire_document_bibliotheque_en_entier(fichier_id: str, user_id: str) -> str |
     pour que l'IA ne prétende jamais ignorer le lien et puisse au moins
     le redonner tel quel.
 
+    CORRECTIF 18/09/2026 bis (bug remonté par Bourama, même jour) : cette
+    fonction ne renvoyait QUE le texte brut, sans jamais dire à l'IA de
+    quel document il s'agit (nom, description, type, URL). Invisible
+    tant que l'appel suit une recherche (le contexte est déjà là), mais
+    problématique quand un CTA donne directement un fichier_id à l'IA
+    sans étape de recherche préalable : elle décrivait un contenu sans
+    savoir ce qu'il était, et ne pouvait ni le nommer ni redonner son
+    lien. On préfixe donc désormais toujours le contenu renvoyé d'un
+    en-tête minimal (nom, description si présente, URL si c'est un
+    lien) -- les métadonnées sont donc allées chercher AVANT de savoir
+    si le document est vectorisé ou non, puisqu'on en a besoin dans les
+    deux cas.
+
     None reste le résultat uniquement si le fichier n'existe pas,
     n'appartient pas à user_id, ou n'est ni un document vectorisé ni un
     lien (ex. vidéo pas encore vectorisée).
     """
+    try:
+        meta = (
+            supabase.table("fichiers_uploades")
+            .select("nom_fichier, description, type_mime, url_publique")
+            .eq("id", fichier_id)
+            .eq("user_id", user_id)
+            .maybe_single()
+            .execute()
+        )
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (lecture métadonnées fichier_id={fichier_id}) : {e}")
+        return None
+    if not meta or not meta.data:
+        return None
+
+    nom = meta.data.get("nom_fichier") or "Document"
+    description = (meta.data.get("description") or "").strip()
+    type_mime = meta.data.get("type_mime")
+    est_lien = type_mime == "text/uri-list"
+
+    entete = f'[Document de ta bibliothèque personnelle : "{nom}"' + (" -- ceci est un lien" if est_lien else "") + "]"
+    if description:
+        entete += f"\nDescription donnée par l'utilisateur : {description}"
+
     try:
         res = (
             supabase.table("documents_bibliotheque")
@@ -196,22 +233,10 @@ def lire_document_bibliotheque_en_entier(fichier_id: str, user_id: str) -> str |
         return None
 
     if res.data:
-        return "\n\n".join(ligne["contenu"] for ligne in res.data)
+        contenu = "\n\n".join(ligne["contenu"] for ligne in res.data)
+        return f"{entete}\n\n{contenu}"
 
-    try:
-        meta = (
-            supabase.table("fichiers_uploades")
-            .select("type_mime, url_publique")
-            .eq("id", fichier_id)
-            .eq("user_id", user_id)
-            .maybe_single()
-            .execute()
-        )
-    except Exception as e:
-        logging.error(f"ERREUR SUPABASE (lecture métadonnées fichier_id={fichier_id}) : {e}")
-        return None
-
-    if not meta or not meta.data or meta.data.get("type_mime") != "text/uri-list":
+    if not est_lien:
         return None
 
     url = (meta.data.get("url_publique") or "").strip()
@@ -220,9 +245,10 @@ def lire_document_bibliotheque_en_entier(fichier_id: str, user_id: str) -> str |
 
     from core.lecture_urls_externes import _lire_url
     contenu_url = _lire_url(url, user_id)
+    entete += f"\nURL : {url}"
     if contenu_url:
-        return contenu_url
-    return f"[Ceci est un lien ajouté à la bibliothèque, extraction automatique de son contenu échouée -- voici l'URL telle quelle : {url}]"
+        return f"{entete}\n\n{contenu_url}"
+    return f"{entete}\n\n[Extraction automatique du contenu échouée -- redonne quand même l'URL ci-dessus telle quelle.]"
 
 
 def formater_source_bibliotheque(r: dict) -> str | None:

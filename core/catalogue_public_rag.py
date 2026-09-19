@@ -141,10 +141,41 @@ def lire_document_catalogue_public(fichier_id: str) -> str | None:
     l'extraction échoue, on renvoie quand même l'URL telle quelle,
     jamais None dans ce cas.
 
+    CORRECTIF 18/09/2026 bis (même correctif que côté bibliothèque
+    perso) : cette fonction ne renvoyait que le texte brut, sans jamais
+    dire à l'IA de quel document il s'agit -- problématique dès qu'un
+    CTA donne directement un fichier_id sans recherche préalable. Les
+    métadonnées (nom, description, type, URL si lien) sont désormais
+    allées chercher AVANT de savoir si le document est vectorisé, et
+    préfixées systématiquement au contenu renvoyé.
+
     None reste le résultat uniquement si l'entrée n'existe pas ou n'est
     ni un document vectorisé ni un lien (ex. vidéo pas encore
     vectorisée).
     """
+    try:
+        meta = (
+            supabase.table("bibliotheque_publique")
+            .select("nom, description, type_mime, url_publique")
+            .eq("id", fichier_id)
+            .maybe_single()
+            .execute()
+        )
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (lecture métadonnées catalogue public fichier_id={fichier_id}) : {e}")
+        return None
+    if not meta or not meta.data:
+        return None
+
+    nom = meta.data.get("nom") or "Document"
+    description = (meta.data.get("description") or "").strip()
+    type_mime = meta.data.get("type_mime")
+    est_lien = type_mime == "text/uri-list"
+
+    entete = f'[Document du catalogue public : "{nom}"' + (" -- ceci est un lien" if est_lien else "") + "]"
+    if description:
+        entete += f"\nDescription : {description}"
+
     try:
         res = (
             supabase.table("documents_catalogue_public")
@@ -158,21 +189,10 @@ def lire_document_catalogue_public(fichier_id: str) -> str | None:
         return None
 
     if res.data:
-        return "\n\n".join(ligne["contenu"] for ligne in res.data)
+        contenu = "\n\n".join(ligne["contenu"] for ligne in res.data)
+        return f"{entete}\n\n{contenu}"
 
-    try:
-        meta = (
-            supabase.table("bibliotheque_publique")
-            .select("type_mime, url_publique")
-            .eq("id", fichier_id)
-            .maybe_single()
-            .execute()
-        )
-    except Exception as e:
-        logging.error(f"ERREUR SUPABASE (lecture métadonnées catalogue public fichier_id={fichier_id}) : {e}")
-        return None
-
-    if not meta or not meta.data or meta.data.get("type_mime") != "text/uri-list":
+    if not est_lien:
         return None
 
     url = (meta.data.get("url_publique") or "").strip()
@@ -181,9 +201,10 @@ def lire_document_catalogue_public(fichier_id: str) -> str | None:
 
     from core.lecture_urls_externes import _lire_url
     contenu_url = _lire_url(url)
+    entete += f"\nURL : {url}"
     if contenu_url:
-        return contenu_url
-    return f"[Ceci est un lien publié dans le catalogue public, extraction automatique de son contenu échouée -- voici l'URL telle quelle : {url}]"
+        return f"{entete}\n\n{contenu_url}"
+    return f"{entete}\n\n[Extraction automatique du contenu échouée -- redonne quand même l'URL ci-dessus telle quelle.]"
 
 
 def lister_catalogue_public(
