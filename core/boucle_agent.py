@@ -545,7 +545,20 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
             # mais geree ici a la main puisque demander_outils ne passe
             # jamais par _traiter_appels/table_routage.
             nom_lisible_demande = _nom_lisible(NOM_OUTIL_DEMANDER_OUTILS)
-            yield {"type": "statut", "texte": f"{nom_lisible_demande}..."}
+            # id_appel/nom_outil ajoutes (19/09/2026, demande Bourama : la ligne
+            # "Recherche d'un outil" restait figee a part, avec un texte
+            # technique). Sans identifiant, le frontend ne peut pas rattacher
+            # cet outil a une ligne de la timeline comme les autres outils
+            # (voir _traiter_appels dans execution_outils.py) : il l'affichait
+            # alors dans l'ancien affichage flottant, jamais retire avant le
+            # debut de la reponse. Avec le meme identifiant sur statut,
+            # statut_termine et outil_resultat, c'est une ligne normale.
+            yield {
+                "type": "statut",
+                "texte": f"{nom_lisible_demande}...",
+                "id_appel": demande["id"],
+                "nom_outil": NOM_OUTIL_DEMANDER_OUTILS,
+            }
 
             if not demande["besoin"]:
                 contenu_reponse = (
@@ -590,19 +603,24 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                         f"Trouvé et ajouté à tes outils disponibles : {noms_trouves}. "
                         "Tu peux l'appeler dès maintenant pour continuer."
                     )
-                    statut_fin = f"{nom_lisible_demande} : {noms_trouves} trouvé"
+                    # Texte de fin identique aux autres outils (19/09/2026, demande
+                    # Bourama : les noms techniques des outils trouves ne doivent
+                    # plus s'afficher ici). Le detail, lui, reste visible en
+                    # depliant la ligne (resultat_affichage, inchange).
+                    statut_fin = f"{nom_lisible_demande} effectuée"
                     resultat_affichage = f"Besoin exprimé : {demande['besoin']}\n\nTrouvé : {noms_trouves}."
                 else:
                     contenu_reponse = "Aucun outil correspondant à ce besoin n'existe dans le catalogue de Clovis."
                     statut_fin = f"{nom_lisible_demande} : rien trouvé"
                     resultat_affichage = f"Besoin exprimé : {demande['besoin']}\n\nAucun outil correspondant trouvé dans le catalogue de Clovis."
 
-            yield {"type": "statut_termine", "texte": statut_fin}
+            yield {"type": "statut_termine", "texte": statut_fin, "id_appel": demande["id"]}
             yield {
                 "type": "outil_resultat",
                 "nom_outil": NOM_OUTIL_DEMANDER_OUTILS,
                 "nom_lisible": nom_lisible_demande,
                 "resultat": resultat_affichage,
+                "id_appel": demande["id"],
             }
             messages_agent.append({
                 "role": "tool",
