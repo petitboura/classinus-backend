@@ -21,6 +21,7 @@ cote frontend (voir lib/canalAgentApplicatif.ts).
 
 import asyncio
 import logging
+import threading
 import uuid
 from typing import Any
 
@@ -64,6 +65,8 @@ async def _verrou_envoi_pour(cle: tuple[str, str]) -> asyncio.Lock:
 
 
 async def connecter(user_id: str, appareil_id: str, websocket: WebSocket) -> None:
+    global _boucle_evenements
+    _boucle_evenements = asyncio.get_running_loop()
     cle = (user_id, appareil_id)
     async with _verrou_connexions:
         ancienne = _connexions.get(cle)
@@ -298,3 +301,96 @@ async def pousser_texte_clovis(user_id: str, texte: str) -> int:
         except Exception as e:
             logging.error(f"ERREUR poussee texte Clovis canal agent applicatif (user={user_id}, appareil={cle[1]}) : {e}")
     return atteintes
+
+
+# Message de l'etudiant PENDANT que Clovis travaille (canal en direct,
+# 19/09/2026, decision Bourama : "il faut que ton message soit envoye").
+# Le frontend l'envoie sur ce canal ; s'il existe un tour de conversation
+# en cours pour ce compte, le message est mis en file et la boucle d'agent
+# (core/boucle_agent.py) le lit au prochain aller-retour avec le modele.
+# Sinon il n'est PAS garde ici : le frontend l'envoie alors comme un message
+# normal dans le chat (accuse pris_en_compte=False).
+# Structures sous verrou threading (et non asyncio) : la boucle d'agent est
+# un generateur synchrone execute dans un thread, le canal WebSocket est
+# asynchrone.
+LONGUEUR_MAX_MESSAGE_ETUDIANT = 2000
+
+_verrou_messages_etudiant = threading.Lock()
+_messages_etudiant: dict[str, list[str]] = {}
+_tours_en_cours: dict[str, int] = {}
+_boucle_evenements: "asyncio.AbstractEventLoop | None" = None
+
+
+def debuter_tour(user_id: str) -> None:
+    with _verrou_messages_etudiant:
+        _tours_en_cours[user_id] = _tours_en_cours.get(user_id, 0) + 1
+
+
+def terminer_tour(user_id: str) -> list[str]:
+    """
+    Fin d'un tour de conversation. Renvoie les messages de l'etudiant que
+    la boucle n'a jamais eu l'occasion de lire (arrives pendant le tout
+    dernier appel au modele, ou sur un chemin de reprise sans injection) :
+    ils sont retires de la file et doivent etre renvoyes au frontend.
+    """
+    with _verrou_messages_etudiant:
+        restant = _tours_en_cours.get(user_id, 0) - 1
+        if restant > 0:
+            _tours_en_cours[user_id] = restant
+            return []
+        _tours_en_cours.pop(user_id, None)
+        return _messages_etudiant.pop(user_id, [])
+
+
+def deposer_message_etudiant(user_id: str, texte: str) -> bool:
+    """True si un tour est en cours (message mis en file), False sinon."""
+    with _verrou_messages_etudiant:
+        if _tours_en_cours.get(user_id, 0) <= 0:
+            return False
+        _messages_etudiant.setdefault(user_id, []).append(texte)
+        return True
+
+
+def retirer_messages_etudiant(user_id: str) -> list[str]:
+    if not user_id:
+        return []
+    with _verrou_messages_etudiant:
+        return _messages_etudiant.pop(user_id, [])
+
+
+async def accuser_message_etudiant(user_id: str, appareil_id: str, id_message: Any, texte: str, websocket: WebSocket) -> None:
+    """Depose le message et renvoie a CETTE connexion l'accuse de reception."""
+    propre = (texte or "").strip()[:LONGUEUR_MAX_MESSAGE_ETUDIANT]
+    pris_en_compte = deposer_message_etudiant(user_id, propre) if propre else False
+    verrou_envoi = await _verrou_envoi_pour((user_id, appareil_id))
+    try:
+        async with verrou_envoi:
+            await websocket.send_json({"accuse_message_etudiant": id_message, "pris_en_compte": pris_en_compte})
+    except Exception as e:
+        logging.error(f"ERREUR accuse message etudiant canal agent applicatif (user={user_id}, appareil={appareil_id}) : {e}")
+
+
+async def _renvoyer_messages_non_lus(user_id: str, textes: list[str]) -> None:
+    async with _verrou_connexions:
+        connexions = [(cle, ws) for cle, ws in _connexions.items() if cle[0] == user_id]
+    if not connexions:
+        return
+    # Une seule connexion suffit : le message doit partir UNE fois dans le chat.
+    cle, websocket = connexions[0]
+    verrou_envoi = await _verrou_envoi_pour(cle)
+    for texte in textes:
+        try:
+            async with verrou_envoi:
+                await websocket.send_json({"message_etudiant_renvoye": texte})
+        except Exception as e:
+            logging.error(f"ERREUR renvoi message etudiant non lu (user={user_id}, appareil={cle[1]}) : {e}")
+
+
+def renvoyer_messages_non_lus(user_id: str, textes: list[str]) -> None:
+    """Appelable depuis un thread synchrone (fin du flux SSE du chat)."""
+    if not textes or _boucle_evenements is None:
+        return
+    try:
+        asyncio.run_coroutine_threadsafe(_renvoyer_messages_non_lus(user_id, textes), _boucle_evenements)
+    except Exception as e:
+        logging.error(f"ERREUR planification renvoi message etudiant non lu (user={user_id}) : {e}")

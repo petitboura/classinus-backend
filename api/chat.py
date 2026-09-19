@@ -26,6 +26,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Literal
 
 from api.auth import utilisateur_optionnel, supabase
+from core.canal_agent_applicatif import debuter_tour, renvoyer_messages_non_lus, terminer_tour
 from core.limitation_debit import limiteur
 from core.restriction_mineur import acces_chat_bloque_pour_mineur
 from main import chat as chat_generateur  # core/main.py:chat()
@@ -195,6 +196,11 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
     Ne change PAS la structure des événements produits par chat() (voir sa
     docstring) -- on les sérialise tels quels, un JSON par ligne `data:`.
     """
+    # Canal en direct (19/09/2026) : tant que ce flux tourne, l'etudiant peut
+    # envoyer un message qui sera lu par la boucle d'agent au prochain
+    # aller-retour (voir core/canal_agent_applicatif.py).
+    if user_id:
+        debuter_tour(user_id)
     try:
         if payload.reprise is not None:
             generateur = chat_generateur(
@@ -228,6 +234,9 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
     except Exception as e:
         logging.error(f"ERREUR chat() en streaming (agent_id={payload.agent_id}) : {e}")
         yield f"data: {json.dumps({'type': 'reponse', 'texte': 'Une erreur est survenue, réessaie dans un instant.'})}\n\n"
+    finally:
+        if user_id:
+            renvoyer_messages_non_lus(user_id, terminer_tour(user_id))
     # Signal de fin explicite : côté Next.js, permet de savoir que le flux
     # est terminé sans dépendre uniquement de la fermeture de connexion.
     yield "data: [DONE]\n\n"

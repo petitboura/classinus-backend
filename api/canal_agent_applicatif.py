@@ -9,7 +9,13 @@ import logging
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from api.auth import supabase
-from core.canal_agent_applicatif import connecter, deconnecter, mettre_a_jour_etat_actions, recevoir_reponse
+from core.canal_agent_applicatif import (
+    accuser_message_etudiant,
+    connecter,
+    deconnecter,
+    mettre_a_jour_etat_actions,
+    recevoir_reponse,
+)
 
 router = APIRouter(prefix="/api/canal-agent-applicatif", tags=["canal-agent-applicatif"])
 
@@ -46,6 +52,15 @@ async def canal_agent_applicatif(
     (chantier P) : {"texte_clovis": "..."}, commentaire libre de Clovis
     a afficher dans la bulle de dialogue, voir
     core/canal_agent_applicatif.py:pousser_texte_clovis.
+
+    Message de l'etudiant pendant que Clovis travaille (recu) :
+    {"id_message": ..., "message_etudiant": "..."}. Reponse a cette
+    connexion : {"accuse_message_etudiant": id_message, "pris_en_compte":
+    bool}. True = un tour est en cours, la boucle d'agent lira le message
+    a son prochain aller-retour ; False = aucun tour en cours, le frontend
+    doit l'envoyer comme un message normal du chat. Envoye par le serveur
+    sans reponse attendue : {"message_etudiant_renvoye": "..."} (message
+    arrive trop tard pour etre lu par le tour, meme traitement cote frontend).
     """
     utilisateur = _verifier_token(token)
     if utilisateur is None:
@@ -63,6 +78,10 @@ async def canal_agent_applicatif(
                 recevoir_reponse(correlation_id, message.get("resultat"))
             elif "etat_actions" in message and isinstance(message.get("etat_actions"), list):
                 mettre_a_jour_etat_actions(utilisateur.id, appareil_id, message["etat_actions"])
+            elif isinstance(message.get("message_etudiant"), str):
+                await accuser_message_etudiant(
+                    utilisateur.id, appareil_id, message.get("id_message"), message["message_etudiant"], websocket
+                )
     except WebSocketDisconnect:
         pass
     except Exception as e:

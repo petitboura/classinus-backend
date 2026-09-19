@@ -6,6 +6,8 @@
 import json
 import logging
 from mcp_tools import parametres_outils
+# Meme chemin d'import que api/ et core/outils_action_agent.py : un seul module, donc un seul etat partage.
+from core.canal_agent_applicatif import retirer_messages_etudiant
 from constantes_agent import GROQ_PRIMARY, MODELES_AVEC_REASONING_EFFORT, DELAI_MAX_PAR_APPEL
 from execution_outils import _AttenteConfirmation, _traiter_appels
 from routage_outils import (
@@ -172,7 +174,7 @@ def _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, 
 def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                  appels_en_cours_a_finir=None, modele=GROQ_PRIMARY, reasoning_effort=None, agent_nom=None,
                  rattrapage_tool_code_restant=1, conversation_id=None,
-                 catalogue_complet=None, table_routage_complet=None):
+                 catalogue_complet=None, table_routage_complet=None, user_id=None):
     """
     Boucle d'agent generique sur le modele Groq utilise (par defaut
     GROQ_PRIMARY, mais peut recevoir n'importe quel modele Groq qui sait
@@ -222,6 +224,10 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
     demander_outils repond simplement qu'aucun outil supplementaire n'est
     disponible (voir plus bas) plutot que de planter.
     """
+    # `user_id` (canal en direct, 19/09/2026) : sert uniquement a lire les
+    # messages que l'etudiant envoie pendant que Clovis travaille (voir
+    # core/canal_agent_applicatif.py). None (chemins de reprise) : aucune
+    # lecture, ces messages sont alors renvoyes au frontend en fin de tour.
     kwargs_reasoning = {"reasoning_effort": reasoning_effort} if reasoning_effort else {}
     # Compteur de sources partagé sur tout le tour (26/08, citations
     # inline bibliotheque) -- une seule boîte, passée aux deux appels de
@@ -270,6 +276,20 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                 break
             budget_courant = min(budget_courant + palier_extension, plafond_absolu)
         etape += 1
+        # Messages de l'etudiant arrives depuis le dernier aller-retour :
+        # ajoutes AVANT l'appel au modele, apres les resultats d'outils deja
+        # ranges dans messages_agent (ordre valide pour le tool calling).
+        for texte_etudiant in retirer_messages_etudiant(user_id):
+            messages_agent.append({
+                "role": "user",
+                "content": (
+                    "Message de l'étudiant, écrit ou dicté pendant que tu agissais dans "
+                    "l'application. Tiens-en compte tout de suite : adapte ou arrête ton action "
+                    "si besoin, et réponds-lui brièvement avec dire_a_l_etudiant ou dans ta réponse : "
+                    + texte_etudiant
+                ),
+            })
+            yield {"type": "message_etudiant_direct", "texte": texte_etudiant}
         # Forçage tool_choice="required" RETIRÉ (2026-09-05, décision
         # explicite de Bourama, chantier "timeline chronologique") : il
         # avait été introduit le 2026-07-28 pour garantir qu'un outil
@@ -416,6 +436,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     rattrapage_tool_code_restant=rattrapage_tool_code_restant - 1,
                     conversation_id=conversation_id,
                     catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
+                    user_id=user_id,
                 )
                 return
             else:
