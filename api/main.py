@@ -46,6 +46,10 @@ from api.comportements_publics import router as comportements_publics_router
 from api.bibliotheque_publique import router as bibliotheque_publique_router
 from api.dossiers_catalogue_public import router as dossiers_catalogue_public_router
 from api.etoiles_catalogue_public import router as etoiles_catalogue_public_router
+from api.commentaires_catalogue_public import router as commentaires_catalogue_public_router
+from api.compteurs_catalogue_public import router as compteurs_catalogue_public_router
+from api.analytique_catalogue_public import router as analytique_catalogue_public_router
+from api.clovis_infos import router as clovis_infos_router
 from api.signalements import router as signalements_router
 from api.signalements_pedagogiques import router as signalements_pedagogiques_router
 from api.audit_hebdomadaire_corrections import router as audit_hebdomadaire_corrections_router
@@ -59,6 +63,8 @@ from api.guide_conversation import router_guide_conversation
 from api.historique_reponses_qcm import router_historique_reponses_qcm
 from api.outils_registre import router as outils_registre_router
 from api.appareils_mobiles import router as appareils_mobiles_router
+from api.connexions import router as connexions_router
+from api.connexions_notion import router as connexions_notion_router
 from api.canal_temps_reel import router as canal_temps_reel_router
 from api.canal_agent_applicatif import router as canal_agent_applicatif_router
 from api.webhooks_github import router as webhooks_github_router
@@ -419,7 +425,7 @@ async def _lifespan(app: FastAPI):
         tache_vectorisation_documents_agent.cancel()
 
 
-app = FastAPI(title="Clovis API", version="0.1.0", lifespan=_lifespan)
+app = FastAPI(title="Classinus API", version="0.1.0", lifespan=_lifespan)
 
 # Limitation de débit (rate limiting) -- voir core/limitation_debit.py.
 # Empêche qu'un utilisateur (ou un spam anonyme) puisse envoyer un nombre
@@ -708,6 +714,10 @@ app.include_router(comportements_publics_router)
 app.include_router(dossiers_catalogue_public_router)
 app.include_router(bibliotheque_publique_router)
 app.include_router(etoiles_catalogue_public_router)
+app.include_router(commentaires_catalogue_public_router)
+app.include_router(compteurs_catalogue_public_router)
+app.include_router(analytique_catalogue_public_router)
+app.include_router(clovis_infos_router)
 app.include_router(signalements_router)
 app.include_router(signalements_pedagogiques_router)
 app.include_router(audit_hebdomadaire_corrections_router)
@@ -721,6 +731,8 @@ app.include_router(router_guide_conversation)
 app.include_router(router_historique_reponses_qcm)
 app.include_router(outils_registre_router)
 app.include_router(appareils_mobiles_router)
+app.include_router(connexions_router)
+app.include_router(connexions_notion_router)
 app.include_router(canal_temps_reel_router)
 app.include_router(canal_agent_applicatif_router)
 app.include_router(dossiers_designes_router)

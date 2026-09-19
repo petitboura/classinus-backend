@@ -1,7 +1,7 @@
 """
 Codes de partage (14/08/2026, demande Bourama) : remplace le système
 "un code = une matière" (core/contenu_dynamique_matiere.py, jamais
-branché sur Clovis -- voir historique) par un système plus riche et
+branché sur Classinus -- voir historique) par un système plus riche et
 générique. Un utilisateur peut créer PLUSIEURS codes (pour ne pas
 mélanger "à qui j'envoie quoi"), chacun pouvant porter, tous optionnels
 et combinables librement :
@@ -397,7 +397,7 @@ def _copier_fichier_pour_receveur(fichier_id: str, receveur_id: str, proprietair
             uploade_par=proprietaire_id,
             user_id=receveur_id,
             description=f.get("description"),
-            statut_vectorisation="en_attente" if necessite_vectorisation_fichier_privee(f["type_mime"]) else "pret",
+            statut_vectorisation="en_attente" if necessite_vectorisation_fichier_privee(f["type_mime"], f["nom_fichier"]) else "pret",
             origine="code_partage",
         )
     except Exception as e:

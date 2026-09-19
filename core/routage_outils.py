@@ -7,6 +7,7 @@ import logging
 from groq import Groq
 from constantes_agent import get_secret, supabase, MODELE_ROUTEUR_OUTILS, MODELE_ROUTEUR_OUTILS_REPLI, DELAI_MAX_PAR_APPEL
 from mcp_tools import lister_outils_autorises_pour_agent
+from registre_outils import NOMS_CATEGORIES_OUTILS, INDEX_CATEGORIES_OUTILS
 
 def _resume_description_outil(description, max_caracteres=200):
     """
@@ -168,17 +169,28 @@ def _outil_demander_outils():
     budget d'aller-retours ni dans la detection de repetition (voir
     _separer_appels_demander_outils juste en dessous). Permet au grand
     modele de demander, EN PLEIN MILIEU de sa reponse en cours, un outil
-    qui existe reellement dans le catalogue de Clovis mais qui ne fait
+    qui existe reellement dans le catalogue de Classinus mais qui ne fait
     pas partie de ce qui lui a ete propose ce tour-ci (ni outils forces
     de contexte, ni gardes du tour precedent, ni suggeres par le routeur
     automatique -- voir _outils_deja_en_main juste en dessous).
 
-    Contrairement a _outil_garder_outils, PAS de liste fermee en enum :
-    le modele ne connait pas les noms exacts des outils qu'il n'a pas, il
-    decrit son besoin en langage libre. C'est l'etape 3 (branchement,
-    dans _agent_groq) qui compare ensuite ce texte par recherche
-    mots-cles (voir recherche_outils.rechercher_outils_pertinents) au
-    reste du catalogue complet deja recupere ailleurs (voir
+    REVISION (19/09/2026, demande Bourama) : le catalogue total (40+
+    outils generation + 45 Notion + 7 Drive + github/tavily) est devenu
+    trop grand pour une seule recherche BM25 a plat, qui melangeait les
+    outils Notion entre eux et avec le reste (certains ne remontaient
+    quasiment jamais). Le modele peut desormais preciser une ou plusieurs
+    categories (voir registre_outils.CATEGORIES_OUTILS), chacune avec sa
+    propre phrase de besoin, recherchees INDEPENDAMMENT les unes des
+    autres (voir le branchement dans _agent_groq). La categorie reste
+    facultative par recherche : sans elle, comportement inchange
+    (recherche sur tout le catalogue).
+
+    Toujours PAS de liste fermee en enum pour "besoin" : le modele ne
+    connait pas les noms exacts des outils qu'il n'a pas, il decrit son
+    besoin en langage libre. C'est l'etape 3 (branchement, dans
+    _agent_groq) qui compare ensuite ce texte par recherche mots-cles
+    (voir recherche_outils.rechercher_outils_pertinents) au reste du
+    catalogue complet deja recupere ailleurs (voir
     mcp_tools.lister_outils_autorises_pour_agent) -- cette fonction-ci ne
     fait que decrire l'outil, aucune recherche.
     """
@@ -187,26 +199,35 @@ def _outil_demander_outils():
         "function": {
             "name": NOM_OUTIL_DEMANDER_OUTILS,
             "description": (
-                "Demande un outil dont tu as besoin MAINTENANT pour "
-                "continuer ta reponse en cours, mais qui ne fait pas "
-                "partie des outils qui te sont proposes ce tour-ci. "
-                "Decris en une phrase claire ce que tu cherches a faire "
-                "(jamais un nom d'outil que tu devinerais). Si un outil "
-                "correspondant existe dans le catalogue de Clovis, il "
-                "t'est ajoute immediatement et tu peux l'appeler dans la "
-                "foulee, sans attendre le prochain message de "
-                "l'utilisateur. Si rien ne correspond, on te le dit "
-                "clairement -- adapte-toi alors plutot que de rester "
-                "bloque en silence. A utiliser seulement quand tu es "
-                "reellement bloque par l'absence d'un outil, pas "
+                "Demande un ou plusieurs outils dont tu as besoin "
+                "MAINTENANT pour continuer ta reponse en cours, mais qui "
+                "ne font pas partie des outils qui te sont proposes ce "
+                "tour-ci. Une entree par besoin dans `recherches` : "
+                "decris en une phrase claire ce que tu cherches a faire "
+                "(jamais un nom d'outil que tu devinerais), et precise la "
+                "categorie si tu sais ou chercher -- ca evite que ta "
+                "recherche se noie parmi tous les autres outils. Si "
+                "plusieurs besoins te bloquent en meme temps (par ex. un "
+                "outil Notion ET un outil de generation), mets une entree "
+                "par besoin dans le meme appel plutot que d'enchainer "
+                "plusieurs appels : chaque entree est cherchee "
+                "independamment, dans SA categorie si elle en a une. Si "
+                "un outil correspondant existe dans le catalogue de "
+                "Classinus, il t'est ajoute immediatement et tu peux "
+                "l'appeler dans la foulee, sans attendre le prochain "
+                "message de l'utilisateur. Si rien ne correspond, on te "
+                "le dit clairement -- adapte-toi alors plutot que de "
+                "rester bloque en silence. A utiliser seulement quand tu "
+                "es reellement bloque par l'absence d'un outil, pas "
                 "systematiquement au debut de chaque tache. "
+                f"{INDEX_CATEGORIES_OUTILS} "
                 "PRIORITE (12/09/2026, demande Bourama) : decris d'abord "
                 "l'outil precis dont tu as besoin pour la tache demandee "
                 "(ex: envoyer un message, gerer un document, un skill, "
                 "chercher sur le web). N'utilise gerer_base_connaissance "
                 "qu'en dernier recours, apres au maximum 2 recherches "
                 "d'outils precis infructueuses -- sauf si la question "
-                "porte clairement sur Clovis ou l'application elle-meme "
+                "porte clairement sur Classinus ou l'application elle-meme "
                 "(fonctionnement, bug, fonctionnalite), auquel cas "
                 "demande directement gerer_base_connaissance des la "
                 "premiere recherche."
@@ -214,16 +235,44 @@ def _outil_demander_outils():
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "besoin": {
-                        "type": "string",
+                    "recherches": {
+                        "type": "array",
+                        "minItems": 1,
                         "description": (
-                            "Description libre, en une phrase, de ce que "
-                            "tu cherches a faire (ex : \"un outil pour "
-                            "envoyer un email\"), pas un nom d'outil."
+                            "Une entree par besoin d'outil, cherchee "
+                            "independamment des autres."
                         ),
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "besoin": {
+                                    "type": "string",
+                                    "description": (
+                                        "Description libre, en une phrase, "
+                                        "de ce que tu cherches a faire "
+                                        "(ex : \"un outil pour envoyer un "
+                                        "email\"), pas un nom d'outil."
+                                    ),
+                                },
+                                "categorie": {
+                                    "type": "string",
+                                    "enum": NOMS_CATEGORIES_OUTILS,
+                                    "description": (
+                                        "Facultatif. Categorie dans "
+                                        "laquelle chercher CE besoin "
+                                        "precis, si tu sais ou regarder "
+                                        "(voir la liste des categories "
+                                        "dans la description de cet "
+                                        "outil). Omis -> recherche sur "
+                                        "tout le catalogue."
+                                    ),
+                                },
+                            },
+                            "required": ["besoin"],
+                        },
                     }
                 },
-                "required": ["besoin"],
+                "required": ["recherches"],
             },
         },
     }
@@ -237,17 +286,20 @@ def _separer_appels_demander_outils(appels):
     table_routage/_traiter_appels, jamais comptes dans le budget ni la
     detection de repetition.
 
-    REVISION (etape 3, meme jour) : contrairement a la premiere version
-    (poussee avec l'etape 2), ne renvoie plus une simple liste de textes
-    "besoin" -- chaque appel demander_outils du lot peut chercher quelque
-    chose de DIFFERENT et doit recevoir sa propre reponse individuelle
-    (voir _agent_groq), pas une reponse generique partagee comme
-    garder_outils. Renvoie donc (appels_normaux, demandes), demandes
-    etant la liste (dans l'ordre, un element par appel demander_outils du
-    lot -- rare qu'il y en ait plus d'un, mais couvert) de dicts
-    {"id": tool_call_id, "besoin": texte_ou_chaine_vide}. Un besoin
-    vide/illisible reste dans la liste (jamais ignore silencieusement
-    cette fois) : l'API Groq exige un message "tool" pour CHAQUE
+    REVISION (19/09/2026, demande Bourama, categorisation) : chaque appel
+    demander_outils transporte desormais une LISTE de recherches
+    ({"besoin": ..., "categorie": ... ou absente}), chacune cherchee
+    independamment (voir le branchement dans _agent_groq). Renvoie donc
+    (appels_normaux, demandes), demandes etant la liste (dans l'ordre, un
+    element par appel demander_outils du lot) de dicts {"id":
+    tool_call_id, "recherches": [...]}. Compatibilite : un appel qui
+    enverrait encore l'ancien format a plat ({"besoin": "..."}) est
+    accepte et transforme en une recherche unique sans categorie, au cas
+    ou un modele en cours de conversation aurait encore l'ancien schema
+    en tete.
+
+    Une recherche vide/illisible reste dans la liste (jamais ignoree
+    silencieusement) : l'API Groq exige un message "tool" pour CHAQUE
     tool_call_id emis par l'assistant, sinon le prochain appel a Groq
     echoue -- charge donc a l'appelant de repondre "je n'ai pas compris"
     plutot que rien.
@@ -258,11 +310,19 @@ def _separer_appels_demander_outils(appels):
         if appel["name"] == NOM_OUTIL_DEMANDER_OUTILS:
             try:
                 arguments = json.loads(appel["arguments"] or "{}")
-                besoin = (arguments.get("besoin") or "").strip()
+                brutes = arguments.get("recherches")
+                if brutes is None and arguments.get("besoin"):
+                    # Compatibilite ancien format (voir docstring).
+                    brutes = [{"besoin": arguments.get("besoin")}]
+                recherches = []
+                for r in (brutes or []):
+                    besoin = (r.get("besoin") or "").strip()
+                    categorie = (r.get("categorie") or "").strip() or None
+                    recherches.append({"besoin": besoin, "categorie": categorie})
             except Exception as e:
                 logging.error(f"ERREUR arguments demander_outils illisibles : {e}")
-                besoin = ""
-            demandes.append({"id": appel["id"], "besoin": besoin})
+                recherches = []
+            demandes.append({"id": appel["id"], "recherches": recherches})
         else:
             appels_normaux.append(appel)
     return appels_normaux, demandes
@@ -456,7 +516,7 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "différents. Pour CHAQUE question, commence par identifier à "
         "quel monde elle appartient AVANT de choisir un outil -- ne te "
         "fie JAMAIS à un mot-clé ('bibliothèque', 'public', 'catalogue', "
-        "'Clovis'...), base-toi sur l'intention réelle :\n\n"
+        "'Classinus'...), base-toi sur l'intention réelle :\n\n"
         "1) MES DOCUMENTS À MOI -- cours, exercice, fichier que "
         "L'ÉTUDIANT LUI-MÊME a uploadé dans SA bibliothèque personnelle. "
         "-> gerer_document_bibliotheque (action \"chercher\"). "
@@ -464,21 +524,21 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "sur les intégrales\", \"qu'est-ce que dit mon document sur la "
         "photosynthèse ?\", \"aide-moi avec l'exercice 4\".\n\n"
         "2) CLOVIS / L'APPLICATION ELLE-MÊME -- comment fonctionne "
-        "Clovis, ses fonctionnalités, un bug, une question sur "
+        "Classinus, ses fonctionnalités, un bug, une question sur "
         "l'application, même vaguement. L'utilisateur ne sait pas que "
         "cette base de connaissances existe, ne connaît aucun nom "
         "d'outil, et ne dira jamais \"cherche dans la base de "
         "connaissance\" -- mets-toi à sa place. "
         "-> gerer_base_connaissance. "
         "Exemples : \"comment fonctionne le partage de code sur "
-        "Clovis ?\", \"est-ce que tu peux générer un PDF ?\", \"c'est "
+        "Classinus ?\", \"est-ce que tu peux générer un PDF ?\", \"c'est "
         "quoi la bibliothèque dans l'appli ?\", \"comment je crée un "
         "programme ?\", \"ça bug chez moi, tu peux m'aider ?\", \"c'est "
-        "quoi Clovis ?\", \"je comprends pas comment marche cette "
+        "quoi Classinus ?\", \"je comprends pas comment marche cette "
         "fonctionnalité\".\n\n"
         "3) CATALOGUE PUBLIC -- LOCALISER un document dans la section "
         "\"Bibliothèque publique\", ouverte à tout le monde, PAS "
-        "l'étudiant qui l'a uploadé, PAS Clovis lui-même. "
+        "l'étudiant qui l'a uploadé, PAS Classinus lui-même. "
         "-> gerer_document_bibliotheque (action "
         "\"trouver_catalogue_public\"). "
         "Exemples : \"trouve-moi un document sur la thermodynamique "
@@ -507,9 +567,9 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "document de la bibliothèque publique dans ma bibliothèque\", "
         "\"télécharge ce document public chez moi\".\n\n"
         "4) WEB -- tout ce qui n'est NI un document de l'étudiant, NI "
-        "Clovis/l'application, NI le catalogue public : actualité, "
+        "Classinus/l'application, NI le catalogue public : actualité, "
         "information générale externe, sujet "
-        "sans rapport avec Clovis ou les documents de l'étudiant. "
+        "sans rapport avec Classinus ou les documents de l'étudiant. "
         "-> tavily_search. "
         "Exemples : \"quelle est la capitale du Japon ?\", \"donne-moi "
         "les dernières nouvelles sur X\", \"c'est quoi la photosynthèse "
@@ -518,7 +578,7 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "connaissance générale stable que tu connais déjà sans "
         "recherche (ex: \"1+1\", \"capitale de la France\") -- même "
         "règle que plus haut, une info ne devient pas une recherche web "
-        "juste parce qu'elle est \"externe\" à Clovis.\n\n"
+        "juste parce qu'elle est \"externe\" à Classinus.\n\n"
         "Piège fréquent à éviter : une question généraliste et une "
         "question sur LES documents personnels de l'étudiant peuvent se "
         "ressembler en surface (\"c'est quoi la mitose ?\" = web ou "
@@ -545,7 +605,7 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         # répondait à côté (confusion avec "compétences personnelles").
         "IMPORTANT : gerer_comportement (action \"lister\") DOIT être "
         "suggéré dès que l'utilisateur demande à voir/lister ses "
-        "\"skills\" (le SEUL mot utilisé dans toute l'interface Clovis "
+        "\"skills\" (le SEUL mot utilisé dans toute l'interface Classinus "
         "pour cette fonctionnalité -- \"comportement\" est un nom interne, "
         "ignore-le pour reconnaître l'intention). Exemples qui DOIVENT "
         "suggérer cet outil : \"quels sont mes skills ?\", \"montre-moi "
@@ -579,13 +639,13 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         # plus cher ici est de rester silencieux, pas de suggérer un
         # outil de trop.
         "IMPORTANT : ne confonds JAMAIS un dossier de la BIBLIOTHÈQUE "
-        "Clovis PERSONNELLE (documents/liens/notes privés de "
+        "Classinus PERSONNELLE (documents/liens/notes privés de "
         "l'étudiant -> gerer_dossier_bibliotheque), un dossier du "
         "CATALOGUE PUBLIC (visible par tout le monde, statut "
         "contribution_libre/privee -> gerer_dossier_catalogue_public, "
         "AJOUT 09/09/2026), et un dossier PHYSIQUE sur le TÉLÉPHONE de "
         "l'étudiant (fichiers réels de son appareil, aucun rapport avec "
-        "la bibliothèque Clovis -> gerer_dossier_telephone + "
+        "la bibliothèque Classinus -> gerer_dossier_telephone + "
         "explorer_dossier). Exemples bibliothèque personnelle : "
         "\"crée-moi un dossier pour mes cours de maths\", \"range ce "
         "document dans un nouveau dossier\", \"supprime mon dossier "
@@ -634,7 +694,7 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "pièces jointes de conversation) : suggère TOUJOURS "
         "gerer_fichier_conversation à la place. Si le fichier demandé est "
         "physiquement SUR LE TÉLÉPHONE de l'étudiant plutôt que dans sa "
-        "bibliothèque Clovis, suggère plutôt la paire gerer_dossier_telephone + "
+        "bibliothèque Classinus, suggère plutôt la paire gerer_dossier_telephone + "
         "explorer_dossier (voir règle du monde téléphone plus haut) --"
         " explorer_dossier a une action dédiée \"donner_fichier\" pour "
         "ce cas précis. Signal de reconnaissance : "

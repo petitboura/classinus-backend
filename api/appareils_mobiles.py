@@ -16,7 +16,7 @@ executer_action_mobile, voir core/serveur_mcp_generation.py), types
 core/dossiers_designes_mobile.py) et "accessibilite_*" (flavor Android
 externe uniquement).
 
-Canal dedie entre l'app mobile Clovis (Android/iOS, depot
+Canal dedie entre l'app mobile Classinus (Android/iOS, depot
 clovis-mobile) et ce backend. Reutilise l'auth Supabase standard deja
 en place (voir api/auth.py) : l'app mobile se connecte directement a
 Supabase avec le SDK natif, puis envoie son access_token en Bearer sur
@@ -174,7 +174,7 @@ def enregistrer_push_token(payload: TokenPush, utilisateur=Depends(utilisateur_c
 def desinscrire_push_token(token: str, utilisateur=Depends(utilisateur_courant)):
     """
     CONTRAT APP MOBILE : appeler a la deconnexion (l'utilisateur se
-    deconnecte de son compte Clovis sur ce telephone) pour ne plus
+    deconnecte de son compte Classinus sur ce telephone) pour ne plus
     recevoir de rappels sur cet appareil.
     """
     try:
@@ -195,7 +195,7 @@ def desinscrire_push_token(token: str, utilisateur=Depends(utilisateur_courant))
 def obtenir_actions_en_attente(appareil_id: str = "", utilisateur=Depends(utilisateur_courant)):
     """
     CONTRAT APP MOBILE : filet de secours a appeler a chaque ouverture de
-    l'app, pour rattraper les actions decidees par Clovis pendant qu'elle
+    l'app, pour rattraper les actions decidees par Classinus pendant qu'elle
     etait fermee/hors ligne (le push peut ne pas etre arrive). Passer
     `appareil_id` (depuis le 04/09/2026) : une action ciblant un AUTRE
     appareil du meme compte (dossier possede par un autre telephone)
@@ -314,38 +314,20 @@ def _titre_resultat_notion(resultat: dict) -> str | None:
 def rechercher_notion(q: str = "", utilisateur=Depends(utilisateur_courant)):
     """
     Preuve de bout en bout du Lot 5 (critere de fin) : recherche dans
-    l'espace Notion connecte de l'utilisateur. `q` vide renvoie les
-    elements les plus recents (comportement standard de l'API Notion).
+    l'espace Notion connecte de l'utilisateur. `q` vide renvoie une liste
+    vide (Notion exige un texte de recherche via son serveur MCP).
     """
-    token = obtenir_token_notion(utilisateur.id)
-    if not token:
-        raise erreur_api(400, "NOTION_NON_CONNECTE")
+    # Le jeton de connexion est un jeton MCP : l'API classique de Notion le
+    # refuse (401). La recherche passe donc par le serveur MCP de Notion.
+    # Notion exige un texte de recherche : sans texte, liste vide.
+    from api.connexions_notion import rechercher_pages_notion
 
-    try:
-        reponse = httpx.post(
-            "https://api.notion.com/v1/search",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Notion-Version": NOTION_API_VERSION,
-                "Content-Type": "application/json",
-            },
-            json={"query": q, "page_size": 20},
-            timeout=10,
-        )
-        reponse.raise_for_status()
-    except Exception as e:
-        logging.error(f"ERREUR recherche Notion mobile (utilisateur {utilisateur.id}) : {e}")
-        raise erreur_api(500, "NOTION_RECHERCHE_ECHEC")
-
-    resultats = reponse.json().get("results", [])
+    if not q.strip():
+        return {"resultats": []}
+    trouvees = rechercher_pages_notion(utilisateur.id, q)
     return {
         "resultats": [
-            {
-                "id": r.get("id"),
-                "type": r.get("object"),
-                "url": r.get("url"),
-                "titre": _titre_resultat_notion(r),
-            }
-            for r in resultats
+            {"id": p["id"], "type": p["type"], "url": p["url"], "titre": p["titre"]}
+            for p in trouvees
         ]
     }

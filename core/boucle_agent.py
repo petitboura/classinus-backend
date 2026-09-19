@@ -20,7 +20,7 @@ from routage_outils import (
     NOM_OUTIL_DEMANDER_OUTILS,
 )
 from recherche_outils import rechercher_outils_pertinents
-from registre_outils import REGISTRE_AFFICHAGE_OUTILS
+from registre_outils import REGISTRE_AFFICHAGE_OUTILS, outils_de_la_categorie
 
 # Libellés français (déjà maintenus pour l'affichage à l'écran) réutilisés
 # le 10/09/2026 comme indice supplémentaire pour rechercher_outils_pertinents
@@ -566,9 +566,23 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
             # mais geree ici a la main puisque demander_outils ne passe
             # jamais par _traiter_appels/table_routage.
             nom_lisible_demande = _nom_lisible(NOM_OUTIL_DEMANDER_OUTILS)
-            yield {"type": "statut", "texte": f"{nom_lisible_demande}..."}
+            # id_appel/nom_outil ajoutes (19/09/2026, demande Bourama : la ligne
+            # "Recherche d'un outil" restait figee a part, avec un texte
+            # technique). Sans identifiant, le frontend ne peut pas rattacher
+            # cet outil a une ligne de la timeline comme les autres outils
+            # (voir _traiter_appels dans execution_outils.py) : il l'affichait
+            # alors dans l'ancien affichage flottant, jamais retire avant le
+            # debut de la reponse. Avec le meme identifiant sur statut,
+            # statut_termine et outil_resultat, c'est une ligne normale.
+            yield {
+                "type": "statut",
+                "texte": f"{nom_lisible_demande}...",
+                "id_appel": demande["id"],
+                "nom_outil": NOM_OUTIL_DEMANDER_OUTILS,
+            }
 
-            if not demande["besoin"]:
+            recherches_valides = [r for r in demande["recherches"] if r["besoin"]]
+            if not recherches_valides:
                 contenu_reponse = (
                     "Je n'ai pas compris ce dont tu as besoin -- decris en "
                     "une phrase claire ce que tu cherches a faire."
@@ -582,19 +596,47 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                 # meme reponse honnete dans les deux cas.
                 contenu_reponse = "Aucun outil supplémentaire n'est disponible pour cette conversation."
                 statut_fin = f"{nom_lisible_demande} : aucun outil disponible"
-                resultat_affichage = f"Besoin exprimé : {demande['besoin']}\n\nAucun outil supplémentaire n'est disponible pour cette conversation."
+                resultat_affichage = "Aucun outil supplémentaire n'est disponible pour cette conversation."
             else:
-                deja_en_main = _outils_deja_en_main(outils_mcp)
-                candidats = [o for o in catalogue_complet if o["function"]["name"] not in deja_en_main]
-                trouves = rechercher_outils_pertinents(demande["besoin"], candidats, libelles_supplementaires=_LIBELLES_POUR_RECHERCHE_OUTILS)
-                if trouves:
+                # REVISION (19/09/2026, demande Bourama, categorisation) :
+                # chaque recherche du lot est traitee independamment, dans
+                # SA categorie si elle en a une (voir
+                # registre_outils.outils_de_la_categorie) -- jamais un seul
+                # gros pool BM25 partage entre toutes, pour eviter qu'une
+                # recherche categorisee ne se fasse polluer par des outils
+                # d'une autre categorie (le probleme signale par Bourama
+                # avec Notion). deja_en_main recalcule a chaque recherche
+                # du lot : si une recherche precedente dans CE MEME lot a
+                # deja trouve un outil, la recherche suivante ne doit pas
+                # le reproposer.
+                trouves_total = []
+                lignes_detail = []
+                for recherche in recherches_valides:
+                    deja_en_main = _outils_deja_en_main(outils_mcp) | {
+                        o["function"]["name"] for o in trouves_total
+                    }
+                    candidats = [o for o in catalogue_complet if o["function"]["name"] not in deja_en_main]
+                    if recherche["categorie"]:
+                        candidats = outils_de_la_categorie(recherche["categorie"], candidats)
+                    trouves = rechercher_outils_pertinents(recherche["besoin"], candidats, libelles_supplementaires=_LIBELLES_POUR_RECHERCHE_OUTILS)
+                    trouves_total.extend(trouves)
+                    etiquette_categorie = f" [{recherche['categorie']}]" if recherche["categorie"] else ""
+                    if trouves:
+                        lignes_detail.append(
+                            f"- \"{recherche['besoin']}\"{etiquette_categorie} -> "
+                            + ", ".join(o["function"]["name"] for o in trouves)
+                        )
+                    else:
+                        lignes_detail.append(f"- \"{recherche['besoin']}\"{etiquette_categorie} -> rien trouvé")
+
+                if trouves_total:
                     # Nouvelle liste (jamais de mutation en place de
                     # l'ancienne outils_mcp) : outils_mcp est aussi ce qui
                     # part dans etat_reprise (confirmation/limite/repetition,
                     # voir _evenement_confirmation/_evenement_reprise_agent
                     # plus bas) -- une mutation en place risquerait de
                     # modifier une reference partagee avec un etat deja capture.
-                    outils_mcp = outils_mcp + trouves
+                    outils_mcp = outils_mcp + trouves_total
                     # Etape 4 : sans ce rafraichissement, l'entree garder_outils
                     # deja presente dans outils_mcp garderait son ANCIEN enum
                     # (fige par main.py avant le debut du tour) -- le modele ne
@@ -602,28 +644,33 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     # outil qu'il vient tout juste d'obtenir via demander_outils.
                     outils_mcp = _rafraichir_enum_garder_outils(outils_mcp)
                     table_routage = dict(table_routage)
-                    for outil in trouves:
+                    for outil in trouves_total:
                         nom = outil["function"]["name"]
                         if table_routage_complet and nom in table_routage_complet:
                             table_routage[nom] = table_routage_complet[nom]
-                    noms_trouves = ", ".join(o["function"]["name"] for o in trouves)
+                    noms_trouves = ", ".join(o["function"]["name"] for o in trouves_total)
                     contenu_reponse = (
                         f"Trouvé et ajouté à tes outils disponibles : {noms_trouves}. "
-                        "Tu peux l'appeler dès maintenant pour continuer."
+                        "Tu peux les appeler dès maintenant pour continuer."
                     )
-                    statut_fin = f"{nom_lisible_demande} : {noms_trouves} trouvé"
-                    resultat_affichage = f"Besoin exprimé : {demande['besoin']}\n\nTrouvé : {noms_trouves}."
+                    # Texte de fin identique aux autres outils (19/09/2026, demande
+                    # Bourama : les noms techniques des outils trouves ne doivent
+                    # plus s'afficher ici). Le detail, lui, reste visible en
+                    # depliant la ligne (resultat_affichage, inchange).
+                    statut_fin = f"{nom_lisible_demande} effectuée"
+                    resultat_affichage = "\n".join(lignes_detail)
                 else:
-                    contenu_reponse = "Aucun outil correspondant à ce besoin n'existe dans le catalogue de Clovis."
+                    contenu_reponse = "Aucun outil correspondant à ces besoins n'existe dans le catalogue de Classinus."
                     statut_fin = f"{nom_lisible_demande} : rien trouvé"
-                    resultat_affichage = f"Besoin exprimé : {demande['besoin']}\n\nAucun outil correspondant trouvé dans le catalogue de Clovis."
+                    resultat_affichage = "\n".join(lignes_detail)
 
-            yield {"type": "statut_termine", "texte": statut_fin}
+            yield {"type": "statut_termine", "texte": statut_fin, "id_appel": demande["id"]}
             yield {
                 "type": "outil_resultat",
                 "nom_outil": NOM_OUTIL_DEMANDER_OUTILS,
                 "nom_lisible": nom_lisible_demande,
                 "resultat": resultat_affichage,
+                "id_appel": demande["id"],
             }
             messages_agent.append({
                 "role": "tool",

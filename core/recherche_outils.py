@@ -11,7 +11,7 @@ les outils sont ensuite branchés -- ça, c'est la suite du chantier (étapes
 2 et 3).
 
 Choix BM25 plutôt que la recherche par sens (pgvector, comme pour la
-bibliothèque) : le catalogue total d'outils de Clovis reste petit (quelques
+bibliothèque) : le catalogue total d'outils de Classinus reste petit (quelques
 dizaines), donc pas besoin d'un appel réseau à Gemini pour vectoriser à
 chaque demande. BM25 tourne entièrement en mémoire, instantanément, sans
 dépendance externe ni nouvelle table Supabase à maintenir.

@@ -1,6 +1,6 @@
 """
 Cree le 24/08/2026, Bourama : Lot 1A Partie 3 (app mobile), brancher le
-cerveau -- canal de decision entre l'agent Clovis et l'appareil.
+cerveau -- canal de decision entre l'agent Classinus et l'appareil.
 
 Reprend le meme esprit que core/notifications_push.py (planifier_rappel /
 traiter_rappels_echus) mais pour une action a EXECUTER immediatement sur

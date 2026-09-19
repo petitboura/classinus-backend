@@ -167,7 +167,7 @@ def _copier_fichier_public_pour_receveur(fichier_id: str, receveur_id: str) -> s
             uploade_par=receveur_id,
             user_id=receveur_id,
             description=description_finale,
-            statut_vectorisation="en_attente" if necessite_vectorisation_fichier_privee(f["type_mime"]) else "pret",
+            statut_vectorisation="en_attente" if necessite_vectorisation_fichier_privee(f["type_mime"], f["nom_fichier"] or f["nom"]) else "pret",
             origine="publique",
         )
     except Exception as e:
@@ -191,10 +191,32 @@ def attacher_dossier(dossier_racine_id: str, receveur_id: str) -> dict | None:
     if not dossier:
         return None
 
+    # 18/09/2026, chantier "profil contributeur bibliotheque publique",
+    # étape 3/7 : compteur d'enregistrements pour l'analytique publique.
+    # Vérifié AVANT l'upsert (idempotent) pour ne compter qu'un vrai
+    # nouvel attachement, jamais un re-attachement (même utilisateur,
+    # même dossier).
+    deja_attache = bool(
+        supabase.table("dossiers_publics_attaches")
+        .select("user_id")
+        .eq("user_id", receveur_id)
+        .eq("dossier_public_id", dossier_racine_id)
+        .maybe_single()
+        .execute()
+        .data
+    )
+
     supabase.table("dossiers_publics_attaches").upsert({
         "user_id": receveur_id,
         "dossier_public_id": dossier_racine_id,
     }).execute()
+
+    if not deja_attache:
+        try:
+            from core.compteurs_catalogue_public import _incrementer
+            _incrementer("dossiers_catalogue_public", "enregistrements_count", dossier_racine_id)
+        except Exception as e:
+            logging.error(f"ERREUR compteur enregistrements (dossier public {dossier_racine_id}) : {e}")
 
     tous_dossiers = lister_dossiers_publics()
     par_id = {d["id"]: d for d in tous_dossiers}
@@ -216,7 +238,32 @@ def detacher_dossier(dossier_racine_id: str, receveur_id: str) -> None:
     """Arrête la synchronisation future -- la copie déjà faite dans la
     bibliothèque perso n'est JAMAIS supprimée automatiquement, voir
     docstring du module."""
-    supabase.table("dossiers_publics_attaches").delete().eq("user_id", receveur_id).eq("dossier_public_id", dossier_racine_id).execute()
+    res = (
+        supabase.table("dossiers_publics_attaches")
+        .delete()
+        .eq("user_id", receveur_id)
+        .eq("dossier_public_id", dossier_racine_id)
+        .execute()
+    )
+    # 18/09/2026, même chantier que attacher_dossier ci-dessus : décrémente
+    # seulement si une ligne a vraiment été supprimée (pas de détachement
+    # "en double" qui ferait passer le compteur sous zéro).
+    if res.data:
+        try:
+            res_element = (
+                supabase.table("dossiers_catalogue_public")
+                .select("enregistrements_count")
+                .eq("id", dossier_racine_id)
+                .maybe_single()
+                .execute()
+            )
+            if res_element and res_element.data:
+                nouveau = max(0, (res_element.data.get("enregistrements_count") or 0) - 1)
+                supabase.table("dossiers_catalogue_public").update({"enregistrements_count": nouveau}).eq(
+                    "id", dossier_racine_id
+                ).execute()
+        except Exception as e:
+            logging.error(f"ERREUR compteur enregistrements (détachement dossier public {dossier_racine_id}) : {e}")
 
 
 def _racines_attachees(dossier_id: str) -> list[str]:

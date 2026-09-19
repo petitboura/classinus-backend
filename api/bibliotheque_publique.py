@@ -333,7 +333,7 @@ def obtenir_entree_bibliotheque_publique_par_url(url: str):
 @router.get("/{entree_id}", response_model=EntreeBibliothequePublique)
 def obtenir_entree_bibliotheque_publique(entree_id: str, utilisateur=Depends(utilisateur_optionnel)):
     """Détail d'une entrée publiée, pour la page publique /bibliotheque/[id]
-    (chantier "Clovis ouvert" du 10/09/2026, demande Bourama : chaque
+    (chantier "Classinus ouvert" du 10/09/2026, demande Bourama : chaque
     PDF retrouvable par son nom et téléchargeable via un lien propre).
 
     Même filtre statut="publie" que la liste ci-dessus : une entrée

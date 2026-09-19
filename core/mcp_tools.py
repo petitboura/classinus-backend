@@ -217,7 +217,7 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
     pertinence des outils reellement disponibles, sans dupliquer toute la
     logique de connexion aux serveurs MCP.
 
-    Simplifie le 14/08 (demande Bourama) : Clovis est une seule IA, plus
+    Simplifie le 14/08 (demande Bourama) : Classinus est une seule IA, plus
     de systeme multi-agents/multi-createurs -- l'ancien filtrage par
     agents_serveurs/agents_outils_generation (par agent) a ete retire.
     Tous les serveurs et outils de generation disponibles cote plateforme

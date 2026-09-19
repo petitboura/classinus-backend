@@ -40,7 +40,7 @@ async def lister_actions_disponibles(ctx: Context) -> str:
     elle peut donc etre generique, courte, ou ambigue (ex. deux boutons
     "Modifier" sur le meme ecran). Se fier au contexte de la conversation
     pour choisir le bon element, et consulter la base de connaissance de
-    Clovis en cas de doute reel plutot que de deviner.
+    Classinus en cas de doute reel plutot que de deviner.
 
     A appeler avant executer_action_application des que la liste
     connue pourrait etre perimee (nouvelle demande de l'etudiant,
@@ -63,7 +63,7 @@ async def lister_actions_disponibles(ctx: Context) -> str:
 @mcp_generation.tool()
 async def executer_action_application(action_id: str, ctx: Context) -> str:
     """
-    Declenche un clic dans l'application Clovis a la place de
+    Declenche un clic dans l'application Classinus a la place de
     l'etudiant, sur l'element `action_id`. `action_id` DOIT etre un
     identifiant renvoye par lister_actions_disponibles (mecanisme de
     poussee d'etat, chantier D) -- ne jamais deviner ni inventer un
@@ -168,7 +168,7 @@ async def montrer_element_application(action_id: str, ctx: Context) -> str:
 
     Si l'étudiant doit ensuite cliquer lui même, ne pas appeler
     executer_action_application à sa place : laisser l'étudiant agir.
-    Si Clovis doit agir à sa place, utiliser executer_action_application
+    Si Classinus doit agir à sa place, utiliser executer_action_application
     séparément après (ou à la place de) ce pointage.
     """
     user_id = ctx.request_context.request.query_params.get("user_id")

@@ -161,10 +161,64 @@ def lire_document_bibliotheque_en_entier(fichier_id: str, user_id: str) -> str |
     Reconstruit le texte intégral d'un document déjà indexé (PDF/texte),
     en recollant tous ses chunks dans l'ordre d'insertion (id croissant
     == ordre d'origine, voir indexer_texte_bibliotheque qui insère les
-    morceaux dans l'ordre). None si le document n'appartient pas à
-    user_id ou n'a aucun chunk indexé (vidéo par exemple -- pas encore
-    vectorisée aujourd'hui, contrairement à PDF/texte/image/audio).
+    morceaux dans l'ordre).
+
+    CORRECTIF 18/09/2026 (bug remonté par Bourama) : un lien ajouté à la
+    bibliothèque (enregistrer_lien, type_mime="text/uri-list") n'est
+    JAMAIS vectorisé (aucune ligne dans documents_bibliotheque), donc
+    cette fonction renvoyait toujours None pour un lien -- l'IA recevait
+    "rien à lire" sans même que l'URL réelle lui soit donnée, impossible
+    dans ces conditions d'essayer de la lire elle-même. Si aucun chunk
+    n'est trouvé, on va donc chercher les métadonnées du fichier : si
+    c'est un lien, on tente de lire son contenu via _lire_url (même
+    logique que pour un lien collé dans le chat, voir
+    core/lecture_urls_externes.py) et on le renvoie ; si l'extraction
+    échoue (lien mort, page protégée, vidéo sans sous-titres...), on
+    renvoie quand même l'URL telle quelle -- jamais None dans ce cas,
+    pour que l'IA ne prétende jamais ignorer le lien et puisse au moins
+    le redonner tel quel.
+
+    CORRECTIF 18/09/2026 bis (bug remonté par Bourama, même jour) : cette
+    fonction ne renvoyait QUE le texte brut, sans jamais dire à l'IA de
+    quel document il s'agit (nom, description, type, URL). Invisible
+    tant que l'appel suit une recherche (le contexte est déjà là), mais
+    problématique quand un CTA donne directement un fichier_id à l'IA
+    sans étape de recherche préalable : elle décrivait un contenu sans
+    savoir ce qu'il était, et ne pouvait ni le nommer ni redonner son
+    lien. On préfixe donc désormais toujours le contenu renvoyé d'un
+    en-tête minimal (nom, description si présente, URL si c'est un
+    lien) -- les métadonnées sont donc allées chercher AVANT de savoir
+    si le document est vectorisé ou non, puisqu'on en a besoin dans les
+    deux cas.
+
+    None reste le résultat uniquement si le fichier n'existe pas,
+    n'appartient pas à user_id, ou n'est ni un document vectorisé ni un
+    lien (ex. vidéo pas encore vectorisée).
     """
+    try:
+        meta = (
+            supabase.table("fichiers_uploades")
+            .select("nom_fichier, description, type_mime, url_publique")
+            .eq("id", fichier_id)
+            .eq("user_id", user_id)
+            .maybe_single()
+            .execute()
+        )
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (lecture métadonnées fichier_id={fichier_id}) : {e}")
+        return None
+    if not meta or not meta.data:
+        return None
+
+    nom = meta.data.get("nom_fichier") or "Document"
+    description = (meta.data.get("description") or "").strip()
+    type_mime = meta.data.get("type_mime")
+    est_lien = type_mime == "text/uri-list"
+
+    entete = f'[Document de ta bibliothèque personnelle : "{nom}"' + (" -- ceci est un lien" if est_lien else "") + "]"
+    if description:
+        entete += f"\nDescription donnée par l'utilisateur : {description}"
+
     try:
         res = (
             supabase.table("documents_bibliotheque")
@@ -178,9 +232,23 @@ def lire_document_bibliotheque_en_entier(fichier_id: str, user_id: str) -> str |
         logging.error(f"ERREUR SUPABASE (lecture intégrale fichier_id={fichier_id}) : {e}")
         return None
 
-    if not res.data:
+    if res.data:
+        contenu = "\n\n".join(ligne["contenu"] for ligne in res.data)
+        return f"{entete}\n\n{contenu}"
+
+    if not est_lien:
         return None
-    return "\n\n".join(ligne["contenu"] for ligne in res.data)
+
+    url = (meta.data.get("url_publique") or "").strip()
+    if not url:
+        return None
+
+    from core.lecture_urls_externes import _lire_url
+    contenu_url = _lire_url(url, user_id)
+    entete += f"\nURL : {url}"
+    if contenu_url:
+        return f"{entete}\n\n{contenu_url}"
+    return f"{entete}\n\n[Extraction automatique du contenu échouée -- redonne quand même l'URL ci-dessus telle quelle.]"
 
 
 def formater_source_bibliotheque(r: dict) -> str | None:

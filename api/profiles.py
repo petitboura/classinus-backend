@@ -69,6 +69,14 @@ class ProfilPublic(BaseModel):
     popup_chat_y: Optional[int] = None
     popup_chat_largeur: Optional[int] = None
     popup_chat_hauteur: Optional[int] = None
+    # 18/09/2026, chantier "profil contributeur bibliotheque publique" --
+    # contrairement aux champs "prives" ci-dessus, celui-ci est TOUJOURS
+    # renvoye avec sa vraie valeur, y compris a un visiteur externe : il
+    # sert justement a savoir si le reste (bio/nom_affiche/avatar_url)
+    # doit etre affiche ou remplace par un etat "profil non public" cote
+    # frontend (voir obtenir_profil_public, qui vide ces trois champs
+    # pour un visiteur externe quand profil_public est faux).
+    profil_public: bool = False
 
 
 class AgentDuCreateur(BaseModel):
@@ -239,7 +247,7 @@ def obtenir_profil_public(user_id: str, utilisateur=Depends(utilisateur_optionne
     try:
         profil = (
             supabase.table("profiles")
-            .select("user_id, nom_affiche, bio, avatar_url, notifications_proactives_actives, premier_agent_id, est_createur, popup_chat_x, popup_chat_y, popup_chat_largeur, popup_chat_hauteur")
+            .select("user_id, nom_affiche, bio, avatar_url, notifications_proactives_actives, premier_agent_id, est_createur, popup_chat_x, popup_chat_y, popup_chat_largeur, popup_chat_hauteur, profil_public")
             .eq("user_id", user_id)
             .maybe_single()
             .execute()
@@ -288,11 +296,19 @@ def obtenir_profil_public(user_id: str, utilisateur=Depends(utilisateur_optionne
     ]
 
     ligne = ligne_profil
+    profil_public = bool(ligne.get("profil_public"))
+    # 18/09/2026, chantier "profil contributeur bibliotheque publique" :
+    # un visiteur externe ne voit bio/nom_affiche/avatar_url QUE si le
+    # proprietaire a active profil_public -- sert notamment au bouton
+    # "details" de la bibliotheque publique (voir docstring plus haut).
+    # Le proprietaire voit toujours ses propres infos, publiees ou non.
+    montrer_infos = est_le_proprietaire or profil_public
     return ProfilDetailPublic(
         user_id=ligne["user_id"],
-        nom_affiche=ligne.get("nom_affiche") or "",
-        bio=ligne.get("bio") or "",
-        avatar_url=ligne.get("avatar_url"),
+        nom_affiche=(ligne.get("nom_affiche") or "") if montrer_infos else "",
+        bio=(ligne.get("bio") or "") if montrer_infos else "",
+        avatar_url=(ligne.get("avatar_url") if montrer_infos else None),
+        profil_public=profil_public,
         agents=agents,
         notifications_proactives_actives=(
             bool(ligne.get("notifications_proactives_actives")) if est_le_proprietaire else False
@@ -335,6 +351,9 @@ class MettreAJourProfilPayload(BaseModel):
     popup_chat_y: Optional[int] = None
     popup_chat_largeur: Optional[int] = None
     popup_chat_hauteur: Optional[int] = None
+    # 18/09/2026, chantier "profil contributeur bibliotheque publique" --
+    # voir docstring de ProfilPublic. None = champ omis, ne rien changer.
+    profil_public: Optional[bool] = None
 
 
 @router.patch("/me", response_model=ProfilPublic)
@@ -398,6 +417,8 @@ def mettre_a_jour_mon_profil(
         ligne["popup_chat_largeur"] = payload.popup_chat_largeur
     if payload.popup_chat_hauteur is not None:
         ligne["popup_chat_hauteur"] = payload.popup_chat_hauteur
+    if payload.profil_public is not None:
+        ligne["profil_public"] = payload.profil_public
 
     try:
         deja_existant = (
@@ -462,7 +483,7 @@ def mettre_a_jour_mon_profil(
     try:
         res = (
             supabase.table("profiles")
-            .select("user_id, nom_affiche, bio, avatar_url, notifications_proactives_actives, premier_agent_id, est_createur, popup_chat_x, popup_chat_y, popup_chat_largeur, popup_chat_hauteur")
+            .select("user_id, nom_affiche, bio, avatar_url, notifications_proactives_actives, premier_agent_id, est_createur, popup_chat_x, popup_chat_y, popup_chat_largeur, popup_chat_hauteur, profil_public")
             .eq("user_id", utilisateur.id)
             .maybe_single()
             .execute()
@@ -478,7 +499,9 @@ def mettre_a_jour_mon_profil(
         cible_id=utilisateur.id,
         details={
             "champs_modifies": [
-                c for c in ("nom_affiche", "bio", "avatar_url", "premier_agent_id", "est_majeur") if c in ligne
+                c
+                for c in ("nom_affiche", "bio", "avatar_url", "premier_agent_id", "est_majeur", "profil_public")
+                if c in ligne
             ]
         },
         request=request,
@@ -497,6 +520,7 @@ def mettre_a_jour_mon_profil(
         popup_chat_y=resultat.get("popup_chat_y"),
         popup_chat_largeur=resultat.get("popup_chat_largeur"),
         popup_chat_hauteur=resultat.get("popup_chat_hauteur"),
+        profil_public=bool(resultat.get("profil_public")),
     )
 
 
@@ -507,7 +531,7 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
     "Exporter mes données" (droit d'accès/portabilité) -- pendant de
     supprimer_mon_compte juste en dessous, demande de Bourama 2026-09-02 :
     donner à chaque utilisateur un moyen concret de récupérer une copie
-    de tout ce que Clovis sait sur lui, sans passer par un administrateur.
+    de tout ce que Classinus sait sur lui, sans passer par un administrateur.
 
     Rassemble, pour l'utilisateur connecté uniquement (jamais un autre
     user_id, même passé en paramètre), toutes ses données personnelles à

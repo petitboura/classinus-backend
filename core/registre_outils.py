@@ -249,6 +249,21 @@ OUTILS_SENSIBLES = {
     "notion-create-view",
     "notion-update-view",
     "notion-create-attachment",
+    # 19/09/2026 (demande Bourama, répartition validée) -- les 8 outils
+    # parmi les 25 nouveaux (voir REGISTRE_AFFICHAGE_OUTILS plus bas) qui
+    # écrivent réellement quelque chose ou déclenchent une action côté
+    # Notion (création/modification de dossier ou fichier, transformation
+    # d'une page, lancement/pilotage d'une session d'agent tiers) : même
+    # logique que les outils d'écriture Notion ci-dessus, TOUJOURS
+    # interrompus pour confirmation avant exécution.
+    "notion-create-folder",
+    "notion-update-folder",
+    "notion-create-file-upload",
+    "notion-convert-page-to-skill",
+    "notion-upload-skill",
+    "notion-spawn-session",
+    "notion-send-message-to-session",
+    "notion-stop-session",
     # Google Drive (01/09) -- ÉCRIVENT réellement dans le Drive de
     # l'utilisateur (creation/copie de fichier), meme logique que les
     # outils d'ecriture Notion/GitHub ci-dessus : TOUJOURS interrompus
@@ -397,7 +412,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "gerer_document_bibliotheque:trouver_catalogue_public": {"label": "Catalogue public", "icone": "Library", "onglet": None},
     "gerer_document_bibliotheque:lire_catalogue_public": {"label": "Catalogue public", "icone": "Library", "onglet": None},
     "gerer_document_bibliotheque:lister_catalogue_public": {"label": "Catalogue public", "icone": "Library", "onglet": None},
-    "gerer_base_connaissance": {"label": "Base de connaissances de Clovis", "icone": "BookMarked", "onglet": "rechercher"},
+    "gerer_base_connaissance": {"label": "Base de connaissances de Classinus", "icone": "BookMarked", "onglet": "rechercher"},
 
     # --- Action dans l'app : GitHub ---
     "gerer_depot_github": {"label": "Dépôt GitHub", "icone": "Github", "onglet": "action_app", "appli": "github"},
@@ -407,7 +422,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "notion-fetch": {"label": "Ouverture d'une page/base Notion", "icone": "FileSearch", "onglet": "action_app", "appli": "notion"},
     "notion-query-data-sources": {"label": "Interrogation d'une base Notion (SQL)", "icone": "Table2", "onglet": "action_app", "appli": "notion"},
     "notion-query-database-view": {"label": "Interrogation d'une vue Notion", "icone": "LayoutGrid", "onglet": "action_app", "appli": "notion"},
-    "notion-query-meeting-notes": {"label": "Recherche dans les notes de réunion", "icone": "StickyNote", "onglet": "action_app", "appli": "notion"},
+    "notion-query-meeting-notes": {"label": "Recherche dans les notes de réunion Notion", "icone": "StickyNote", "onglet": "action_app", "appli": "notion"},
     "notion-get-comments": {"label": "Lecture des commentaires Notion", "icone": "MessagesSquare", "onglet": "action_app", "appli": "notion"},
     "notion-get-async-task": {"label": "Suivi d'une tâche Notion en cours", "icone": "Clock", "onglet": "action_app", "appli": "notion"},
     "notion-get-teams": {"label": "Liste des équipes Notion", "icone": "Users", "onglet": "action_app", "appli": "notion"},
@@ -423,6 +438,45 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "notion-create-attachment": {"label": "Ajout d'une pièce jointe Notion", "icone": "Paperclip", "onglet": "action_app", "appli": "notion"},
     "notion-create-view": {"label": "Création d'une vue Notion", "icone": "PanelsTopLeft", "onglet": "action_app", "appli": "notion"},
     "notion-update-view": {"label": "Modification d'une vue Notion", "icone": "SlidersHorizontal", "onglet": "action_app", "appli": "notion"},
+
+    # --- Action dans l'app : Notion (25 outils supplémentaires, 19/09/2026,
+    # demande Bourama) --- le connecteur Notion en expose désormais 45 au
+    # total (contre 20 avant, bloc ci-dessus), écart constaté en comparant
+    # ce registre au catalogue Notion actuel. Ces 25 n'avaient encore aucune
+    # entrée ici : invisibles à la recherche interne d'outils (le libellé
+    # français de CE registre est ce qui sert de libelle_supplementaire à
+    # rechercher_outils_pertinents, voir core/boucle_agent.py) et non
+    # couverts par OUTILS_SENSIBLES. Tous les libellés incluent explicitement
+    # le mot "Notion" (demande Bourama : sans ça, une recherche en français
+    # matche mal -- même problème déjà rencontré avec Tavily).
+    # Icônes vérifiées une à une dans lucide-react 0.383.0 installé
+    # (classgpt-frontend/package.json), pas de repli Wrench attendu.
+    "notion-ai-search": {"label": "Recherche IA dans Notion", "icone": "Sparkles", "onglet": "action_app", "appli": "notion"},
+    "notion-search-agents": {"label": "Recherche d'agents Notion", "icone": "Users", "onglet": "action_app", "appli": "notion"},
+    "notion-search-sessions": {"label": "Recherche de sessions d'agent Notion", "icone": "Search", "onglet": "action_app", "appli": "notion"},
+    "notion-search-skills": {"label": "Recherche de skills Notion", "icone": "ScrollText", "onglet": "action_app", "appli": "notion"},
+    "notion-query-multiple-data-sources": {"label": "Interrogation de plusieurs bases Notion", "icone": "Layers", "onglet": "action_app", "appli": "notion"},
+    "notion-query-sessions": {"label": "Liste des sessions d'agent Notion", "icone": "ListChecks", "onglet": "action_app", "appli": "notion"},
+    "notion-read-session-event": {"label": "Lecture d'un évènement de session Notion", "icone": "FileText", "onglet": "action_app", "appli": "notion"},
+    "notion-list-favorite-pages": {"label": "Liste des pages favorites Notion", "icone": "Star", "onglet": "action_app", "appli": "notion"},
+    "notion-list-private-pages": {"label": "Liste des pages privées Notion", "icone": "Lock", "onglet": "action_app", "appli": "notion"},
+    "notion-list-recent-pages": {"label": "Liste des pages Notion récentes", "icone": "Clock", "onglet": "action_app", "appli": "notion"},
+    "notion-list-session-events": {"label": "Historique d'une session d'agent Notion", "icone": "History", "onglet": "action_app", "appli": "notion"},
+    "notion-list-shared-pages": {"label": "Liste des pages partagées Notion", "icone": "Share2", "onglet": "action_app", "appli": "notion"},
+    "notion-get-session-status": {"label": "Statut d'une session d'agent Notion", "icone": "Activity", "onglet": "action_app", "appli": "notion"},
+    "notion-get-tool-access": {"label": "Vérification des droits d'accès Notion", "icone": "ShieldCheck", "onglet": "action_app", "appli": "notion"},
+    "notion-check-mcp-next-steps": {"label": "Vérification des étapes suivantes Notion", "icone": "ArrowRight", "onglet": "action_app", "appli": "notion"},
+    "notion-download-skill": {"label": "Téléchargement d'un skill Notion", "icone": "Download", "onglet": "action_app", "appli": "notion"},
+    "notion-show-advanced-analysis-next-steps": {"label": "Étapes suivantes d'analyse avancée Notion", "icone": "ArrowRight", "onglet": "action_app", "appli": "notion"},
+    # --- Écriture/action (marqués sensibles, voir OUTILS_SENSIBLES plus haut) ---
+    "notion-create-folder": {"label": "Création d'un dossier Notion", "icone": "FolderPlus", "onglet": "action_app", "appli": "notion"},
+    "notion-update-folder": {"label": "Modification d'un dossier Notion", "icone": "FolderCog", "onglet": "action_app", "appli": "notion"},
+    "notion-create-file-upload": {"label": "Envoi d'un fichier dans Notion", "icone": "UploadCloud", "onglet": "action_app", "appli": "notion"},
+    "notion-convert-page-to-skill": {"label": "Conversion d'une page Notion en skill", "icone": "Wand2", "onglet": "action_app", "appli": "notion"},
+    "notion-upload-skill": {"label": "Import d'un skill dans Notion", "icone": "Upload", "onglet": "action_app", "appli": "notion"},
+    "notion-spawn-session": {"label": "Lancement d'une session d'agent Notion", "icone": "PlayCircle", "onglet": "action_app", "appli": "notion"},
+    "notion-send-message-to-session": {"label": "Envoi d'un message à une session d'agent Notion", "icone": "MessageSquare", "onglet": "action_app", "appli": "notion"},
+    "notion-stop-session": {"label": "Arrêt d'une session d'agent Notion", "icone": "StopCircle", "onglet": "action_app", "appli": "notion"},
 
     # --- Action dans l'app : Google Drive ---
     # Noms d'outils NON VÉRIFIÉS en conditions réelles, voir le
@@ -585,4 +639,104 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # une action, meme rappel de cache 24h.
     "dire_a_l_etudiant": {"label": "Message en direct à l'étudiant", "icone": "MousePointerClick", "onglet": None},
 }
+
+# --- Categorisation pour demander_outils (19/09/2026, demande Bourama) ---
+# Le pool total d'outils actifs (verifie en base le 19/09 : 40 sur le
+# serveur "generation" + 45 Notion + 7 Drive + github/tavily) est devenu
+# trop grand pour une seule recherche BM25 a plat : les 45 outils Notion
+# se melangeaient entre eux et avec le reste, certains ne remontant
+# quasiment jamais (signale par Bourama). Categories statiques, decidees
+# a la main : un outil peut apparaitre dans plusieurs categories si
+# besoin (simple liste Python, pas un mapping outil -> categorie unique).
+#
+# "notion" n'a volontairement AUCUNE liste figee ici : les 45 outils
+# partagent tous le prefixe "notion-", verifie par prefixe dans
+# outils_de_la_categorie() plus bas -- fiable meme si Notion ajoute encore
+# des outils au connecteur, contrairement a une liste a remettre a jour a
+# la main a chaque fois.
+CATEGORIES_OUTILS = {
+    "generation_documents": [
+        "generer_document", "generer_document_word", "generer_document_excel",
+        "generer_document_powerpoint", "generer_document_latex", "generer_code",
+        "generer_site_zip", "generer_bundle", "generer_image", "deployer_site",
+        "exporter_donnees", "calculer_symbolique",
+    ],
+    # rechercher_image range ici (avec Tavily), pas dans generation_documents :
+    # onglet="rechercher" dans REGISTRE_AFFICHAGE_OUTILS ci-dessus, c'est une
+    # recherche d'image EXISTANTE sur le web, pas une creation (voir
+    # generer_image, qui lui reste dans generation_documents).
+    "recherche_web": [
+        "tavily_search", "tavily_extract", "tavily_crawl", "tavily_map",
+        "tavily_research", "rechercher_image",
+    ],
+    "bibliotheque": [
+        "gerer_document_bibliotheque", "gerer_dossier_bibliotheque",
+        "gerer_fichier_conversation",
+    ],
+    "catalogue_public": [
+        "gerer_entree_catalogue_public", "gerer_dossier_catalogue_public",
+    ],
+    "base_connaissance": ["gerer_base_connaissance"],
+    "pedagogie": [
+        "gerer_avancement_notions", "consulter_avancement_notion",
+        "verifier_consignes_code_actif", "consulter_signalement",
+        "consulter_signalements_pertinents", "enregistrer_note_signalement",
+        "rattacher_signalement_notion",
+    ],
+    "comportement": ["gerer_comportement", "gerer_comportement_public"],
+    "memoire": ["gerer_memoire_utilisateur"],
+    "telephone_etudiant": [
+        "gerer_dossier_telephone", "explorer_dossier", "gerer_action_mobile",
+        "lire_temps_ecran", "gerer_session_concentration",
+    ],
+    "historique": ["lister_conversations_historique", "lire_conversation_historique"],
+    "agent_applicatif": [
+        "executer_action_application", "lister_actions_disponibles",
+        "executer_clic_generique", "montrer_element_application",
+    ],
+    "github": ["gerer_depot_github"],
+    "google_drive": [
+        "search_files", "read_file_content", "download_file_content",
+        "list_recent_files", "get_file_metadata", "create_file", "copy_file",
+    ],
+}
+
+# Categories reconnues par prefixe de nom d'outil plutot que par liste
+# figee (voir commentaire au-dessus de CATEGORIES_OUTILS).
+CATEGORIES_OUTILS_PAR_PREFIXE = {
+    "notion": "notion-",
+}
+
+NOMS_CATEGORIES_OUTILS = list(CATEGORIES_OUTILS.keys()) + list(CATEGORIES_OUTILS_PAR_PREFIXE.keys())
+
+# Texte compact envoye dans la description de demander_outils (voir
+# routage_outils._outil_demander_outils) : les categories evidentes sont
+# nommees seules, les autres ont une parenthese pour lever l'ambiguite.
+INDEX_CATEGORIES_OUTILS = (
+    "Catégories : notion, google_drive, github, generation_documents, "
+    "recherche_web (web + recherche d'image), bibliotheque (documents/dossiers "
+    "personnels), catalogue_public, base_connaissance (Classinus lui même), "
+    "pedagogie (avancement, signalements), comportement (skills), memoire, "
+    "telephone_etudiant (mobile, écran, concentration), historique "
+    "(conversations passées), agent_applicatif (actions dans l'appli)."
+)
+
+
+def outils_de_la_categorie(nom_categorie, outils_candidats):
+    """
+    Sous-ensemble de `outils_candidats` (liste au format outils_pour_llm,
+    voir mcp_tools.py) appartenant a `nom_categorie`. Verifie d'abord
+    CATEGORIES_OUTILS (liste figee de noms), puis
+    CATEGORIES_OUTILS_PAR_PREFIXE (prefixe de nom, voir "notion").
+    Categorie inconnue -> liste vide : jamais un repli silencieux sur
+    toute la liste, un nom de categorie invalide doit rester sans
+    resultat plutot que de chercher partout sans que personne ne le sache.
+    """
+    noms_fixes = set(CATEGORIES_OUTILS.get(nom_categorie, []))
+    prefixe = CATEGORIES_OUTILS_PAR_PREFIXE.get(nom_categorie)
+    return [
+        o for o in outils_candidats
+        if o["function"]["name"] in noms_fixes
+        or (prefixe and o["function"]["name"].startswith(prefixe))
+    ]
 

@@ -51,7 +51,7 @@ DELAI_STATUT_1_SECONDES = 5
 DELAI_STATUT_2_SECONDES = 15
 DELAI_ABANDON_SECONDES = 30
 
-TEXTE_STATUT_1 = "Clovis interagit avec l'application..."
+TEXTE_STATUT_1 = "Classinus interagit avec l'application..."
 TEXTE_STATUT_2 = "Ça prend un peu plus de temps que prévu..."
 
 
@@ -256,7 +256,7 @@ async def demander_pointage_action(user_id: str, action_id: str, on_statut=None)
     """
     Chantier G (mode guidage). Diffuse {montrer_action_id} : demande
     UNIQUEMENT de deplacer le curseur virtuel vers l'element de
-    `action_id`, sans jamais l'executer -- pour que Clovis puisse
+    `action_id`, sans jamais l'executer -- pour que Classinus puisse
     montrer une nouveaute a l'etudiant en l'expliquant dans le chat,
     sans agir a sa place. Jamais de confirmation cote frontend pour ce
     cas (voir lib/canalAgentApplicatif.ts) : un pointage visuel n'a
