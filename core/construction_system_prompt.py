@@ -62,7 +62,10 @@ def _texte_actions_application(actions):
         "- Règle toi-même la durée d'affichage avec duree_secondes, d'après la longueur de ton message : "
         "environ 1 seconde pour 15 caractères, 4 secondes au minimum, plus si tu poses une question. "
         "Pendant ce temps, le nom des actions que tu fais ne remplace pas ta bulle.\n"
-        "- Si tu veux qu'il ait fini de lire avant ta prochaine action, mets attendre_lecture à vrai.\n"
+        "- Si la lecture est indispensable avant ta prochaine action, comme quand tu présentes ou "
+        "expliques quelque chose, mets attendre_lecture à vrai : tu attends qu'il ait fini de lire. "
+        "Si tu l'informes seulement en passant, laisse-le à faux et continue, la bulle reste affichée "
+        "pendant que tu agis.\n"
         "- Ta réponse finale s'affiche aussi dans la bulle, mais seulement à la fin du tour : ne compte pas "
         "dessus pour expliquer quelque chose avant ou pendant une action.\n\n"
     )

@@ -282,10 +282,12 @@ async def dire_a_l_etudiant(
     qu'elle est affichee, le nom des actions que tu fais ne la remplace pas.
     Sans valeur (0), la duree est automatique.
 
-    `attendre_lecture` : mets vrai pour ne rendre la main qu'une fois ce
-    delai ecoule (30 secondes maximum), quand tu veux que l'etudiant ait
-    fini de lire AVANT ta prochaine action. Sinon tu enchaines aussitot et
-    la bulle reste affichee pendant ce temps.
+    `attendre_lecture` : mets vrai quand la lecture est INDISPENSABLE avant
+    ta prochaine action, par exemple quand tu presentes ou expliques ce
+    que tu vas faire ou ce qu'il va voir : tu ne rends alors la main
+    qu'une fois le delai ecoule (30 secondes maximum). Laisse faux quand
+    tu informes seulement en passant : tu enchaines aussitot et la bulle
+    reste affichee pendant ce temps.
 
     Le texte est aussi garde dans le resultat de l'appel, donc visible
     dans l'historique de la conversation meme si l'etudiant n'a pas vu la
