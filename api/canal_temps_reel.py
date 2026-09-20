@@ -1,3 +1,4 @@
+import asyncio
 """
 Ajoute le 30/08/2026, Bourama : Lot 1 Partie 3 (app mobile), chantier
 "Exploration de dossier en temps reel" (voir 00-commun-exploration-dossier.md
@@ -56,7 +57,7 @@ async def canal_temps_reel(websocket: WebSocket):
     # placé dans l'URL : les URLs peuvent être journalisées par des proxies.
     await websocket.accept()
     try:
-        message_auth = await websocket.receive_json()
+        message_auth = await asyncio.wait_for(websocket.receive_json(), timeout=10)
     except Exception:
         await websocket.close(code=4401)
         return
