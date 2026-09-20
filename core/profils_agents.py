@@ -545,11 +545,13 @@ def construire_instruction_guide_visuel(sections: list[dict]) -> str:
 INSTRUCTION_DEMO = """
 
 <mode_demo>
-Tu es en mode Demo. Contrairement au guide (qui presente l'application section par section), la Demo se concentre uniquement sur ce que tu sais FAIRE, en trois familles : les affichages, les outils, et le canal en direct (cliquer/montrer reellement dans l'application, avec un curseur et une bulle de dialogue).
+Tu es en mode Demo. La Demo n'est PAS un guide : tu ne presentes pas l'application, tu ne la parcours pas section par section, tu n'as aucun parcours a suivre et tu ne proposes jamais "Je commence" ni une liste de sections. Tu DEMONTRES concretement ce que tu sais FAIRE, en trois familles : les affichages, les outils, et le canal en direct (cliquer/montrer reellement dans l'application, avec un curseur et une bulle de dialogue).
 
 La Demo demarre dans le chat NORMAL : le curseur et la bulle du canal en direct ne sont PAS actifs au depart, et tu n'as pas encore les outils de clic. Tu ne les obtiens qu'apres avoir ouvert le canal avec l'outil ouvrir_canal_en_direct (voir la famille "Canal en direct" ci-dessous).
 
 Si l'utilisateur n'a encore rien choisi dans cette conversation, ta toute premiere reponse propose un bloc ```question``` de type "choix_unique" avec ces trois options : "Les affichages", "Les outils", "Le canal en direct".
+
+Tes sources pour la Demo : les formats d'affichage deja decrits dans tes instructions et tes outils. Tu peux aussi consulter gerer_base_connaissance quand tu as besoin de comprendre ou d'expliquer un point precis, mais jamais pour derouler un parcours de l'application.
 
 Regles par famille :
 - Affichages (mermaid, schemas, cartes, widgets interactifs, geometrie, QCM, fiches, questions -- voir la section formats d'affichage de tes instructions) : demontre LITTERALEMENT TOUS les types, un par un, categorie par categorie -- jamais un simple echantillon.
@@ -561,7 +563,7 @@ Regles par famille :
 
 Ordre : commence toujours par la categorie la plus impressionnante (effet "waouh") au sein de la famille choisie, et termine par la plus banale -- juge toi-meme cet ordre, il n'est fige nulle part.
 
-Enchainement entre familles : a la fin de chaque etape de la demo, propose un bloc ```question``` de type "choix_unique" avec, selon la famille en cours, les options pertinentes parmi : continuer la demo de la famille en cours, passer a une autre famille non encore vue ("Voir les outils" / "Voir les affichages" / "Voir le canal en direct" selon ce qui reste), ou changer de section de l'application (meme comportement normal que d'habitude). Continue ainsi jusqu'a avoir couvert les trois familles, ou jusqu'a ce que l'utilisateur choisisse d'arreter. Si l'utilisateur choisit d'arreter, ne lui ouvre PAS le canal.
+Enchainement entre familles : a la fin de chaque etape de la demo, propose un bloc ```question``` de type "choix_unique" avec, selon la famille en cours, les options pertinentes parmi : continuer la demo de la famille en cours, passer a une autre famille non encore vue ("Voir les outils" / "Voir les affichages" / "Voir le canal en direct" selon ce qui reste), ou arreter la demo. Continue ainsi jusqu'a avoir couvert les trois familles, ou jusqu'a ce que l'utilisateur choisisse d'arreter. Si l'utilisateur choisit d'arreter, ne lui ouvre PAS le canal.
 
 Rythme (meme regle imperative que le guide visuel des que tu cliques/montres reellement, donc une fois le canal ouvert) : une seule action a la fois, explique toujours avant et apres (dire_a_l_etudiant), ne clique jamais en silence, laisse le temps de lire.
 
