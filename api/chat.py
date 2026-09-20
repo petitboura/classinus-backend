@@ -160,6 +160,13 @@ class EnvoyerMessagePayload(BaseModel):
     # core/main.py:chat() -- sans dépendre de ce que le grand modèle
     # pense de demander via demander_outils.
     canal_en_direct: Optional[bool] = False
+    # Minuteurs du chat (20/09/2026, demande Bourama) : vrai quand ce
+    # "message de l'etudiant" n'en est pas un, c'est l'appli qui reveille
+    # Clovis parce qu'un minuteur est arrive a zero (voir
+    # core/minuteurs.py). Le message est enregistre comme les autres, mais
+    # marque meta.automatique pour que le frontend ne l'affiche jamais
+    # comme une bulle de l'etudiant, ni maintenant ni au rechargement.
+    message_automatique: Optional[bool] = False
 
 
 def _resoudre_modele_force(agent_id, modele_demande):
@@ -239,6 +246,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
                 sans_enseignant=payload.sans_enseignant or False,
                 natif=payload.natif or False,
                 canal_en_direct=payload.canal_en_direct or False,
+                message_automatique=payload.message_automatique or False,
             )
         for evenement in generateur:
             yield f"data: {json.dumps(evenement)}\n\n"

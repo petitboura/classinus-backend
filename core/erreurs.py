@@ -264,6 +264,13 @@ MESSAGES_FR: dict[str, str] = {
     "SEUL_LE_CREATEUR_CONCERNE_PEUT_REFUSER": "Seul le créateur concerné peut refuser cette demande.",
     "DEPLACEMENT_CREERAIT_UNE_BOUCLE": "Ce déplacement est impossible (un dossier ne peut pas finir dans lui-même ou dans l'un de ses propres sous-dossiers).",
     "DOSSIER_DESTINATION_INTROUVABLE": "Dossier de destination introuvable.",
+    # 20/09/2026, minuteurs dans le chat -- voir core/minuteurs.py. A
+    # garder synchronise avec lib/erreurs.ts cote clovis-frontend.
+    "MINUTEUR_DUREE_INVALIDE": "Cette durée de minuteur n'est pas valide.",
+    "MINUTEUR_TROP_NOMBREUX": "Trop de minuteurs sont en cours en même temps, arrête en un d'abord.",
+    "MINUTEUR_INTROUVABLE": "Ce minuteur est introuvable.",
+    "MINUTEUR_DEJA_TERMINE": "Ce minuteur est déjà terminé ou arrêté.",
+    "MINUTEUR_ECHEC": "Impossible de mettre à jour ce minuteur pour le moment.",
 }
 
 

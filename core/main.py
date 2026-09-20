@@ -112,7 +112,7 @@ def _bloc_fichiers_generes(fichiers):
 # present en prod malgre le fix deja present sur main.
 
 
-def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False):
+def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False):
     """
     Generateur d'evenements. Chaque element produit est un dictionnaire :
     - {"type": "statut", "texte": "..."}         -> un outil MCP est en cours d'utilisation (ou, depuis le 11/09/2026, Gemini en train de lire une image/video jointe)
@@ -978,6 +978,13 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # anticipe du chemin image -- d'ou la definition ici, avant la
     # branche image, a None par defaut pour un message texte classique.
     meta_utilisateur = None
+    # Minuteurs du chat (20/09/2026) : message envoye par l'appli et non
+    # par l'etudiant, a ne jamais afficher comme une bulle de l'etudiant
+    # (voir api/chat.py, champ message_automatique). Aucun chemin
+    # "message automatique" n'a de piece jointe : la branche image plus
+    # bas, qui remplace meta_utilisateur, ne le concerne donc jamais.
+    if message_automatique:
+        meta_utilisateur = {"automatique": True}
 
     if toutes_les_urls_images or images_base64:
         # Chemin dédié image(s) : voir docstring ci-dessus. Pas de cascade
