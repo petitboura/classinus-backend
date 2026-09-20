@@ -39,7 +39,7 @@ from api.auth import utilisateur_courant
 from core.erreurs import erreur_api
 from core.usage_appareil_mobile import enregistrer_usage, lire_usage
 from core.notifications_push import enregistrer_token_natif, supprimer_token_natif
-from core.actions_appareil_mobile import lire_action, lire_actions_en_attente, marquer_resultat
+from core.actions_appareil_mobile import lire_action, lire_actions_en_attente, marquer_resultat, prendre_action
 from core.dossiers_designes_mobile import synchroniser_dossiers_designes
 from connexions.notion import (
     demarrer_connexion_notion,
@@ -203,6 +203,23 @@ def obtenir_actions_en_attente(appareil_id: str = "", utilisateur=Depends(utilis
     bon dossier la marque "echouee" a la place du bon appareil.
     """
     return {"actions": lire_actions_en_attente(utilisateur.id, appareil_id)}
+
+
+@router.post("/actions/{action_id}/prise-en-charge")
+def prendre_en_charge_action(
+    action_id: str, appareil_id: str = "", utilisateur=Depends(utilisateur_courant)
+):
+    """
+    Revendication atomique par l'appareil avant toute exécution native.
+    Une seule connexion/appareil peut faire passer l'action de en_attente
+    à en_execution.
+    """
+    if not appareil_id.strip():
+        raise erreur_api(400, "APPAREIL_ID_MANQUANT")
+    action = prendre_action(action_id, utilisateur.id, appareil_id)
+    if action is None:
+        raise erreur_api(409, "ACTION_DEJA_PRISE_OU_INTROUVABLE")
+    return action
 
 
 @router.get("/actions/{action_id}")
