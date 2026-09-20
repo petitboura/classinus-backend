@@ -11,6 +11,8 @@ decision Bourama) en "executer_action_application" : il n'y a plus de
 notion d'appareil cible, voir core/canal_agent_applicatif.py.
 """
 
+import asyncio
+
 from core.canal_agent_applicatif import (
     pousser_texte_clovis as _pousser_texte_clovis,
     demander_ouverture_canal as _demander_ouverture_canal,
@@ -222,9 +224,36 @@ async def ecrire_dans_champ(action_id: str, texte: str, ctx: Context) -> str:
 # faite pour une ou deux phrases lues en passant, pas pour un paragraphe.
 LONGUEUR_MAX_TEXTE_DIRECT = 400
 
+# Duree d'affichage de la bulle voulue par le modele (20/09/2026, demande
+# Bourama : la bulle disparaissait trop tot, et le modele est le mieux placé
+# pour savoir combien de temps se lit son message). Bornes larges, pas des
+# limites produit tranchees avec Bourama (a valider), regroupees ici pour
+# etre faciles a changer.
+DUREE_MIN_BULLE_SECONDES = 3
+DUREE_MAX_BULLE_SECONDES = 60
+
+# Quand le modele demande d'attendre que l'etudiant ait fini de lire avant
+# de continuer (attendre_lecture), attente maximale : au dela, une action
+# bloquee trop longtemps ressemble a une panne.
+ATTENTE_MAX_LECTURE_SECONDES = 30
+
+
+def _duree_automatique_secondes(texte: str) -> float:
+    """Meme formule que la duree automatique du frontend
+    (lib/contexteCanalEnDirect.tsx : 5 s minimum, 60 ms par caractere,
+    15 s maximum), utilisee ici seulement pour savoir combien de temps
+    attendre quand le modele n'a pas donne de duree. A garder identique
+    des deux cotes."""
+    return min(15.0, max(5.0, len(texte) * 0.06))
+
 
 @mcp_generation.tool()
-async def dire_a_l_etudiant(texte: str, ctx: Context) -> str:
+async def dire_a_l_etudiant(
+    texte: str,
+    ctx: Context,
+    duree_secondes: int = 0,
+    attendre_lecture: bool = False,
+) -> str:
     """
     Chantier P (canal en direct, decision Bourama du 19/09/2026) :
     affiche un court commentaire dans une bulle qui suit la souris de
@@ -234,6 +263,11 @@ async def dire_a_l_etudiant(texte: str, ctx: Context) -> str:
     quelqu'un (ce que tu vois, ce que tu vas faire, pourquoi, ce qui
     bloque).
 
+    L'etudiant ne voit QUE cette bulle, une a la fois : chaque nouveau
+    message remplace le precedent, et il ne voit ni tes reflexions, ni les
+    resultats de tes outils, ni le reste de ta reponse. Chaque message doit
+    donc se comprendre seul.
+
     A appeler entre deux actions, avant ou apres un executer_action_application
     ou un montrer_element_application, seulement quand ca apporte
     quelque chose a l'etudiant. Une ou deux phrases courtes, dans la langue
@@ -241,6 +275,17 @@ async def dire_a_l_etudiant(texte: str, ctx: Context) -> str:
     description de l'action en cours (l'application l'affiche deja), ne pas
     commenter chaque clic, ne pas s'en servir pour la reponse finale : celle-ci
     reste dans ta reponse normale du chat.
+
+    `duree_secondes` : combien de temps la bulle reste affichee (3 a 60),
+    a regler d'apres la longueur de ton message, environ 1 seconde pour 15
+    caracteres avec 4 secondes minimum, plus si tu poses une question. Tant
+    qu'elle est affichee, le nom des actions que tu fais ne la remplace pas.
+    Sans valeur (0), la duree est automatique.
+
+    `attendre_lecture` : mets vrai pour ne rendre la main qu'une fois ce
+    delai ecoule (30 secondes maximum), quand tu veux que l'etudiant ait
+    fini de lire AVANT ta prochaine action. Sinon tu enchaines aussitot et
+    la bulle reste affichee pendant ce temps.
 
     Le texte est aussi garde dans le resultat de l'appel, donc visible
     dans l'historique de la conversation meme si l'etudiant n'a pas vu la
@@ -260,14 +305,30 @@ async def dire_a_l_etudiant(texte: str, ctx: Context) -> str:
             "Reformule en une ou deux phrases courtes."
         )
 
-    atteintes = await _pousser_texte_clovis(user_id, propre)
+    # Durée voulue par le modèle, ramenée dans les bornes plutôt que refusée :
+    # un 90 ou un 1 ne doit pas faire perdre le message.
+    duree_voulue = 0
+    if isinstance(duree_secondes, int) and not isinstance(duree_secondes, bool) and duree_secondes > 0:
+        duree_voulue = max(DUREE_MIN_BULLE_SECONDES, min(DUREE_MAX_BULLE_SECONDES, duree_secondes))
+
+    atteintes = await _pousser_texte_clovis(user_id, propre, duree_voulue or None)
 
     if atteintes == 0:
         return (
             "Aucun affichage : l'application n'est ouverte nulle part pour ce compte, "
             "l'étudiant n'a rien vu. Dis-le dans ta réponse normale à la place."
         )
-    return f"Message affiché à l'étudiant : {propre}"
+
+    duree_effective = float(duree_voulue) if duree_voulue else _duree_automatique_secondes(propre)
+    resultat = (
+        f"Message affiché à l'étudiant pendant environ {duree_effective:.0f} secondes, "
+        f"il remplace la bulle précédente : {propre}"
+    )
+    if attendre_lecture:
+        attente = min(duree_effective, float(ATTENTE_MAX_LECTURE_SECONDES))
+        await asyncio.sleep(attente)
+        resultat += f"\nAttendu {attente:.0f} secondes pour qu'il ait le temps de lire."
+    return resultat
 
 
 # Texte envoye comme message du chat, a la fin du tour, une fois le canal
