@@ -16,6 +16,7 @@ from core.canal_agent_applicatif import (
     demander_execution_action as _demander_execution_action,
     demander_clic_generique as _demander_clic_generique,
     demander_pointage_action as _demander_pointage_action,
+    demander_ecriture_champ as _demander_ecriture_champ,
     observer_changement_ecran as _observer_changement_ecran,
     photographier_ecran as _photographier_ecran,
 )
@@ -167,6 +168,53 @@ async def montrer_element_application(action_id: str, ctx: Context) -> str:
     if isinstance(resultat, dict) and resultat.get("erreur"):
         return f"Erreur : {resultat['erreur']}"
     return "Curseur déplacé vers l'élément avec succès."
+
+
+@mcp_generation.tool()
+async def ecrire_dans_champ(action_id: str, texte: str, ctx: Context) -> str:
+    """
+    Ajoute le 20/09/2026 (demande Bourama) : écrit `texte` dans le champ
+    de saisie `action_id` à la place de l'étudiant, avec une frappe
+    visible (l'étudiant voit le texte apparaître progressivement,
+    lettre par lettre, comme s'il était tapé). `action_id` doit être un
+    identifiant de champ de saisie (input ou textarea) présent dans la
+    liste des éléments à l'écran fournie dans ce prompt système, jamais
+    deviné ni inventé. Pour un menu déroulant, une case à cocher, ou
+    tout autre élément qui ne se remplit pas par frappe, utilise
+    executer_action_application à la place.
+
+    Remplace entièrement le contenu actuel du champ, ne l'ajoute pas à
+    la suite de ce qui y est déjà écrit.
+
+    Plus aucune confirmation côté étudiant par défaut, même principe
+    que executer_action_application : l'exécution est immédiate dès
+    l'appel de cet outil. N'agis que quand l'étudiant a réellement
+    demandé cette saisie (ou l'a clairement acceptée dans la
+    conversation), jamais de façon spontanée.
+
+    NECESSITE que l'application soit ouverte quelque part pour ce
+    compte, même règle que les autres outils de ce fichier.
+    """
+    user_id = ctx.request_context.request.query_params.get("user_id")
+    if not user_id:
+        return "Erreur : impossible d'identifier l'utilisateur."
+
+    if not action_id:
+        return "Erreur : paramètre 'action_id' manquant."
+    if not texte:
+        return "Erreur : paramètre 'texte' manquant."
+
+    avant = _photographier_ecran(user_id)
+    resultat = await _demander_ecriture_champ(user_id, action_id, texte)
+
+    if resultat is None:
+        return (
+            "Aucune réponse de l'application : soit elle n'est ouverte nulle part pour ce compte, "
+            "soit ce champ n'est plus disponible à l'écran nulle part où elle est ouverte."
+        )
+    if isinstance(resultat, dict) and resultat.get("erreur"):
+        return f"Erreur : {resultat['erreur']}"
+    return "Texte écrit avec succès.\n" + await _observer_changement_ecran(user_id, avant)
 
 
 # Plafond de longueur d'un commentaire en direct : la bulle du canal est

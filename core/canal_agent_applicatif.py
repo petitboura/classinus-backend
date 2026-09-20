@@ -328,6 +328,28 @@ async def demander_pointage_action(user_id: str, action_id: str, on_statut=None)
     )
 
 
+async def demander_ecriture_champ(user_id: str, action_id: str, texte: str, on_statut=None) -> Any | None:
+    """
+    Ajoute le 20/09/2026 (demande Bourama : donner a Classinus la
+    possibilite d'ecrire dans les champs, pas seulement cliquer). Meme
+    principe que demander_execution_action, mais pour remplir un champ
+    de saisie : diffuse {action_id, texte_a_ecrire} a toutes les
+    connexions actives de user_id, la premiere connexion qui trouve
+    l'element correspondant, VISIBLE et ACTIF, tape le texte reellement
+    (avec une frappe visible cote frontend, voir traiterDemandeEcriture
+    dans lib/canalAgentApplicatif.ts). Aucune confirmation cote
+    etudiant, meme regle que le reste de ce chantier depuis le
+    19/09/2026.
+    """
+    correlation_id = str(uuid.uuid4())
+    return await _diffuser_et_attendre(
+        user_id,
+        {"id": correlation_id, "action_id": action_id, "texte_a_ecrire": texte},
+        on_statut,
+        on_timeout_log=f"ecriture action={action_id}",
+    )
+
+
 async def pousser_texte_clovis(user_id: str, texte: str) -> int:
     """
     Chantier P (19/09/2026, decision Bourama) : commentaire libre de

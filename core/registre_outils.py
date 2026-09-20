@@ -632,6 +632,8 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "executer_clic_generique": {"label": "Clic générique dans l'application", "icone": "MousePointerClick", "onglet": None},
     # Chantier G : mode guidage, meme rappel de cache 24h.
     "montrer_element_application": {"label": "Pointer un élément de l'application", "icone": "MousePointerClick", "onglet": None},
+    # Ecriture dans les champs (20/09/2026, demande Bourama), meme rappel de cache 24h.
+    "ecrire_dans_champ": {"label": "Écriture dans un champ", "icone": "PenLine", "onglet": None},
     # Chantier P (canal en direct, 19/09/2026) : commentaire libre pendant
     # une action, meme rappel de cache 24h.
     "dire_a_l_etudiant": {"label": "Message en direct à l'étudiant", "icone": "MousePointerClick", "onglet": None},
@@ -693,7 +695,7 @@ CATEGORIES_OUTILS = {
     # jamais demandee par un outil.
     "agent_applicatif": [
         "executer_action_application",
-        "executer_clic_generique", "montrer_element_application",
+        "executer_clic_generique", "montrer_element_application", "ecrire_dans_champ",
     ],
     "github": ["gerer_depot_github"],
     "google_drive": [
