@@ -71,8 +71,12 @@ def gerer_comportement(
       courte description de ceux qui semblent pertinents pour ce
       message -- utilise cette action quand l'un d'eux semble
       s'appliquer, AVANT de répondre, pour lire son contenu réel plutôt
-      que de deviner à partir de la description seule. Paramètre :
-      `comportement_id`.
+      que de deviner à partir de la description seule. Si tu as déjà
+      consulté ce même `comportement_id` plus tôt dans cette conversation
+      (résultat toujours visible, marqué "[Résultat de l'outil déjà
+      exécuté]"), ne le rappelle pas -- son contenu n'a pas changé entre
+      deux messages, réponds directement à partir de ce résultat.
+      Paramètre : `comportement_id`.
     - "ajouter" : enregistre une NOUVELLE instruction personnelle, à
       utiliser SEULEMENT quand l'étudiant exprime CLAIREMENT et
       EXPLICITEMENT une préférence ou une règle à retenir pour la suite
@@ -198,7 +202,12 @@ def gerer_base_connaissance(
       `question`. À utiliser quand la question touche un sujet précis où
       un contenu de référence a pu être préparé à l'avance, pas
       systématique, seulement si pertinent. Renvoie les extraits trouvés
-      ou un message si rien de pertinent. Paramètre : `question`.
+      ou un message si rien de pertinent. Si une question identique ou
+      équivalente a déjà été cherchée plus tôt dans cette conversation
+      (résultat toujours visible, marqué "[Résultat de l'outil déjà
+      exécuté]"), ne relance pas cette recherche -- réponds directement
+      à partir de ce résultat, sauf si l'étudiant précise ou change
+      clairement sa question. Paramètre : `question`.
     - "lister_articles" : liste les noms de tous les articles
       disponibles. À utiliser avant "lire_article" si le nom exact de
       l'article recherché n'est pas connu. Aucun paramètre.
@@ -212,7 +221,10 @@ def gerer_base_connaissance(
       tel quel (verbatim), ne le résume pas, ne le reformule pas, ne le
       raccourcis pas. Si `nom` est inconnu, utilise d'abord "chercher"
       pour identifier le bon nom, ou "lister_articles" pour voir les
-      noms disponibles. Paramètre : `nom`.
+      noms disponibles. Si ce même article a déjà été lu plus tôt dans
+      cette conversation (résultat toujours visible, marqué "[Résultat
+      de l'outil déjà exécuté]"), ne le relis pas -- son contenu n'a pas
+      changé entre deux messages. Paramètre : `nom`.
     """
     requete = ctx.request_context.request
     agent_id = requete.query_params.get("agent_id")
