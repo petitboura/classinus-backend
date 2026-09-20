@@ -20,6 +20,16 @@ construire_instruction_guide(obtenir_sections_guide()) (core/
 profils_agents.py) quand ce mode est actif. Meme patron que
 persona_pedagogique_conversation.py, branche le 14/09/2026 apres sa
 creation le 12/09/2026.
+
+ETENDU le 20/09/2026 (chantier "demo + guide visuel", demande Bourama,
+voir specs-demo-decouverte.md dans clovis-frontend) : obtenir_guide_actif
+renvoie desormais un dict {"actif": bool, "sous_mode": str} au lieu d'un
+bool nu -- sous_mode vaut "textuel" (comportement d'origine, inchange),
+"visuel" ou "demo" (migration 2026_09_20). definir_guide_actif accepte le
+meme parametre. Tous les appelants ont ete mis a jour en meme temps que
+ce fichier (core/main.py, api/guide_conversation.py) -- ne JAMAIS laisser
+un appelant lire ce dict comme un bool, l'ancien comportement `if
+guide_actif:` planterait silencieusement sur une valeur toujours "truthy".
 """
 import logging
 import time
@@ -70,10 +80,18 @@ def obtenir_sections_guide() -> list:
     return valeur
 
 
-def obtenir_guide_actif(conversation_id: str, user_id: str) -> bool:
-    """Le guide interactif est-il actif sur cette conversation ? False
-    tant que l'utilisateur n'a rien active explicitement (pas de valeur
-    par defaut implicite a true)."""
+_SOUS_MODE_PAR_DEFAUT = "textuel"
+_SOUS_MODES_VALIDES = ("textuel", "visuel", "demo")
+
+
+def obtenir_guide_actif(conversation_id: str, user_id: str) -> dict:
+    """Le mode decouverte (guide ou demo) est-il actif sur cette
+    conversation ? Renvoie {"actif": bool, "sous_mode": str}, jamais un
+    bool nu (voir docstring du module, extension du 20/09/2026). Pas de
+    valeur par defaut implicite a actif=true : "actif" reste False tant
+    que l'utilisateur n'a rien active explicitement. sous_mode vaut
+    toujours "textuel" quand actif est False (valeur sans consequence
+    dans ce cas, jamais lue par construire_instruction_guide)."""
     maintenant = time.time()
     entree = _cache_guide.get(conversation_id)
     if entree is not None and entree["expire_a"] > maintenant:
@@ -81,7 +99,7 @@ def obtenir_guide_actif(conversation_id: str, user_id: str) -> bool:
     try:
         res = (
             supabase.table("conversation_guide_actif")
-            .select("actif")
+            .select("actif, sous_mode")
             .eq("conversation_id", conversation_id)
             .eq("user_id", user_id)
             .maybe_single()
@@ -89,21 +107,33 @@ def obtenir_guide_actif(conversation_id: str, user_id: str) -> bool:
         )
     except Exception as e:
         logging.error(f"ERREUR SUPABASE (lecture guide actif {conversation_id}) : {e}")
-        return False
-    valeur = bool(res.data["actif"]) if (res and res.data) else False
+        return {"actif": False, "sous_mode": _SOUS_MODE_PAR_DEFAUT}
+    if res and res.data:
+        valeur = {
+            "actif": bool(res.data["actif"]),
+            "sous_mode": res.data.get("sous_mode") or _SOUS_MODE_PAR_DEFAUT,
+        }
+    else:
+        valeur = {"actif": False, "sous_mode": _SOUS_MODE_PAR_DEFAUT}
     _cache_guide[conversation_id] = {"valeur": valeur, "expire_a": maintenant + _DUREE_CACHE_SECONDES}
     return valeur
 
 
-def definir_guide_actif(conversation_id: str, user_id: str, actif: bool) -> dict:
-    """Active ou desactive le guide interactif sur cette conversation pour
-    cet utilisateur. Upsert sur conversation_id seul (cle primaire) -- une
-    conversation n'appartient qu'a un seul utilisateur, jamais recreee
-    pour un autre."""
+def definir_guide_actif(conversation_id: str, user_id: str, actif: bool, sous_mode: str = _SOUS_MODE_PAR_DEFAUT) -> dict:
+    """Active ou desactive le mode decouverte sur cette conversation pour
+    cet utilisateur, et fixe sous_mode ("textuel" par defaut -- comportement
+    d'origine inchange -- "visuel" ou "demo", voir migration 2026_09_20).
+    Upsert sur conversation_id seul (cle primaire) -- une conversation
+    n'appartient qu'a un seul utilisateur, jamais recreee pour un autre.
+    Valeur invalide repliee sur "textuel" plutot que de faire echouer
+    l'ecriture -- meme esprit defensif que le reste de ce module."""
+    if sous_mode not in _SOUS_MODES_VALIDES:
+        sous_mode = _SOUS_MODE_PAR_DEFAUT
     ligne = {
         "conversation_id": conversation_id,
         "user_id": user_id,
         "actif": actif,
+        "sous_mode": sous_mode,
     }
     try:
         res = (

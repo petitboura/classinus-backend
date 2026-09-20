@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from configuration import get_system_prompt
-from profils_agents import INSTRUCTIONS_FORMATS_AFFICHAGE, INSTRUCTIONS_ARBITRAGE_CALCUL, REGLE_CONTEXTE_INVISIBLE, INSTRUCTIONS_LONGUEUR_REPONSE, MODES_PEDAGOGIQUES, REGLE_BASCULE_MODE_PEDAGOGIQUE, construire_instruction_guide, MODES_SOURCE
+from profils_agents import INSTRUCTIONS_FORMATS_AFFICHAGE, INSTRUCTIONS_ARBITRAGE_CALCUL, REGLE_CONTEXTE_INVISIBLE, INSTRUCTIONS_LONGUEUR_REPONSE, MODES_PEDAGOGIQUES, REGLE_BASCULE_MODE_PEDAGOGIQUE, construire_instruction_guide, construire_instruction_guide_visuel, construire_instruction_demo, MODES_SOURCE
 from guide_conversation import obtenir_sections_guide
 
 
@@ -56,7 +56,7 @@ def _texte_actions_application(actions):
     return instruction + "Éléments cliquables actuellement à l'écran (id : description) :\n" + lignes + "\n"
 
 
-def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=False, mode_source=None, actions_ecran=None):
+def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None):
     # Restauré le 14/08 (voir commentaire des constantes plus haut) : la
     # page Notion de l'agent (get_system_prompt) ne doit plus contenir QUE
     # la personnalité/le comportement propre à l'agent -- les 3 blocs fixes
@@ -163,11 +163,28 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # Bourama. guide_actif vient de obtenir_guide_actif(conversation_id,
     # user_id) (core/guide_conversation.py), calcule dans chat() et recu
     # ici en parametre -- meme patron que persona_pedagogique juste
-    # au-dessus, jamais recalcule ici. Pas de mode par defaut : False tant
-    # que l'utilisateur n'a rien active explicitement (bouton flottant ou
-    # menu "+" du chat, etapes 4/5, pas encore poussees).
-    if guide_actif:
-        system_final += construire_instruction_guide(obtenir_sections_guide())
+    # au-dessus, jamais recalcule ici. Pas de mode par defaut : actif=False
+    # tant que l'utilisateur n'a rien active explicitement (bouton
+    # flottant ou menu "+" du chat, etapes 4/5, pas encore poussees).
+    #
+    # ETENDU le 20/09/2026 (chantier "demo + guide visuel", demande
+    # Bourama, voir specs-demo-decouverte.md dans clovis-frontend) :
+    # guide_actif est maintenant {"actif": bool, "sous_mode": str}, plus un
+    # bool nu (voir core/guide_conversation.py). sous_mode="textuel" garde
+    # exactement le comportement d'origine (construire_instruction_guide).
+    # "visuel" et "demo" sont deux instructions separees, mutuellement
+    # exclusives avec le guide textuel : les trois tournent chacune sur
+    # leur propre conversation dediee (jamais mélangées sur la meme), donc
+    # jamais plus d'une des trois active a la fois ici.
+    guide_actif = guide_actif or {"actif": False, "sous_mode": "textuel"}
+    if guide_actif["actif"]:
+        sous_mode_decouverte = guide_actif.get("sous_mode") or "textuel"
+        if sous_mode_decouverte == "visuel":
+            system_final += construire_instruction_guide_visuel(obtenir_sections_guide())
+        elif sous_mode_decouverte == "demo":
+            system_final += construire_instruction_demo()
+        else:
+            system_final += construire_instruction_guide(obtenir_sections_guide())
 
     # Chantier "mode source" (voir contexte-mode-source-clovis.md),
     # 16/09/2026, demande Bourama. mode_source vient de
