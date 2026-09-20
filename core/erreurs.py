@@ -267,7 +267,7 @@ MESSAGES_FR: dict[str, str] = {
     # 20/09/2026, minuteurs dans le chat -- voir core/minuteurs.py. A
     # garder synchronise avec lib/erreurs.ts cote clovis-frontend.
     "MINUTEUR_DUREE_INVALIDE": "Cette durée de minuteur n'est pas valide.",
-    "MINUTEUR_TROP_NOMBREUX": "Trop de minuteurs sont en cours en même temps, arrête-en un d'abord.",
+    "MINUTEUR_TROP_NOMBREUX": "Trop de minuteurs sont en cours en même temps, arrête en un d'abord.",
     "MINUTEUR_INTROUVABLE": "Ce minuteur est introuvable.",
     "MINUTEUR_DEJA_TERMINE": "Ce minuteur est déjà terminé ou arrêté.",
     "MINUTEUR_ECHEC": "Impossible de mettre à jour ce minuteur pour le moment.",
