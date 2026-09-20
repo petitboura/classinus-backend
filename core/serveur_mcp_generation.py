@@ -39,6 +39,8 @@ uniquement un déplacement de code :
   - outils_avancement_notions.py : avancement des notions (Partie 1) en
     langage naturel + règle de comportement (Partie 3, chantier
     "confiance pédagogique")
+  - outils_minuteurs.py          : minuteurs du chat (20/09/2026, demande
+    Bourama), chat seulement, pas sur le serveur MCP public
   - outils_verification_code_actif.py : outil unique de vérification
     "mode cours" (12/09/2026, demande Bourama) -- filet de sécurité en
     plus de l'injection automatique, absorbe les anciens
@@ -85,3 +87,4 @@ import core.outils_concentration  # noqa: F401
 import core.outils_avancement_notions  # noqa: F401
 import core.outils_verification_code_actif  # noqa: F401
 import core.outils_action_agent  # noqa: F401
+import core.outils_minuteurs  # noqa: F401

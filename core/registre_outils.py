@@ -628,6 +628,8 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # via forcer_rechargement_catalogue_outils ou redemarrage Railway
     # (cache 24h connu, voir plan-agent-applicatif-clovis.md section 2).
     "executer_action_application": {"label": "Action dans l'application", "icone": "MousePointerClick", "onglet": None},
+    # 20/09/2026 (demande Bourama) : minuteurs du chat, appeles par le modele, jamais cliquables a la main (onglet None).
+    "gerer_minuteur": {"label": "Gestion d'un minuteur", "icone": "Timer", "onglet": None},
     # Chantier F : filet de securite generique, meme rappel de cache 24h.
     "executer_clic_generique": {"label": "Clic générique dans l'application", "icone": "MousePointerClick", "onglet": None},
     # Chantier G : mode guidage, meme rappel de cache 24h.
@@ -692,6 +694,8 @@ CATEGORIES_OUTILS = {
         "lire_temps_ecran", "gerer_session_concentration",
     ],
     "historique": ["lister_conversations_historique", "lire_conversation_historique"],
+    # Minuteurs du chat (20/09/2026, demande Bourama, chat seulement).
+    "minuteur": ["gerer_minuteur"],
     # lister_actions_disponibles retire le 19/09/2026 (chantier "agent
     # applicatif continu", decision Bourama) : la liste des actions est
     # desormais injectee automatiquement dans le prompt systeme, plus
@@ -724,7 +728,7 @@ INDEX_CATEGORIES_OUTILS = (
     "personnels), catalogue_public, base_connaissance (Classinus lui même), "
     "pedagogie (avancement, signalements), comportement (skills), memoire, "
     "telephone_etudiant (mobile, écran, concentration), historique "
-    "(conversations passées), agent_applicatif (actions dans l'appli)."
+    "(conversations passées), agent_applicatif (actions dans l'appli), minuteur (minuteurs dans le chat)."
 )
 
 

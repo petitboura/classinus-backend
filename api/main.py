@@ -67,6 +67,7 @@ from api.connexions import router as connexions_router
 from api.connexions_notion import router as connexions_notion_router
 from api.canal_temps_reel import router as canal_temps_reel_router
 from api.canal_agent_applicatif import router as canal_agent_applicatif_router
+from api.minuteurs import router_minuteurs
 from api.webhooks_github import router as webhooks_github_router
 from api.dossiers_designes import router as dossiers_designes_router
 from api.programme_notions import router as programme_notions_router
@@ -74,6 +75,7 @@ from api.fichiers_r2 import router as fichiers_r2_router
 from api.apercu_lien import router as apercu_lien_router
 from core.serveur_mcp_generation import mcp_generation
 from core.notifications_push import traiter_rappels_echus, un_canal_push_disponible
+from core.minuteurs import traiter_minuteurs_a_notifier
 from core.proactivite import verifier_relances_proactives
 from core.audit_hebdomadaire_corrections import verifier_audits_hebdomadaires
 from core.file_attente_vectorisation import (
@@ -133,6 +135,23 @@ async def _boucle_planificateur_rappels():
         except Exception as e:
             logging.error(f"ERREUR boucle planificateur rappels : {e}")
         await asyncio.sleep(60)
+
+
+async def _boucle_planificateur_minuteurs():
+    # Minuteurs du chat (20/09/2026, demande Bourama, voir
+    # core/minuteurs.py) : previent l'etudiant par notification quand un
+    # minuteur est fini et que l'appli fermee n'a pas pu prendre la fin en
+    # charge. Passage toutes les 30s (les rappels, eux, toutes les 60s) car
+    # un minuteur se compte en secondes. Meme garantie que les rappels :
+    # si le process redemarre, rien n'est perdu (l'etat est en base).
+    while True:
+        try:
+            notifies = await asyncio.to_thread(traiter_minuteurs_a_notifier)
+            if notifies:
+                logging.info(f"Planificateur minuteurs : {notifies} notification(s) envoyée(s).")
+        except Exception as e:
+            logging.error(f"ERREUR boucle planificateur minuteurs : {e}")
+        await asyncio.sleep(30)
 
 
 async def _boucle_planificateur_proactivite():
@@ -391,8 +410,10 @@ async def _lifespan(app: FastAPI):
     ):
         tache_planificateur = None
         tache_proactivite = None
+        tache_minuteurs = None
         if un_canal_push_disponible():
             tache_planificateur = asyncio.create_task(_boucle_planificateur_rappels())
+            tache_minuteurs = asyncio.create_task(_boucle_planificateur_minuteurs())
             tache_proactivite = asyncio.create_task(_boucle_planificateur_proactivite())
         tache_vectorisation = asyncio.create_task(_boucle_vectorisation())
         tache_reessai_echecs = asyncio.create_task(_boucle_reessai_echecs())
@@ -411,6 +432,8 @@ async def _lifespan(app: FastAPI):
             tache_planificateur.cancel()
         if tache_proactivite:
             tache_proactivite.cancel()
+        if tache_minuteurs:
+            tache_minuteurs.cancel()
         tache_vectorisation.cancel()
         tache_reessai_echecs.cancel()
         tache_extraction_texte_publique.cancel()
@@ -735,6 +758,7 @@ app.include_router(connexions_router)
 app.include_router(connexions_notion_router)
 app.include_router(canal_temps_reel_router)
 app.include_router(canal_agent_applicatif_router)
+app.include_router(router_minuteurs)
 app.include_router(dossiers_designes_router)
 app.include_router(webhooks_github_router)
 app.include_router(programme_notions_router)
