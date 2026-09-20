@@ -25,6 +25,9 @@ tard car ils demandent un nouveau suivi qui n'existe pas encore) :
   components/chat/BulleMessage.tsx côté frontend -- liste tenue à jour
   manuellement ici, à mettre à jour si un nouveau type de bloc apparaît
   côté frontend)
+- modes pédagogiques les plus choisis (Socratique/Professeur/Tuteur/
+  Examinateur, voir SelecteurPersonaPedagogique.tsx et la table
+  conversation_persona_pedagogique côté backend)
 
 Le lien conversation -> code passe par conversation_mode_actif
 (rattachement_id) -> rattachements_codes (code_id), voir
@@ -66,6 +69,32 @@ TYPES_VISUELS: dict[str, str] = {
     "widget": "Widget interactif",
     "html": "Widget interactif",
 }
+
+# Mode pédagogique choisi par l'élève (20/09/2026, demande Bourama, voir
+# la barre de saisie -- SelecteurPersonaPedagogique.tsx côté frontend),
+# mêmes clés que MODES_PEDAGOGIQUES (core/profils_agents.py) et
+# PERSONAS_VALIDES (core/persona_pedagogique_conversation.py).
+LABELS_PERSONAS: dict[str, str] = {
+    "socratique": "Socratique",
+    "professeur": "Professeur",
+    "tuteur": "Tuteur",
+    "examinateur": "Examinateur",
+}
+
+# Outils à exclure de "outils les plus utilisés" (20/09/2026, demande
+# explicite Bourama) : des vérifications/mécanismes internes, pas de
+# vrais choix de l'élève, qui dominent le classement sans rien dire
+# d'utile (voir core/outils_verification_code_actif.py -- appel forcé à
+# quasiment chaque message dès qu'un code est actif ; demander_outils --
+# recherche interne dans le catalogue d'outils ; gerer_base_connaissance
+# -- pareil, jugé plus proche d'un mécanisme interne que d'un vrai choix
+# d'outil pour cette statistique). Comparé au nom technique (nomOutil),
+# pas au label affiché, pour rester robuste si le label change.
+OUTILS_EXCLUS_DU_TOP: frozenset[str] = frozenset({
+    "verifier_consignes_code_actif",
+    "demander_outils",
+    "gerer_base_connaissance",
+})
 
 _MOTIF_BLOC = re.compile(r"```(\w+)")
 
@@ -142,6 +171,22 @@ def _signalements_non_traites(code_id: str) -> int:
     return res.count or 0
 
 
+def _personas_des_conversations(conversation_ids: list[str]) -> list[dict]:
+    if not conversation_ids:
+        return []
+    toutes_les_lignes: list = []
+    for debut in range(0, len(conversation_ids), TAILLE_PAGE_SUPABASE):
+        bloc_ids = conversation_ids[debut : debut + TAILLE_PAGE_SUPABASE]
+        toutes_les_lignes.extend(
+            _recuperer_toutes_les_lignes(
+                lambda bloc_ids=bloc_ids: supabase.table("conversation_persona_pedagogique")
+                .select("persona")
+                .in_("conversation_id", bloc_ids)
+            )
+        )
+    return toutes_les_lignes
+
+
 def _heure_locale(horodatage: str) -> datetime | None:
     if not horodatage:
         return None
@@ -185,6 +230,8 @@ def calculer_audit_complet(prof_id: str, code_id: str) -> dict:
     compteur_outils: Counter = Counter()
     for m in messages:
         for outil in (m.get("meta") or {}).get("outils") or []:
+            if outil.get("nomOutil") in OUTILS_EXCLUS_DU_TOP:
+                continue
             nom = outil.get("nomLisible") or outil.get("nomOutil")
             if nom:
                 compteur_outils[nom] += 1
@@ -197,6 +244,12 @@ def calculer_audit_complet(prof_id: str, code_id: str) -> dict:
             label = TYPES_VISUELS.get(langage.lower())
             if label:
                 compteur_visuels[label] += 1
+
+    compteur_personas: Counter = Counter()
+    for p in _personas_des_conversations(conversation_ids):
+        label = LABELS_PERSONAS.get((p.get("persona") or "").lower())
+        if label:
+            compteur_personas[label] += 1
 
     return {
         "total_rattaches": total_rattaches,
@@ -212,4 +265,5 @@ def calculer_audit_complet(prof_id: str, code_id: str) -> dict:
         },
         "outils_top": [{"nom": nom, "nombre": n} for nom, n in compteur_outils.most_common(8)],
         "visuels_top": [{"nom": nom, "nombre": n} for nom, n in compteur_visuels.most_common(8)],
+        "modes_top": [{"nom": nom, "nombre": n} for nom, n in compteur_personas.most_common(4)],
     }
