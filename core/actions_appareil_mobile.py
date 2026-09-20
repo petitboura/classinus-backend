@@ -92,6 +92,31 @@ def creer_action(user_id: str, type_action: str, parametres: dict, appareil_id_c
     return action_id
 
 
+def prendre_action(action_id: str, user_id: str, appareil_id: str) -> dict | None:
+    """
+    Revendique atomiquement une action encore en attente pour un appareil.
+    Une action déjà en_execution n'est jamais redistribuée automatiquement :
+    si le réseau tombe après l'exécution locale, la redistribuer pourrait
+    exécuter deux fois une suppression/création/déplacement.
+    """
+    try:
+        maintenant = datetime.now(timezone.utc).isoformat()
+        res = (
+            supabase.table("actions_appareil_mobile")
+            .update({"statut": "en_execution", "prise_en_charge_le": maintenant})
+            .eq("id", action_id)
+            .eq("user_id", user_id)
+            .eq("statut", "en_attente")
+            .execute()
+        )
+        if not res.data:
+            return None
+        return lire_action(action_id, user_id)
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (prendre_action id={action_id}) : {e}")
+        return None
+
+
 def lire_action(action_id: str, user_id: str) -> dict | None:
     try:
         res = (
