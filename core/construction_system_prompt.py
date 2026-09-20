@@ -15,22 +15,24 @@ def _texte_actions_application(actions):
     Agent applicatif (19/09/2026, decision Bourama : retrait de l'outil
     lister_actions_disponibles, le modele ne le demande plus). Texte injecte
     dans le prompt systeme : la liste COMPLETE et actuelle des elements
-    cliquables a l'ecran, a chaque tour (voir
+    cliquables/saisissables a l'ecran, a chaque tour (voir
     core/canal_agent_applicatif.py pour la raison de l'abandon de
-    l'injection par difference), et les regles pour cliquer sans jamais
-    forcer un element qu'on ne voit pas.
+    l'injection par difference), et les regles pour cliquer/ecrire sans
+    jamais forcer un element qu'on ne voit pas. Ecriture dans les champs
+    ajoutee le 20/09/2026 (demande Bourama), voir ecrire_dans_champ.
     """
     instruction = (
         "\n\n## Actions disponibles dans l'application\n"
         "Dès que tu dois cliquer sur quelque chose pour l'étudiant, utilise directement "
-        "executer_action_application avec l'id correspondant de la liste ci-dessous. Cette liste est "
-        "actuelle à cet instant : c'est TOUT ce que tu vois à l'écran. Aucune confirmation n'est "
-        "nécessaire par défaut, agis directement. Demande confirmation à l'étudiant dans ta réponse "
-        "normale seulement s'il te l'a explicitement demandé, ou si tu juges toi-même plus prudent de "
-        "confirmer avant d'agir.\n\n"
-        "Règles pour cliquer :\n"
-        "- Ne force JAMAIS un clic sur un élément que tu ne vois pas dans la liste : n'invente aucun "
-        "id, ne devine aucun sélecteur.\n"
+        "executer_action_application avec l'id correspondant de la liste ci-dessous. Dès que tu dois "
+        "écrire du texte dans un champ de saisie (input, zone de texte), utilise ecrire_dans_champ avec "
+        "l'id du champ. Cette liste est actuelle à cet instant : c'est TOUT ce que tu vois à l'écran. "
+        "Aucune confirmation n'est nécessaire par défaut, agis directement. Demande confirmation à "
+        "l'étudiant dans ta réponse normale seulement s'il te l'a explicitement demandé, ou si tu juges "
+        "toi-même plus prudent de confirmer avant d'agir.\n\n"
+        "Règles pour cliquer et écrire :\n"
+        "- Ne force JAMAIS un clic ou une écriture sur un élément que tu ne vois pas dans la liste : "
+        "n'invente aucun id, ne devine aucun sélecteur.\n"
         "- Si ce que tu cherches n'est pas dans la liste, c'est probablement caché derrière un menu, un "
         "tiroir, un panneau replié, un onglet ou une fenêtre fermée. Cherche dans la liste les boutons "
         "qui ouvrent quelque chose (menu, ☰, « plus », « … », tiroir, panneau latéral, onglet, flèche, "
@@ -53,7 +55,7 @@ def _texte_actions_application(actions):
         for a in actions
         if isinstance(a.get("id"), str)
     )
-    return instruction + "Éléments cliquables actuellement à l'écran (id : description) :\n" + lignes + "\n"
+    return instruction + "Éléments cliquables ou saisissables actuellement à l'écran (id : description) :\n" + lignes + "\n"
 
 
 def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=False, mode_source=None, actions_ecran=None):
