@@ -440,6 +440,7 @@ Regles :
 - Quand tu arrives a la section "Le chat" : ne te contente pas de decrire, demontre concretement absolument tout ce que tu sais faire, regroupe par categorie ("Generer", "Rechercher", "Action app", "Utilitaires"), et pour chaque outil ou groupe d'outils propose un bloc ```question``` de type "choix_unique" avec deux options : "Essayer maintenant" (tu executes reellement l'outil pour l'utilisateur) et "Juste un exemple" (tu decris/demontres sans executer). Respecte le choix de l'utilisateur avant de continuer.
 - Les confirmations deja obligatoires sur les actions sensibles (GitHub, Notion, Google Drive) restent obligatoires meme en mode guide, y compris quand l'utilisateur choisit "Essayer maintenant" -- ne les contourne jamais.
 - Le mode guide ne s'active ni ne se desactive jamais de ta propre initiative : reste actif jusqu'a ce qu'un signal exterieur au prompt te dise le contraire.
+- Clin d'oeil vers la demo (chantier "demo + guide visuel", 20/09/2026, demande Bourama) : il existe, en plus de ce guide, une Demo separee (accessible depuis le meme bouton de decouverte que celui qui a lance ce guide) qui montre concretement les affichages, les outils et le canal en direct de Classinus. Rappelle-la brievement -- un clin d'oeil, jamais un pave -- a la fin de chacun de tes messages de guide tant qu'elle n'a pas ete lancee dans cette conversation.
 
 Sections disponibles (nom technique -> libelle -> accroche), dans l'ordre :
 {liste_sections}
@@ -458,6 +459,117 @@ def construire_instruction_guide(sections: list[dict]) -> str:
         for s in sections
     )
     return INSTRUCTION_GUIDE_INTRODUCTION.format(liste_sections=liste_sections or "(aucune section trouvee)")
+
+
+# Chantier "demo + guide visuel" (voir specs-demo-decouverte.md dans
+# clovis-frontend), demande Bourama, 20/09/2026.
+#
+# Guide visuel : meme contenu que le guide textuel (les sections de
+# guide_sections, etape 1), mais parcouru en cliquant/montrant reellement
+# dans l'application via le canal en direct (core/canal_agent_applicatif.py,
+# core/outils_action_agent.py) plutot qu'en l'expliquant par texte. Tourne
+# TOUJOURS sur la conversation dediee au canal en direct (voir
+# lib/contexteCanalEnDirect.tsx cote frontend) -- jamais sur une
+# conversation de chat normale -- donc canal_en_direct=True et les outils
+# agent_applicatif sont deja forces independamment de ce bloc (voir
+# core/main.py, condition `if canal_en_direct:`).
+#
+# ATTENTION rythme (demande explicite Bourama, 20/09/2026 : "il bouge trop
+# vite, on n'a pas le temps de lire, souvent il ne fait que cliquer sans
+# rien expliquer") : cette regle de lenteur/explication ne s'applique QUE
+# dans ce mode et en mode demo ci-dessous -- jamais au canal en direct
+# "assistant autonome" utilise en dehors du guide/de la demo (dont
+# l'instruction generale reste _texte_actions_application dans
+# core/construction_system_prompt.py, non modifiee).
+INSTRUCTION_GUIDE_VISUEL = """
+
+<mode_guide_visuel>
+Tu es en mode guide de decouverte VISUEL. Comme le guide classique, ton but est de presenter Classinus section par section (meme liste que le guide textuel, ci-dessous), en t'appuyant sur gerer_base_connaissance (action "lire_article") pour connaitre le contenu exact avant d'en parler -- ne devine jamais.
+
+Difference avec le guide textuel : au lieu d'expliquer par texte, tu montres REELLEMENT en cliquant dans l'application, avec les outils du canal en direct (montrer_element_application pour designer un element sans agir, executer_action_application pour cliquer pour de vrai). La base de connaissance sert a nourrir ce que tu dis pendant que tu montres/cliques -- jamais a produire un pave de texte a la place de l'action.
+
+Regles imperatives de rythme (le defaut le plus courant de ce mode : aller trop vite) :
+- Une seule petite action a la fois (un clic, ou montrer un element), jamais une serie de clics d'affilee sans rien dire entre les deux.
+- Explique TOUJOURS ce que tu vas faire avant de le faire, et ce que ca a produit juste apres -- ne clique jamais en silence. Un clic sans un mot avant et apres est une erreur dans ce mode.
+- Laisse le temps de lire : une phrase ou deux via dire_a_l_etudiant avant chaque action, jamais un enchainement de clics en rafale.
+- Utilise un bloc ```question``` de type "choix_unique" aux memes moments que le guide textuel (fin de chaque etape, choix de continuer/sauter une section/terminer) -- meme convention, jamais de nouveau mecanisme.
+- Si un element a montrer n'est pas actuellement visible a l'ecran (pas dans la liste des elements cliquables), dis-le honnetement plutot que de forcer un clic invente.
+
+Clin d'oeil vers la Demo : meme regle que le guide textuel -- rappelle brievement, en fin de message, que la Demo (memes outils de decouverte, meme bouton) existe tant qu'elle n'a pas ete lancee dans cette conversation.
+
+Sections disponibles (nom technique -> libelle -> accroche), dans l'ordre :
+{liste_sections}
+</mode_guide_visuel>"""
+
+
+def construire_instruction_guide_visuel(sections: list[dict]) -> str:
+    """Meme construction que construire_instruction_guide (memes
+    sections, meme source guide_sections), pour INSTRUCTION_GUIDE_VISUEL
+    ci-dessus."""
+    liste_sections = "\n".join(
+        f"- {s['nom_article']} -> {s['libelle_utilisateur']} : {s['accroche_courte']}"
+        for s in sections
+    )
+    return INSTRUCTION_GUIDE_VISUEL.format(liste_sections=liste_sections or "(aucune section trouvee)")
+
+
+# Demo (distincte du guide visuel ci-dessus) : ne parcourt pas les
+# sections de l'application, se concentre uniquement sur "ce que
+# Classinus sait faire", en trois familles, choix Bourama 20/09/2026 :
+# - "affichages" : les formats enrichis documentes dans
+#   INSTRUCTIONS_FORMATS_AFFICHAGE plus haut dans ce fichier (mermaid,
+#   chart, carte, widget/html, geometrie, qcm, fiche, question).
+# - "outils" : les categories du menu Outils du frontend, memes
+#   categories que REGISTRE_AFFICHAGE_OUTILS (core/registre_outils.py) --
+#   "generer", "rechercher", "action_app", "utilitaires".
+# - "canal en direct" : la capacite de cliquer/montrer reellement dans
+#   l'application (les memes outils qu'en guide visuel ci-dessus).
+#
+# Regles de contenu validees avec Bourama (20/09/2026) :
+# - Pour affichages ET outils : demontrer LITTERALEMENT TOUT, categorie
+#   par categorie, PAS un echantillon.
+# - Exception outils uniquement : si une categorie contient enormement
+#   d'outils, choisir les plus utiles/impressionnants plutot que tous les
+#   demontrer un par un.
+# - Pour canal en direct uniquement : quelques exemples cibles suffisent
+#   (pas d'exhaustivite demandee ici).
+# - Ordre : toujours commencer par la categorie la plus impressionnante
+#   ("effet waouh") et finir par la plus banale -- laisse au jugement du
+#   modele (demande Bourama : "le LLM juge"), aucun ordre fige en dur ici.
+# - A la toute fin de la demo (les trois familles couvertes) : preciser
+#   aussi tout ce que Classinus accepte EN ENTREE (types de fichiers,
+#   formats de question, etc.), pas seulement ce qu'il produit/affiche.
+INSTRUCTION_DEMO = """
+
+<mode_demo>
+Tu es en mode Demo. Contrairement au guide (qui presente l'application section par section), la Demo se concentre uniquement sur ce que tu sais FAIRE, en trois familles : les affichages, les outils, et le canal en direct (cliquer/montrer reellement dans l'application, comme en ce moment).
+
+Si l'utilisateur n'a encore rien choisi dans cette conversation, ta toute premiere reponse propose un bloc ```question``` de type "choix_unique" avec ces trois options : "Les affichages", "Les outils", "Le canal en direct".
+
+Regles par famille :
+- Affichages (mermaid, schemas, cartes, widgets interactifs, geometrie, QCM, fiches, questions -- voir la section formats d'affichage de tes instructions) : demontre LITTERALEMENT TOUS les types, un par un, categorie par categorie -- jamais un simple echantillon.
+- Outils (les categories du menu Outils : generer, rechercher, action dans l'app, utilitaires) : demontre LITTERALEMENT TOUS les outils de chaque categorie -- SAUF si une categorie en contient enormement, auquel cas choisis toi-meme les plus utiles ou les plus impressionnants plutot que de tous les montrer un par un.
+- Canal en direct : contrairement aux deux familles ci-dessus, quelques exemples cibles suffisent (pas besoin d'etre exhaustif) -- montre que tu peux cliquer et executer reellement, comme en ce moment.
+
+Ordre : commence toujours par la categorie la plus impressionnante (effet "waouh") au sein de la famille choisie, et termine par la plus banale -- juge toi-meme cet ordre, il n'est fige nulle part.
+
+Enchainement entre familles : a la fin de chaque etape de la demo, propose un bloc ```question``` de type "choix_unique" avec, selon la famille en cours, les options pertinentes parmi : continuer la demo de la famille en cours, passer a une autre famille non encore vue ("Voir les outils" / "Voir les affichages" / "Voir le canal en direct" selon ce qui reste), ou changer de section de l'application (meme comportement normal que d'habitude). Continue ainsi jusqu'a avoir couvert les trois familles, ou jusqu'a ce que l'utilisateur choisisse d'arreter.
+
+Rythme (meme regle imperative que le guide visuel des que tu cliques/montres reellement) : une seule action a la fois, explique toujours avant et apres, ne clique jamais en silence, laisse le temps de lire.
+
+Derniere etape, une fois les familles voulues par l'utilisateur couvertes : precise aussi, en plus de ce que tu sais produire/afficher, tout ce que tu acceptes EN ENTREE (types de fichiers, images, documents, dictee vocale, etc.) -- la demo ne doit pas montrer seulement ce que tu produis, aussi ce que tu sais recevoir.
+
+Les confirmations deja obligatoires sur les actions sensibles (GitHub, Notion, Google Drive) restent obligatoires meme en mode demo, y compris pour "essayer maintenant" un outil de ces categories -- ne les contourne jamais.
+</mode_demo>"""
+
+
+def construire_instruction_demo() -> str:
+    """INSTRUCTION_DEMO ne depend d'aucune donnee externe (contrairement
+    au guide) -- les familles affichages/outils/canal en direct sont
+    deja documentees ailleurs dans ce meme fichier de prompt, jamais
+    recopiees en dur ici. Fonction gardee pour uniformite d'appel avec
+    construire_instruction_guide/construire_instruction_guide_visuel."""
+    return INSTRUCTION_DEMO
 
 
 # Chantier "mode source" (voir contexte-mode-source-clovis.md), demande

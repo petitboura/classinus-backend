@@ -511,6 +511,10 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # Guide de decouverte (etape 3, 16/09/2026, demande Bourama) :
             # meme principe que persona_pedagogique juste au-dessus, ne
             # depend d'aucun des autres, lance dans le meme lot parallele.
+            # guide_actif est desormais un dict {"actif", "sous_mode"}
+            # (chantier "demo + guide visuel", 20/09/2026, voir
+            # core/guide_conversation.py) -- le nom de variable ne change
+            # pas pour limiter le remaniement, mais ce n'est plus un bool.
             f_guide_actif = executor.submit(obtenir_guide_actif, conversation_id, user_id) if conversation_id else None
             # Mode source (chantier "mode source", 16/09/2026, demande
             # Bourama) : Aucun/Recherche/Sur pieces, ne depend d'aucun des
@@ -520,7 +524,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             rattachement_id_actif = f_rattachement_actif.result() if f_rattachement_actif else None
             comportements_etudiant_bruts = f_comportements_etudiant.result()
             persona_pedagogique = f_persona_pedagogique.result() if f_persona_pedagogique else None
-            guide_actif = f_guide_actif.result() if f_guide_actif else False
+            guide_actif = f_guide_actif.result() if f_guide_actif else {"actif": False, "sous_mode": "textuel"}
             mode_source = f_mode_source.result() if f_mode_source else None
             # Agent applicatif (correctif 19/09/2026) : liste COMPLETE et
             # actuelle des elements cliquables a l'ecran, a CHAQUE tour,
