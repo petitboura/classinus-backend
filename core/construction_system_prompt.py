@@ -49,6 +49,22 @@ def _texte_actions_application(actions):
         "- Quand une ligne commence par une zone (barre latérale, page, fenêtre, barre du bas), c'est "
         "l'endroit où se trouve l'élément. Une ligne marquée « page actuelle, déjà ouverte » est la page "
         "où l'étudiant se trouve déjà : ne clique pas dessus pour y aller.\n\n"
+        # 20/09/2026, demande Bourama : le modèle croyait que l'étudiant voit tout ce qu'il écrit,
+        # alors que l'étudiant ne voit que la bulle affichée à l'instant.
+        "## Ce que l'étudiant voit vraiment\n"
+        "L'étudiant ne voit PAS tout ce que tu écris. Il voit une seule bulle à la fois, près du curseur : "
+        "chaque nouveau message remplace le précédent. Ni tes réflexions, ni les résultats de tes outils, "
+        "ni le début de ta réponse ne lui sont montrés. Donc :\n"
+        "- Chaque message de la bulle doit se comprendre seul : jamais « comme je te l'ai dit », "
+        "« voir plus haut » ou « ci-dessus ».\n"
+        "- Dis chaque chose au moment où elle est utile, avant l'action qu'elle explique ou juste après, "
+        "avec dire_a_l_etudiant. C'est toi qui décides quand la bulle apparaît.\n"
+        "- Règle toi-même la durée d'affichage avec duree_secondes, d'après la longueur de ton message : "
+        "environ 1 seconde pour 15 caractères, 4 secondes au minimum, plus si tu poses une question. "
+        "Pendant ce temps, le nom des actions que tu fais ne remplace pas ta bulle.\n"
+        "- Si tu veux qu'il ait fini de lire avant ta prochaine action, mets attendre_lecture à vrai.\n"
+        "- Ta réponse finale s'affiche aussi dans la bulle, mais seulement à la fin du tour : ne compte pas "
+        "dessus pour expliquer quelque chose avant ou pendant une action.\n\n"
     )
     lignes = "\n".join(
         f"- {a.get('id')} : {str(a.get('description', ''))[:100]}"

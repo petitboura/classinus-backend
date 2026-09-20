@@ -350,7 +350,7 @@ async def demander_ecriture_champ(user_id: str, action_id: str, texte: str, on_s
     )
 
 
-async def pousser_texte_clovis(user_id: str, texte: str) -> int:
+async def pousser_texte_clovis(user_id: str, texte: str, duree_secondes: int | None = None) -> int:
     """
     Chantier P (19/09/2026, decision Bourama) : commentaire libre de
     Clovis pendant qu'il agit. Contrairement aux demandes ci-dessus, rien
@@ -364,18 +364,27 @@ async def pousser_texte_clovis(user_id: str, texte: str) -> int:
     qui voit et sait ce qu'il fait, donc lui qui juge ce qui vaut la peine
     d'etre dit. Pas de nouvel appel LLM dedie.
 
+    `duree_secondes` (20/09/2026, demande Bourama : la bulle disparaissait
+    trop tot) : combien de temps le modele veut que la bulle reste
+    affichee, puisqu'il connait la longueur de son message. Absent (None) :
+    le frontend garde sa duree automatique selon la longueur du texte.
+
     Renvoie le nombre de connexions atteintes (0 si l'application n'est
     ouverte nulle part pour ce compte).
     """
     async with _verrou_connexions:
         connexions = [(cle, ws) for cle, ws in _connexions.items() if cle[0] == user_id]
 
+    message = {"texte_clovis": texte}
+    if duree_secondes is not None:
+        message["duree_secondes"] = duree_secondes
+
     atteintes = 0
     for cle, websocket in connexions:
         verrou_envoi = await _verrou_envoi_pour(cle)
         try:
             async with verrou_envoi:
-                await websocket.send_json({"texte_clovis": texte})
+                await websocket.send_json(message)
             atteintes += 1
         except Exception as e:
             logging.error(f"ERREUR poussee texte Clovis canal agent applicatif (user={user_id}, appareil={cle[1]}) : {e}")
