@@ -14,7 +14,7 @@ via un outil agent dedie.
 
 import logging
 
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
 from api.auth import supabase, utilisateur_courant
 from core.canal_temps_reel import (
@@ -50,31 +50,22 @@ def _verifier_token(token: str):
 
 
 @router.websocket("/ws")
-async def canal_temps_reel(
-    websocket: WebSocket, token: str = Query(default=""), appareil_id: str = Query(default="")
-):
-    """
-    CONTRAT APP MOBILE : ouvrir cette connexion des que l'app est au
-    premier plan (et la reouvrir a chaque reprise), tant qu'un compte est
-    connecte. Chaque question recue a la forme {"id": ..., "question":
-    ...} ; la reponse doit etre renvoyee avec le meme "id" : {"id": ...,
-    "reponse": ...}. Pour ce lot, aucun traitement reel n'est attendu :
-    repondre "oui" a n'importe quelle question suffit pour valider le
-    tuyau (voir 01-canal-temps-reel.md).
-
-    `appareil_id` (ajoute le 04/09/2026, voir
-    core/canal_temps_reel.py, commentaire au-dessus de _connexions) :
-    identifie CET appareil precis (ou "" pour une session web, voir
-    urlWebSocket cote clovis-frontend) -- sans ca, un deuxieme appareil
-    du meme compte qui se connecte remplacerait purement et simplement
-    le premier dans la table des connexions actives.
-    """
-    utilisateur = _verifier_token(token)
-    if utilisateur is None:
+async def canal_temps_reel(websocket: WebSocket):
+    # Le token Supabase et l'identifiant d'appareil sont envoyés dans le
+    # premier message après l'ouverture. Un token bearer ne doit pas être
+    # placé dans l'URL : les URLs peuvent être journalisées par des proxies.
+    await websocket.accept()
+    try:
+        message_auth = await websocket.receive_json()
+    except Exception:
         await websocket.close(code=4401)
         return
 
-    await websocket.accept()
+    utilisateur = _verifier_token(str(message_auth.get("auth_token") or ""))
+    if utilisateur is None:
+        await websocket.close(code=4401)
+        return
+    appareil_id = str(message_auth.get("appareil_id") or "")
     await connecter(utilisateur.id, appareil_id, websocket)
 
     try:
