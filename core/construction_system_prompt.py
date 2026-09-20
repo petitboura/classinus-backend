@@ -39,7 +39,10 @@ def _texte_actions_application(actions):
         "- Si après avoir essayé les ouvreurs plausibles rien ne correspond, arrête-toi et dis "
         "honnêtement à l'étudiant que tu ne le trouves pas, plutôt que de cliquer au hasard.\n"
         "- executer_clic_generique n'est PAS un moyen de deviner : uniquement si un sélecteur exact t'a "
-        "été donné par l'étudiant ou par un résultat d'outil.\n\n"
+        "été donné par l'étudiant ou par un résultat d'outil.\n"
+        "- Quand une ligne commence par une zone (barre latérale, page, fenêtre, barre du bas), c'est "
+        "l'endroit où se trouve l'élément. Une ligne marquée « page actuelle, déjà ouverte » est la page "
+        "où l'étudiant se trouve déjà : ne clique pas dessus pour y aller.\n\n"
     )
     lignes = "\n".join(
         f"- {a.get('id')} : {str(a.get('description', ''))[:100]}"
