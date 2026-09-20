@@ -113,7 +113,7 @@ def _bloc_fichiers_generes(fichiers):
 # present en prod malgre le fix deja present sur main.
 
 
-def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False):
+def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False):
     """
     Generateur d'evenements. Chaque element produit est un dictionnaire :
     - {"type": "statut", "texte": "..."}         -> un outil MCP est en cours d'utilisation (ou, depuis le 11/09/2026, Gemini en train de lire une image/video jointe)
@@ -201,6 +201,21 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     valeur par conversation, pas par message. Simplement transmis a
     _sauvegarder_echange(). None accepte : un appelant qui ne gere pas
     encore les fils continue de fonctionner normalement.
+
+    `parent_id`/`regenerer` (ajoutes le 20/09/2026, chantier "versions
+    navigables", voir core/persistance_echanges.py:_sauvegarder_echange
+    pour le detail des deux cas ci-dessous) : simplement transmis tels
+    quels a _sauvegarder_echange() par chaque site d'appel de ce fichier.
+    - regenerer=False (defaut) : `parent_id` est l'id du dernier message
+      de la branche en cours cote frontend (None pour le tout premier
+      message d'une conversation), voir ChatIA.tsx, chaque message
+      affiche porte son id des qu'il est connu (evenement "meta").
+    - regenerer=True ("reessayer" cote frontend) : aucune nouvelle ligne
+      "user" n'est creee, `parent_id` est directement l'id du message
+      "user" EXISTANT sous lequel attacher cette nouvelle reponse comme
+      version alternative de l'ancienne. `message_utilisateur` reste
+      quand meme fourni normalement (le texte de la question, inchange,
+      necessaire pour regenerer une reponse), seule la sauvegarde change.
 
     Pour reprendre apres une confirmation_requise, appeler :
         chat(reprise={"etat_reprise": evenement["etat_reprise"], "approuve": True|False})
@@ -1191,7 +1206,8 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 yield {"type": "reponse", "texte": morceau}
             logging.info(f"Réponse via MODELE PREMIUM : {modele_force}")
             ids_historique = _sauvegarder_echange(
-                user_id, agent_id, message_utilisateur, "".join(reponse_accumulee), conversation_id, modele=modele_force, meta_utilisateur=meta_utilisateur
+                user_id, agent_id, message_utilisateur, "".join(reponse_accumulee), conversation_id, modele=modele_force, meta_utilisateur=meta_utilisateur,
+                parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer
             )
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
@@ -1257,7 +1273,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     meta_assistant,
                     fichiers_generes_accumules,
                 )
-                ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=DEEPSEEK_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant)
+                ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=DEEPSEEK_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
                 if ids_historique:
                     yield {"type": "meta", **ids_historique}
                 _finaliser_memoire_en_arriere_plan(user_id, agent_id)
@@ -1282,7 +1298,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 meta_assistant,
                 fichiers_generes_accumules,
             )
-            ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GROQ_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant)
+            ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GROQ_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
             _finaliser_memoire_en_arriere_plan(user_id, agent_id)
@@ -1324,7 +1340,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     meta_assistant,
                     fichiers_generes_accumules,
                 )
-                ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=model, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant)
+                ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=model, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
                 # Signale au frontend quand la reponse vient d'un modele de
                 # qualite reduite (demande Bourama, 26/07) : evite que
                 # l'utilisateur juge la plateforme sur une reponse plus
@@ -1455,7 +1471,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # deja obtenus par un modele Groq/DeepSeek avant l'echec
             # disparaissaient donc reellement a la reouverture de la
             # conversation, meme s'ils restaient visibles en direct.
-            ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GOOGLE_MODEL, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant)
+            ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GOOGLE_MODEL, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
             _finaliser_memoire_en_arriere_plan(user_id, agent_id)
