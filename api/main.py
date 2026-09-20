@@ -53,6 +53,7 @@ from api.clovis_infos import router as clovis_infos_router
 from api.signalements import router as signalements_router
 from api.signalements_pedagogiques import router as signalements_pedagogiques_router
 from api.audit_hebdomadaire_corrections import router as audit_hebdomadaire_corrections_router
+from api.audit_complet_bureau import router as audit_complet_bureau_router
 from api.contenu_legal import router as contenu_legal_router
 from api.codes_partage import router_mes_codes, router_rattachements
 from api.etablissements import router_etablissements
@@ -744,6 +745,7 @@ app.include_router(clovis_infos_router)
 app.include_router(signalements_router)
 app.include_router(signalements_pedagogiques_router)
 app.include_router(audit_hebdomadaire_corrections_router)
+app.include_router(audit_complet_bureau_router)
 app.include_router(contenu_legal_router)
 app.include_router(router_mes_codes)
 app.include_router(router_rattachements)
