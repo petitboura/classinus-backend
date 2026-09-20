@@ -3,11 +3,12 @@
 # periodique du resume memoire de l'utilisateur.
 import logging
 import threading
+import uuid
 from groq import Groq
 from constantes_agent import get_secret, supabase, MODELE_RESUME, SEUIL_RESUME_MESSAGES, DELAI_MAX_PAR_APPEL
 from profils_agents import _charger_resume_memoire, _mettre_a_jour_profil_utilisateur_si_besoin
 
-def _sauvegarder_echange(user_id, agent_id, message_utilisateur, reponse_finale, conversation_id=None, modele=None, meta_utilisateur=None, meta_assistant=None):
+def _sauvegarder_echange(user_id, agent_id, message_utilisateur, reponse_finale, conversation_id=None, modele=None, meta_utilisateur=None, meta_assistant=None, parent_id=None, sauvegarder_message_utilisateur=True):
     """
     Persiste l'echange (question + reponse) dans `conversations`, pour la
     memoire long-terme. Ignore silencieusement si l'utilisateur n'est pas
@@ -40,18 +41,55 @@ def _sauvegarder_echange(user_id, agent_id, message_utilisateur, reponse_finale,
     reconstruire a la reouverture le meme affichage qu'en direct, plutot
     que l'ancien rendu groupe approximatif. Absent pour les echanges
     anterieurs a cette date (pas de retro-remplissage).
+
+    `parent_id`/`sauvegarder_message_utilisateur` (ajoutes le 20/09/2026,
+    chantier "versions navigables", voir la migration
+    2026_09_20c_versions_navigables_historique.sql) : ecrits UNIQUEMENT
+    sur historique_conversations (colonne parent_id), jamais sur
+    `conversations` (table de memoire court terme sans notion de
+    version). Deux cas :
+    - sauvegarder_message_utilisateur=True (comportement par defaut,
+      inchange) : `parent_id` est le parent_id de la ligne "user" creee
+      ici (id de la derniere ligne de la branche precedente, None si
+      c'est le tout premier message de la conversation). La ligne
+      "assistant" creee juste apres prend systematiquement pour parent
+      l'id de cette ligne "user", genere cote Python (uuid.uuid4) plutot
+      que laisse a la base, pour pouvoir le referencer immediatement
+      sans un aller-retour Supabase supplementaire.
+    - sauvegarder_message_utilisateur=False ("reessayer", voir
+      core/main.py:chat() parametre `regenerer`) : AUCUNE ligne "user"
+      n'est creee (ni ici ni dans `conversations`, la question existe
+      deja depuis la premiere tentative), `parent_id` est directement
+      l'id de cette ligne "user" EXISTANTE, et la nouvelle ligne
+      "assistant" devient une VERSION ALTERNATIVE (meme parent_id que
+      l'ancienne reponse) plutot qu'une suite.
     """
     ids_historique = None  # renvoyé à l'appelant pour l'indexation du feedback
 
     if not user_id or not (reponse_finale or "").strip():
         return ids_historique
-    try:
-        supabase.table("conversations").insert([
-            {"user_id": user_id, "agent_id": agent_id, "role": "user", "content": message_utilisateur},
-            {"user_id": user_id, "agent_id": agent_id, "role": "assistant", "content": reponse_finale},
-        ]).execute()
-    except Exception as e:
-        logging.error(f"ERREUR SUPABASE (sauvegarde conversations) : {e}")
+
+    # Chantier "versions navigables" (20/09/2026) : id genere cote Python
+    # plutot que laisse a Postgres, pour pouvoir le referencer comme
+    # parent_id de la ligne assistant juste en dessous SANS aller-retour
+    # Supabase supplementaire (un seul insert groupe, comme avant). Absent
+    # (None) quand sauvegarder_message_utilisateur=False : pas de nouvelle
+    # ligne "user", donc pas de nouvel id a generer, `parent_id` recu en
+    # parametre EST deja l'id de la ligne "user" existante a utiliser.
+    id_nouveau_message_utilisateur = str(uuid.uuid4()) if sauvegarder_message_utilisateur else None
+
+    if sauvegarder_message_utilisateur:
+        try:
+            supabase.table("conversations").insert([
+                {"user_id": user_id, "agent_id": agent_id, "role": "user", "content": message_utilisateur},
+                {"user_id": user_id, "agent_id": agent_id, "role": "assistant", "content": reponse_finale},
+            ]).execute()
+        except Exception as e:
+            logging.error(f"ERREUR SUPABASE (sauvegarde conversations) : {e}")
+    # sauvegarder_message_utilisateur=False ("reessayer") : rien a ajouter
+    # dans `conversations`, la question a deja ete enregistree la premiere
+    # fois, dupliquer la question sans la reponse casserait la paire
+    # user/assistant que cette table suppose toujours alternee.
 
     # Ajouté le 2026-07-13 (Bourama : historique de conversation visible,
     # conservée par agent, dans le tableau de bord). Table SÉPARÉE de
@@ -70,20 +108,30 @@ def _sauvegarder_echange(user_id, agent_id, message_utilisateur, reponse_finale,
     # sans erreur, ses messages sont juste groupés sous "historique ancien"
     # côté affichage plutôt que dans un fil précis.
     try:
-        res = (
-            supabase.table("historique_conversations")
-            .insert([
-                {"user_id": user_id, "agent_id": agent_id, "role": "user", "content": message_utilisateur, "conversation_id": conversation_id, "meta": meta_utilisateur or None},
-                {"user_id": user_id, "agent_id": agent_id, "role": "assistant", "content": reponse_finale, "conversation_id": conversation_id, "modele": modele, "meta": meta_assistant or None},
-            ])
-            .execute()
-        )
+        lignes_a_inserer = []
+        if sauvegarder_message_utilisateur:
+            lignes_a_inserer.append({
+                "id": id_nouveau_message_utilisateur,
+                "user_id": user_id, "agent_id": agent_id, "role": "user", "content": message_utilisateur,
+                "conversation_id": conversation_id, "meta": meta_utilisateur or None, "parent_id": parent_id,
+            })
+        id_parent_assistant = id_nouveau_message_utilisateur if sauvegarder_message_utilisateur else parent_id
+        lignes_a_inserer.append({
+            "user_id": user_id, "agent_id": agent_id, "role": "assistant", "content": reponse_finale,
+            "conversation_id": conversation_id, "modele": modele, "meta": meta_assistant or None,
+            "parent_id": id_parent_assistant,
+        })
+        res = supabase.table("historique_conversations").insert(lignes_a_inserer).execute()
         lignes = res.data or []
-        ligne_user = next((l for l in lignes if l["role"] == "user"), None)
         ligne_assistant = next((l for l in lignes if l["role"] == "assistant"), None)
-        if ligne_user and ligne_assistant:
+        if ligne_assistant:
             ids_historique = {
-                "message_id_user": ligne_user["id"],
+                # Reessayer (sauvegarder_message_utilisateur=False) : pas
+                # de nouvelle ligne "user" cree ici, message_id_user reste
+                # donc l'id de la ligne "user" EXISTANTE (recu via
+                # `parent_id`), toujours une vraie valeur utilisable cote
+                # frontend, jamais None dans ce cas.
+                "message_id_user": id_nouveau_message_utilisateur if sauvegarder_message_utilisateur else parent_id,
                 "message_id_assistant": ligne_assistant["id"],
                 "created_at_assistant": ligne_assistant.get("created_at"),
                 # Propage automatiquement dans tous les evenements SSE
