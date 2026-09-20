@@ -60,15 +60,26 @@ from core.outils_generation_commun import mcp_generation, Context
 def verifier_consignes_code_actif(action: str, ctx: Context, nom_notion: str = "") -> str:
     """
     Outil OBLIGATOIRE dès que le mode cours est actif (12/09/2026,
-    demande explicite Bourama -- ce n'est plus une option laissée à ton
-    jugement). Trois choses liées au code actif de cet élève sont
-    injectées automatiquement dans ton prompt système à chaque message
-    (les comportements/skills reçus, les notions pertinentes du
-    Programme avec leur consigne/règle, et les notes du prof sur les
-    signalements), mais tant que le mode cours est actif, tu dois quand
-    même appeler cet outil pour les trois actions ci-dessous avant de
-    répondre, systématiquement, même si les blocs injectés te semblent
-    déjà complets.
+    demande explicite Bourama ; affiné le 20/09/2026 -- toujours pas une
+    option laissée à ton jugement, mais les MOMENTS où l'appel est
+    obligatoire sont désormais précis, pas "à chaque message"). Trois
+    choses liées au code actif de cet élève sont injectées automatiquement
+    dans ton prompt système à chaque message (les comportements/skills
+    reçus, les notions pertinentes du Programme avec leur consigne/règle,
+    et les notes du prof sur les signalements) -- CETTE injection
+    automatique ne change pas. Ce qui change : tu dois appeler cet outil
+    pour les trois actions ci-dessous, avant de répondre, seulement dans
+    ces cas :
+    - au tout premier message de la conversation où le mode cours est
+      actif ;
+    - dès que le sujet change (nouvelle notion, nouvelle matière, ou tout
+      cas de figure différent de ce qui a déjà été vérifié dans cette
+      conversation) ;
+    - à tout moment où les blocs injectés automatiquement te semblent
+      vides, incomplets, ou possiblement périmés.
+    En dehors de ces cas (même sujet déjà vérifié, blocs injectés toujours
+    cohérents), ne le rappelle PAS à chaque question -- l'injection
+    automatique suffit.
 
     `action` doit être l'une de :
     - "comportements" : relit à l'instant, sans dépendre du cache,
