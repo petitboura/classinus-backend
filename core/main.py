@@ -22,6 +22,7 @@ from core.mode_actif_conversation import rattachement_actif_pour_prompt
 from core.persona_pedagogique_conversation import obtenir_persona_pedagogique
 from core.mode_source_conversation import obtenir_mode_source
 from core.guide_conversation import obtenir_guide_actif
+from core.plafond_outils_tour import definir_plafond_tour, PLAFOND_OUTILS_GUIDE_VISUEL
 from core.canal_agent_applicatif import obtenir_actions_disponibles
 from avancement_notions_ia import notions_pertinentes_pour_eleve, resoudre_code_actif_eleve
 from signalements import signalements_pertinents_pour_injection
@@ -680,6 +681,19 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         and not canal_en_direct
     ):
         outils_forces_contexte.append("ouvrir_canal_en_direct")
+
+    # Guide visuel, option "Tout d'un coup" (20/09/2026, demande Bourama) :
+    # le parcours complet depasse largement le plafond normal d'appels
+    # d'outils par tour, on le releve pour ce seul cas (voir
+    # core/plafond_outils_tour.py). Retire a la fin du flux, api/chat.py.
+    if (
+        user_id
+        and canal_en_direct
+        and isinstance(guide_actif, dict)
+        and guide_actif.get("actif")
+        and guide_actif.get("sous_mode") == "visuel"
+    ):
+        definir_plafond_tour(user_id, PLAFOND_OUTILS_GUIDE_VISUEL)
 
     # Outils gardés par le grand modèle au tour précédent (2026-09-04,
     # demande Bourama) : voir _outil_garder_outils/_lire_outils_retenus.

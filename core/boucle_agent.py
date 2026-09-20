@@ -8,6 +8,7 @@ import logging
 from mcp_tools import parametres_outils
 # Meme chemin d'import que api/ et core/outils_action_agent.py : un seul module, donc un seul etat partage.
 from core.canal_agent_applicatif import retirer_messages_etudiant
+from core.plafond_outils_tour import plafond_tour
 from constantes_agent import GROQ_PRIMARY, MODELES_AVEC_REASONING_EFFORT, DELAI_MAX_PAR_APPEL
 from execution_outils import _AttenteConfirmation, _traiter_appels
 from routage_outils import (
@@ -262,6 +263,11 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
     budget_courant = _params_outils["budget_depart"]
     palier_extension = _params_outils["palier_extension"]
     plafond_absolu = _params_outils["plafond_absolu"]
+    # Guide visuel "Tout d'un coup" (20/09/2026) : plafond releve pour CE tour
+    # seulement, voir core/plafond_outils_tour.py.
+    plafond_force = plafond_tour(user_id)
+    if plafond_force:
+        plafond_absolu = max(plafond_absolu, plafond_force)
     tolerance_repetition = _params_outils["tolerance_repetition"]
     # (nom, arguments) de chaque appel deja execute ce tour, dans l'ordre
     # -- sert uniquement a _detecter_appel_repete, jamais vide entre deux
