@@ -107,11 +107,13 @@ def prendre_action(action_id: str, user_id: str, appareil_id: str) -> dict | Non
             .eq("id", action_id)
             .eq("user_id", user_id)
             .eq("statut", "en_attente")
+            .or_(f"appareil_id_cible.is.null,appareil_id_cible.eq.{appareil_id}")
+            .select("id, type_action, parametres, statut, resultat")
             .execute()
         )
         if not res.data:
             return None
-        return lire_action(action_id, user_id)
+        return res.data[0]
     except Exception as e:
         logging.error(f"ERREUR SUPABASE (prendre_action id={action_id}) : {e}")
         return None
