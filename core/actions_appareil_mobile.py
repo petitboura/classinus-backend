@@ -101,13 +101,30 @@ def prendre_action(action_id: str, user_id: str, appareil_id: str) -> dict | Non
     """
     try:
         maintenant = datetime.now(timezone.utc).isoformat()
+        champs = {"statut": "en_execution", "prise_en_charge_le": maintenant}
+        # Deux PATCH distincts plutôt qu'un OR sur une mutation : cela
+        # évite une incompatibilité PostgREST ancienne sur les filtres OR
+        # dans PATCH et garde la revendication atomique.
         res = (
             supabase.table("actions_appareil_mobile")
-            .update({"statut": "en_execution", "prise_en_charge_le": maintenant})
+            .update(champs)
             .eq("id", action_id)
             .eq("user_id", user_id)
             .eq("statut", "en_attente")
-            .or_(f"appareil_id_cible.is.null,appareil_id_cible.eq.{appareil_id}")
+            .eq("appareil_id_cible", appareil_id)
+            .select("id, type_action, parametres, statut, resultat")
+            .execute()
+        )
+        if res.data:
+            return res.data[0]
+
+        res = (
+            supabase.table("actions_appareil_mobile")
+            .update(champs)
+            .eq("id", action_id)
+            .eq("user_id", user_id)
+            .eq("statut", "en_attente")
+            .is_("appareil_id_cible", "null")
             .select("id, type_action, parametres, statut, resultat")
             .execute()
         )
