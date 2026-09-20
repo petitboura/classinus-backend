@@ -145,6 +145,16 @@ class MessageHistorique(BaseModel):
     content: str
     created_at: str
     meta: Optional[dict] = None
+    # Versions navigables (20/09/2026, demande Bourama) : id propre de
+    # CETTE ligne et id du message precedent dans sa branche (None pour
+    # le tout premier message d'une conversation), voir la migration
+    # 2026_09_20c_versions_navigables_historique.sql. Plusieurs lignes
+    # peuvent partager le meme parent_id : ce sont des versions
+    # alternatives a ce point precis, reconstruit en arbre cote
+    # frontend (ChatIA.tsx), cette route renvoie TOUJOURS TOUTES les
+    # lignes de la conversation demandee, pas seulement le chemin actif.
+    id: Optional[str] = None
+    parent_id: Optional[str] = None
 
 
 @router.get("/{agent_id}", response_model=List[MessageHistorique])
@@ -163,7 +173,7 @@ def obtenir_historique_agent(agent_id: str, utilisateur=Depends(utilisateur_cour
     try:
         lignes = _recuperer_toutes_les_lignes(
             lambda: supabase.table("historique_conversations")
-            .select("role, content, created_at, meta")
+            .select("id, parent_id, role, content, created_at, meta")
             .eq("user_id", utilisateur.id)
             .eq("agent_id", agent_id)
             .order("created_at")
@@ -261,11 +271,17 @@ def obtenir_fil_conversation(agent_id: str, conversation_id: str, utilisateur=De
     ci-dessus). `conversation_id` vaut littéralement "legacy" pour recharger
     le fil des lignes d'avant cette fonctionnalité (conversation_id NULL en
     base) -- convention interne à cette route, jamais stockée telle quelle.
+
+    Versions navigables (20/09/2026) : renvoie TOUTES les lignes de ce
+    fil, y compris toutes les versions alternatives (plusieurs lignes
+    peuvent partager le même parent_id), pas seulement le chemin
+    actuellement affiché. C'est ChatIA.tsx côté frontend qui reconstruit
+    l'arbre à partir de id/parent_id et choisit quoi afficher par défaut.
     """
     def _construire_requete():
         requete = (
             supabase.table("historique_conversations")
-            .select("role, content, created_at, meta")
+            .select("id, parent_id, role, content, created_at, meta")
             .eq("user_id", utilisateur.id)
             .eq("agent_id", agent_id)
         )

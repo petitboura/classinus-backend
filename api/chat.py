@@ -168,6 +168,17 @@ class EnvoyerMessagePayload(BaseModel):
     # marque meta.automatique pour que le frontend ne l'affiche jamais
     # comme une bulle de l'etudiant, ni maintenant ni au rechargement.
     message_automatique: Optional[bool] = False
+    # Versions navigables (20/09/2026, demande Bourama) : voir
+    # core/main.py:chat() et core/persistance_echanges.py pour le detail
+    # complet des deux cas. `parent_id` = id du dernier message de la
+    # branche affichee cote frontend sous lequel attacher ce tour
+    # (message.id, voir ChatIA.tsx), None pour le tout premier message.
+    # `regenerer` = True uniquement pour "reessayer" : aucune nouvelle
+    # ligne "user" n'est creee, `parent_id` designe alors directement le
+    # message "user" EXISTANT sous lequel la nouvelle reponse devient une
+    # version alternative de l'ancienne (au lieu d'une suite).
+    parent_id: Optional[str] = None
+    regenerer: Optional[bool] = False
 
 
 def _resoudre_modele_force(agent_id, modele_demande):
@@ -248,6 +259,8 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
                 natif=payload.natif or False,
                 canal_en_direct=payload.canal_en_direct or False,
                 message_automatique=payload.message_automatique or False,
+                parent_id=payload.parent_id,
+                regenerer=payload.regenerer or False,
             )
         for evenement in generateur:
             yield f"data: {json.dumps(evenement)}\n\n"
