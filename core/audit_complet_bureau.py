@@ -84,16 +84,28 @@ LABELS_PERSONAS: dict[str, str] = {
 # Outils à exclure de "outils les plus utilisés" (20/09/2026, demande
 # explicite Bourama) : des vérifications/mécanismes internes, pas de
 # vrais choix de l'élève, qui dominent le classement sans rien dire
-# d'utile (voir core/outils_verification_code_actif.py -- appel forcé à
-# quasiment chaque message dès qu'un code est actif ; demander_outils --
-# recherche interne dans le catalogue d'outils ; gerer_base_connaissance
-# -- pareil, jugé plus proche d'un mécanisme interne que d'un vrai choix
-# d'outil pour cette statistique). Comparé au nom technique (nomOutil),
-# pas au label affiché, pour rester robuste si le label change.
+# d'utile. Comparé au nom technique (nomOutil), pas au label affiché,
+# pour rester robuste si le label change.
+# - verifier_consignes_code_actif : appel forcé à quasiment chaque
+#   message dès qu'un code est actif (voir
+#   core/outils_verification_code_actif.py)
+# - demander_outils : recherche interne dans le catalogue d'outils
+# - gerer_base_connaissance : recherche dans la base de connaissances
+#   de Classinus -- pas un mécanisme forcé, mais jugé par Bourama plus
+#   proche d'un mécanisme interne que d'un vrai choix d'outil ici
+# - consulter_skills_chapitres_matiere : étape câblée en dur dans
+#   core/main.py (nom_outil_niveau2), déclenchée automatiquement, sans
+#   aucune décision du modèle
+# - gerer_document_bibliotheque : forcé et son appel systématique dicté
+#   par le prompt dès qu'un mode source (Recherche ou Sur pièces) est
+#   actif (core/main.py, "outils_forces_contexte" + bloc MODE SOURCE de
+#   core/construction_system_prompt.py)
 OUTILS_EXCLUS_DU_TOP: frozenset[str] = frozenset({
     "verifier_consignes_code_actif",
     "demander_outils",
     "gerer_base_connaissance",
+    "consulter_skills_chapitres_matiere",
+    "gerer_document_bibliotheque",
 })
 
 _MOTIF_BLOC = re.compile(r"```(\w+)")
