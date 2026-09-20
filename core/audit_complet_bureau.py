@@ -81,6 +81,17 @@ LABELS_PERSONAS: dict[str, str] = {
     "examinateur": "Examinateur",
 }
 
+# Mode source choisi par l'élève (20/09/2026, demande Bourama : "ajouter
+# l'analytique des modes recherche et sur pièces" -- même panneau que le
+# persona pédagogique dans la barre de saisie, groupe séparé). Mêmes clés
+# que MODES_SOURCE_VALIDES (core/mode_source_conversation.py). "Aucun"
+# (mode_source=None) n'est pas dans ce dict : pas de ligne comptée pour
+# ce cas, comme pour les personas.
+LABELS_MODES_SOURCE: dict[str, str] = {
+    "recherche": "Recherche",
+    "sur_pieces": "Sur pièces",
+}
+
 # Outils à exclure de "outils les plus utilisés" (20/09/2026, demande
 # explicite Bourama) : des vérifications/mécanismes internes, pas de
 # vrais choix de l'élève, qui dominent le classement sans rien dire
@@ -96,16 +107,15 @@ LABELS_PERSONAS: dict[str, str] = {
 # - consulter_skills_chapitres_matiere : étape câblée en dur dans
 #   core/main.py (nom_outil_niveau2), déclenchée automatiquement, sans
 #   aucune décision du modèle
-# - gerer_document_bibliotheque : forcé et son appel systématique dicté
-#   par le prompt dès qu'un mode source (Recherche ou Sur pièces) est
-#   actif (core/main.py, "outils_forces_contexte" + bloc MODE SOURCE de
-#   core/construction_system_prompt.py)
+# gerer_document_bibliotheque n'est PAS exclu (retour en arrière,
+# 20/09/2026) : Bourama voulait une analytique séparée des modes source
+# Recherche/Sur pièces (voir LABELS_MODES_SOURCE ci-dessus), pas
+# l'exclusion de cet outil -- mauvaise interprétation corrigée.
 OUTILS_EXCLUS_DU_TOP: frozenset[str] = frozenset({
     "verifier_consignes_code_actif",
     "demander_outils",
     "gerer_base_connaissance",
     "consulter_skills_chapitres_matiere",
-    "gerer_document_bibliotheque",
 })
 
 _MOTIF_BLOC = re.compile(r"```(\w+)")
@@ -199,6 +209,22 @@ def _personas_des_conversations(conversation_ids: list[str]) -> list[dict]:
     return toutes_les_lignes
 
 
+def _modes_source_des_conversations(conversation_ids: list[str]) -> list[dict]:
+    if not conversation_ids:
+        return []
+    toutes_les_lignes: list = []
+    for debut in range(0, len(conversation_ids), TAILLE_PAGE_SUPABASE):
+        bloc_ids = conversation_ids[debut : debut + TAILLE_PAGE_SUPABASE]
+        toutes_les_lignes.extend(
+            _recuperer_toutes_les_lignes(
+                lambda bloc_ids=bloc_ids: supabase.table("conversation_mode_source")
+                .select("mode_source")
+                .in_("conversation_id", bloc_ids)
+            )
+        )
+    return toutes_les_lignes
+
+
 def _heure_locale(horodatage: str) -> datetime | None:
     if not horodatage:
         return None
@@ -263,6 +289,12 @@ def calculer_audit_complet(prof_id: str, code_id: str) -> dict:
         if label:
             compteur_personas[label] += 1
 
+    compteur_modes_source: Counter = Counter()
+    for m2 in _modes_source_des_conversations(conversation_ids):
+        label = LABELS_MODES_SOURCE.get((m2.get("mode_source") or "").lower())
+        if label:
+            compteur_modes_source[label] += 1
+
     return {
         "total_rattaches": total_rattaches,
         "actifs": actifs,
@@ -278,4 +310,5 @@ def calculer_audit_complet(prof_id: str, code_id: str) -> dict:
         "outils_top": [{"nom": nom, "nombre": n} for nom, n in compteur_outils.most_common(8)],
         "visuels_top": [{"nom": nom, "nombre": n} for nom, n in compteur_visuels.most_common(8)],
         "modes_top": [{"nom": nom, "nombre": n} for nom, n in compteur_personas.most_common(4)],
+        "modes_source_top": [{"nom": nom, "nombre": n} for nom, n in compteur_modes_source.most_common(2)],
     }
