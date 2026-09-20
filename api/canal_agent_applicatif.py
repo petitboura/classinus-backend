@@ -6,7 +6,7 @@ l'existant).
 
 import logging
 
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from api.auth import supabase
 from core.canal_agent_applicatif import (
@@ -34,46 +34,22 @@ def _verifier_token(token: str):
 
 
 @router.websocket("/ws")
-async def canal_agent_applicatif(
-    websocket: WebSocket, token: str = Query(default=""), appareil_id: str = Query(default="")
-):
-    """
-    CONTRAT FRONTEND : ouvrir cette connexion des que l'app est au
-    premier plan (meme cycle de vie que le canal temps reel existant,
-    voir lib/canalAgentApplicatif.ts). Trois formes de message recues :
-    - {"id": ..., "action_id": ...} : demande d'execution (chantier C) ;
-    - {"id": ..., "resultat": ...} : reponse de CE frontend a une
-      demande d'execution ;
-    - {"etat_actions": [...]} : poussee de l'etat courant des actions
-      disponibles sur CETTE connexion (chantier D), envoyee a
-      l'ouverture puis a chaque changement cote frontend.
-
-    Une forme de message ENVOYEE par le serveur sans reponse attendue
-    (chantier P) : {"texte_clovis": "..."}, commentaire libre de Clovis
-    a afficher dans la bulle de dialogue, voir
-    core/canal_agent_applicatif.py:pousser_texte_clovis.
-
-    Autre forme ENVOYEE par le serveur sans reponse attendue (demo,
-    20/09/2026) : {"ouvrir_canal_en_direct": {"conversation_id": ...}},
-    demande d'activer le canal en direct sur cette conversation (voir
-    core/canal_agent_applicatif.py:demander_ouverture_canal). Envoyee a
-    UNE seule connexion.
-
-    Message de l'etudiant pendant que Clovis travaille (recu) :
-    {"id_message": ..., "message_etudiant": "..."}. Reponse a cette
-    connexion : {"accuse_message_etudiant": id_message, "pris_en_compte":
-    bool}. True = un tour est en cours, la boucle d'agent lira le message
-    a son prochain aller-retour ; False = aucun tour en cours, le frontend
-    doit l'envoyer comme un message normal du chat. Envoye par le serveur
-    sans reponse attendue : {"message_etudiant_renvoye": "..."} (message
-    arrive trop tard pour etre lu par le tour, meme traitement cote frontend).
-    """
-    utilisateur = _verifier_token(token)
-    if utilisateur is None:
+async def canal_temps_reel(websocket: WebSocket):
+    # Le token Supabase et l'identifiant d'appareil sont envoyés dans le
+    # premier message après l'ouverture. Un token bearer ne doit pas être
+    # placé dans l'URL : les URLs peuvent être journalisées par des proxies.
+    await websocket.accept()
+    try:
+        message_auth = await websocket.receive_json()
+    except Exception:
         await websocket.close(code=4401)
         return
 
-    await websocket.accept()
+    utilisateur = _verifier_token(str(message_auth.get("auth_token") or ""))
+    if utilisateur is None:
+        await websocket.close(code=4401)
+        return
+    appareil_id = str(message_auth.get("appareil_id") or "")
     await connecter(utilisateur.id, appareil_id, websocket)
 
     try:
