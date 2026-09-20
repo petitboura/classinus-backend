@@ -487,6 +487,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     notions_programme_pertinentes = []
     signalements_pertinents = []
     code_id_actif = None
+    # Valeur par defaut (20/09/2026) : guide_actif n'est calcule que dans le
+    # bloc ci-dessous ; le bloc "demo" plus bas le lit dans tous les cas.
+    guide_actif = {"actif": False, "sous_mode": "textuel"}
     if user_id and message_utilisateur:
         # Perf (11/09/2026, demande Bourama : "tout ce qui peut se faire en
         # parallele plutot qu'a la suite, allez go") : ces 4 petites
@@ -664,6 +667,19 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # doit le supposer en dur.
     if canal_en_direct:
         outils_forces_contexte += CATEGORIES_OUTILS.get("agent_applicatif", []) + ["dire_a_l_etudiant"]
+
+    # Demo (20/09/2026, decision Bourama : la demo tourne dans le chat
+    # normal et n'ouvre le canal qu'au moment de le demontrer) : tant que
+    # le canal n'est pas ouvert, la demo a besoin de l'outil qui l'ouvre.
+    # Une fois le canal ouvert (canal_en_direct vrai), il n'est plus
+    # propose : les outils de clic sont deja la.
+    if (
+        isinstance(guide_actif, dict)
+        and guide_actif.get("actif")
+        and guide_actif.get("sous_mode") == "demo"
+        and not canal_en_direct
+    ):
+        outils_forces_contexte.append("ouvrir_canal_en_direct")
 
     # Outils gardés par le grand modèle au tour précédent (2026-09-04,
     # demande Bourama) : voir _outil_garder_outils/_lire_outils_retenus.

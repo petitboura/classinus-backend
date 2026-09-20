@@ -13,6 +13,7 @@ notion d'appareil cible, voir core/canal_agent_applicatif.py.
 
 from core.canal_agent_applicatif import (
     pousser_texte_clovis as _pousser_texte_clovis,
+    demander_ouverture_canal as _demander_ouverture_canal,
     demander_execution_action as _demander_execution_action,
     demander_clic_generique as _demander_clic_generique,
     demander_pointage_action as _demander_pointage_action,
@@ -267,3 +268,42 @@ async def dire_a_l_etudiant(texte: str, ctx: Context) -> str:
             "l'étudiant n'a rien vu. Dis-le dans ta réponse normale à la place."
         )
     return f"Message affiché à l'étudiant : {propre}"
+
+
+# Texte envoye comme message du chat, a la fin du tour, une fois le canal
+# ouvert (voir core/canal_agent_applicatif.py:demander_ouverture_canal).
+TEXTE_SUITE_DEMO_CANAL = "Montre-moi maintenant le canal en direct, avec quelques exemples."
+
+
+@mcp_generation.tool()
+async def ouvrir_canal_en_direct(ctx: Context) -> str:
+    """
+    Demo uniquement (decision Bourama du 20/09/2026) : ouvre le canal en
+    direct (curseur qui bouge et clique, bulle de dialogue) pour pouvoir
+    le DEMONTRER. La demo tourne dans le chat normal, ou tu n'as pas les
+    outils de clic : cet outil est le seul moyen de les obtenir.
+
+    A appeler UNIQUEMENT en mode demo, quand l'utilisateur choisit de voir
+    le canal en direct, ou quand tu as fini les affichages et les outils
+    et qu'il ne l'a toujours pas choisi. Ne l'appelle pas si tu as deja
+    les outils de clic, ni une deuxieme fois dans la meme conversation.
+
+    Apres l'appel, termine ta reponse par UNE phrase courte annoncant que
+    le canal s'ouvre : la suite de la demo demarre toute seule dans un
+    nouveau tour, avec les outils de clic disponibles.
+    """
+    user_id = ctx.request_context.request.query_params.get("user_id")
+    if not user_id:
+        return "Erreur : impossible d'identifier l'utilisateur."
+    conversation_id = ctx.request_context.request.query_params.get("conversation_id") or None
+
+    atteintes = await _demander_ouverture_canal(user_id, conversation_id, TEXTE_SUITE_DEMO_CANAL)
+    if atteintes == 0:
+        return (
+            "Impossible d'ouvrir le canal : l'application n'est ouverte nulle part pour ce compte. "
+            "Dis-le simplement a l'utilisateur et termine la demo sans cette partie."
+        )
+    return (
+        "Le canal en direct s'ouvre. Termine ta reponse par une seule phrase courte qui l'annonce "
+        "(sans bloc question) : la suite de la demo demarre automatiquement."
+    )

@@ -382,6 +382,35 @@ async def pousser_texte_clovis(user_id: str, texte: str) -> int:
     return atteintes
 
 
+async def demander_ouverture_canal(user_id: str, conversation_id: str | None, texte_suite: str) -> int:
+    """
+    Demo (20/09/2026) : demande au frontend d'ouvrir le canal en direct sur
+    la conversation `conversation_id` (celle de la demo, pour que le mode
+    demo continue), puis programme `texte_suite` comme message du chat a
+    envoyer des que le tour en cours est termine (voir terminer_tour).
+
+    Une SEULE connexion est visee (la meme que renvoyer_messages_non_lus :
+    le canal ne doit s'ouvrir qu'a un seul endroit, et le message de suite
+    doit partir de cet endroit-la). Renvoie 0 si l'application n'est
+    ouverte nulle part pour ce compte (rien n'est alors programme).
+    """
+    async with _verrou_connexions:
+        connexions = [(cle, ws) for cle, ws in _connexions.items() if cle[0] == user_id]
+    if not connexions:
+        return 0
+    cle, websocket = connexions[0]
+    verrou_envoi = await _verrou_envoi_pour(cle)
+    try:
+        async with verrou_envoi:
+            await websocket.send_json({"ouvrir_canal_en_direct": {"conversation_id": conversation_id}})
+    except Exception as e:
+        logging.error(f"ERREUR ouverture canal en direct (user={user_id}, appareil={cle[1]}) : {e}")
+        return 0
+    with _verrou_messages_etudiant:
+        _continuations_canal[user_id] = texte_suite
+    return 1
+
+
 # Message de l'etudiant PENDANT que Clovis travaille (canal en direct,
 # 19/09/2026, decision Bourama : "il faut que ton message soit envoye").
 # Le frontend l'envoie sur ce canal ; s'il existe un tour de conversation
@@ -397,6 +426,12 @@ LONGUEUR_MAX_MESSAGE_ETUDIANT = 2000
 _verrou_messages_etudiant = threading.Lock()
 _messages_etudiant: dict[str, list[str]] = {}
 _tours_en_cours: dict[str, int] = {}
+# Demo (20/09/2026, decision Bourama : la demo tourne dans le chat normal
+# et n'ouvre le canal en direct qu'au moment de le demontrer) : texte a
+# renvoyer comme message du chat a la FIN du tour en cours, une fois le
+# canal ouvert (voir demander_ouverture_canal). Pas avant : ce tour-ci a
+# ete lance sans les outils de clic, seul un NOUVEAU tour les a.
+_continuations_canal: dict[str, str] = {}
 _boucle_evenements: "asyncio.AbstractEventLoop | None" = None
 
 
@@ -418,7 +453,11 @@ def terminer_tour(user_id: str) -> list[str]:
             _tours_en_cours[user_id] = restant
             return []
         _tours_en_cours.pop(user_id, None)
-        return _messages_etudiant.pop(user_id, [])
+        non_lus = _messages_etudiant.pop(user_id, [])
+        suite = _continuations_canal.pop(user_id, None)
+        if suite:
+            non_lus = non_lus + [suite]
+        return non_lus
 
 
 def deposer_message_etudiant(user_id: str, texte: str) -> bool:

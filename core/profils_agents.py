@@ -473,6 +473,9 @@ def construire_instruction_guide(sections: list[dict]) -> str:
 # conversation de chat normale -- donc canal_en_direct=True et les outils
 # agent_applicatif sont deja forces independamment de ce bloc (voir
 # core/main.py, condition `if canal_en_direct:`).
+# (Cela ne concerne que le GUIDE VISUEL. La Demo, elle, demarre dans le
+# chat normal et n'ouvre le canal qu'au moment de le demontrer, voir
+# INSTRUCTION_DEMO plus bas, decision Bourama 20/09/2026.)
 #
 # ATTENTION rythme (demande explicite Bourama, 20/09/2026 : "il bouge trop
 # vite, on n'a pas le temps de lire, souvent il ne fait que cliquer sans
@@ -542,22 +545,27 @@ def construire_instruction_guide_visuel(sections: list[dict]) -> str:
 INSTRUCTION_DEMO = """
 
 <mode_demo>
-Tu es en mode Demo. Contrairement au guide (qui presente l'application section par section), la Demo se concentre uniquement sur ce que tu sais FAIRE, en trois familles : les affichages, les outils, et le canal en direct (cliquer/montrer reellement dans l'application, comme en ce moment).
+Tu es en mode Demo. Contrairement au guide (qui presente l'application section par section), la Demo se concentre uniquement sur ce que tu sais FAIRE, en trois familles : les affichages, les outils, et le canal en direct (cliquer/montrer reellement dans l'application, avec un curseur et une bulle de dialogue).
+
+La Demo demarre dans le chat NORMAL : le curseur et la bulle du canal en direct ne sont PAS actifs au depart, et tu n'as pas encore les outils de clic. Tu ne les obtiens qu'apres avoir ouvert le canal avec l'outil ouvrir_canal_en_direct (voir la famille "Canal en direct" ci-dessous).
 
 Si l'utilisateur n'a encore rien choisi dans cette conversation, ta toute premiere reponse propose un bloc ```question``` de type "choix_unique" avec ces trois options : "Les affichages", "Les outils", "Le canal en direct".
 
 Regles par famille :
 - Affichages (mermaid, schemas, cartes, widgets interactifs, geometrie, QCM, fiches, questions -- voir la section formats d'affichage de tes instructions) : demontre LITTERALEMENT TOUS les types, un par un, categorie par categorie -- jamais un simple echantillon.
 - Outils (les categories du menu Outils : generer, rechercher, action dans l'app, utilitaires) : demontre LITTERALEMENT TOUS les outils de chaque categorie -- SAUF si une categorie en contient enormement, auquel cas choisis toi-meme les plus utiles ou les plus impressionnants plutot que de tous les montrer un par un.
-- Canal en direct : contrairement aux deux familles ci-dessus, quelques exemples cibles suffisent (pas besoin d'etre exhaustif) -- montre que tu peux cliquer et executer reellement, comme en ce moment.
+- Canal en direct : contrairement aux deux familles ci-dessus, quelques exemples cibles suffisent (pas besoin d'etre exhaustif). Tu ne peux pas cliquer depuis le chat normal : pour montrer cette famille, tu dois d'abord OUVRIR le canal avec l'outil ouvrir_canal_en_direct, dans l'un de ces deux cas seulement :
+  (a) l'utilisateur choisit "Le canal en direct" ou "Voir le canal en direct" (ou le demande clairement) : appelle l'outil aussitot ;
+  (b) tu as fini les affichages ET les outils voulus, et l'utilisateur n'a toujours pas choisi le canal en direct : ouvre-le toi-meme, sans lui redemander et sans bloc question a cet endroit.
+  Juste apres l'appel de l'outil, termine ta reponse par UNE seule phrase courte qui annonce que le canal s'ouvre (rien d'autre, aucun bloc question) : la suite de la demo se declenche automatiquement dans le canal, ou tu auras les outils de clic. N'appelle jamais cet outil si tu disposes deja des outils de clic (canal deja ouvert), ni une deuxieme fois dans la meme conversation.
 
 Ordre : commence toujours par la categorie la plus impressionnante (effet "waouh") au sein de la famille choisie, et termine par la plus banale -- juge toi-meme cet ordre, il n'est fige nulle part.
 
-Enchainement entre familles : a la fin de chaque etape de la demo, propose un bloc ```question``` de type "choix_unique" avec, selon la famille en cours, les options pertinentes parmi : continuer la demo de la famille en cours, passer a une autre famille non encore vue ("Voir les outils" / "Voir les affichages" / "Voir le canal en direct" selon ce qui reste), ou changer de section de l'application (meme comportement normal que d'habitude). Continue ainsi jusqu'a avoir couvert les trois familles, ou jusqu'a ce que l'utilisateur choisisse d'arreter.
+Enchainement entre familles : a la fin de chaque etape de la demo, propose un bloc ```question``` de type "choix_unique" avec, selon la famille en cours, les options pertinentes parmi : continuer la demo de la famille en cours, passer a une autre famille non encore vue ("Voir les outils" / "Voir les affichages" / "Voir le canal en direct" selon ce qui reste), ou changer de section de l'application (meme comportement normal que d'habitude). Continue ainsi jusqu'a avoir couvert les trois familles, ou jusqu'a ce que l'utilisateur choisisse d'arreter. Si l'utilisateur choisit d'arreter, ne lui ouvre PAS le canal.
 
-Rythme (meme regle imperative que le guide visuel des que tu cliques/montres reellement) : une seule action a la fois, explique toujours avant et apres, ne clique jamais en silence, laisse le temps de lire.
+Rythme (meme regle imperative que le guide visuel des que tu cliques/montres reellement, donc une fois le canal ouvert) : une seule action a la fois, explique toujours avant et apres (dire_a_l_etudiant), ne clique jamais en silence, laisse le temps de lire.
 
-Derniere etape, une fois les familles voulues par l'utilisateur couvertes : precise aussi, en plus de ce que tu sais produire/afficher, tout ce que tu acceptes EN ENTREE (types de fichiers, images, documents, dictee vocale, etc.) -- la demo ne doit pas montrer seulement ce que tu produis, aussi ce que tu sais recevoir.
+Derniere etape, une fois les familles voulues par l'utilisateur couvertes (donc apres la partie canal en direct si elle a eu lieu) : precise aussi, en plus de ce que tu sais produire/afficher, tout ce que tu acceptes EN ENTREE (types de fichiers, images, documents, dictee vocale, etc.) -- la demo ne doit pas montrer seulement ce que tu produis, aussi ce que tu sais recevoir.
 
 Les confirmations deja obligatoires sur les actions sensibles (GitHub, Notion, Google Drive) restent obligatoires meme en mode demo, y compris pour "essayer maintenant" un outil de ces categories -- ne les contourne jamais.
 </mode_demo>"""

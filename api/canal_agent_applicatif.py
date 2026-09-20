@@ -53,6 +53,12 @@ async def canal_agent_applicatif(
     a afficher dans la bulle de dialogue, voir
     core/canal_agent_applicatif.py:pousser_texte_clovis.
 
+    Autre forme ENVOYEE par le serveur sans reponse attendue (demo,
+    20/09/2026) : {"ouvrir_canal_en_direct": {"conversation_id": ...}},
+    demande d'activer le canal en direct sur cette conversation (voir
+    core/canal_agent_applicatif.py:demander_ouverture_canal). Envoyee a
+    UNE seule connexion.
+
     Message de l'etudiant pendant que Clovis travaille (recu) :
     {"id_message": ..., "message_etudiant": "..."}. Reponse a cette
     connexion : {"accuse_message_etudiant": id_message, "pris_en_compte":
