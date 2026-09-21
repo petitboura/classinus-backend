@@ -106,12 +106,21 @@ def _decouvrir_metadata():
 def _client_dcr_actif(metadata):
     """
     Retourne (client_ref, client_id, client_secret) pour le client DCR le
-    plus recent en base. En enregistre un nouveau aupres de Notion si aucun
-    n'existe encore.
+    plus recent en base dont l'adresse de retour enregistree correspond a
+    URL_RETOUR actuelle. Si aucun ne correspond (premiere utilisation, ou
+    changement de domaine), en enregistre un nouveau aupres de Notion.
+
+    21/09/2026, demande de Bourama : Notion memorise l'adresse de retour
+    donnee a l'inscription et refuse toute autre ("Invalid redirect_uri").
+    Apres le passage a classinus.com, l'ancien client restait reutilise avec
+    l'ancienne adresse. On filtre donc sur l'adresse actuelle et on garde les
+    anciennes lignes intactes pour que les tokens deja emis continuent de se
+    rafraichir avec leur propre client.
     """
     ligne = (
         supabase.table("notion_oauth_clients")
         .select("*")
+        .eq("redirect_uri", URL_RETOUR)
         .order("created_at", desc=True)
         .limit(1)
         .execute()
