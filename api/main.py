@@ -645,6 +645,12 @@ ORIGINES_AUTORISEES = [
     # bloque par le navigateur avec "Failed to fetch", meme si la
     # connexion Supabase (qui n'a pas cette restriction) fonctionne.
     "https://localhost",
+    # 21/09/2026, demande Bourama : nom de domaine officiel de Classinus.
+    # Sans ces lignes, le navigateur bloque tout appel du site servi sur
+    # classinus.com vers ce backend. La version www est incluse pour le
+    # cas où elle serait servie directement au lieu d'être redirigée.
+    "https://classinus.com",
+    "https://www.classinus.com",
 ]
 
 # Vercel donne une URL DIFFERENTE a chaque deploiement de preview (en plus
