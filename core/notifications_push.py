@@ -41,7 +41,7 @@ APNs (iOS) : API HTTP/2 avec jeton JWT signé ES256 (méthode "token
 based provider authentication" recommandée par Apple, pas de
 certificat .p12 à renouveler tous les ans). Variables : APNS_KEY_P8_B64
 (le fichier .p8 téléchargé sur developer.apple.com, encodé en base64),
-APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID (com.clovis.app).
+APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID (com.classinus.app).
 
 TODO Bourama (aucune de ces valeurs n'existe encore, comme BASE_URL/
 SUPABASE_ANON_KEY côté clovis-mobile) :
@@ -75,7 +75,7 @@ from core.notifications import creer_notification
 VAPID_CLAIMS_SUB = "mailto:contact@maame.africa"  # à changer par une vraie adresse si besoin
 
 FCM_SCOPES = ["https://www.googleapis.com/auth/firebase.messaging"]
-APNS_BUNDLE_ID = "com.clovis.app"  # voir ios/README.md dans clovis-mobile, à réaligner si Bourama change l'id
+APNS_BUNDLE_ID = "com.classinus.app"  # voir ios/README.md dans clovis-mobile, à réaligner si Bourama change l'id
 
 
 def _get_secret(cle):
