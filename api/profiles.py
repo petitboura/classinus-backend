@@ -561,7 +561,7 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
         ("commentaires_agents", "agent_comments", "user_id"),
         ("notes_agents", "agent_ratings", "user_id"),
         ("codes_partage_crees", "codes_partage", "proprietaire_id"),
-        ("invitations_crees", "invitations_clovis", "proprietaire_id"),
+        ("invitations_crees", "invitations_classinus", "proprietaire_id"),
         ("comportements_etudiant", "comportements_etudiants", "etudiant_id"),
     )
     for cle_export, table, colonne in tables_par_colonne_simple:

@@ -26,7 +26,7 @@ TABLES_PAR_TYPE = {
     "fichier": "bibliotheque_publique",
     "dossier": "dossiers_catalogue_public",
     "skill": "comportements_publics",
-    "clovis": "clovis_infos",
+    "clovis": "classinus_infos",
 }
 
 

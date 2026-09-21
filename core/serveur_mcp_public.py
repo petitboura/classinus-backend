@@ -13,7 +13,7 @@ REGLE PRODUIT NON NEGOCIABLE (voir README clovis-frontend) : ce
 connecteur est celui de CLOVIS, jamais de "Djiguigne". Le title, la
 description, l'icone et le website_url ne doivent jamais laisser
 transparaitre l'ecosysteme derriere -- voir le nom technique interne
-ci-dessous ("clovis_public"), qui lui n'est jamais vu par l'utilisateur.
+ci-dessous ("classinus_public"), qui lui n'est jamais vu par l'utilisateur.
 
 Limite connue cote Claude.ai au moment de l'ecriture : un connecteur
 personnalise ajoute par URL affiche une icone generique quel que soit ce
@@ -51,7 +51,7 @@ from core.mcp_auth_public import (
 )
 
 mcp_public = FastMCP(
-    name="clovis_public",
+    name="classinus_public",
     title="Classinus",
     description=(
         "Assistant pedagogique Classinus : consultez et gerez votre "
