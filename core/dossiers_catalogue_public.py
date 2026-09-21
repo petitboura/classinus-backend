@@ -135,6 +135,18 @@ def renommer_dossier(dossier_id: str, nouveau_nom: str) -> None:
     supabase.table("dossiers_catalogue_public").update({"nom": nouveau_nom}).eq("id", dossier_id).execute()
 
 
+# 20/09/2026, demande Bourama ("beaucoup de paramètres ne sont pas
+# éditables aujourd'hui") : la description existe en base depuis le
+# 08/09 (migration 2026_09_08_description_dossiers_catalogue_public.sql)
+# mais n'était modifiable nulle part -- fonction séparée plutôt
+# qu'étendre renommer_dossier ci-dessus, qui est déjà appelée à
+# plusieurs endroits (MCP, serveur_mcp_espace.py) avec la seule
+# signature (dossier_id, nouveau_nom) : les toucher tous pour un champ
+# optionnel de plus n'apportait rien, cette fonction reste additive.
+def modifier_description_dossier(dossier_id: str, description: str) -> None:
+    supabase.table("dossiers_catalogue_public").update({"description": description}).eq("id", dossier_id).execute()
+
+
 def modifier_filtres_dossier(
     dossier_id: str,
     pays: list[str] | None = None, niveau: list[str] | None = None, categorie: list[str] | None = None,

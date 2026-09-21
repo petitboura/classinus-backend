@@ -22,6 +22,7 @@ from core.dossiers_catalogue_public import (
     lister_dossiers,
     lister_fichiers_ids_dossier,
     lister_sous_dossiers,
+    modifier_description_dossier,
     modifier_filtres_dossier,
     peut_ajouter_contenu,
     peut_retirer_contenu,
@@ -74,6 +75,12 @@ class CreerDossierPayload(BaseModel):
 
 class RenommerDossierPayload(BaseModel):
     nom: str
+    # 20/09/2026, demande Bourama : la description (colonne existante
+    # depuis le 08/09) rejoint le nom dans cette même route PATCH plutôt
+    # qu'une route séparée -- un seul bouton "Modifier" côté frontend,
+    # même esprit que fichier/skill. None = inchangée, chaîne (même
+    # vide) = nouvelle valeur.
+    description: str | None = None
 
 
 class ModifierFiltresDossierPayload(BaseModel):
@@ -190,7 +197,11 @@ def renommer(dossier_id: str, payload: RenommerDossierPayload, utilisateur=Depen
         raise erreur_api(403, "CE_DOSSIER_NE_T_APPARTIENT_PAS")
     nouveau_nom = (payload.nom or "").strip() or "Nouveau dossier"
     renommer_dossier(dossier_id, nouveau_nom)
-    return {"id": dossier_id, "nom": nouveau_nom}
+    reponse = {"id": dossier_id, "nom": nouveau_nom}
+    if payload.description is not None:
+        modifier_description_dossier(dossier_id, payload.description.strip())
+        reponse["description"] = payload.description.strip()
+    return reponse
 
 
 @router.patch("/{dossier_id}/filtres")

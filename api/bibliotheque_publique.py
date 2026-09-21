@@ -389,6 +389,33 @@ def modifier_filtres_fichier(entree_id: str, payload: ModifierFiltresFichierPayl
     return _marquer_est_a_moi([res.data], utilisateur)[0]
 
 
+class ModifierEntreePayload(BaseModel):
+    nom: str | None = None
+    description: str | None = None
+
+
+@router.patch("/{entree_id}", response_model=EntreeBibliothequePublique)
+def modifier_entree(entree_id: str, payload: ModifierEntreePayload, utilisateur=Depends(utilisateur_courant)):
+    """
+    20/09/2026, demande Bourama ("beaucoup de paramètres ne sont pas
+    éditables aujourd'hui") : nom et description d'un fichier/lien/texte
+    déjà publié rejoignent modifier_entree_publique (déjà utilisée par
+    /filtres ci-dessus et par l'outil MCP), réservé au contributeur
+    d'origine, même règle que /filtres et que supprimer ci-dessous.
+    """
+    erreur = modifier_entree_publique(entree_id, utilisateur.id, nom=payload.nom, description=payload.description)
+    if erreur == "ENTREE_INTROUVABLE":
+        raise erreur_api(404, "ENTREE_INTROUVABLE")
+    if erreur == "CETTE_ENTREE_NE_T_APPARTIENT_PAS":
+        raise erreur_api(403, "CETTE_ENTREE_NE_T_APPARTIENT_PAS")
+    if erreur == "NOM_REQUIS":
+        raise erreur_api(400, "NOM_REQUIS")
+    res = supabase.table("bibliotheque_publique").select(_CAMPOS_ENTREE).eq("id", entree_id).maybe_single().execute()
+    if not res or not res.data:
+        raise erreur_api(404, "ENTREE_INTROUVABLE")
+    return _marquer_est_a_moi([res.data], utilisateur)[0]
+
+
 @router.post("", response_model=EntreeBibliothequePublique, status_code=201)
 async def ajouter_a_bibliotheque_publique(
     fichier: UploadFile = File(...),

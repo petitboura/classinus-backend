@@ -190,18 +190,22 @@ def publier_texte_public(
 
 
 def modifier_entree_publique(
-    entree_id: str, utilisateur_id: str, description: str = None,
+    entree_id: str, utilisateur_id: str, nom: str = None, description: str = None,
     pays: str | list[str] | None = None, niveau: str | list[str] | None = None, categorie: str | list[str] | None = None, classe: str | list[str] | None = None, specialite: str | list[str] | None = None,
 ) -> str | None:
     """
-    Modifie la description et/ou les filtres d'une entrée déjà publiée
-    (nouvelle capacité, 09/09/2026 -- n'existait dans AUCUNE route API
-    avant cet ajout). Seul le contributeur d'origine peut modifier SA
-    propre entrée (même règle que supprimer_entree_publique).
+    Modifie le nom, la description et/ou les filtres d'une entrée déjà
+    publiée (nom ajouté le 20/09/2026, demande Bourama : "beaucoup de
+    paramètres ne sont pas éditables aujourd'hui" -- description et
+    filtres existaient déjà depuis le 09/09, voir plus bas). Seul le
+    contributeur d'origine peut modifier SA propre entrée (même règle
+    que supprimer_entree_publique).
 
     Chaque paramètre non fourni (None) laisse le champ correspondant
-    inchangé -- une chaîne vide explicite EFFACE le champ (ex.
-    `pays=""` retire le filtre pays existant).
+    inchangé -- une chaîne vide explicite EFFACE le champ pour
+    description/filtres (ex. `pays=""` retire le filtre pays existant).
+    Le nom, lui, ne peut pas être vidé (c'est le titre affiché partout
+    dans le catalogue) : une chaîne vide/blanche est refusée.
 
     Renvoie None si tout s'est bien passé, ou un message d'erreur
     (str) sinon.
@@ -213,6 +217,11 @@ def modifier_entree_publique(
         return "CETTE_ENTREE_NE_T_APPARTIENT_PAS"
 
     maj = {}
+    if nom is not None:
+        nom_nettoye = nom.strip()
+        if not nom_nettoye:
+            return "NOM_REQUIS"
+        maj["nom"] = nom_nettoye
     if description is not None:
         maj["description"] = description.strip()
     # 15/09/2026 : chaque champ accepte toujours chaîne vide "" pour

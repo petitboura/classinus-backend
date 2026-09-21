@@ -914,6 +914,63 @@ def obtenir_comportement_public(comportement_public_id: str) -> dict | None:
     return res.data if res else None
 
 
+def modifier_comportement_public(comportement_public_id: str, auteur_id: str, nom: str = None, description: str = None, texte: str = None, skill_md: str = None) -> str | None:
+    """
+    20/09/2026, demande Bourama ("pouvoir modifier le contenu réel") :
+    rien n'était modifiable après publication -- c'était une copie
+    figée, définitivement déconnectée du comportement privé d'origine
+    (voir publier_comportement_public ci-dessus). Ajoute cette capacité
+    directement sur la ligne publiée, réservée à l'auteur d'origine
+    (même règle que retirer_skill_public ci-dessous).
+
+    Chaque paramètre non fourni (None) laisse le champ correspondant
+    inchangé. Bourama a été prévenu explicitement (avant cet ajout) que
+    modifier texte/skill_md change le comportement de tous ceux qui ont
+    déjà activé ce skill (activer_comportement_public copie ces deux
+    champs dans une ligne comportements_etudiants indépendante au
+    moment de l'activation -- seules les activations FUTURES verront le
+    nouveau contenu, les copies déjà activées ne sont jamais retouchées
+    après coup, ni ici ni ailleurs).
+
+    Renvoie None si tout s'est bien passé, ou un message d'erreur (str)
+    sinon.
+    """
+    res = (
+        supabase.table("comportements_publics")
+        .select("auteur_id")
+        .eq("id", comportement_public_id)
+        .eq("statut", "publie")
+        .maybe_single()
+        .execute()
+    )
+    if not res or not res.data:
+        return "COMPORTEMENT_INTROUVABLE"
+    if res.data["auteur_id"] != auteur_id:
+        return "CE_SKILL_NE_T_APPARTIENT_PAS"
+
+    maj = {}
+    if nom is not None:
+        nom_nettoye = nom.strip()
+        if not nom_nettoye:
+            return "NOM_REQUIS"
+        maj["nom"] = nom_nettoye
+    if description is not None:
+        maj["description"] = description.strip()
+    if texte is not None:
+        texte_nettoye = texte.strip()
+        if not texte_nettoye:
+            return "TEXTE_REQUIS"
+        maj["texte"] = texte_nettoye
+    if skill_md is not None:
+        maj["skill_md"] = skill_md.strip()
+
+    if not maj:
+        return "AUCUNE_MODIFICATION_FOURNIE"
+
+    supabase.table("comportements_publics").update(maj).eq("id", comportement_public_id).execute()
+    return None
+
+
 def retirer_skill_public(comportement_public_id: str, auteur_id: str) -> bool:
     """07/09/2026, demande Bourama : l'auteur d'un skill public doit
     pouvoir le retirer (n'existait pas). Retrait doux (statut='retire',

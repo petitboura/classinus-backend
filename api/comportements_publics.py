@@ -16,6 +16,7 @@ from api.auth import utilisateur_courant, utilisateur_optionnel
 from core.comportements_etudiants import (
     activer_comportement_public,
     lister_comportements_publics,
+    modifier_comportement_public,
     obtenir_comportement_public,
     retirer_skill_public,
     uploader_comportement_public,
@@ -78,6 +79,41 @@ def obtenir_comportement_public_detail(comportement_public_id: str, utilisateur=
     ligne["mon_etoile"] = utilisateur is not None and bool(
         etoiles_utilisateur("skill", [comportement_public_id], utilisateur.id)
     )
+    return ligne
+
+
+class ModifierComportementPublicPayload(BaseModel):
+    nom: str | None = None
+    description: str | None = None
+    texte: str | None = None
+    skill_md: str | None = None
+
+
+@router.patch("/{comportement_public_id}", response_model=ComportementPublic)
+def modifier_mon_skill_public(comportement_public_id: str, payload: ModifierComportementPublicPayload, utilisateur=Depends(utilisateur_courant)):
+    """
+    20/09/2026, demande Bourama : rien n'était modifiable après
+    publication d'un skill (copie figée, voir modifier_comportement_
+    public). Réservé à l'auteur d'origine, même 404 générique que
+    retirer_mon_skill_public juste en dessous si l'appelant n'en est
+    pas l'auteur -- ne jamais confirmer à un tiers qu'un skill existe
+    et appartient à quelqu'un d'autre.
+    """
+    erreur = modifier_comportement_public(
+        comportement_public_id, utilisateur.id,
+        nom=payload.nom, description=payload.description, texte=payload.texte, skill_md=payload.skill_md,
+    )
+    if erreur in ("COMPORTEMENT_INTROUVABLE", "CE_SKILL_NE_T_APPARTIENT_PAS"):
+        raise erreur_api(404, "COMPORTEMENT_PUBLIC_INTROUVABLE")
+    if erreur == "NOM_REQUIS":
+        raise erreur_api(400, "NOM_REQUIS")
+    if erreur == "TEXTE_REQUIS":
+        raise erreur_api(400, "TEXTE_REQUIS")
+    ligne = obtenir_comportement_public(comportement_public_id)
+    if not ligne:
+        raise erreur_api(404, "COMPORTEMENT_PUBLIC_INTROUVABLE")
+    ligne["est_a_moi"] = True
+    ligne["mon_etoile"] = bool(etoiles_utilisateur("skill", [comportement_public_id], utilisateur.id))
     return ligne
 
 
