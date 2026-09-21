@@ -22,7 +22,7 @@
 -- orphelines plutôt que de perdre des réponses entières silencieusement.
 
 ALTER TABLE public.historique_conversations
-    ADD COLUMN IF NOT EXISTS parent_id uuid REFERENCES public.historique_conversations(id) ON DELETE SET NULL;
+    ADD COLUMN IF NOT EXISTS parent_id bigint REFERENCES public.historique_conversations(id) ON DELETE SET NULL;
 
 CREATE INDEX IF NOT EXISTS idx_historique_conversations_parent
     ON public.historique_conversations USING btree (parent_id);

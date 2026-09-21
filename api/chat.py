@@ -177,7 +177,7 @@ class EnvoyerMessagePayload(BaseModel):
     # ligne "user" n'est creee, `parent_id` designe alors directement le
     # message "user" EXISTANT sous lequel la nouvelle reponse devient une
     # version alternative de l'ancienne (au lieu d'une suite).
-    parent_id: Optional[str] = None
+    parent_id: Optional[int] = None
     regenerer: Optional[bool] = False
 
 

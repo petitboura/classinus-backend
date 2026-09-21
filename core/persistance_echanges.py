@@ -3,7 +3,6 @@
 # periodique du resume memoire de l'utilisateur.
 import logging
 import threading
-import uuid
 from groq import Groq
 from constantes_agent import get_secret, supabase, MODELE_RESUME, SEUIL_RESUME_MESSAGES, DELAI_MAX_PAR_APPEL
 from profils_agents import _charger_resume_memoire, _mettre_a_jour_profil_utilisateur_si_besoin
@@ -52,10 +51,11 @@ def _sauvegarder_echange(user_id, agent_id, message_utilisateur, reponse_finale,
       inchange) : `parent_id` est le parent_id de la ligne "user" creee
       ici (id de la derniere ligne de la branche precedente, None si
       c'est le tout premier message de la conversation). La ligne
-      "assistant" creee juste apres prend systematiquement pour parent
-      l'id de cette ligne "user", genere cote Python (uuid.uuid4) plutot
-      que laisse a la base, pour pouvoir le referencer immediatement
-      sans un aller-retour Supabase supplementaire.
+      "assistant" creee juste apres prend pour parent l'id auto-genere
+      (bigint identity Postgres, PAS un uuid) de cette ligne "user",
+      necessite donc DEUX inserts sequentiels (impossible de connaitre
+      l'id avant que Postgres l'attribue), contrairement a l'ancien
+      insert groupe des deux lignes en un seul aller-retour.
     - sauvegarder_message_utilisateur=False ("reessayer", voir
       core/main.py:chat() parametre `regenerer`) : AUCUNE ligne "user"
       n'est creee (ni ici ni dans `conversations`, la question existe
@@ -68,15 +68,6 @@ def _sauvegarder_echange(user_id, agent_id, message_utilisateur, reponse_finale,
 
     if not user_id or not (reponse_finale or "").strip():
         return ids_historique
-
-    # Chantier "versions navigables" (20/09/2026) : id genere cote Python
-    # plutot que laisse a Postgres, pour pouvoir le referencer comme
-    # parent_id de la ligne assistant juste en dessous SANS aller-retour
-    # Supabase supplementaire (un seul insert groupe, comme avant). Absent
-    # (None) quand sauvegarder_message_utilisateur=False : pas de nouvelle
-    # ligne "user", donc pas de nouvel id a generer, `parent_id` recu en
-    # parametre EST deja l'id de la ligne "user" existante a utiliser.
-    id_nouveau_message_utilisateur = str(uuid.uuid4()) if sauvegarder_message_utilisateur else None
 
     if sauvegarder_message_utilisateur:
         try:
@@ -107,31 +98,51 @@ def _sauvegarder_echange(user_id, agent_id, message_utilisateur, reponse_finale,
     # un appelant qui ne gère pas encore les fils continue de fonctionner
     # sans erreur, ses messages sont juste groupés sous "historique ancien"
     # côté affichage plutôt que dans un fil précis.
+    #
+    # Chantier "versions navigables" (20/09/2026) : `id` de cette table
+    # est un bigint IDENTITY Postgres (pas un uuid), impossible a deviner
+    # cote Python avant l'insertion, quand sauvegarder_message_utilisateur
+    # est vrai, DEUX inserts sequentiels sont donc necessaires (la ligne
+    # "user" doit exister, avec son id reellement attribue par Postgres,
+    # avant de pouvoir inserer la ligne "assistant" qui la reference comme
+    # parent_id). Un seul insert groupe suffit dans le cas contraire
+    # (reessayer), puisque le parent (la question existante) est deja
+    # connu.
     try:
-        lignes_a_inserer = []
+        id_parent_assistant = parent_id
         if sauvegarder_message_utilisateur:
-            lignes_a_inserer.append({
-                "id": id_nouveau_message_utilisateur,
-                "user_id": user_id, "agent_id": agent_id, "role": "user", "content": message_utilisateur,
-                "conversation_id": conversation_id, "meta": meta_utilisateur or None, "parent_id": parent_id,
+            res_user = (
+                supabase.table("historique_conversations")
+                .insert({
+                    "user_id": user_id, "agent_id": agent_id, "role": "user", "content": message_utilisateur,
+                    "conversation_id": conversation_id, "meta": meta_utilisateur or None, "parent_id": parent_id,
+                })
+                .execute()
+            )
+            lignes_user = res_user.data or []
+            if not lignes_user:
+                raise RuntimeError("insertion de la ligne 'user' sans retour de ligne")
+            id_parent_assistant = lignes_user[0]["id"]
+
+        res_assistant = (
+            supabase.table("historique_conversations")
+            .insert({
+                "user_id": user_id, "agent_id": agent_id, "role": "assistant", "content": reponse_finale,
+                "conversation_id": conversation_id, "modele": modele, "meta": meta_assistant or None,
+                "parent_id": id_parent_assistant,
             })
-        id_parent_assistant = id_nouveau_message_utilisateur if sauvegarder_message_utilisateur else parent_id
-        lignes_a_inserer.append({
-            "user_id": user_id, "agent_id": agent_id, "role": "assistant", "content": reponse_finale,
-            "conversation_id": conversation_id, "modele": modele, "meta": meta_assistant or None,
-            "parent_id": id_parent_assistant,
-        })
-        res = supabase.table("historique_conversations").insert(lignes_a_inserer).execute()
-        lignes = res.data or []
-        ligne_assistant = next((l for l in lignes if l["role"] == "assistant"), None)
-        if ligne_assistant:
+            .execute()
+        )
+        lignes_assistant = res_assistant.data or []
+        if lignes_assistant:
+            ligne_assistant = lignes_assistant[0]
             ids_historique = {
                 # Reessayer (sauvegarder_message_utilisateur=False) : pas
                 # de nouvelle ligne "user" cree ici, message_id_user reste
                 # donc l'id de la ligne "user" EXISTANTE (recu via
                 # `parent_id`), toujours une vraie valeur utilisable cote
                 # frontend, jamais None dans ce cas.
-                "message_id_user": id_nouveau_message_utilisateur if sauvegarder_message_utilisateur else parent_id,
+                "message_id_user": id_parent_assistant if sauvegarder_message_utilisateur else parent_id,
                 "message_id_assistant": ligne_assistant["id"],
                 "created_at_assistant": ligne_assistant.get("created_at"),
                 # Propage automatiquement dans tous les evenements SSE

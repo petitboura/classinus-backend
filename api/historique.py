@@ -153,8 +153,8 @@ class MessageHistorique(BaseModel):
     # alternatives a ce point precis, reconstruit en arbre cote
     # frontend (ChatIA.tsx), cette route renvoie TOUJOURS TOUTES les
     # lignes de la conversation demandee, pas seulement le chemin actif.
-    id: Optional[str] = None
-    parent_id: Optional[str] = None
+    id: Optional[int] = None
+    parent_id: Optional[int] = None
 
 
 @router.get("/{agent_id}", response_model=List[MessageHistorique])
