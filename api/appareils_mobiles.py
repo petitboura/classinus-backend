@@ -250,9 +250,9 @@ def rapporter_resultat_action(
 # Flow cote app :
 # 1. POST .../connecteurs/notion/demarrer -> ouvrir l'url_autorisation
 #    renvoyee dans ASWebAuthenticationSession (iOS, callbackURLScheme=
-#    "clovismobile") ou Custom Tabs + intent-filter (Android).
+#    "classinusmobile") ou Custom Tabs + intent-filter (Android).
 # 2. Recuperer `code` et `state` depuis l'URI de redirection interceptee
-#    (clovismobile://oauth-callback?code=...&state=...).
+#    (classinusmobile://oauth-callback?code=...&state=...).
 # 3. POST .../connecteurs/notion/finaliser avec {code, state}.
 # 4. GET .../connecteurs/notion/statut pour verifier l'etat a tout moment.
 # 5. GET .../connecteurs/notion/rechercher?q=... pour un appel effectif de

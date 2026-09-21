@@ -64,7 +64,7 @@ DECOUVERTE_URL = "https://mcp.notion.com/.well-known/oauth-authorization-server"
 # Enregistre en tant que redirect_uri SUPPLEMENTAIRE aupres de Notion (DCR
 # accepte un tableau), en plus de URL_RETOUR (web). Pas un secret : c'est un
 # identifiant de protocole fixe, pas une cle.
-REDIRECT_URI_MOBILE = "clovismobile://oauth-callback"
+REDIRECT_URI_MOBILE = "classinusmobile://oauth-callback"
 
 # Marge de securite : on rafraichit un peu avant l'expiration reelle plutot
 # que d'attendre un 401, comme recommande par Notion.
