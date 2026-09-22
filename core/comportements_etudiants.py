@@ -187,9 +187,10 @@ def _generer_skill(texte: str) -> dict:
                     f"Instruction de l'étudiant :\n{texte}"
                 ),
             }],
-            max_completion_tokens=800,
             timeout=20.0,
         )
+        if completion.choices[0].finish_reason == "length":
+            raise ValueError("réponse tronquée (finish_reason=length)")
         brut = (completion.choices[0].message.content or "").strip()
         correspondance = _RE_FRONTMATTER.match(brut)
         if not correspondance:
