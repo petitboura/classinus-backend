@@ -544,9 +544,30 @@ def _route_mcp_principale(app_mcp_starlette, chemin_complet):
             f"(auth_server_provider ajouterait des routes supplementaires)."
         )
     route_brute = routes_trouvees[0]
+    endpoint = route_brute.endpoint
+
+    # CORRECTIF (22/09) -- 500 "AttributeError: ... has no attribute
+    # '__name__'" sur TOUTE requete vers /mcp/public et /mcp/espace,
+    # systematiquement (logs Railway, signale par Bourama). Cause : quand
+    # un token_verifier est configure (cas de ces 2 serveurs, auth
+    # Supabase), la librairie mcp (streamable_http_app, mcp/server/
+    # lowlevel/server.py) enveloppe directement l'endpoint de la route
+    # dans une instance de RequireAuthMiddleware -- ce n'est ni une
+    # fonction ni une methode, juste un objet avec un `__call__`. Notre
+    # middleware de limitation de debit (SlowAPIMiddleware, voir plus
+    # haut) inspecte `route.endpoint.__name__` sur TOUTES les routes de
+    # l'app pour decider s'il doit s'appliquer, et plante des qu'il tombe
+    # sur cet objet -- avant meme d'atteindre le code d'authentification.
+    # Fix : donner a cet objet un `__name__` (les instances Python
+    # peuvent recevoir des attributs arbitraires, aucun `__slots__` ici),
+    # comme le ferait une fonction normale -- la limitation de debit
+    # continue de fonctionner normalement sur ces routes ensuite.
+    if not hasattr(endpoint, "__name__"):
+        endpoint.__name__ = f"mcp_endpoint_{chemin_complet.strip('/').replace('/', '_')}"
+
     return Route(
         route_brute.path,
-        endpoint=route_brute.endpoint,
+        endpoint=endpoint,
         methods=list(route_brute.methods) if route_brute.methods else None,
         middleware=app_mcp_starlette.user_middleware,
     )
