@@ -527,9 +527,10 @@ def choisir_comportements_pertinents(message_utilisateur: str, comportements: li
             model=MODELE_PETIT,
             messages=[{"role": "user", "content": prompt_routeur}],
             response_format={"type": "json_object"},
-            max_completion_tokens=200,
             timeout=10.0,
         )
+        if completion.choices[0].finish_reason == "length":
+            raise ValueError("réponse tronquée (finish_reason=length)")
         brut = completion.choices[0].message.content.strip()
         suggestion = json.loads(brut)
         ids_valides = {c["id"] for c in comportements}
