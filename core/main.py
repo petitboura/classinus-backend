@@ -506,6 +506,15 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # Valeur par defaut (20/09/2026) : guide_actif n'est calcule que dans le
     # bloc ci-dessous ; le bloc "demo" plus bas le lit dans tous les cas.
     guide_actif = {"actif": False, "sous_mode": "textuel"}
+    # Valeur par defaut (23/09/2026, correctif Bourama : chat casse pour
+    # tout visiteur sans compte) : mode_source n'etait calcule que dans le
+    # bloc ci-dessous (reserve aux utilisateurs connectes), mais deja lu
+    # sans garde plus bas (ligne "if mode_source in (...)") et transmis a
+    # _construire_system_prompt dans tous les cas -- pour un visiteur sans
+    # compte, ce bloc etait saute et la variable n'existait jamais,
+    # provoquant un plantage systematique. "Aucun" (mode_source=None) est
+    # le comportement par defaut existant, voir core/mode_source_conversation.py.
+    mode_source = None
     if user_id and message_utilisateur:
         # Perf (11/09/2026, demande Bourama : "tout ce qui peut se faire en
         # parallele plutot qu'a la suite, allez go") : ces 4 petites
