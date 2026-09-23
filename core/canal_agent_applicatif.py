@@ -239,20 +239,25 @@ async def _diffuser_et_attendre(
             except Exception as e:
                 logging.error(f"ERREUR diffusion message canal agent applicatif (user={user_id}, appareil={cle[1]}) : {e}")
 
+        # Correctif 24/09/2026, Bourama : asyncio.wait_for ANNULE ce qu'il
+        # attend quand le delai expire. Sans asyncio.shield, la Future
+        # etait annulee des la fin de la premiere etape (5s), et les
+        # etapes suivantes levaient CancelledError, ce qui tuait tout
+        # l'appel d'outil a exactement 5 secondes.
         try:
-            return await asyncio.wait_for(future, timeout=DELAI_STATUT_1_SECONDES)
+            return await asyncio.wait_for(asyncio.shield(future), timeout=DELAI_STATUT_1_SECONDES)
         except asyncio.TimeoutError:
             pass
 
         await _appeler_statut(on_statut, TEXTE_STATUT_1)
         try:
-            return await asyncio.wait_for(future, timeout=DELAI_STATUT_2_SECONDES - DELAI_STATUT_1_SECONDES)
+            return await asyncio.wait_for(asyncio.shield(future), timeout=DELAI_STATUT_2_SECONDES - DELAI_STATUT_1_SECONDES)
         except asyncio.TimeoutError:
             pass
 
         await _appeler_statut(on_statut, TEXTE_STATUT_2)
         try:
-            return await asyncio.wait_for(future, timeout=DELAI_ABANDON_SECONDES - DELAI_STATUT_2_SECONDES)
+            return await asyncio.wait_for(asyncio.shield(future), timeout=DELAI_ABANDON_SECONDES - DELAI_STATUT_2_SECONDES)
         except asyncio.TimeoutError:
             logging.warning(
                 f"ABANDON canal agent applicatif (user={user_id}, id={correlation_id}) : "
@@ -261,6 +266,8 @@ async def _diffuser_et_attendre(
             return None
     finally:
         _attentes.pop(correlation_id, None)
+        if not future.done():
+            future.cancel()
 
 
 async def demander_execution_action(user_id: str, action_id: str, on_statut=None) -> Any | None:

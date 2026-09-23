@@ -369,6 +369,21 @@ def lister_tous_les_outils(get_secret, user_id=None, agent_id=None, outil_force=
     return filtrer_catalogue_par_outil_force(outils_pour_llm, table_routage, outil_force)
 
 
+def _message_erreur_technique_outil(nom_outil: str) -> str:
+    """
+    Ajoute le 24/09/2026, Bourama : le message precedent ("Erreur lors de
+    l'appel a l'outil X.") ne disait rien au modele, qui inventait alors
+    une cause (souvent "le telephone n'est pas ouvert"). Dit clairement que
+    la cause est inconnue et interdit de l'attribuer a l'app ou au telephone.
+    """
+    return (
+        f"Erreur technique interne pendant l'appel à l'outil '{nom_outil}'. "
+        "La cause est inconnue : ne l'attribue pas au téléphone, à l'app ou à "
+        "l'étudiant. Dis simplement qu'une erreur technique est survenue et "
+        "propose de réessayer."
+    )
+
+
 def appeler_outil(nom_outil, arguments, table_routage):
     """
     Execute un outil par son nom, quel que soit le serveur MCP qui
@@ -403,7 +418,7 @@ def appeler_outil(nom_outil, arguments, table_routage):
                 yield exc
         detail = "; ".join(f"{type(sub).__name__}: {sub}" for sub in _aplatir(eg))
         logging.error(f"ERREUR MCP appel a {nom_outil} (TaskGroup) : {detail}", exc_info=True)
-        return f"Erreur lors de l'appel a l'outil '{nom_outil}'."
+        return _message_erreur_technique_outil(nom_outil)
     except Exception as e:
         logging.error(f"ERREUR MCP appel a {nom_outil}: {e}", exc_info=True)
-        return f"Erreur lors de l'appel a l'outil '{nom_outil}'."
+        return _message_erreur_technique_outil(nom_outil)
