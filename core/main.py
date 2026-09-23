@@ -515,6 +515,15 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # provoquant un plantage systematique. "Aucun" (mode_source=None) est
     # le comportement par defaut existant, voir core/mode_source_conversation.py.
     mode_source = None
+    # Valeur par defaut (23/09/2026, meme correctif que mode_source
+    # juste au-dessus, oubliee pour cette variable la premiere fois) :
+    # persona_pedagogique n'etait calculee que dans le bloc ci-dessous
+    # (reserve aux utilisateurs connectes), mais deja lue sans garde plus
+    # bas (_construire_system_prompt) -- pour un visiteur sans compte, la
+    # variable n'existait jamais, provoquant le meme plantage systematique
+    # sur chat(). None est le comportement par defaut existant (aucun mode
+    # pedagogique choisi), voir core/persona_pedagogique_conversation.py.
+    persona_pedagogique = None
     if user_id and message_utilisateur:
         # Perf (11/09/2026, demande Bourama : "tout ce qui peut se faire en
         # parallele plutot qu'a la suite, allez go") : ces 4 petites
