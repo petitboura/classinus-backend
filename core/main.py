@@ -524,6 +524,16 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # sur chat(). None est le comportement par defaut existant (aucun mode
     # pedagogique choisi), voir core/persona_pedagogique_conversation.py.
     persona_pedagogique = None
+    # Valeur par defaut (23/09/2026, meme correctif, meme oubli initial
+    # que mode_source et persona_pedagogique juste au-dessus) :
+    # actions_ecran n'etait calculee que dans le bloc ci-dessous (canal
+    # en direct + utilisateur connecte), mais deja lue sans garde plus
+    # bas (_construire_system_prompt, les deux appels). Pour un visiteur
+    # sans compte, la variable n'existait jamais, meme plantage
+    # systematique sur chat(). None = aucune action d'ecran a injecter,
+    # comportement par defaut existant (canal en direct desactive tant
+    # que l'utilisateur n'est pas connecte), voir core/canal_agent_applicatif.py.
+    actions_ecran = None
     if user_id and message_utilisateur:
         # Perf (11/09/2026, demande Bourama : "tout ce qui peut se faire en
         # parallele plutot qu'a la suite, allez go") : ces 4 petites
