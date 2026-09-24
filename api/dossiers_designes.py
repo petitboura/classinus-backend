@@ -43,41 +43,25 @@ from core.vectorisation_dossiers_designes import (
     vectoriser_maintenant,
     extraire_texte_maintenant,
 )
+from core.import_zip import extraire_membres_zip, est_zip
 
 router = APIRouter(prefix="/api/dossiers-designes", tags=["dossiers-designes"])
 
-TAILLE_MAX_OCTETS = 50 * 1024 * 1024  # 50 Mo, meme limite que la bibliotheque perso (api/bibliotheque_utilisateur.py)
 
-
-@router.post("/upload", status_code=201)
-async def uploader_fichier_dossier_designe(
-    fichier: UploadFile = File(...),
-    dossier_nom: str = Form(...),
-    plateforme: str = Form(...),
-    chemin: str = Form("[]"),  # JSON -- liste ordonnee de noms de sous-dossiers depuis la racine designee
-    utilisateur=Depends(utilisateur_courant),
-):
+def _stocker_fichier_dossier_designe(
+    utilisateur_id: str, plateforme: str, dossier_nom: str, chemin_liste: list, nom_fichier: str, type_mime: str, contenu: bytes,
+) -> dict:
     """
-    Stocke le fichier immediatement et renvoie -- tout traitement
-    (extraction de texte gratuite ou vraie vectorisation) part en file
-    d'attente ou attend une demande explicite (voir docstring du
-    module), jamais traite par cette requete.
+    Enregistre UN fichier dans fichiers_dossier_designe (dedup, upsert,
+    rollback storage si l'écriture BDD échoue) -- factorisé le
+    23/09/2026 (chantier "voir ce qu'il y a dans les zip") pour être
+    appelé aussi bien par un upload direct du plugin natif que pour
+    chaque membre d'un .zip déplié (voir uploader_fichier_dossier_designe
+    ci-dessous) ; comportement strictement identique dans les deux cas.
+    Ne déclenche PAS la vectorisation elle-même -- à l'appelant de le
+    faire à partir de statut_vectorisation/statut_extraction_texte de la
+    ligne renvoyée (asyncio.create_task, contexte async requis).
     """
-    try:
-        chemin_liste = json.loads(chemin)
-        if not isinstance(chemin_liste, list):
-            raise ValueError
-    except (json.JSONDecodeError, ValueError):
-        raise erreur_api(400, "CHEMIN_INVALIDE_LISTE_JSON_ATTENDUE")
-
-    contenu = await fichier.read()
-    if len(contenu) == 0:
-        raise erreur_api(400, "FICHIER_VIDE")
-    if len(contenu) > TAILLE_MAX_OCTETS:
-        raise erreur_api(400, "FICHIER_TROP_LOURD_50_MO_MAX")
-
-    nom_fichier = fichier.filename or "fichier"
-    type_mime = fichier.content_type or "application/octet-stream"
     extension = nom_fichier.rsplit(".", 1)[-1] if "." in nom_fichier else "bin"
 
     # 16/09/2026 (correctif orphelins, chantier quota Supabase) : cette
@@ -91,7 +75,7 @@ async def uploader_fichier_dossier_designe(
     ancienne_ligne = (
         supabase.table("fichiers_dossier_designe")
         .select("chemin_stockage")
-        .eq("user_id", utilisateur.id)
+        .eq("user_id", utilisateur_id)
         .eq("plateforme", plateforme)
         .eq("dossier_nom", dossier_nom)
         .eq("chemin", json.dumps(chemin_liste))
@@ -108,9 +92,9 @@ async def uploader_fichier_dossier_designe(
         # si le contenu est identique à un fichier déjà présent
         # (n'importe laquelle des 3 bibliothèques), au lieu de le
         # réuploader dans un nouveau chemin "dossiers_designes/...".
-        chemin_stockage, hash_contenu = stocker_avec_dedoublonnage(supabase, contenu, extension, f"dossiers_designes/{utilisateur.id}", type_mime)
+        chemin_stockage, hash_contenu = stocker_avec_dedoublonnage(supabase, contenu, extension, f"dossiers_designes/{utilisateur_id}", type_mime)
     except Exception as e:
-        logging.error(f"ERREUR SUPABASE STORAGE (upload dossier designe, utilisateur {utilisateur.id}) : {e}")
+        logging.error(f"ERREUR SUPABASE STORAGE (upload dossier designe, utilisateur {utilisateur_id}) : {e}")
         raise erreur_api(500, "ECHEC_DU_TRANSFERT")
 
     url_publique = stockage_r2.from_(BUCKET_DOSSIERS_DESIGNES).get_public_url(chemin_stockage)
@@ -130,7 +114,7 @@ async def uploader_fichier_dossier_designe(
         statut_extraction_texte = "non_applicable"
 
     ligne = {
-        "user_id": utilisateur.id,
+        "user_id": utilisateur_id,
         "plateforme": plateforme,
         "dossier_nom": dossier_nom,
         "chemin": chemin_liste,
@@ -187,13 +171,83 @@ async def uploader_fichier_dossier_designe(
             supprimer_stockage_si_dernier_usage(supabase, ancien_chemin_stockage)
         except Exception as e:
             logging.warning(f"Nettoyage ancien fichier Storage échoué ({ancien_chemin_stockage}), remplacement effectué quand même : {e}")
-    # 16/09/2026 (chantier quota Supabase) : declenchement immediat en
-    # arriere-plan au lieu d'attendre le passage suivant des boucles de
-    # polling -- celles-ci restent le filet de securite.
+
+    return entree
+
+
+def _declencher_vectorisation_si_besoin(entree: dict) -> None:
     if entree.get("statut_vectorisation") == "en_attente":
         asyncio.create_task(asyncio.to_thread(vectoriser_maintenant, entree["id"]))
     if entree.get("statut_extraction_texte") == "en_attente":
         asyncio.create_task(asyncio.to_thread(extraire_texte_maintenant, entree["id"]))
+
+
+@router.post("/upload", status_code=201)
+async def uploader_fichier_dossier_designe(
+    fichier: UploadFile = File(...),
+    dossier_nom: str = Form(...),
+    plateforme: str = Form(...),
+    chemin: str = Form("[]"),  # JSON -- liste ordonnee de noms de sous-dossiers depuis la racine designee
+    utilisateur=Depends(utilisateur_courant),
+):
+    """
+    Stocke le fichier immediatement et renvoie -- tout traitement
+    (extraction de texte gratuite ou vraie vectorisation) part en file
+    d'attente ou attend une demande explicite (voir docstring du
+    module), jamais traite par cette requete.
+
+    23/09/2026 (demande Bourama, "voir ce qu'il y a dans les zip",
+    étape 3) : si le fichier envoyé est un .zip, il est déplié -- chaque
+    fichier à l'intérieur enregistré individuellement, dans un
+    sous-chemin nommé d'après le zip (chemin_liste + [nom_zip]), plutôt
+    que stocké tel quel. Voir core/import_zip.py::extraire_membres_zip,
+    partagé avec la bibliothèque privée/publique.
+    """
+    try:
+        chemin_liste = json.loads(chemin)
+        if not isinstance(chemin_liste, list):
+            raise ValueError
+    except (json.JSONDecodeError, ValueError):
+        raise erreur_api(400, "CHEMIN_INVALIDE_LISTE_JSON_ATTENDUE")
+
+    contenu = await fichier.read()
+    if len(contenu) == 0:
+        raise erreur_api(400, "FICHIER_VIDE")
+    # Limite de taille (50 Mo) retirée le 23/09/2026 (demande Bourama, "partout").
+
+    nom_fichier = fichier.filename or "fichier"
+    type_mime = fichier.content_type or "application/octet-stream"
+
+    if est_zip(nom_fichier, type_mime):
+        nom_dossier_zip = nom_fichier.rsplit(".", 1)[0] if nom_fichier.lower().endswith(".zip") else nom_fichier
+        membres, erreurs = await asyncio.to_thread(extraire_membres_zip, contenu, nom_fichier)
+
+        fichiers_crees = []
+        for membre in membres:
+            chemin_membre = chemin_liste + [nom_dossier_zip] + list(membre["sous_chemin"])
+            try:
+                entree_membre = await asyncio.to_thread(
+                    _stocker_fichier_dossier_designe,
+                    utilisateur.id, plateforme, dossier_nom, chemin_membre,
+                    membre["nom_fichier"], membre["type_mime"], membre["contenu"],
+                )
+            except Exception as e:
+                logging.warning(f"IMPORT ZIP DOSSIER DESIGNE : échec enregistrement {membre['nom_fichier']} depuis {nom_fichier} : {e}")
+                erreurs.append({"nom": membre["nom_fichier"], "raison": "ECHEC_STOCKAGE"})
+                continue
+            _declencher_vectorisation_si_besoin(entree_membre)
+            fichiers_crees.append(entree_membre)
+
+        return {"dossier": {"nom": nom_dossier_zip}, "fichiers": fichiers_crees, "erreurs": erreurs}
+
+    entree = await asyncio.to_thread(
+        _stocker_fichier_dossier_designe,
+        utilisateur.id, plateforme, dossier_nom, chemin_liste, nom_fichier, type_mime, contenu,
+    )
+    # 16/09/2026 (chantier quota Supabase) : declenchement immediat en
+    # arriere-plan au lieu d'attendre le passage suivant des boucles de
+    # polling -- celles-ci restent le filet de securite.
+    _declencher_vectorisation_si_besoin(entree)
 
     return entree
 

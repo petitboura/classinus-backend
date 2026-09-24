@@ -56,7 +56,6 @@ from core.outils_generation_commun import (
     TYPES_EMPLACEMENT_BIBLIOTHEQUE,
     _libelle_emplacement,
     _lister_emplacements_document,
-    _TAILLE_MAX_OCTETS_BIBLIOTHEQUE,
     _supabase_memoire,
 )
 
@@ -530,8 +529,7 @@ def gerer_document_bibliotheque(
                 return "Erreur : contenu_base64 invalide (doit être du base64 valide)."
         if len(contenu_fichier) == 0:
             return "Erreur : fichier vide."
-        if len(contenu_fichier) > _TAILLE_MAX_OCTETS_BIBLIOTHEQUE:
-            return "Erreur : fichier trop lourd (50 Mo max)."
+        # Limite de taille (50 Mo) retirée le 23/09/2026 (demande Bourama, "partout").
         nom_original = (nom_fichier or "fichier").strip()
         titre_val = (titre or "").strip()
         description_val = (description or "").strip()

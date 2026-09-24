@@ -47,7 +47,6 @@ from core.bibliotheque_fichiers import enregistrer_fichier as _enregistrer_fichi
 from core.dedoublonnage_stockage import supprimer_stockage_si_dernier_usage
 
 BUCKET = "bibliotheque"
-TAILLE_MAX_OCTETS = 50 * 1024 * 1024  # 50 Mo, même limite que le reste de la bibliothèque publique/perso
 
 
 def _classer_si_autorise(fichier_id: str, dossier_id: str | None, utilisateur_id: str) -> None:
@@ -97,8 +96,7 @@ def publier_fichier_public(
     """Publie un fichier (octets déjà en main) dans le catalogue public. Voir docstring du module."""
     if len(contenu) == 0:
         raise ValueError("FICHIER_VIDE")
-    if len(contenu) > TAILLE_MAX_OCTETS:
-        raise ValueError("FICHIER_TROP_LOURD_50_MO_MAX")
+    # Limite de taille (50 Mo) retirée le 23/09/2026 (demande Bourama, "partout").
     nom_final = (nom or "").strip() or (nom_fichier or "Document").rsplit(".", 1)[0]
     extension = nom_fichier.rsplit(".", 1)[-1] if "." in (nom_fichier or "") else "bin"
     chemin_stockage = f"publique/{uuid.uuid4()}.{extension}"

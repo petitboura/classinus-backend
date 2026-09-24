@@ -57,6 +57,7 @@ from core.dossiers_catalogue_public import (
 )
 from core.dossiers_publics_attaches import propager_fichier_public_range_dossier as _propager_fichier_public_range_dossier
 from core.catalogue_public_publication import modifier_entree_publique
+from core.import_zip import deplier_zip_bibliotheque_publique, est_zip
 from core.geolocalisation_pays import pays_utilisateur
 from core.listes_bibliotheque_publique import lister_valeurs, normaliser_et_enregistrer_liste
 
@@ -75,7 +76,6 @@ def _classer_si_autorise(fichier_id: str, dossier_id: str, utilisateur_id: str) 
 
 
 BUCKET = "bibliotheque"
-TAILLE_MAX_OCTETS = 50 * 1024 * 1024  # 50 Mo, même limite que la bibliothèque personnelle
 
 
 def _get_secret(cle):
@@ -442,8 +442,35 @@ async def ajouter_a_bibliotheque_publique(
     contenu = await fichier.read()
     if len(contenu) == 0:
         raise erreur_api(400, "FICHIER_VIDE")
-    if len(contenu) > TAILLE_MAX_OCTETS:
-        raise erreur_api(400, "FICHIER_TROP_LOURD_50_MO_MAX")
+    # Limite de taille (50 Mo) retirée le 23/09/2026 (demande Bourama, "partout").
+
+    # 23/09/2026 (demande Bourama : "voir ce qu'il y a dans les zip",
+    # étape 2) -- même principe que la bibliothèque privée (voir
+    # core/import_zip.py) : un .zip n'est plus stocké tel quel, il est
+    # déplié, chaque fichier publié individuellement dans un nouveau
+    # dossier du catalogue public nommé d'après le zip.
+    if est_zip(fichier.filename or "", fichier.content_type):
+        dossier_id_val = (dossier_id or "").strip() or None
+        # Même vérification de permission que _classer_si_autorise (voir
+        # plus haut) -- sans ça, n'importe qui pourrait faire apparaître
+        # un dossier dans l'arborescence d'un dossier public qu'il ne
+        # contrôle pas simplement en donnant son id.
+        if dossier_id_val and not (_dossier_catalogue_public(dossier_id_val) and _peut_ajouter_contenu_dossier(dossier_id_val, utilisateur.id)):
+            dossier_id_val = None
+        resultat = await asyncio.to_thread(
+            deplier_zip_bibliotheque_publique,
+            contenu_zip=contenu,
+            nom_zip=fichier.filename or "fichier.zip",
+            ajoute_par=utilisateur.id,
+            dossier_parent_id=dossier_id_val,
+            pays=pays, niveau=niveau, categorie=categorie, classe=classe, specialite=specialite,
+        )
+        for entree_membre in resultat["fichiers"]:
+            if entree_membre.get("statut_vectorisation") == "en_attente":
+                asyncio.create_task(asyncio.to_thread(vectoriser_maintenant_publique, entree_membre["id"]))
+            if entree_membre.get("statut_extraction_texte") == "en_attente":
+                asyncio.create_task(asyncio.to_thread(extraire_texte_maintenant_publique, entree_membre["id"]))
+        return resultat
 
     nom_original = fichier.filename or "fichier"
     extension = nom_original.rsplit(".", 1)[-1] if "." in nom_original else "bin"

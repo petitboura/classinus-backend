@@ -42,10 +42,10 @@ from file_attente_vectorisation import (  # noqa: E402
     reinitialiser_pour_reessai,
     vectoriser_maintenant_privee,
 )
+from import_zip import deplier_zip_bibliotheque, est_zip  # noqa: E402
 
 router = APIRouter(prefix="/api/bibliotheque", tags=["bibliotheque-utilisateur"])
 
-TAILLE_MAX_OCTETS = 50 * 1024 * 1024  # 50 Mo, même limite que la bibliothèque niveau agent
 BUCKET_BIBLIOTHEQUE_PUBLIQUE = "bibliotheque"  # même bucket que core/bibliotheque_fichiers.py, sous-dossier "publique/"
 
 
@@ -91,6 +91,7 @@ async def uploader_document(
     fichier: UploadFile = File(...),
     titre: str = Form(None),
     description: str = Form(None),
+    dossier_parent_id: str = Form(None),
     utilisateur=Depends(utilisateur_courant),
 ):
     """
@@ -119,8 +120,9 @@ async def uploader_document(
     contenu = await fichier.read()
     if len(contenu) == 0:
         raise erreur_api(400, "FICHIER_VIDE")
-    if len(contenu) > TAILLE_MAX_OCTETS:
-        raise erreur_api(400, "FICHIER_TROP_LOURD_50_MO_MAX")
+    # Limite de taille (50 Mo) retirée le 23/09/2026 (demande Bourama, "partout") --
+    # plus aucun plafond ici, ni ailleurs dans la bibliothèque (privée, publique,
+    # dossiers désignés).
 
     # CORRECTIF 2026-08-27 (bug remonté par Bourama : un fichier issu
     # d'un dossier importé gardait son chemin complet comme nom --
@@ -134,6 +136,34 @@ async def uploader_document(
         f"{titre.strip()} — {description.strip()}" if (titre or "").strip() and (description or "").strip()
         else (description or titre or "").strip() or nom_original
     )
+
+    # 23/09/2026 (demande Bourama : "voir ce qu'il y a dans les zip") --
+    # un .zip n'est plus stocké tel quel : il est déplié, chaque fichier à
+    # l'intérieur enregistré individuellement (lisible/vectorisable comme
+    # s'il avait été uploadé seul), rangé dans un nouveau dossier nommé
+    # d'après le zip. Voir core/import_zip.py.
+    if est_zip(nom_original, fichier.content_type):
+        resultat = await asyncio.to_thread(
+            deplier_zip_bibliotheque,
+            contenu_zip=contenu,
+            nom_zip=nom_original,
+            niveau="utilisateur",
+            uploade_par=utilisateur.id,
+            user_id=utilisateur.id,
+            dossier_parent_id=(dossier_parent_id or "").strip() or None,
+        )
+        for ligne_membre in resultat["fichiers"]:
+            if ligne_membre.get("statut_vectorisation") == "en_attente":
+                asyncio.create_task(asyncio.to_thread(vectoriser_maintenant_privee, ligne_membre["id"]))
+        journaliser(
+            action="bibliotheque_perso.zip_deplie",
+            user_id=utilisateur.id,
+            cible_type="utilisateur",
+            cible_id=utilisateur.id,
+            details={"nom_zip": nom_original, "nb_fichiers": len(resultat["fichiers"]), "nb_erreurs": len(resultat["erreurs"])},
+            request=request,
+        )
+        return resultat
 
     try:
         # CORRECTIF 02/09 (bug remonté par Bourama : upload perçu comme

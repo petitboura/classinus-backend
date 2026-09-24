@@ -211,7 +211,6 @@ AGENT_ID_ESPACE = "clovis"
 # 17/08 (Bourama : "il faut qu'on puisse uploader tout") -- whitelist
 # retirée, comme côté api/bibliotheque_utilisateur.py (à garder en
 # phase si ça change là-bas). Seule la taille reste contrôlée.
-_TAILLE_MAX_OCTETS = 50 * 1024 * 1024  # 50 Mo
 
 mcp_espace = FastMCP(
     name="espace",
@@ -523,8 +522,7 @@ def ajouter_document_bibliotheque(
 
     if len(contenu) == 0:
         return "Erreur : fichier vide."
-    if len(contenu) > _TAILLE_MAX_OCTETS:
-        return "Erreur : fichier trop lourd (50 Mo max)."
+    # Limite de taille (50 Mo) retirée le 23/09/2026 (demande Bourama, "partout").
 
     nom_original = (nom_fichier or "fichier").strip()
     titre = (titre or "").strip()
@@ -1178,8 +1176,7 @@ def publier_fichier_catalogue_public(
             contenu = base64.b64decode(contenu_base64, validate=True)
         except Exception:
             return "Erreur : contenu_base64 invalide (doit être du base64 valide)."
-    if len(contenu) > _TAILLE_MAX_OCTETS:
-        return "Erreur : fichier trop lourd (50 Mo max)."
+    # Limite de taille (50 Mo) retirée le 23/09/2026 (demande Bourama, "partout").
     try:
         entree = _publier_fichier_public(
             ajoute_par=user_id, contenu=contenu, nom_fichier=(nom_fichier or "fichier").strip(),
