@@ -34,68 +34,6 @@ def _ressemble_a_du_json_casse(texte: str) -> bool:
     return '"name"' in debut and '"arguments"' in debut
 
 
-def _ressemble_a_une_simple_url(contenu: str) -> bool:
-    """
-    Vrai si le resultat d'un outil n'est (essentiellement) qu'un lien nu,
-    comme le renvoient generer_image/generer_document/generer_code/
-    generer_site_zip/deployer_site... -- typiquement une courte phrase
-    d'accompagnement suivie d'une URL, sans structure JSON. Sert a
-    exclure ces resultats de _debut_provient_d_un_resultat_outil : les
-    reutiliser dans la reponse est le comportement normal et voulu, pas
-    une fuite a masquer.
-    """
-    c = contenu.strip()
-    return ("http://" in c or "https://" in c) and "{" not in c and "\"name\"" not in c
-
-
-def _debut_provient_d_un_resultat_outil(debut: str, messages_agent) -> bool:
-    """
-    Deuxieme cas signale par Bourama (25/07), distinct de
-    _ressemble_a_du_json_casse : le modele recopie parfois tel quel le
-    JSON BRUT renvoye par un outil (GitHub, Notion, Tavily, Wolfram...)
-    comme si c'etait sa reponse, au lieu de le resumer en langage naturel.
-    Contrairement au bug d'appel d'outil rate, ce JSON n'a pas forcement
-    les cles "name"/"arguments" -- sa forme depend entierement de l'outil
-    source, donc pas de pattern generique fiable. On compare plutot
-    directement au texte des resultats d'outils recus DANS CE TOUR
-    (messages_agent, role="tool", toujours groupes juste avant l'appel
-    Groq courant -- voir _traiter_appels) : si le debut de la reponse est
-    un extrait verbatim d'un de ces resultats, c'est une recopie brute,
-    peu importe l'outil ou le format.
-    """
-    debut = debut.strip()
-    if len(debut) < 15:
-        return False
-    for message in reversed(messages_agent):
-        if message.get("role") != "tool":
-            break  # les messages "tool" d'un meme tour sont toujours groupes en fin de liste
-        contenu = message.get("content")
-        # CORRECTION (31/07, signalee par Bourama -- lien image/pdf tronque
-        # a l'affichage) : l'ancienne comparaison (`debut[:40] in contenu`)
-        # declenchait un faux positif des qu'une URL renvoyee par un outil
-        # de generation (image/pdf/code...) etait reutilisee -- normalement
-        # -- par le modele dans sa reponse markdown : cette URL apparait
-        # par definition dans le contenu de l'outil, meme quand le modele
-        # l'integre proprement dans une phrase. Ancrer la comparaison sur
-        # le DEBUT du contenu de l'outil ne suffit pas non plus : quand le
-        # buffer de streaming est coupe pile au debut de l'URL (cf
-        # _position_sure_pour_flush), ce debut coincide quand meme avec le
-        # debut du resultat de l'outil. La vraie distinction est donc :
-        # un resultat d'outil qui n'est QU'une URL nue (generer_image,
-        # generer_document, generer_code...) est fait pour etre reutilise
-        # tel quel -- ce n'est jamais une "fuite" -- alors qu'un resultat
-        # structure (JSON de GitHub/Notion/Tavily/Wolfram...) recopie
-        # verbatim, lui, est bien le bug vise ici. On ignore donc les
-        # resultats d'outils qui ne sont qu'un lien.
-        if not isinstance(contenu, str):
-            continue
-        if _ressemble_a_une_simple_url(contenu):
-            continue
-        if debut[:40] in contenu:
-            return True
-    return False
-
-
 _RE_DEBUT_TOOL_CODE = re.compile(r"```\s*tool_code\b", re.IGNORECASE)
 
 
@@ -195,14 +133,16 @@ def _position_fin_bloc_call_outil(bloc_buffer: str):
 
 
 def _reponse_suspecte_generique(buffer_debut: str, messages_agent) -> bool:
-    """Les 2 filets de securite "tout ou rien" contre les bugs Groq connus
-    (JSON casse, recopie brute d'un resultat d'outil) -- le 3e cas (faux
-    bloc TOOL_CODE) est gere a part via _trouver_debut_tool_code, qui
-    permet de ne masquer que le bloc precis plutot que tout le passage."""
-    return (
-        _ressemble_a_du_json_casse(buffer_debut)
-        or _debut_provient_d_un_resultat_outil(buffer_debut, messages_agent)
-    )
+    """Filet de securite contre le bug Groq connu de JSON casse -- le 2e
+    cas historique (recopie verbatim d'un resultat d'outil) a ete retire
+    (23/09/2026, demande Bourama) : trop de faux positifs sur des reponses
+    legitimes qui citent simplement un lien renvoye par un outil (ex.
+    recherche web), evacuees a tort vers la bulle de raisonnement au lieu
+    de s'afficher comme reponse normale. Le 3e cas (faux bloc TOOL_CODE)
+    reste gere a part via _trouver_debut_tool_code, qui permet de ne
+    masquer que le bloc precis plutot que tout le passage. `messages_agent`
+    n'est plus utilise ici mais garde pour compatibilite d'appel."""
+    return _ressemble_a_du_json_casse(buffer_debut)
 
 
 SEUIL_VERIF_JSON = 60
@@ -373,18 +313,19 @@ def _finaliser_fragment_texte(etat, messages_agent):
 #   meme masquee/repliee -- doit disparaitre entierement de ce que voit
 #   l'utilisateur
 # Critere de detection (Bourama, 12/09) : un segment est "ingestion" des
-# qu'il contient, n'importe ou dans son texte, SOIT un lien http/https
-# (recopie ou non -- contrairement a _debut_provient_d_un_resultat_outil,
+# qu'il contient, n'importe ou dans son texte, un lien http/https --
 # aucune exception pour un lien nu ici : un lien dans le raisonnement est
-# toujours un signe d'ingestion, jamais de vraie reflexion), SOIT une
-# recopie quasi mot pour mot d'un resultat d'outil recu juste avant
-# (reutilise _debut_provient_d_un_resultat_outil ci-dessus).
+# toujours un signe d'ingestion, jamais de vraie reflexion.
+#
+# (23/09/2026) Le 2e critere historique (recopie verbatim d'un resultat
+# d'outil, via _debut_provient_d_un_resultat_outil) a ete retire en meme
+# temps que son usage dans _reponse_suspecte_generique -- meme faux
+# positifs. `messages_agent` n'est plus utilise ici mais garde pour
+# compatibilite d'appel (voir boucle_agent.py).
 
 
 def _raisonnement_ressemble_a_ingestion(buffer: str, messages_agent) -> bool:
-    if "http://" in buffer or "https://" in buffer:
-        return True
-    return _debut_provient_d_un_resultat_outil(buffer, messages_agent)
+    return "http://" in buffer or "https://" in buffer
 
 
 def _nouvel_etat_filtre_raisonnement():

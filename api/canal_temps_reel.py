@@ -19,8 +19,10 @@ from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
 from api.auth import supabase, utilisateur_courant
 from core.canal_temps_reel import (
+    CANAL_NON_CONNECTE,
     connecter,
     deconnecter,
+    est_erreur_canal,
     poser_question_appareil,
     recevoir_reponse,
 )
@@ -59,12 +61,12 @@ async def canal_temps_reel(websocket: WebSocket):
     try:
         message_auth = await asyncio.wait_for(websocket.receive_json(), timeout=10)
     except Exception:
-        await websocket.close(code=4401)
+        await fermer_websocket_sans_erreur(websocket, 4401)
         return
 
     utilisateur = _verifier_token(str(message_auth.get("auth_token") or ""))
     if utilisateur is None:
-        await websocket.close(code=4401)
+        await fermer_websocket_sans_erreur(websocket, 4401)
         return
     appareil_id = str(message_auth.get("appareil_id") or "")
     await connecter(utilisateur.id, appareil_id, websocket)
@@ -92,9 +94,12 @@ async def tester_canal(appareil_id: str = "", utilisateur=Depends(utilisateur_co
     connecte et attend la reponse en direct via le WebSocket ci-dessus.
     `connecte: false` signifie que cet appareil precis n'a pas de
     connexion active (renvoi immediat, sans attendre le timeout de 30s)
-    -- a distinguer d'une reponse recue apres attente.
+    -- a distinguer d'une reponse recue apres attente. `raison` (modifie
+    le 24/09/2026) donne la cause exacte quand le telephone n'a pas repondu :
+    non_connecte, envoi_echoue ou sans_reponse.
     """
     reponse = await poser_question_appareil(utilisateur.id, appareil_id, "es-tu là ?")
-    if reponse is None:
-        return {"connecte": False, "reponse": None}
+    if est_erreur_canal(reponse):
+        raison = reponse["erreur_canal"]
+        return {"connecte": raison != CANAL_NON_CONNECTE, "reponse": None, "raison": raison}
     return {"connecte": True, "reponse": reponse}

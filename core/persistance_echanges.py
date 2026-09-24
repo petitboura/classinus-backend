@@ -4,7 +4,7 @@
 import logging
 import threading
 from groq import Groq
-from constantes_agent import get_secret, supabase, MODELE_RESUME, SEUIL_RESUME_MESSAGES, DELAI_MAX_PAR_APPEL
+from constantes_agent import get_secret, supabase, MODELE_RESUME, SEUIL_RESUME_MESSAGES, DELAI_MAX_PAR_APPEL, TAILLE_MAX_MESSAGE_RESUME, TOKENS_MAX_SORTIE_RESUME
 from profils_agents import _charger_resume_memoire, _mettre_a_jour_profil_utilisateur_si_besoin
 
 def _sauvegarder_echange(user_id, agent_id, message_utilisateur, reponse_finale, conversation_id=None, modele=None, meta_utilisateur=None, meta_assistant=None, parent_id=None, sauvegarder_message_utilisateur=True):
@@ -187,8 +187,14 @@ def _mettre_a_jour_resume_si_besoin(user_id):
             return  # pas encore assez de matiere pour justifier un resume
 
         ancien_resume = _charger_resume_memoire(user_id)
+        def _tronquer(texte):
+            texte = texte or ""
+            if len(texte) <= TAILLE_MAX_MESSAGE_RESUME:
+                return texte
+            return texte[:TAILLE_MAX_MESSAGE_RESUME] + " [...]"
+
         messages_recents = "\n".join(
-            f"{'Utilisateur' if m['role'] == 'user' else 'Assistant'} : {m['content']}"
+            f"{'Utilisateur' if m['role'] == 'user' else 'Assistant'} : {_tronquer(m['content'])}"
             for m in reversed(messages)
         )
 
@@ -245,7 +251,7 @@ def _mettre_a_jour_resume_si_besoin(user_id):
                 {"role": "system", "content": instruction_resume},
                 {"role": "user", "content": contenu_utilisateur},
             ],
-            max_completion_tokens=None,
+            max_completion_tokens=TOKENS_MAX_SORTIE_RESUME,
             timeout=DELAI_MAX_PAR_APPEL,
         )
         nouveau_resume = completion.choices[0].message.content.strip()

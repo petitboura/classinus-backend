@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from configuration import get_system_prompt
 from profils_agents import INSTRUCTIONS_FORMATS_AFFICHAGE, INSTRUCTIONS_ARBITRAGE_CALCUL, REGLE_CONTEXTE_INVISIBLE, INSTRUCTIONS_LONGUEUR_REPONSE, MODES_PEDAGOGIQUES, REGLE_BASCULE_MODE_PEDAGOGIQUE, construire_instruction_guide, construire_instruction_guide_visuel, construire_instruction_demo, MODES_SOURCE
 from guide_conversation import obtenir_sections_guide
+from historique_reponses_qcm import formater_reponses_qcm
 
 
 def _texte_actions_application(actions):
@@ -77,7 +78,7 @@ def _texte_actions_application(actions):
     return instruction + "Éléments cliquables ou saisissables actuellement à l'écran (id : description) :\n" + lignes + "\n"
 
 
-def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None):
+def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None, reponses_qcm_recentes=None):
     # Restauré le 14/08 (voir commentaire des constantes plus haut) : la
     # page Notion de l'agent (get_system_prompt) ne doit plus contenir QUE
     # la personnalité/le comportement propre à l'agent -- les 3 blocs fixes
@@ -233,6 +234,25 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # injecte du tout.
     if actions_ecran:
         system_final += _texte_actions_application(actions_ecran)
+
+    # Injection automatique des reponses QCM (23/09/2026, demande Bourama) :
+    # jusqu'ici l'IA ne savait jamais ce que l'etudiant avait repondu a un
+    # QCM (```qcm), enregistre en base mais jamais relu (voir
+    # core/historique_reponses_qcm.py). reponses_qcm_recentes est calcule
+    # dans chat() (core/main.py, reponses_qcm_a_injecter) : uniquement
+    # rempli quand le dernier QCM donne par le modele se situe dans les 2
+    # derniers messages de l'etudiant (celui-ci compris) -- au-dela, voir
+    # l'outil de secours lire_reponses_qcm (core/outils_reponses_qcm.py).
+    # None ou liste vide : rien n'est injecte du tout, comportement inchange.
+    if reponses_qcm_recentes:
+        system_final += (
+            "\n\n### Réponses récentes de l'étudiant aux QCM\n"
+            "L'étudiant vient de répondre au(x) QCM suivant(s) -- tiens-en compte "
+            "dans ta réponse si c'est pertinent (ex. revenir sur une erreur, "
+            "féliciter une bonne réponse), sans forcément le mentionner si ce "
+            "n'est pas utile à ce moment :\n"
+            + formater_reponses_qcm(reponses_qcm_recentes)
+        )
 
     # Injection de la structure "Programme" (classe/matière/chapitre) dans
     # le system prompt retirée le 29/08/2026 (demande Bourama) -- la

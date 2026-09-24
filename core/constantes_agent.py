@@ -116,6 +116,17 @@ AGENT_ID_PAR_DEFAUT = "clovis"  # 12/08 : ce depot isole ne sert plus que Clovis
 SEUIL_RESUME_MESSAGES = 20
 MODELE_RESUME = "openai/gpt-oss-20b"  # 17/08 : llama-3.1-8b-instant decommissionne par Groq (404 en prod) -- quota TPM separe de la cascade principale, evite la contention
 
+# 24/09/2026 : plafonds pour que la requete de resume ne depasse jamais la
+# limite de 8 000 tokens par minute de openai/gpt-oss-20b (Groq, tier
+# gratuit). Constate en prod : 20 messages d'assistant longs bruts
+# faisaient 11 000 a 17 000 tokens demandes -> erreur 413, le resume
+# n'etait jamais mis a jour ET les messages n'etaient jamais purges, donc
+# la requete grossissait a chaque nouvel essai. Chaque message est
+# tronque (le debut suffit pour un resume factuel), et la sortie est
+# bornee.
+TAILLE_MAX_MESSAGE_RESUME = 700  # caracteres gardes par message dans la transcription envoyee
+TOKENS_MAX_SORTIE_RESUME = 1500
+
 # Ajoute le 15/09/2026 (demande Bourama) : au-dela de ce volume cumule
 # (en caracteres) de resultats d'outils reinjectes dans l'historique d'une
 # meme conversation (voir core/historique_outils.py), les plus ANCIENS

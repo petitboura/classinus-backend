@@ -35,16 +35,24 @@ def enregistrer_usage(user_id: str, plateforme: str, entrees: list[dict]) -> Non
     if not entrees:
         return
 
-    lignes = [
-        {
-            "user_id": user_id,
-            "plateforme": plateforme,
-            "nom_app": entree["nom_app"],
-            "date": entree["date"],
-            "duree_secondes": entree["duree_secondes"],
-        }
-        for entree in entrees
-    ]
+    # Dedoublonnage (24/09/2026) : si le telephone envoie plusieurs entrees
+    # pour la meme (app, jour) dans une seule synchronisation, Postgres
+    # refuse l'upsert entier ("cannot affect row a second time") et plus
+    # rien n'etait enregistre. On garde la duree la plus grande, le total
+    # du jour ne pouvant que croitre.
+    par_cle: dict[tuple, dict] = {}
+    for entree in entrees:
+        cle = (entree["nom_app"], entree["date"])
+        existante = par_cle.get(cle)
+        if existante is None or entree["duree_secondes"] > existante["duree_secondes"]:
+            par_cle[cle] = {
+                "user_id": user_id,
+                "plateforme": plateforme,
+                "nom_app": entree["nom_app"],
+                "date": entree["date"],
+                "duree_secondes": entree["duree_secondes"],
+            }
+    lignes = list(par_cle.values())
 
     supabase.table("usage_appareil_mobile").upsert(
         lignes, on_conflict="user_id,plateforme,nom_app,date"

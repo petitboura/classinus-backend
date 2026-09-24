@@ -27,20 +27,20 @@ lequel de ses appareils connectes.
 
 from typing import Any
 
-from core.canal_temps_reel import poser_question_appareil
+from core.canal_temps_reel import poser_question_appareil, est_erreur_canal
 from core.lecture_fichier_mobile import lire_contenu_fichier, fichier_trop_volumineux
 
 
 async def lister_contenu_dossier(
     user_id: str, appareil_id: str, dossier_nom: str, on_statut=None
-) -> dict[str, Any] | None:
+) -> dict[str, Any]:
     """
     Demande en direct au telephone de l'etudiant le contenu du dossier
     designe `dossier_nom`.
 
     Renvoie :
-    - None si l'app n'est pas ouverte sur le telephone (voir
-      poser_question_appareil) ;
+    - {"erreur_canal": <code>} si le telephone n'a pas pu etre joint (voir
+      poser_question_appareil et est_erreur_canal) ;
     - {"elements": [{"nom": ..., "estDossier": bool, "tailleOctets":
       int|None}, ...]} si la demande a abouti (l'app repond via
       DossiersPlugin.listerContenu, voir clovis-frontend) ;
@@ -58,7 +58,7 @@ async def lister_contenu_dossier(
 
 async def ouvrir_sous_dossier(
     user_id: str, appareil_id: str, dossier_nom: str, chemin: list[str], on_statut=None
-) -> dict[str, Any] | None:
+) -> dict[str, Any]:
     """
     Cree le 30/08/2026, Bourama : Lot 3 (voir 03-navigation-recherche-nom.md).
 
@@ -79,7 +79,7 @@ async def ouvrir_sous_dossier(
 
 async def chercher_par_nom(
     user_id: str, appareil_id: str, dossier_nom: str, terme_recherche: str, on_statut=None
-) -> dict[str, Any] | None:
+) -> dict[str, Any]:
     """
     Cree le 30/08/2026, Bourama : Lot 3 (voir 03-navigation-recherche-nom.md).
 
@@ -105,7 +105,7 @@ async def chercher_par_nom(
 
 async def lire_fichier(
     user_id: str, appareil_id: str, dossier_nom: str, chemin: list[str], on_statut=None
-) -> dict[str, Any] | None:
+) -> dict[str, Any]:
     """
     Cree le 30/08/2026, Bourama : Lot 4 (voir 04-lecture-contenu.md).
 
@@ -118,7 +118,7 @@ async def lire_fichier(
     demander et transmettre, comme les autres fonctions ci-dessus.
 
     Renvoie :
-    - None si l'app n'est pas ouverte sur le telephone ;
+    - {"erreur_canal": <code>} si le telephone n'a pas pu etre joint ;
     - {"contenu_base64": ..., "type_mime": ..., "nom_fichier": ...,
       "tailleOctets": int|None} si la demande a abouti (le telephone a
       trouve et lu le fichier) ;
@@ -136,7 +136,7 @@ async def lire_fichier(
 
 async def lister_tous_fichiers(
     user_id: str, appareil_id: str, dossier_nom: str, on_statut=None
-) -> dict[str, Any] | None:
+) -> dict[str, Any]:
     """
     Cree le 30/08/2026, Bourama : Lot 5 (voir 05-recherche-contenu-app-fermee.md).
 
@@ -159,7 +159,7 @@ async def lister_tous_fichiers(
 
 async def chercher_par_contenu(
     user_id: str, appareil_id: str, dossier_nom: str, terme_recherche: str, on_statut=None
-) -> dict[str, Any] | None:
+) -> dict[str, Any]:
     """
     Cree le 30/08/2026, Bourama : Lot 5 (voir 05-recherche-contenu-app-fermee.md).
 
@@ -180,9 +180,10 @@ async def chercher_par_contenu(
     faire echouer toute la recherche.
 
     Renvoie :
-    - None IMMEDIATEMENT si l'app se ferme a n'importe quel moment de la
-      recherche (au listing initial ou pendant la lecture d'un fichier),
-      jamais de resultat partiel presente comme s'il etait complet ;
+    - {"erreur_canal": <code>} IMMEDIATEMENT si le telephone n'est plus
+      joignable a n'importe quel moment de la recherche (au listing
+      initial ou pendant la lecture d'un fichier), jamais de resultat
+      partiel presente comme s'il etait complet ;
     - {"elements": [{"nom": ..., "chemin": [...], "extrait": "..."}]} :
       un element par fichier dont le contenu contient `terme_recherche`,
       "extrait" est un court passage du contenu autour de la premiere
@@ -193,8 +194,8 @@ async def chercher_par_contenu(
       designe introuvable).
     """
     listing = await lister_tous_fichiers(user_id, appareil_id, dossier_nom, on_statut=on_statut)
-    if listing is None:
-        return None
+    if est_erreur_canal(listing):
+        return listing
     if "erreur" in listing:
         return listing
 
@@ -205,8 +206,8 @@ async def chercher_par_contenu(
         chemin_element = element.get("chemin") or [element.get("nom")]
 
         lecture_brute = await lire_fichier(user_id, appareil_id, dossier_nom, chemin_element, on_statut=on_statut)
-        if lecture_brute is None:
-            return None
+        if est_erreur_canal(lecture_brute):
+            return lecture_brute
         if "erreur" in lecture_brute:
             continue
 

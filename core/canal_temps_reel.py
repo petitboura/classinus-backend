@@ -14,8 +14,8 @@ A ne pas confondre avec core/actions_appareil_mobile.py : ce dernier
 reste le systeme "envoie et oublie" (l'agent decide une action, le
 resultat revient plus tard, hors de la conversation en cours). Ici,
 c'est synchrone et en direct -- l'app doit etre ouverte au moment de la
-question, sinon poser_question_appareil renvoie None immediatement (voir
-docstring plus bas).
+question, sinon poser_question_appareil renvoie tout de suite une erreur
+{"erreur_canal": "non_connecte"} (voir docstring plus bas).
 """
 
 import asyncio
@@ -83,6 +83,34 @@ DELAI_ABANDON_SECONDES = 30
 
 TEXTE_STATUT_1 = "Classinus regarde toujours..."
 TEXTE_STATUT_2 = "Ça prend un peu plus de temps que prévu..."
+
+# Ajoute le 24/09/2026, Bourama : avant cette date, poser_question_appareil
+# renvoyait None dans trois situations tres differentes (pas de connexion,
+# envoi echoue, pas de reponse en 30s), et l'outil affichait toujours
+# "l'app n'est pas ouverte". Elle renvoie maintenant un petit dict
+# {"erreur_canal": <code>} qui dit exactement ce qui s'est passe.
+CANAL_NON_CONNECTE = "non_connecte"
+CANAL_ENVOI_ECHOUE = "envoi_echoue"
+CANAL_SANS_REPONSE = "sans_reponse"
+
+
+async def fermer_websocket_sans_erreur(websocket: WebSocket, code: int) -> None:
+    """
+    Ferme un WebSocket sans jamais lever : si l'application s'est deja
+    deconnectee (fermeture de l'ecran, coupure reseau) avant qu'on
+    puisse la refuser, starlette leve WebSocketDisconnect au moment du
+    close(), ce qui produisait un traceback complet dans les logs pour
+    un cas parfaitement normal (24/09/2026).
+    """
+    try:
+        await websocket.close(code=code)
+    except Exception:
+        pass
+
+
+def est_erreur_canal(resultat: Any) -> bool:
+    """True si `resultat` est une erreur du canal lui-meme (pas une reponse du telephone)."""
+    return isinstance(resultat, dict) and "erreur_canal" in resultat
 
 
 async def connecter(user_id: str, appareil_id: str, websocket: WebSocket) -> None:
@@ -187,7 +215,7 @@ async def _appeler_statut(on_statut, texte: str) -> None:
 
 async def poser_question_appareil(
     user_id: str, appareil_id: str, contenu: Any, on_statut=None
-) -> Any | None:
+) -> Any:
     """
     Fonction centrale du canal temps reel (voir 01-canal-temps-reel.md).
 
@@ -206,14 +234,17 @@ async def poser_question_appareil(
     "le" telephone de l'utilisateur des qu'il peut y en avoir plusieurs.
 
     Renvoie :
-    - None IMMEDIATEMENT si aucune connexion active pour cet appareil
-      precis (app fermee, ou c'est un AUTRE appareil du meme utilisateur
-      qui est ouvert) -- jamais d'attente de 30 secondes inutile ;
     - la reponse du telephone des qu'elle arrive (meme forme que ce que
-      l'app a mis dans le champ "reponse" -- texte ou objet JSON) ;
-    - None apres 30 secondes si la connexion existait mais n'a jamais
-      repondu (coupure reseau en cours de route, app fermee entre-temps,
-      etc).
+      l'app a mis dans le champ "reponse", texte ou objet JSON) ;
+    - {"erreur_canal": "non_connecte"} IMMEDIATEMENT si aucune connexion
+      active pour cet appareil precis (app fermee, ou c'est un AUTRE
+      appareil du meme utilisateur qui est ouvert), jamais d'attente de
+      30 secondes inutile ;
+    - {"erreur_canal": "envoi_echoue"} si la connexion existait mais que
+      l'envoi de la question a echoue ;
+    - {"erreur_canal": "sans_reponse"} apres 30 secondes si la connexion
+      existait mais n'a jamais repondu (coupure reseau, app en arriere-plan).
+    Tester avec est_erreur_canal().
 
     `on_statut` (optionnel) : callback (sync ou coroutine) appele avec un
     texte francais a 5s puis 15s d'attente sans reponse, pour relayer un
@@ -227,7 +258,7 @@ async def poser_question_appareil(
         websocket = _connexions.get((user_id, appareil_id))
 
     if websocket is None:
-        return None
+        return {"erreur_canal": CANAL_NON_CONNECTE}
 
     correlation_id = str(uuid.uuid4())
     future: "asyncio.Future[Any]" = asyncio.get_event_loop().create_future()
@@ -240,17 +271,23 @@ async def poser_question_appareil(
                 await websocket.send_json({"id": correlation_id, "question": contenu})
         except Exception as e:
             logging.error(f"ERREUR envoi question canal temps reel (user={user_id}, appareil={appareil_id}) : {e}")
-            return None
+            return {"erreur_canal": CANAL_ENVOI_ECHOUE}
 
+        # Correctif 24/09/2026, Bourama : asyncio.wait_for ANNULE ce qu'il
+        # attend quand le delai expire. Sans asyncio.shield, la Future
+        # etait annulee des la fin de la premiere etape (5s), et les
+        # etapes suivantes (15s, 30s) levaient CancelledError, ce qui
+        # tuait tout l'appel d'outil a exactement 5 secondes. shield
+        # protege la Future : seul le delai d'attente est interrompu.
         try:
-            return await asyncio.wait_for(future, timeout=DELAI_STATUT_1_SECONDES)
+            return await asyncio.wait_for(asyncio.shield(future), timeout=DELAI_STATUT_1_SECONDES)
         except asyncio.TimeoutError:
             pass
 
         await _appeler_statut(on_statut, TEXTE_STATUT_1)
         try:
             return await asyncio.wait_for(
-                future, timeout=DELAI_STATUT_2_SECONDES - DELAI_STATUT_1_SECONDES
+                asyncio.shield(future), timeout=DELAI_STATUT_2_SECONDES - DELAI_STATUT_1_SECONDES
             )
         except asyncio.TimeoutError:
             pass
@@ -258,13 +295,15 @@ async def poser_question_appareil(
         await _appeler_statut(on_statut, TEXTE_STATUT_2)
         try:
             return await asyncio.wait_for(
-                future, timeout=DELAI_ABANDON_SECONDES - DELAI_STATUT_2_SECONDES
+                asyncio.shield(future), timeout=DELAI_ABANDON_SECONDES - DELAI_STATUT_2_SECONDES
             )
         except asyncio.TimeoutError:
             logging.warning(
                 f"ABANDON canal temps reel (user={user_id}, appareil={appareil_id}, id={correlation_id}) : "
                 f"pas de reponse apres {DELAI_ABANDON_SECONDES}s"
             )
-            return None
+            return {"erreur_canal": CANAL_SANS_REPONSE}
     finally:
         _attentes.pop(correlation_id, None)
+        if not future.done():
+            future.cancel()

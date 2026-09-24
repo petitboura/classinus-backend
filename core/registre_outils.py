@@ -600,6 +600,11 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # correct des anciens messages déjà en base, jamais réutilisées pour
     # de nouveaux appels).
     "verifier_consignes_code_actif": {"label": "Vérification du code actif", "icone": "ShieldCheck", "onglet": None},
+    # Filet de secours (23/09/2026, demande Bourama) au-delà de la fenêtre
+    # des 2 messages auto-injectés après un QCM -- voir
+    # core/outils_reponses_qcm.py. onglet: None, même logique que
+    # verifier_consignes_code_actif : jamais un bouton cliquable.
+    "lire_reponses_qcm": {"label": "Lecture des réponses QCM", "icone": "ListChecks", "onglet": None},
 
     # --- Actions sur le téléphone de l'étudiant (26/08/2026) ---
     # onglet=None, même logique que les blocs "Programme adaptatif"/
@@ -788,7 +793,7 @@ CATEGORIES_OUTILS = {
         "gerer_avancement_notions", "consulter_avancement_notion",
         "verifier_consignes_code_actif", "consulter_signalement",
         "consulter_signalements_pertinents", "enregistrer_note_signalement",
-        "rattacher_signalement_notion",
+        "rattacher_signalement_notion", "lire_reponses_qcm",
     ],
     "comportement": ["gerer_comportement", "gerer_comportement_public"],
     "memoire": ["gerer_memoire_utilisateur"],

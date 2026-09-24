@@ -41,6 +41,42 @@ from core.vectorisation_dossiers_designes import (
 from core.bibliotheque_fichiers import enregistrer_fichier as _enregistrer_fichier
 
 from core.outils_generation_commun import mcp_generation, Context, _TAILLE_MAX_OCTETS_BIBLIOTHEQUE
+from core.canal_temps_reel import (
+    est_erreur_canal as _est_erreur_canal,
+    CANAL_NON_CONNECTE as _CANAL_NON_CONNECTE,
+    CANAL_ENVOI_ECHOUE as _CANAL_ENVOI_ECHOUE,
+    CANAL_SANS_REPONSE as _CANAL_SANS_REPONSE,
+)
+
+# Ajoute le 24/09/2026, Bourama : avant cette date, TOUTE impossibilite de
+# joindre le telephone donnait le meme message "l'app n'est pas ouverte",
+# meme quand l'etudiant ecrivait depuis l'app (message illogique). Un
+# message par cause reelle, ecrit pour le modele (il le reformule pour
+# l'etudiant). Jamais d'affirmation "l'app est fermee" quand ce n'est pas
+# certain.
+_MESSAGES_ERREUR_CANAL = {
+    _CANAL_NON_CONNECTE: (
+        "Aucune connexion active avec le téléphone de l'étudiant à cet instant. "
+        "Dis-lui que la liaison avec son téléphone n'est pas établie pour le moment "
+        "et qu'il peut réessayer dans quelques secondes. Si l'app du téléphone est "
+        "fermée, il suffit de l'ouvrir. N'affirme pas que l'app est fermée."
+    ),
+    _CANAL_ENVOI_ECHOUE: (
+        "La question n'a pas pu être envoyée au téléphone : la liaison vient de se "
+        "couper. Dis à l'étudiant qu'il peut réessayer dans quelques secondes. "
+        "Ne dis pas que l'app est fermée."
+    ),
+    _CANAL_SANS_REPONSE: (
+        "Le téléphone n'a pas répondu en 30 secondes (réseau lent ou app en "
+        "arrière-plan). Dis à l'étudiant que le téléphone met trop de temps à "
+        "répondre et propose de réessayer. Ne dis pas que l'app est fermée."
+    ),
+}
+_MESSAGE_ERREUR_CANAL_INCONNUE = (
+    "Le téléphone n'a pas pu être joint pour une raison inconnue. Dis à "
+    "l'étudiant qu'une erreur est survenue et propose de réessayer. "
+    "Ne dis pas que l'app est fermée."
+)
 
 
 
@@ -572,16 +608,14 @@ async def explorer_dossier(
         logging.error(f"ERREUR explorer_dossier ({action}, {dossier_nom}) : {e}")
         return "Erreur : impossible d'explorer ce dossier, réessaie."
 
-    # Message unifié pour TOUTES les actions ci-dessus quand l'app n'est
-    # pas ouverte (validé avec Bourama le 30/08/2026, voir
-    # 05-recherche-contenu-app-fermee.md) : toujours la même phrase à
-    # relayer à l'étudiant, jamais une erreur technique brute.
-    if resultat is None:
-        return (
-            "L'app Classinus n'est pas ouverte sur le téléphone de l'étudiant "
-            "en ce moment : dis-lui exactement ceci : \"Ouvre l'app pour "
-            "que je regarde.\""
-        )
+    # Modifié le 24/09/2026 (Bourama) : ce bloc affichait toujours "l'app
+    # n'est pas ouverte" pour toute impossibilité de joindre le téléphone.
+    # Le canal renvoie maintenant la cause réelle (voir
+    # core/canal_temps_reel.poser_question_appareil), un message par cause.
+    # None reste géré par sécurité (cause inconnue).
+    if resultat is None or _est_erreur_canal(resultat):
+        code = resultat.get("erreur_canal") if resultat else None
+        return _MESSAGES_ERREUR_CANAL.get(code, _MESSAGE_ERREUR_CANAL_INCONNUE)
 
     if "erreur" in resultat:
         return f"Erreur : {resultat['erreur']}"
