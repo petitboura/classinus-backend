@@ -368,7 +368,21 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         client_groq = Groq(api_key=get_secret("GROQ_API_KEY"), max_retries=0)
 
         if approuve:
-            yield {"type": "statut", "texte": f"{_nom_lisible_appel(appel)}..."}
+            # 24/09/2026 (bug remonté par Bourama : après un clic sur Confirmer,
+            # la suite était mal branchée et bloquait) : l'appel confirmé
+            # doit porter les MÊMES identifiants que dans _traiter_appels
+            # (id_appel, nom_outil, nom_lisible, action). Sans id_appel, le
+            # frontend le traitait comme un statut flottant sans ligne
+            # dans la chronologie, jamais recollé à son résultat, donc
+            # resté affiché en cours.
+            yield {
+                "type": "statut",
+                "texte": f"{_nom_lisible_appel(appel)}...",
+                "id_appel": appel["id"],
+                "nom_outil": appel["name"],
+                "nom_lisible": _nom_lisible_appel(appel),
+                "action": _action_appel(appel),
+            }
             try:
                 arguments = json.loads(appel["arguments"] or "{}")
             except Exception:
@@ -385,13 +399,14 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             except Exception as e:
                 logging.error(f"ERREUR OUTIL APPROUVÉ ({appel['name']}) : {e}")
                 resultat = f"Erreur : {_nom_lisible_appel(appel)} a échoué ({e})."
-                yield {"type": "statut_termine", "texte": f"{_nom_lisible_appel(appel)} a échoué"}
+                yield {"type": "statut_termine", "texte": f"{_nom_lisible_appel(appel)} a échoué", "id_appel": appel["id"]}
                 yield {
                     "type": "outil_resultat",
                     "nom_outil": appel["name"],
                     "nom_lisible": _nom_lisible_appel(appel),
                     "action": _action_appel(appel),
                     "resultat": resultat,
+                    "id_appel": appel["id"],
                 }
                 messages_agent.append({
                     "role": "tool",
@@ -400,13 +415,14 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 })
                 deja_ajoute_a_messages_agent = True
             if not deja_ajoute_a_messages_agent:
-                yield {"type": "statut_termine", "texte": f"{_nom_lisible_appel(appel)} effectuée"}
+                yield {"type": "statut_termine", "texte": f"{_nom_lisible_appel(appel)} effectuée", "id_appel": appel["id"]}
                 yield {
                     "type": "outil_resultat",
                     "nom_outil": appel["name"],
                     "nom_lisible": _nom_lisible_appel(appel),
                     "action": _action_appel(appel),
                     "resultat": _resultat_pour_affichage(resultat),
+                    "id_appel": appel["id"],
                 }
         else:
             resultat = "Action annulée par l'utilisateur : cet outil n'a pas été exécuté."
