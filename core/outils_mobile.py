@@ -56,26 +56,25 @@ from core.canal_temps_reel import (
 # certain.
 _MESSAGES_ERREUR_CANAL = {
     _CANAL_NON_CONNECTE: (
-        "Aucune connexion active avec le téléphone de l'étudiant à cet instant. "
-        "Dis-lui que la liaison avec son téléphone n'est pas établie pour le moment "
-        "et qu'il peut réessayer dans quelques secondes. Si l'app du téléphone est "
-        "fermée, il suffit de l'ouvrir. N'affirme pas que l'app est fermée."
+        "Le téléphone de l'étudiant n'a pas pu être joint à cet instant. "
+        "Dis-lui que ça n'a pas abouti pour le moment et propose de réessayer dans quelques secondes. "
+        "Ne mentionne jamais l'état de l'application (fermée, en arrière-plan, onglet non visible)."
     ),
     _CANAL_ENVOI_ECHOUE: (
-        "La question n'a pas pu être envoyée au téléphone : la liaison vient de se "
-        "couper. Dis à l'étudiant qu'il peut réessayer dans quelques secondes. "
-        "Ne dis pas que l'app est fermée."
+        "La demande n'a pas pu être envoyée au téléphone. Dis à l'étudiant que ça "
+        "n'a pas abouti pour le moment et propose de réessayer dans quelques secondes. "
+        "Ne mentionne jamais l'état de l'application (fermée, en arrière-plan, onglet non visible)."
     ),
     _CANAL_SANS_REPONSE: (
-        "Le téléphone n'a pas répondu en 30 secondes (réseau lent ou app en "
-        "arrière-plan). Dis à l'étudiant que le téléphone met trop de temps à "
-        "répondre et propose de réessayer. Ne dis pas que l'app est fermée."
+        "Le téléphone n'a pas répondu à temps. Dis à l'étudiant que ça prend trop "
+        "de temps et propose de réessayer. Ne mentionne jamais l'état de "
+        "l'application (fermée, en arrière-plan, onglet non visible)."
     ),
 }
 _MESSAGE_ERREUR_CANAL_INCONNUE = (
-    "Le téléphone n'a pas pu être joint pour une raison inconnue. Dis à "
-    "l'étudiant qu'une erreur est survenue et propose de réessayer. "
-    "Ne dis pas que l'app est fermée."
+    "Le téléphone n'a pas pu être joint. Dis à l'étudiant que ça n'a pas "
+    "abouti pour le moment et propose de réessayer. Ne mentionne jamais "
+    "l'état de l'application (fermée, en arrière-plan, onglet non visible)."
 )
 
 
@@ -156,7 +155,7 @@ def gerer_dossier_telephone(
     - gerer_document_bibliotheque : cherche/lit des documents, y compris
       dans le catalogue PUBLIC partagé -- là non plus aucun rapport avec
       le téléphone de l'étudiant.
-    - explorer_dossier : lecture EN DIRECT (app ouverte requise) du
+    - explorer_dossier : lecture EN DIRECT du
       contenu d'un dossier du téléphone -- utilise cet outil-ci
       uniquement pour AGIR (créer/renommer/supprimer/déplacer), jamais
       pour lire ou lister en détail.
@@ -175,10 +174,11 @@ def gerer_dossier_telephone(
       l'étudiant. L'action est mise en attente et poussée immédiatement
       au téléphone. Depuis le 01/09/2026, cet appel ATTEND jusqu'à ~10s
       la confirmation réelle du téléphone avant de répondre : le message
-      renvoyé reflète le VRAI résultat (succès/échec) si l'app a
-      confirmé à temps, sinon un message explicite "pas encore
-      confirmée" (app fermée/hors ligne, l'action reste en attente et
-      sera rattrapée plus tard). Attends toujours ce résultat avant de
+      renvoyé reflète le VRAI résultat (succès/échec) si la confirmation
+      est arrivée à temps, sinon un message "pas encore confirmée"
+      (l'action reste en attente et sera rattrapée plus tard : dis
+      simplement qu'elle est en cours, sans jamais mentionner l'état de
+      l'application). Attends toujours ce résultat avant de
       lancer une action suivante qui en dépendrait (ex: déplacer un
       fichier juste renommé).
 
@@ -206,6 +206,13 @@ def gerer_dossier_telephone(
       exacte, ne devine jamais un chemin. Pour "dossier_deplacer",
       "nouveau_chemin" cible de la même façon l'emplacement niché de
       DESTINATION à l'intérieur de "nouveau_dossier_nom".
+
+      RÈGLE : un sous-dossier n'est JAMAIS un dossier désigné. "dossier_nom"
+      (et "nouveau_dossier_nom") ne peut être que l'un des noms renvoyés par
+      "lister_dossiers". Un sous-dossier appartient toujours à son dossier
+      désigné et ne s'indique que dans "chemin" (ou comme "element_nom"
+      quand c'est lui la cible). Ne le présente jamais à l'étudiant comme un
+      dossier à part.
     """
     user_id = ctx.request_context.request.query_params.get("user_id")
     if not user_id:
@@ -338,12 +345,18 @@ async def explorer_dossier(
     Explore EN DIRECT le contenu d'un dossier désigné par l'étudiant sur
     son téléphone (contrairement à gerer_dossier_telephone, qui est
     asynchrone et fire-and-forget, et sert à AGIR sur les dossiers, pas
-    à les lire ou les explorer). NÉCESSITE que l'app Classinus soit ouverte
-    sur le téléphone au moment de l'appel, sinon échoue avec un message
-    clair à relayer à l'étudiant. NE PAS CONFONDRE non plus avec
+    à les lire ou les explorer). Si le téléphone ne répond pas, dis
+    simplement que ça n'a pas abouti pour le moment et propose de
+    réessayer, sans jamais mentionner l'état de l'application. NE PAS CONFONDRE non plus avec
     gerer_dossier_bibliotheque/gerer_document_bibliotheque, qui portent
     sur la bibliothèque Classinus (privée ou catalogue public), jamais sur
     le téléphone physique de l'étudiant.
+
+    RÈGLE : un sous-dossier n'est JAMAIS un dossier désigné. `dossier_nom`
+    ne peut être que l'un des noms renvoyés par "lister_dossiers". Un
+    sous-dossier appartient toujours à son dossier désigné et ne s'indique
+    que dans `chemin`. Ne le présente jamais à l'étudiant comme un dossier
+    à part.
 
     `action` doit être l'une de :
     - "lister_contenu" : liste le contenu du dossier désigné
@@ -396,7 +409,7 @@ async def explorer_dossier(
       06/09/2026, demande Bourama) :
       1. Recherche sémantique instantanée dans ce qui a déjà été vectorisé
          en arrière-plan (04/09/2026) -- comprend le SENS de
-         `terme_recherche`, fonctionne même app fermée, renvoie un extrait
+         `terme_recherche`, fonctionne à tout moment, renvoie un extrait
          du contenu ET le lien du fichier.
       2. Recherche par métadonnées, INDÉPENDANTE de la précédente --
          cherche `terme_recherche` comme sous-chaîne dans le NOM des
@@ -418,7 +431,7 @@ async def explorer_dossier(
       les DEUX recherches ne trouvent rien (cas possible : fichier pas
       encore vectorisé ET nom différent du terme cherché), bascule
       automatiquement sur une lecture EN DIRECT de chaque fichier
-      (nécessite l'app ouverte, peut prendre plus de temps si le dossier
+      (peut prendre plus de temps si le dossier
       contient beaucoup de fichiers, c'est normal) : renvoie alors les
       fichiers correspondants avec un court extrait autour de la
       correspondance trouvée, réutilisable ensuite avec "lire_fichier"

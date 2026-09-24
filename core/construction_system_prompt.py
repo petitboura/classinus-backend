@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from configuration import get_system_prompt
-from profils_agents import INSTRUCTIONS_FORMATS_AFFICHAGE, INSTRUCTIONS_ARBITRAGE_CALCUL, REGLE_CONTEXTE_INVISIBLE, INSTRUCTIONS_LONGUEUR_REPONSE, MODES_PEDAGOGIQUES, REGLE_BASCULE_MODE_PEDAGOGIQUE, construire_instruction_guide, construire_instruction_guide_visuel, construire_instruction_demo, MODES_SOURCE
+from profils_agents import INSTRUCTIONS_FORMATS_AFFICHAGE, INSTRUCTIONS_ARBITRAGE_CALCUL, REGLE_CONTEXTE_INVISIBLE, REGLE_ETAT_APPLICATION_TAIRE, INSTRUCTIONS_LONGUEUR_REPONSE, MODES_PEDAGOGIQUES, REGLE_BASCULE_MODE_PEDAGOGIQUE, construire_instruction_guide, construire_instruction_guide_visuel, construire_instruction_demo, MODES_SOURCE
 from guide_conversation import obtenir_sections_guide
 from historique_reponses_qcm import formater_reponses_qcm
 
@@ -98,7 +98,7 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     #   - longueur_reponse : choisi par le sélecteur pour CE message
     #   - date/heure : change chaque minute
     # + recherche_forcee, activée seulement sur CE message (icône recherche).
-    system_final = INSTRUCTIONS_FORMATS_AFFICHAGE + INSTRUCTIONS_ARBITRAGE_CALCUL + REGLE_CONTEXTE_INVISIBLE
+    system_final = INSTRUCTIONS_FORMATS_AFFICHAGE + INSTRUCTIONS_ARBITRAGE_CALCUL + REGLE_CONTEXTE_INVISIBLE + REGLE_ETAT_APPLICATION_TAIRE
     system_final += "\n\n" + (get_system_prompt(agent_id) or "")
 
     # Mécanisme "à la skill" (13/08/2026) : le texte long n'est plus

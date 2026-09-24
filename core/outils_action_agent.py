@@ -59,10 +59,10 @@ async def executer_action_application(action_id: str, ctx: Context) -> str:
     chat avant d'appeler cet outil si l'etudiant te l'a explicitement
     demande, ou si tu juges toi-meme plus prudent de confirmer d'abord.
 
-    NECESSITE que l'application soit ouverte quelque part pour ce
-    compte (peu importe l'onglet ou l'appareil, voir
-    core/canal_agent_applicatif.py) -- sinon echoue immediatement avec un
-    message clair a relayer a l'etudiant.
+    Si l'action n'aboutit pas, dis simplement a l'etudiant que ca n'a
+    pas abouti pour le moment et propose de reessayer. Ne mentionne
+    jamais l'etat de l'application (fermee, en arriere-plan, onglet non
+    visible).
     """
     user_id = ctx.request_context.request.query_params.get("user_id")
     if not user_id:
@@ -76,8 +76,8 @@ async def executer_action_application(action_id: str, ctx: Context) -> str:
 
     if resultat is None:
         return (
-            "Aucune réponse de l'application : soit elle n'est ouverte nulle part pour ce compte, "
-            "soit l'action n'est plus disponible à l'écran nulle part où elle est ouverte."
+            "Cette action n'a pas pu être exécutée pour le moment. "
+            "Ne mentionne jamais l'état de l'application (fermée, en arrière-plan, onglet non visible) : dis simplement que ça n'a pas abouti pour le moment et propose de réessayer."
         )
     if isinstance(resultat, dict) and resultat.get("erreur"):
         return f"Erreur : {resultat['erreur']}"
@@ -125,8 +125,8 @@ async def executer_clic_generique(selecteur: str, description: str, ctx: Context
 
     if resultat is None:
         return (
-            "Aucune réponse de l'application : soit elle n'est ouverte nulle part pour ce compte, "
-            "soit l'élément visé n'a été trouvé (visible et actif) nulle part où elle est ouverte."
+            "Cet élément n'a pas pu être atteint pour le moment. "
+            "Ne mentionne jamais l'état de l'application (fermée, en arrière-plan, onglet non visible) : dis simplement que ça n'a pas abouti pour le moment et propose de réessayer."
         )
     if isinstance(resultat, dict) and resultat.get("erreur"):
         return f"Erreur : {resultat['erreur']}"
@@ -165,8 +165,8 @@ async def montrer_element_application(action_id: str, ctx: Context) -> str:
 
     if resultat is None:
         return (
-            "Aucune réponse de l'application : soit elle n'est ouverte nulle part pour ce compte, "
-            "soit cette action n'est plus disponible à l'écran nulle part où elle est ouverte."
+            "Cette action n'a pas pu être exécutée pour le moment. "
+            "Ne mentionne jamais l'état de l'application (fermée, en arrière-plan, onglet non visible) : dis simplement que ça n'a pas abouti pour le moment et propose de réessayer."
         )
     if isinstance(resultat, dict) and resultat.get("erreur"):
         return f"Erreur : {resultat['erreur']}"
@@ -195,8 +195,9 @@ async def ecrire_dans_champ(action_id: str, texte: str, ctx: Context) -> str:
     demandé cette saisie (ou l'a clairement acceptée dans la
     conversation), jamais de façon spontanée.
 
-    NECESSITE que l'application soit ouverte quelque part pour ce
-    compte, même règle que les autres outils de ce fichier.
+    Si la saisie n'aboutit pas, même règle que les autres outils de ce
+    fichier : ne mentionne jamais l'état de l'application, dis que ça
+    n'a pas abouti pour le moment et propose de réessayer.
     """
     user_id = ctx.request_context.request.query_params.get("user_id")
     if not user_id:
@@ -212,8 +213,8 @@ async def ecrire_dans_champ(action_id: str, texte: str, ctx: Context) -> str:
 
     if resultat is None:
         return (
-            "Aucune réponse de l'application : soit elle n'est ouverte nulle part pour ce compte, "
-            "soit ce champ n'est plus disponible à l'écran nulle part où elle est ouverte."
+            "Ce champ n'a pas pu être rempli pour le moment. "
+            "Ne mentionne jamais l'état de l'application (fermée, en arrière-plan, onglet non visible) : dis simplement que ça n'a pas abouti pour le moment et propose de réessayer."
         )
     if isinstance(resultat, dict) and resultat.get("erreur"):
         return f"Erreur : {resultat['erreur']}"
@@ -291,8 +292,8 @@ async def dire_a_l_etudiant(
 
     Le texte est aussi garde dans le resultat de l'appel, donc visible
     dans l'historique de la conversation meme si l'etudiant n'a pas vu la
-    bulle. Si l'application n'est ouverte nulle part pour ce compte, la
-    bulle ne peut pas s'afficher : le dire alors dans ta reponse normale.
+    bulle. Si la bulle ne peut pas s'afficher, ecris simplement le texte dans ta
+    reponse normale, sans expliquer pourquoi.
     """
     user_id = ctx.request_context.request.query_params.get("user_id")
     if not user_id:
@@ -317,8 +318,8 @@ async def dire_a_l_etudiant(
 
     if atteintes == 0:
         return (
-            "Aucun affichage : l'application n'est ouverte nulle part pour ce compte, "
-            "l'étudiant n'a rien vu. Dis-le dans ta réponse normale à la place."
+            "Le message n'a pas pu s'afficher en bulle. "
+            "Écris-le simplement dans ta réponse normale à la place, sans expliquer pourquoi."
         )
 
     duree_effective = float(duree_voulue) if duree_voulue else _duree_automatique_secondes(propre)
@@ -363,8 +364,8 @@ async def ouvrir_canal_en_direct(ctx: Context) -> str:
     atteintes = await _demander_ouverture_canal(user_id, conversation_id, TEXTE_SUITE_DEMO_CANAL)
     if atteintes == 0:
         return (
-            "Impossible d'ouvrir le canal : l'application n'est ouverte nulle part pour ce compte. "
-            "Dis-le simplement a l'utilisateur et termine la demo sans cette partie."
+            "Le canal en direct n'a pas pu s'ouvrir pour le moment. "
+            "Termine la demo sans cette partie, sans expliquer pourquoi."
         )
     return (
         "Le canal en direct s'ouvre. Termine ta reponse par une seule phrase courte qui l'annonce "

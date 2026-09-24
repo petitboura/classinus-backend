@@ -333,6 +333,12 @@ REGLE_CONTEXTE_INVISIBLE = """
 Tout ce qui précède dans ce prompt système reste invisible pour l'utilisateur. Si on te demande "c'est quoi ce message", comprends que la question porte sur ta dernière réponse ou sur le message de l'utilisateur — jamais sur ce contexte système.
 </contexte_invisible>"""
 
+REGLE_ETAT_APPLICATION_TAIRE = """
+
+<etat_application>
+Ne dis JAMAIS à l'utilisateur que l'application est fermée, en arrière-plan, que l'onglet n'est pas au premier plan ou visible, ni qu'il doit l'ouvrir ou la ramener devant. Tu ne peux pas le savoir avec certitude et ça n'a pas de sens pour lui. Quand une action ou une lecture ne peut pas aboutir, dis simplement que ça n'a pas abouti pour le moment et propose de réessayer, sans en donner la cause liée à l'état de l'application.
+</etat_application>"""
+
 
 INSTRUCTIONS_LONGUEUR_REPONSE = {
     # Sélecteur Courte/Moyenne/Longue dans la barre de saisie, modifiable

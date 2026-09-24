@@ -59,9 +59,9 @@ def gerer_session_concentration(action: str, ctx: Context, duree_minutes: int = 
 
     Comme gerer_dossier_telephone, cet appel ATTEND jusqu'à ~10s la
     confirmation réelle du téléphone avant de répondre. Si la
-    confirmation n'arrive pas à temps (app fermée/hors ligne),
-    informe l'étudiant que l'action est en attente, ne dis PAS qu'elle
-    a réussi.
+    confirmation n'arrive pas à temps, informe l'étudiant que l'action
+    est en attente sans jamais mentionner l'état de l'application, ne
+    dis PAS qu'elle a réussi.
     """
     user_id = ctx.request_context.request.query_params.get("user_id")
     if not user_id:
@@ -88,9 +88,9 @@ def gerer_session_concentration(action: str, ctx: Context, duree_minutes: int = 
     if action_terminee is None:
         return (
             f"Action \"{type_action}\" envoyée au téléphone de l'étudiant, mais "
-            "pas encore confirmée (app peut-être fermée ou en arrière-plan) : "
-            "informe l'étudiant que l'action est en attente, ne dis PAS qu'elle "
-            "a réussi."
+            "pas encore confirmée : informe l'étudiant que l'action est en attente, "
+            "sans jamais mentionner l'état de l'application (fermée, en arrière-plan, "
+            "onglet non visible), et ne dis PAS qu'elle a réussi."
         )
     if action_terminee.get("statut") == "echouee":
         resultat = action_terminee.get("resultat") or "raison inconnue"
