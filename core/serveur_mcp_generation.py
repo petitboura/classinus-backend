@@ -78,6 +78,8 @@ import core.outils_fichiers_conversation  # noqa: F401
 import core.outils_dossiers_catalogue_public  # noqa: F401
 import core.outils_catalogue_public_publication  # noqa: F401
 import core.outils_etoiles_catalogue_public  # noqa: F401
+import core.outils_commentaires_catalogue_public  # noqa: F401
+import core.outils_programme_catalogue_public  # noqa: F401  # 22/09/2026, catalogue public du Programme
 import core.outils_memoire_profil  # noqa: F401
 import core.outils_comportements_connaissance  # noqa: F401
 import core.outils_comportements_publics  # noqa: F401

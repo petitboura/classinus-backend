@@ -178,6 +178,19 @@ from core.catalogue_public_publication import (
     copier_entree_publique_vers_perso as _copier_entree_publique_vers_perso,
 )
 from core.etoiles_catalogue_public import basculer_etoile as _basculer_etoile
+from core.commentaires_catalogue_public import (
+    creer_commentaire as _creer_commentaire,
+    supprimer_commentaire as _supprimer_commentaire,
+)
+from core.programme_catalogue_public import (
+    publier_programme_public as _publier_programme_public,
+    modifier_programme_public as _modifier_programme_public,
+    supprimer_programme_public as _supprimer_programme_public,
+    lire_programme_public as _lire_programme_public,
+    lister_programmes_catalogue_public as _lister_programmes_catalogue_public,
+    chercher_programmes_catalogue_public as _chercher_programmes_catalogue_public,
+    copier_programme_vers_perso as _copier_programme_vers_perso,
+)
 from main import chat as _chat_generateur  # core/main.py:chat() -- import bare comme dans api/chat.py (core/ deja sur sys.path a ce point, voir api/main.py : api.chat importe avant core.serveur_mcp_espace)
 from core.confirmations_mcp import (
     creer_confirmation as _creer_confirmation,
@@ -1335,6 +1348,177 @@ def copier_entree_catalogue_public_vers_perso(entree_id: str, ctx: Context) -> s
     return "Document copié dans ta bibliothèque personnelle."
 
 
+# Catalogue public du PROGRAMME -- 22/09/2026, demande Bourama : même
+# principe que le catalogue public de la bibliothèque ci-dessus,
+# transposé au Programme (arborescence de notions par code de
+# partage). Toute la logique métier vit dans
+# core/programme_catalogue_public.py (réutilisée des deux côtés).
+# Une action = un outil séparé ici, même convention que le reste de ce
+# fichier (côté chat, gerer_programme_catalogue_public regroupe tout
+# en un seul outil avec un paramètre `action`, convention différente
+# mais volontaire des deux côtés, voir core/outils_programme_catalogue_public.py).
+
+@mcp_espace.tool(
+    name="clovis_publier_programme_catalogue_public",
+    title="Publier un Programme dans le catalogue public",
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=True),
+)
+def publier_programme_catalogue_public(
+    code_id: str, nom: str, ctx: Context, description: str = "", inclure_regles_consignes: bool = False,
+    pays: list[str] = [], niveau: list[str] = [], categorie: list[str] = [], classe: list[str] = [], specialite: list[str] = [],
+) -> str:
+    """
+    Publie le Programme ENTIER d'un code (jamais une branche partielle)
+    dans le catalogue public, au nom de cet utilisateur. `code_id` doit
+    appartenir à cet utilisateur. `inclure_regles_consignes` : inclut
+    ou non les règles de comportement et consignes IA de chaque notion
+    dans la copie publiée (choix du publieur). `pays`, `niveau`,
+    `categorie`, `classe`, `specialite` optionnels, chacun une liste de
+    valeurs.
+    """
+    user_id = _user_id_authentifie(ctx)
+    if not user_id:
+        return "Erreur : utilisateur non authentifié."
+    resultat = _publier_programme_public(
+        (code_id or "").strip(), user_id, nom, description, inclure_regles_consignes,
+        pays, niveau, categorie, classe, specialite,
+    )
+    if resultat == "CODE_INTROUVABLE":
+        return "Erreur : ce code n'existe pas ou ne t'appartient pas."
+    if resultat == "NOM_REQUIS":
+        return "Erreur : un nom est requis pour publier."
+    if resultat == "PROGRAMME_VIDE":
+        return "Erreur : ce Programme est vide, rien à publier."
+    return f"Programme publié dans le catalogue public (id {resultat['id']})."
+
+
+@mcp_espace.tool(
+    name="clovis_modifier_programme_catalogue_public",
+    title="Modifier une entrée de Programme du catalogue public",
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=True),
+)
+def modifier_programme_catalogue_public(
+    entree_id: str, ctx: Context, nom: str = "", description: str = "",
+    pays: list[str] = [], niveau: list[str] = [], categorie: list[str] = [], classe: list[str] = [], specialite: list[str] = [],
+) -> str:
+    """Modifie le nom, la description et/ou les filtres d'un Programme déjà publié. Réservé au contributeur d'origine. Seuls les champs fournis (non vides) sont modifiés -- un filtre fourni REMPLACE entièrement ses valeurs actuelles."""
+    user_id = _user_id_authentifie(ctx)
+    if not user_id:
+        return "Erreur : utilisateur non authentifié."
+    erreur = _modifier_programme_public(
+        entree_id, user_id,
+        nom=nom.strip() or None if nom else None,
+        description=description.strip() or None if description else None,
+        pays=pays or None, niveau=niveau or None, categorie=categorie or None, classe=classe or None, specialite=specialite or None,
+    )
+    if erreur == "ENTREE_INTROUVABLE":
+        return "Cette entrée du catalogue public est introuvable."
+    if erreur == "CETTE_ENTREE_NE_T_APPARTIENT_PAS":
+        return "Erreur : tu ne peux modifier que les Programmes que tu as toi-même publiés."
+    if erreur == "NOM_REQUIS":
+        return "Erreur : le nom ne peut pas être vidé."
+    if erreur == "AUCUNE_MODIFICATION_FOURNIE":
+        return "Erreur : indique au moins une chose à modifier."
+    return "Entrée du catalogue public modifiée."
+
+
+@mcp_espace.tool(
+    name="clovis_supprimer_programme_catalogue_public",
+    title="Supprimer une entrée de Programme du catalogue public",
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=True, open_world_hint=True),
+)
+def supprimer_programme_catalogue_public(entree_id: str, ctx: Context) -> str:
+    """Supprime DÉFINITIVEMENT un Programme du catalogue public. Réservé au contributeur d'origine. SENSIBLE : le client doit confirmer avec l'utilisateur avant d'appeler cet outil."""
+    user_id = _user_id_authentifie(ctx)
+    if not user_id:
+        return "Erreur : utilisateur non authentifié."
+    if not _supprimer_programme_public(entree_id, user_id):
+        return "Erreur : cette entrée est introuvable, ou tu n'en es pas l'auteur."
+    return "Programme supprimé du catalogue public."
+
+
+@mcp_espace.tool(
+    name="clovis_lire_programme_catalogue_public",
+    title="Lire une entrée de Programme du catalogue public",
+    annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=True),
+)
+def lire_programme_catalogue_public(entree_id: str, ctx: Context) -> str:
+    """Affiche le contenu (structure de notions) d'un Programme publié, pour le consulter avant de le récupérer."""
+    entree = _lire_programme_public((entree_id or "").strip())
+    if not entree:
+        return "Cette entrée du catalogue public est introuvable."
+    lignes = "\n".join(f"- {n['nom']}" for n in entree["notions"])
+    return (
+        f"« {entree['nom']} »\n{entree.get('description') or ''}\n\n"
+        f"Contient les règles/consignes : {'oui' if entree['inclut_regles_consignes'] else 'non'}\n"
+        f"Étoiles : {entree['etoiles_count']}\n\nNotions :\n{lignes}"
+    )
+
+
+@mcp_espace.tool(
+    name="clovis_lister_programmes_catalogue_public",
+    title="Lister les Programmes récents du catalogue public",
+    annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=True),
+)
+def lister_programmes_catalogue_public(
+    ctx: Context, nombre: int = 5,
+    pays: str = "", niveau: str = "", categorie: str = "", classe: str = "", specialite: str = "",
+) -> str:
+    """Liste les Programmes les plus récents du catalogue public, pour une demande vague. `nombre` par défaut 5, max 15."""
+    resultat = _lister_programmes_catalogue_public(limite=nombre or 5, pays=pays, niveau=niveau, categorie=categorie, classe=classe, specialite=specialite)
+    if not resultat["programmes"]:
+        return "Aucun Programme public trouvé."
+    lignes = "\n".join(f"- {p['nom']} [id: {p['id']}]" for p in resultat["programmes"])
+    return f"{len(resultat['programmes'])} Programme(s) sur {resultat['total']} au total :\n{lignes}"
+
+
+@mcp_espace.tool(
+    name="clovis_chercher_programmes_catalogue_public",
+    title="Chercher un Programme dans le catalogue public",
+    annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=True),
+)
+def chercher_programmes_catalogue_public(
+    question: str, ctx: Context, nombre: int = 5,
+    pays: str = "", niveau: str = "", categorie: str = "", classe: str = "", specialite: str = "",
+) -> str:
+    """Recherche par mot clé (nom + description) dans le catalogue public de Programmes."""
+    resultats = _chercher_programmes_catalogue_public(question, match_count=nombre or 5, pays=pays, niveau=niveau, categorie=categorie, classe=classe, specialite=specialite)
+    if not resultats:
+        return "Aucun Programme public ne correspond à cette recherche."
+    lignes = "\n".join(f"- {p['nom']} [id: {p['id']}]" for p in resultats)
+    return f"Programmes trouvés :\n{lignes}"
+
+
+@mcp_espace.tool(
+    name="clovis_copier_programme_catalogue_public_vers_perso",
+    title="Copier un Programme du catalogue public vers son espace personnel",
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=True),
+)
+def copier_programme_catalogue_public_vers_perso(
+    entree_id: str, ctx: Context, code_id: str = "", nouveau_code_nom: str = "", inclure_regles_consignes: bool = False,
+) -> str:
+    """Copie un Programme déjà publié (de n'importe qui) vers l'espace personnel de cet utilisateur. `code_id` (un de ses codes existants, remplace le Programme de ce code) OU `nouveau_code_nom` (crée un nouveau code) : demander lequel s'il n'est pas précisé. `inclure_regles_consignes` ne peut reprendre que ce que le publieur a lui-même inclus."""
+    user_id = _user_id_authentifie(ctx)
+    if not user_id:
+        return "Erreur : utilisateur non authentifié."
+    try:
+        resultat = _copier_programme_vers_perso(
+            (entree_id or "").strip(), user_id, code_id=(code_id or "").strip() or None,
+            nouveau_code_nom=(nouveau_code_nom or "").strip() or None, inclure_regles_consignes=inclure_regles_consignes,
+        )
+    except Exception as e:
+        logging.error(f"ERREUR outil copier_programme_catalogue_public_vers_perso : {e}")
+        return "Erreur : impossible de copier ce Programme, réessaie."
+    if resultat == "ENTREE_INTROUVABLE":
+        return "Cette entrée du catalogue public est introuvable."
+    if resultat == "CODE_INTROUVABLE":
+        return "Erreur : ce code n'existe pas ou ne t'appartient pas."
+    if resultat == "PROGRAMME_VIDE":
+        return "Erreur : ce Programme public est vide."
+    return f"Programme copié ({resultat['nb_notions']} notion(s)) vers le code (id {resultat['code_id']})."
+
+
+
 @mcp_espace.tool(
     name="clovis_basculer_etoile_catalogue_public",
     title="Mettre/retirer une étoile sur un élément du catalogue public",
@@ -1342,11 +1526,12 @@ def copier_entree_catalogue_public_vers_perso(entree_id: str, ctx: Context) -> s
 )
 def basculer_etoile_catalogue_public(type_element: str, element_id: str, ctx: Context) -> str:
     """
-    Pose l'étoile de l'utilisateur sur un fichier, un dossier ou un
-    skill du catalogue public s'il ne l'a pas encore, la retire sinon
-    (toggle, comme sur GitHub) -- jamais de note 1 à 5, seul le nombre
-    total d'étoiles compte. `type_element` : "fichier", "dossier" ou
-    "skill". `element_id` : l'id de cet élément.
+    Pose l'étoile de l'utilisateur sur un fichier, un dossier, un skill
+    ou un Programme du catalogue public s'il ne l'a pas encore, la
+    retire sinon (toggle, comme sur GitHub) -- jamais de note 1 à 5,
+    seul le nombre total d'étoiles compte. `type_element` : "fichier",
+    "dossier", "skill" ou "programme". `element_id` : l'id de cet
+    élément.
     """
     user_id = _user_id_authentifie(ctx)
     if not user_id:
@@ -1355,7 +1540,7 @@ def basculer_etoile_catalogue_public(type_element: str, element_id: str, ctx: Co
         resultat = _basculer_etoile(type_element, (element_id or "").strip(), user_id)
     except ValueError as e:
         if str(e) == "TYPE_ELEMENT_INCONNU":
-            return "Erreur : type_element invalide, doit être 'fichier', 'dossier' ou 'skill'."
+            return "Erreur : type_element invalide, doit être 'fichier', 'dossier', 'skill' ou 'programme'."
         if str(e) == "ELEMENT_INTROUVABLE":
             return "Cet élément du catalogue public est introuvable."
         raise
@@ -1365,6 +1550,65 @@ def basculer_etoile_catalogue_public(type_element: str, element_id: str, ctx: Co
     if resultat["etoile"]:
         return f"Étoile posée. Total : {resultat['etoiles_count']} étoile(s)."
     return f"Étoile retirée. Total : {resultat['etoiles_count']} étoile(s)."
+
+
+@mcp_espace.tool(
+    name="clovis_ajouter_commentaire_catalogue_public",
+    title="Commenter un élément du catalogue public",
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=True),
+)
+def ajouter_commentaire_catalogue_public(type_element: str, element_id: str, contenu: str, ctx: Context) -> str:
+    """
+    Ajoute un commentaire de l'utilisateur sur un élément du catalogue
+    public. N'utilise cet outil QUE si l'utilisateur le demande
+    explicitement, jamais de ta propre initiative. Nécessite que
+    l'utilisateur ait un profil public. `type_element` : "fichier",
+    "dossier", "skill" ou "programme". `element_id` : l'id de cet
+    élément. `contenu` : le texte du commentaire.
+    """
+    user_id = _user_id_authentifie(ctx)
+    if not user_id:
+        return "Erreur : utilisateur non authentifié."
+    try:
+        _creer_commentaire(type_element, (element_id or "").strip(), user_id, contenu)
+    except ValueError as e:
+        if str(e) == "TYPE_ELEMENT_INCONNU":
+            return "Erreur : type_element invalide, doit être 'fichier', 'dossier', 'skill' ou 'programme'."
+        if str(e) == "ELEMENT_INTROUVABLE":
+            return "Cet élément du catalogue public est introuvable."
+        if str(e) == "COMMENTAIRE_VIDE":
+            return "Erreur : le commentaire ne peut pas être vide."
+        if str(e) == "PROFIL_PUBLIC_REQUIS_POUR_COMMENTER":
+            return "Erreur : il faut un profil public pour commenter."
+        raise
+    except Exception as e:
+        logging.error(f"ERREUR outil clovis_ajouter_commentaire_catalogue_public ({type_element} {element_id}) : {e}")
+        return "Erreur : impossible d'ajouter ce commentaire, réessaie."
+    return "Commentaire ajouté."
+
+
+@mcp_espace.tool(
+    name="clovis_supprimer_commentaire_catalogue_public",
+    title="Supprimer son commentaire du catalogue public",
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=True, open_world_hint=True),
+)
+def supprimer_commentaire_catalogue_public(commentaire_id: str, ctx: Context) -> str:
+    """Supprime un commentaire déjà posté par CET utilisateur (le sien uniquement). Paramètre : `commentaire_id`."""
+    user_id = _user_id_authentifie(ctx)
+    if not user_id:
+        return "Erreur : utilisateur non authentifié."
+    try:
+        _supprimer_commentaire((commentaire_id or "").strip(), user_id)
+    except ValueError as e:
+        if str(e) == "COMMENTAIRE_INTROUVABLE":
+            return "Ce commentaire est introuvable."
+        if str(e) == "COMMENTAIRE_NE_T_APPARTIENT_PAS":
+            return "Erreur : tu ne peux supprimer que tes propres commentaires."
+        raise
+    except Exception as e:
+        logging.error(f"ERREUR outil clovis_supprimer_commentaire_catalogue_public ({commentaire_id}) : {e}")
+        return "Erreur : impossible de supprimer ce commentaire, réessaie."
+    return "Commentaire supprimé."
 
 
 

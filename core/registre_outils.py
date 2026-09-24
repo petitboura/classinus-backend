@@ -684,6 +684,8 @@ CATEGORIES_OUTILS = {
     ],
     "catalogue_public": [
         "gerer_entree_catalogue_public", "gerer_dossier_catalogue_public",
+        "gerer_programme_catalogue_public",  # 22/09/2026
+        "ajouter_commentaire_catalogue_public", "supprimer_commentaire_catalogue_public",  # 22/09/2026
     ],
     "base_connaissance": ["gerer_base_connaissance"],
     "pedagogie": [
