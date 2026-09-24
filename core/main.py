@@ -114,6 +114,26 @@ def _bloc_fichiers_generes(fichiers):
 # present en prod malgre le fix deja present sur main.
 
 
+def _client_pour_reprise(modele):
+    """
+    Client LLM à utiliser pour REPRENDRE un tour arrêté (confirmation
+    d'outil, limite d'outils, répétition), selon le modèle qui l'avait
+    démarré. 24/09/2026 (bug remonté par Bourama : après un clic sur
+    Confirmer, "erreur, souci technique"). Depuis le 07/09 DeepSeek est le
+    modèle principal de la cascade, donc l'état de reprise garde
+    "deepseek-v4-flash" ; la reprise créait toujours un client Groq, et Groq
+    répondait 404 "model not found" (visible dans les logs Railway : "ERREUR
+    GROQ (reprise apres confirmation) deepseek-v4-flash"). Modèle DeepSeek =
+    client DeepSeek (même construction que dans chat(), plus bas) ; tout le
+    reste = Groq, comme avant.
+    """
+    if modele and str(modele).startswith("deepseek"):
+        cle_deepseek = get_secret("DEEPSEEK_API_KEY")
+        if cle_deepseek:
+            return OpenAI(api_key=cle_deepseek, base_url="https://api.deepseek.com")
+    return Groq(api_key=get_secret("GROQ_API_KEY"), max_retries=0)
+
+
 def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False):
     """
     Generateur d'evenements. Chaque element produit est un dictionnaire :
@@ -339,7 +359,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         if reprise.get("message_utilisateur"):
             messages_agent.append({"role": "user", "content": reprise["message_utilisateur"]})
 
-        client_groq = Groq(api_key=get_secret("GROQ_API_KEY"), max_retries=0)
+        client_groq = _client_pour_reprise(modele_reprise)
         try:
             yield from _agent_groq(
                 client_groq, messages_agent, outils_mcp, table_routage,
@@ -365,7 +385,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # l'etat de reprise -- voir _catalogue_pour_demander_outils.
         catalogue_complet, table_routage_complet = _catalogue_pour_demander_outils(user_id, agent_id, outils_mcp, conversation_id)
 
-        client_groq = Groq(api_key=get_secret("GROQ_API_KEY"), max_retries=0)
+        client_groq = _client_pour_reprise(modele_reprise)
 
         if approuve:
             # 24/09/2026 (bug remonté par Bourama : après un clic sur Confirmer,
