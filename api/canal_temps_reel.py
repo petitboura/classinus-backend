@@ -61,12 +61,12 @@ async def canal_temps_reel(websocket: WebSocket):
     try:
         message_auth = await asyncio.wait_for(websocket.receive_json(), timeout=10)
     except Exception:
-        await websocket.close(code=4401)
+        await fermer_websocket_sans_erreur(websocket, 4401)
         return
 
     utilisateur = _verifier_token(str(message_auth.get("auth_token") or ""))
     if utilisateur is None:
-        await websocket.close(code=4401)
+        await fermer_websocket_sans_erreur(websocket, 4401)
         return
     appareil_id = str(message_auth.get("appareil_id") or "")
     await connecter(utilisateur.id, appareil_id, websocket)

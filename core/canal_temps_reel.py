@@ -94,6 +94,20 @@ CANAL_ENVOI_ECHOUE = "envoi_echoue"
 CANAL_SANS_REPONSE = "sans_reponse"
 
 
+async def fermer_websocket_sans_erreur(websocket: WebSocket, code: int) -> None:
+    """
+    Ferme un WebSocket sans jamais lever : si l'application s'est deja
+    deconnectee (fermeture de l'ecran, coupure reseau) avant qu'on
+    puisse la refuser, starlette leve WebSocketDisconnect au moment du
+    close(), ce qui produisait un traceback complet dans les logs pour
+    un cas parfaitement normal (24/09/2026).
+    """
+    try:
+        await websocket.close(code=code)
+    except Exception:
+        pass
+
+
 def est_erreur_canal(resultat: Any) -> bool:
     """True si `resultat` est une erreur du canal lui-meme (pas une reponse du telephone)."""
     return isinstance(resultat, dict) and "erreur_canal" in resultat

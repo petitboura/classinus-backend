@@ -94,7 +94,7 @@ async def uploader_fichier_dossier_designe(
         .eq("user_id", utilisateur.id)
         .eq("plateforme", plateforme)
         .eq("dossier_nom", dossier_nom)
-        .eq("chemin", chemin_liste)
+        .eq("chemin", json.dumps(chemin_liste))
         .eq("nom_fichier", nom_fichier)
         .maybe_single()
         .execute()
