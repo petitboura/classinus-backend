@@ -26,12 +26,17 @@ TABLES_PAR_TYPE = {
     "fichier": "bibliotheque_publique",
     "dossier": "dossiers_catalogue_public",
     "skill": "comportements_publics",
+    "programme": "programmes_catalogue_public",  # 22/09/2026
 }
 
 COLONNES_PAR_TYPE = {
     "fichier": ["id", "partages_count", "etoiles_count", "cta_count", "enregistrements_count"],
     "dossier": ["id", "partages_count", "etoiles_count", "cta_count", "enregistrements_count"],
     "skill": ["id", "partages_count", "etoiles_count", "cta_count", "activations_count"],
+    # Programme n'a que les étoiles pour l'instant (pas de compteurs
+    # partages/cta/enregistrements, décision de scope 22/09/2026) --
+    # les autres colonnes ci-dessous retombent simplement à 0.
+    "programme": ["id", "etoiles_count"],
 }
 
 

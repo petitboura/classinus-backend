@@ -27,8 +27,9 @@ def basculer_etoile_catalogue_public(type_element: str, element_id: str, ctx: Co
 
     `type_element` doit être l'une de : "fichier" (voir
     gerer_document_bibliotheque), "dossier" (voir
-    gerer_dossier_catalogue_public) ou "skill" (voir
-    consulter_comportement / les comportements publics). `element_id`
+    gerer_dossier_catalogue_public), "skill" (voir
+    consulter_comportement / les comportements publics) ou "programme"
+    (voir gerer_programme_catalogue_public, 22/09/2026). `element_id`
     est l'id de cet élément.
     """
     user_id = ctx.request_context.request.query_params.get("user_id")
@@ -40,7 +41,7 @@ def basculer_etoile_catalogue_public(type_element: str, element_id: str, ctx: Co
         resultat = _basculer_etoile(type_element, element_id.strip(), user_id)
     except ValueError as e:
         if str(e) == "TYPE_ELEMENT_INCONNU":
-            return "Erreur : type_element invalide, doit être 'fichier', 'dossier' ou 'skill'."
+            return "Erreur : type_element invalide, doit être 'fichier', 'dossier', 'skill' ou 'programme'."
         if str(e) == "ELEMENT_INTROUVABLE":
             return "Cet élément du catalogue public est introuvable."
         raise

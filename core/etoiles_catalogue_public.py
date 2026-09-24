@@ -27,6 +27,7 @@ TABLES_PAR_TYPE = {
     "dossier": "dossiers_catalogue_public",
     "skill": "comportements_publics",
     "clovis": "classinus_infos",
+    "programme": "programmes_catalogue_public",  # 22/09/2026, catalogue public du Programme
 }
 
 

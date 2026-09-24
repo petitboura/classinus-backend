@@ -566,6 +566,21 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "\"retire ce document du catalogue public\", \"copie ce "
         "document de la bibliothèque publique dans ma bibliothèque\", "
         "\"télécharge ce document public chez moi\".\n\n"
+        # AJOUT 22/09/2026 (demande Bourama : catalogue public du
+        # Programme, même monde 3 que la bibliothèque/dossiers publics
+        # ci-dessus, transposé au Programme).
+        "gerer_programme_catalogue_public : PUBLIER le Programme entier "
+        "d'un code dans le catalogue public, le CHERCHER/LISTER/LIRE, "
+        "MODIFIER ou SUPPRIMER une entrée déjà publiée, ou la COPIER "
+        "vers son propre espace (un code existant ou un nouveau créé à "
+        "la volée). Ne pas confondre avec gerer_avancement_notions "
+        "(Programme PERSONNEL, jamais publié). Exemples : \"publie mon "
+        "Programme dans le catalogue public\", \"trouve un Programme de "
+        "maths terminale dans le catalogue\", \"récupère ce Programme "
+        "publié chez moi\". Pour noter/commenter une entrée déjà "
+        "publiée (type_element=\"programme\") : "
+        "basculer_etoile_catalogue_public / "
+        "ajouter_commentaire_catalogue_public.\n\n"
         "4) WEB -- tout ce qui n'est NI un document de l'étudiant, NI "
         "Classinus/l'application, NI le catalogue public : actualité, "
         "information générale externe, sujet "
