@@ -383,7 +383,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # nouvelle). Icône "ImageSearch" NON VÉRIFIÉE dans cette version de
     # lucide-react (0.383.0) -- repli automatique sur Wrench sinon, voir
     # resoudreIcone (clovis-frontend/lib/outils.ts).
-    "rechercher_image": {"label": "Recherche d'image", "icone": "ImageSearch", "onglet": "rechercher"},
+    "rechercher_image": {"label": "Recherche d'image", "icone": "Images", "onglet": "rechercher"},
     # gerer_document_bibliotheque (consolidé le 26/08, ex 12 outils
     # séparés -- consulter_bibliotheque, consulter_bibliotheque_publique,
     # lister/ajouter/supprimer/classer/déclasser/ranger/retirer/lire_entier,
@@ -567,7 +567,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # Même onglet=None : section "Historique" à part entière de "Mon
     # espace", pas un bouton du menu Outils du chat.
     "lister_conversations_historique": {"label": "Liste des conversations passées", "icone": "History", "onglet": None},
-    "lire_conversation_historique": {"label": "Lecture d'une conversation passée", "icone": "History", "onglet": None},
+    "lire_conversation_historique": {"label": "Lecture d'une conversation passée", "icone": "MessageSquareText", "onglet": None},
 
     # --- Programme adaptatif (interne) ---
     # Bloc entier retiré le 29/08/2026 (demande Bourama) : ces outils
@@ -631,18 +631,121 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # 20/09/2026 (demande Bourama) : minuteurs du chat, appeles par le modele, jamais cliquables a la main (onglet None).
     "gerer_minuteur": {"label": "Gestion d'un minuteur", "icone": "Timer", "onglet": None},
     # Chantier F : filet de securite generique, meme rappel de cache 24h.
-    "executer_clic_generique": {"label": "Clic générique dans l'application", "icone": "MousePointerClick", "onglet": None},
+    "executer_clic_generique": {"label": "Clic générique dans l'application", "icone": "MousePointer2", "onglet": None},
     # Chantier G : mode guidage, meme rappel de cache 24h.
-    "montrer_element_application": {"label": "Pointer un élément de l'application", "icone": "MousePointerClick", "onglet": None},
+    "montrer_element_application": {"label": "Pointer un élément de l'application", "icone": "Crosshair", "onglet": None},
     # Ecriture dans les champs (20/09/2026, demande Bourama), meme rappel de cache 24h.
     "ecrire_dans_champ": {"label": "Écriture dans un champ", "icone": "PenLine", "onglet": None},
     # Chantier P (canal en direct, 19/09/2026) : commentaire libre pendant
     # une action, meme rappel de cache 24h.
-    "dire_a_l_etudiant": {"label": "Message en direct à l'étudiant", "icone": "MousePointerClick", "onglet": None},
+    "dire_a_l_etudiant": {"label": "Message en direct à l'étudiant", "icone": "MessageCircle", "onglet": None},
     # Demo (20/09/2026) : ouverture du canal en direct depuis le chat
     # normal, meme rappel de cache 24h.
-    "ouvrir_canal_en_direct": {"label": "Ouverture du canal en direct", "icone": "MousePointerClick", "onglet": None},
+    "ouvrir_canal_en_direct": {"label": "Ouverture du canal en direct", "icone": "Radio", "onglet": None},
+
+    # --- Outils sans entrée jusqu'au 24/09/2026 (audit de l'affichage des
+    # outils, demande Bourama : repérer les icônes génériques) --- ces 10
+    # outils existent bel et bien côté chat (voir core/outils_*.py) mais
+    # n'avaient AUCUNE entrée ici, donc affichaient l'icône générique et
+    # leur nom technique brut. onglet=None comme les autres outils que le
+    # modèle appelle en autonomie. Chaque icône est nouvelle dans ce
+    # registre (jamais une icône déjà utilisée ailleurs ici).
+    "gerer_entree_catalogue_public": {"label": "Publications du catalogue public", "icone": "LibraryBig", "onglet": None},
+    "gerer_dossier_catalogue_public": {"label": "Dossiers du catalogue public", "icone": "FolderSymlink", "onglet": None},
+    "gerer_comportement_public": {"label": "Skills publics", "icone": "Puzzle", "onglet": None},
+    "basculer_etoile_catalogue_public": {"label": "Étoile du catalogue public", "icone": "Bookmark", "onglet": None},
+    "gerer_session_concentration": {"label": "Session de concentration", "icone": "Focus", "onglet": None},
+    "lire_temps_ecran": {"label": "Lecture du temps d'écran", "icone": "Smartphone", "onglet": None},
+    "planifier_rappel": {"label": "Planification d'un rappel", "icone": "BellRing", "onglet": None},
+    "consulter_signalement": {"label": "Consultation d'un signalement", "icone": "Flag", "onglet": None},
+    "enregistrer_note_signalement": {"label": "Note sur un signalement", "icone": "NotebookPen", "onglet": None},
+    "rattacher_signalement_notion": {"label": "Rattachement d'un signalement à une notion", "icone": "Link", "onglet": None},
 }
+
+# --- Verbes des actions (24/09/2026, demande Bourama : regroupement des
+# outils qui s'enchaînent et petite icône d'action) ---
+# Un même verbe = une même petite icône ("sous-icône") et un même
+# libellé, PARTOUT : "supprimer" a la même corbeille pour la bibliothèque,
+# les dossiers, les skills, le catalogue public, et "delete" pour un outil
+# d'une appli connectée. Un futur outil qui utilise l'un de ces verbes est
+# donc couvert sans rien toucher d'autre. Ajouter un verbe = une ligne ici.
+#
+# Clé = un mot d'une action ("chercher_par_contenu" -> "chercher", coupé
+# sur "_") OU d'un nom d'outil connecté ("notion-search" -> "search", coupé
+# sur "-" et "_"). Le premier mot reconnu l'emporte (voir
+# verbe_de_action / core/profils_agents.py:_nom_lisible et le frontend,
+# lib/outils.ts:sousIconePour).
+# Valeur = (libellé français ou None, nom d'export lucide-react).
+# libellé None : verbes anglais des outils d'applis connectées, dont le
+# libellé complet existe déjà dans REGISTRE_AFFICHAGE_OUTILS (jamais recomposé).
+VERBES_ACTIONS = {
+    # Actions des outils Classinus (français)
+    "chercher": ("Recherche", "Search"),
+    "trouver": ("Recherche", "Search"),
+    "lister": ("Liste", "List"),
+    "consulter": ("Consultation", "Eye"),
+    "lire": ("Lecture", "Eye"),
+    "ouvrir": ("Ouverture", "Eye"),
+    "explorer": ("Exploration", "Eye"),
+    "creer": ("Création", "Plus"),
+    "ajouter": ("Ajout", "Plus"),
+    "lancer": ("Lancement", "Play"),
+    "demarrer": ("Démarrage", "Play"),
+    "activer": ("Activation", "Power"),
+    "executer": ("Exécution", "Zap"),
+    "arreter": ("Arrêt", "Square"),
+    "publier": ("Publication", "Upload"),
+    "modifier": ("Modification", "Pencil"),
+    "renommer": ("Renommage", "Pencil"),
+    "mettre": ("Mise à jour", "Pencil"),
+    "definir": ("Réglage", "Pencil"),
+    "nommer": ("Nommage", "Pencil"),
+    "supprimer": ("Suppression", "Trash2"),
+    "effacer": ("Effacement", "Trash2"),
+    "retirer": ("Retrait", "Minus"),
+    "declasser": ("Déclassement", "Minus"),
+    "ranger": ("Rangement", "FolderInput"),
+    "classer": ("Classement", "FolderInput"),
+    "deplacer": ("Déplacement", "Move"),
+    "fusionner": ("Fusion", "Merge"),
+    "copier": ("Copie", "Copy"),
+    "donner": ("Envoi", "Download"),
+    # Noms d'outils des applis connectées (anglais, libellé jamais recomposé)
+    "search": (None, "Search"),
+    "query": (None, "Search"),
+    "fetch": (None, "Eye"),
+    "get": (None, "Eye"),
+    "read": (None, "Eye"),
+    "show": (None, "Eye"),
+    "list": (None, "List"),
+    "create": (None, "Plus"),
+    "update": (None, "Pencil"),
+    "delete": (None, "Trash2"),
+    "move": (None, "Move"),
+    "duplicate": (None, "Copy"),
+    "copy": (None, "Copy"),
+    "download": (None, "Download"),
+    "upload": (None, "Upload"),
+    "send": (None, "Send"),
+    "spawn": (None, "Play"),
+    "stop": (None, "Square"),
+    "convert": (None, "ArrowRightLeft"),
+    "check": (None, "Check"),
+}
+
+
+def verbe_de_action(texte):
+    """
+    Premier mot reconnu (voir VERBES_ACTIONS) dans une action ou un nom
+    d'outil, ou None. Coupe sur "_" et "-" : "dossier_creer_fichier" ->
+    "creer", "notion-ai-search" -> "search".
+    """
+    if not texte:
+        return None
+    for mot in texte.replace("-", "_").split("_"):
+        if mot in VERBES_ACTIONS:
+            return mot
+    return None
 
 # --- Categorisation pour demander_outils (19/09/2026, demande Bourama) ---
 # Le pool total d'outils actifs (verifie en base le 19/09 : 40 sur le

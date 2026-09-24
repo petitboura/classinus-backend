@@ -10,7 +10,7 @@ import concurrent.futures
 import requests
 from mcp_tools import appeler_outil
 from registre_outils import OUTILS_SENSIBLES
-from profils_agents import _nom_lisible_appel
+from profils_agents import _nom_lisible_appel, _action_appel
 
 class _AttenteConfirmation(Exception):
     """
@@ -420,6 +420,12 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                 "texte": f"{_nom_lisible_appel(appel)}...",
                 "id_appel": appel["id"],
                 "nom_outil": appel["name"],
+                # 24/09/2026 (demande Bourama, regroupement des outils qui
+                # s'enchaînent) : libellé et action connus dès le début, pour
+                # que la ligne "en cours" puisse déjà se regrouper avec les
+                # précédentes et afficher sa petite icône d'action.
+                "nom_lisible": _nom_lisible_appel(appel),
+                "action": _action_appel(appel),
             }
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(appels_surs)) as executor:
@@ -457,6 +463,7 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                         "type": "outil_resultat",
                         "nom_outil": appel["name"],
                         "nom_lisible": _nom_lisible_appel(appel),
+                        "action": _action_appel(appel),
                         "resultat": resultat,
                         "id_appel": appel["id"],
                     }
@@ -474,6 +481,7 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                     "type": "outil_resultat",
                     "nom_outil": appel["name"],
                     "nom_lisible": _nom_lisible_appel(appel),
+                    "action": _action_appel(appel),
                     "resultat": _resultat_pour_affichage(resultat),
                     "id_appel": appel["id"],
                 }

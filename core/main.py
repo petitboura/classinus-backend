@@ -47,7 +47,7 @@ from constantes_agent import (
 from moderation_message import _verifier_message_utilisateur
 from filtre_texte_streaming import _ressemble_a_du_json_casse  # réexporté pour core/proactivite.py (05/09/2026)
 from lecture_urls_externes import _construire_parts_gemini, _enrichir_message_avec_urls, _telecharger_image
-from profils_agents import _nom_agent, _nom_lisible, _nom_lisible_appel
+from profils_agents import _nom_agent, _nom_lisible, _nom_lisible_appel, _action_appel
 from routage_outils import (
     _ecrire_outils_retenus, _lire_outils_retenus, _outil_garder_outils, _router_outils,
     _preparer_demander_outils, _catalogue_pour_demander_outils,
@@ -389,6 +389,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     "type": "outil_resultat",
                     "nom_outil": appel["name"],
                     "nom_lisible": _nom_lisible_appel(appel),
+                    "action": _action_appel(appel),
                     "resultat": resultat,
                 }
                 messages_agent.append({
@@ -403,6 +404,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     "type": "outil_resultat",
                     "nom_outil": appel["name"],
                     "nom_lisible": _nom_lisible_appel(appel),
+                    "action": _action_appel(appel),
                     "resultat": _resultat_pour_affichage(resultat),
                 }
         else:

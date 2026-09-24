@@ -803,17 +803,20 @@ def _capturer_reponse(generateur, accumulateur, meta=None, fichiers_generes_accu
         elif meta is not None and event["type"] == "raisonnement":
             _ajouter_segment_texte(meta, "raisonnement", event["texte"])
         elif meta is not None and event["type"] == "outil_resultat":
-            meta.setdefault("outils", []).append({
+            # 24/09/2026 (demande Bourama, regroupement des outils qui
+            # s'enchaînent) : l'action est gardée pour que la petite icône
+            # d'action et le regroupement survivent à la réouverture d'une
+            # conversation. Absente = comme avant (anciens messages, outils
+            # sans action) -- aucune clé vide écrite dans ce cas.
+            entree_meta = {
                 "nomOutil": event["nom_outil"],
                 "nomLisible": event["nom_lisible"],
                 "resultat": event["resultat"],
-            })
-            meta.setdefault("segments", []).append({
-                "type": "outil",
-                "nomOutil": event["nom_outil"],
-                "nomLisible": event["nom_lisible"],
-                "resultat": event["resultat"],
-            })
+            }
+            if event.get("action"):
+                entree_meta["action"] = event["action"]
+            meta.setdefault("outils", []).append(dict(entree_meta))
+            meta.setdefault("segments", []).append({"type": "outil", **entree_meta})
         elif meta is not None and event["type"] == "sources" and meta.get("outils"):
             meta["outils"][-1]["sources"] = event["sources"]
             if meta.get("segments") and meta["segments"][-1]["type"] == "outil":

@@ -8,6 +8,7 @@ from datetime import datetime
 from groq import Groq
 from constantes_agent import get_secret, supabase, MODELE_PROFIL, SEUIL_PROFIL_MESSAGES, DELAI_MAX_PAR_APPEL
 from filtre_texte_streaming import NOMS_OUTILS_LISIBLES
+from registre_outils import VERBES_ACTIONS, verbe_de_action
 
 def _nom_agent(agent_id):
     """
@@ -40,9 +41,24 @@ def _nom_lisible(nom_outil, action=None):
     remonté par Bourama le 28/08). Même pattern composite que
     _est_outil_sensible pour OUTILS_SENSIBLES.
     """
-    if action and f"{nom_outil}:{action}" in NOMS_OUTILS_LISIBLES:
-        return NOMS_OUTILS_LISIBLES[f"{nom_outil}:{action}"]
-    return NOMS_OUTILS_LISIBLES.get(nom_outil, nom_outil)
+    cle_composite = f"{nom_outil}:{action}" if action else None
+    if cle_composite and cle_composite in NOMS_OUTILS_LISIBLES:
+        base = NOMS_OUTILS_LISIBLES[cle_composite]
+        connu = True
+    else:
+        base = NOMS_OUTILS_LISIBLES.get(nom_outil, nom_outil)
+        connu = nom_outil in NOMS_OUTILS_LISIBLES
+    # 24/09/2026 (demande Bourama, regroupement des outils qui s'enchaînent) :
+    # pour un outil à actions (bibliothèque, dossiers, skills...), le libellé
+    # porte aussi le verbe de l'action, sinon "chercher" et "supprimer"
+    # afficheraient le même texte et seraient regroupés à tort côté chat.
+    # Verbe inconnu ou outil absent du registre : libellé de base, comme avant.
+    if action and connu:
+        verbe = verbe_de_action(action)
+        libelle_verbe = VERBES_ACTIONS[verbe][0] if verbe else None
+        if libelle_verbe:
+            return f"{libelle_verbe} ({base})"
+    return base
 
 
 def _action_appel(appel):

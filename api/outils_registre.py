@@ -14,7 +14,7 @@ chat, avant même une éventuelle connexion.
 
 from fastapi import APIRouter
 
-from registre_outils import REGISTRE_AFFICHAGE_OUTILS
+from registre_outils import REGISTRE_AFFICHAGE_OUTILS, VERBES_ACTIONS
 
 router = APIRouter(prefix="/api/outils", tags=["outils"])
 
@@ -23,7 +23,8 @@ router = APIRouter(prefix="/api/outils", tags=["outils"])
 def lister_registre_affichage_outils():
     """
     Renvoie chaque outil sous la forme {nom, label, icone, onglet, appli}
-    -- `appli` absent si non pertinent. Le frontend (classgpt-frontend/
+    (clé "outils") -- `appli` absent si non pertinent -- plus la table des
+    verbes d'action et de leur petite icône (clé "verbes_actions"). Le frontend (classgpt-frontend/
     lib/outils.ts) convertit `icone` (nom lucide-react en chaîne) en
     composant React lui-même ; cette route ne connaît rien du rendu.
 
@@ -44,5 +45,12 @@ def lister_registre_affichage_outils():
                 **({"appli": entree["appli"]} if "appli" in entree else {}),
             }
             for nom, entree in REGISTRE_AFFICHAGE_OUTILS.items()
-        ]
+        ],
+        # 24/09/2026 (demande Bourama, petite icône d'action) : verbe -> nom
+        # d'export lucide-react de la petite icône affichée sur l'icône de
+        # l'outil. Même source que le libellé composé côté serveur (voir
+        # core/registre_outils.py:VERBES_ACTIONS), pour que texte et icône ne
+        # se contredisent jamais. Le frontend (lib/outils.ts:sousIconePour)
+        # découpe l'action ou le nom d'outil et prend le premier verbe connu.
+        "verbes_actions": {verbe: {"icone": icone} for verbe, (_libelle, icone) in VERBES_ACTIONS.items()},
     }
