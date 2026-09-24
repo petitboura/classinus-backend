@@ -28,6 +28,12 @@ MESSAGES_FR: dict[str, str] = {
     "COMPTE_NON_CREATEUR": "Ce compte n'a pas (encore) le statut créateur.",
     "COMMENTAIRE_VIDE": "Le commentaire ne peut pas être vide.",
     "COMMENTAIRE_INTROUVABLE": "Commentaire introuvable.",
+    # 22/09/2026, catalogue public du Programme.
+    "CODE_INTROUVABLE": "Ce code de partage est introuvable.",
+    "NOM_REQUIS": "Un nom est requis.",
+    "PROGRAMME_VIDE": "Ce Programme est vide.",
+    "AUCUNE_MODIFICATION_FOURNIE": "Indique au moins une chose à modifier.",
+    "PROGRAMME_PUBLIC_INTROUVABLE": "Cette entrée du catalogue public est introuvable.",
     "COMMENTAIRE_NE_T_APPARTIENT_PAS": "Ce commentaire ne t'appartient pas.",
     "PROFIL_PUBLIC_REQUIS_POUR_COMMENTER": "Rends ton profil public pour pouvoir commenter (réglages du profil).",
     "CONTENU_LEGAL_INTROUVABLE": "Contenu légal introuvable.",

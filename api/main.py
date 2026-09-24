@@ -72,6 +72,7 @@ from api.minuteurs import router_minuteurs
 from api.webhooks_github import router as webhooks_github_router
 from api.dossiers_designes import router as dossiers_designes_router
 from api.programme_notions import router as programme_notions_router
+from api.programme_catalogue_public import router as programme_catalogue_public_router  # 22/09/2026
 from api.fichiers_r2 import router as fichiers_r2_router
 from api.apercu_lien import router as apercu_lien_router
 from core.serveur_mcp_generation import mcp_generation
@@ -791,6 +792,7 @@ app.include_router(router_minuteurs)
 app.include_router(dossiers_designes_router)
 app.include_router(webhooks_github_router)
 app.include_router(programme_notions_router)
+app.include_router(programme_catalogue_public_router)  # 22/09/2026
 app.include_router(fichiers_r2_router)
 app.include_router(apercu_lien_router)
 
