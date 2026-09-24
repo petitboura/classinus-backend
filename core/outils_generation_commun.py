@@ -57,7 +57,6 @@ mcp_generation = FastMCP(name="generation")
 # (Bourama, "retrait des whitelists de type de fichier"), voir
 # core/serveur_mcp_espace.py::ajouter_document_bibliotheque pour la même
 # évolution côté serveur externe.
-_TAILLE_MAX_OCTETS_BIBLIOTHEQUE = 50 * 1024 * 1024  # 50 Mo
 
 
 # 02/09/2026, demande Bourama : tout ce que l'IA génère (document, code,

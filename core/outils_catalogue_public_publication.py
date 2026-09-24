@@ -28,7 +28,6 @@ from core.catalogue_public_publication import (
     modifier_entree_publique as _modifier_entree_publique,
     supprimer_entree_publique as _supprimer_entree_publique,
     copier_entree_publique_vers_perso as _copier_entree_publique_vers_perso,
-    TAILLE_MAX_OCTETS as _TAILLE_MAX_OCTETS,
 )
 
 
@@ -118,8 +117,6 @@ def gerer_entree_catalogue_public(
                 contenu_fichier = base64.b64decode(contenu_base64_val, validate=True)
             except Exception:
                 return "Erreur : contenu_base64 invalide (doit être du base64 valide)."
-        if len(contenu_fichier) > _TAILLE_MAX_OCTETS:
-            return "Erreur : fichier trop lourd (50 Mo max)."
         try:
             entree = _publier_fichier_public(
                 ajoute_par=user_id, contenu=contenu_fichier, nom_fichier=(nom_fichier or "fichier").strip(),

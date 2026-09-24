@@ -40,7 +40,7 @@ from core.vectorisation_dossiers_designes import (
 )
 from core.bibliotheque_fichiers import enregistrer_fichier as _enregistrer_fichier
 
-from core.outils_generation_commun import mcp_generation, Context, _TAILLE_MAX_OCTETS_BIBLIOTHEQUE
+from core.outils_generation_commun import mcp_generation, Context
 from core.canal_temps_reel import (
     est_erreur_canal as _est_erreur_canal,
     CANAL_NON_CONNECTE as _CANAL_NON_CONNECTE,
@@ -675,8 +675,7 @@ async def explorer_dossier(
         type_mime = resultat.get("type_mime") or "application/octet-stream"
         taille_octets = resultat.get("tailleOctets")
 
-        if taille_octets is not None and taille_octets > _TAILLE_MAX_OCTETS_BIBLIOTHEQUE:
-            return f'Le fichier "{nom_fichier}" dépasse 50 Mo, impossible de le transférer depuis le téléphone.'
+        # Limite de taille (50 Mo) retirée le 23/09/2026 (demande Bourama, "partout").
 
         contenu_base64 = resultat.get("contenu_base64")
         if not contenu_base64:
