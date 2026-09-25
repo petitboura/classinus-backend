@@ -242,13 +242,36 @@ def _vectoriser_fichier(ligne: dict) -> None:
 
 
 def extraire_pages_pdf_bytes(contenu: bytes) -> list[str]:
-    """Meme logique que bibliotheque_rag.py::extraire_pages_pdf, mais sur des bytes (pas un chemin de fichier -- le contenu vient de Supabase Storage, jamais ecrit sur disque)."""
+    """
+    Meme logique que bibliotheque_rag.py::extraire_pages_pdf, mais sur des
+    bytes (pas un chemin de fichier, le contenu vient de Supabase Storage,
+    jamais ecrit sur disque).
+
+    25/09/2026 (bug signale par Bourama) : un PDF malforme peut faire
+    planter PyPDF2 avec "list index out of range", soit a l'ouverture, soit
+    sur une page precise, ce fichier repassait alors en "echec" puis
+    etait relance automatiquement (sans plafond, voir docstring du module)
+    en boucle infinie. Desormais tolerant : une page qui plante est ignoree
+    (texte vide pour cette page, pas d'echec du fichier entier) et un
+    document qui plante des l'ouverture renvoie une liste vide plutot que
+    de faire remonter l'exception, le fichier passe alors en "fait" avec
+    peu ou pas de texte, au lieu de boucler indefiniment.
+    """
     import PyPDF2
 
+    try:
+        reader = PyPDF2.PdfReader(io.BytesIO(contenu))
+    except Exception as e:
+        logging.error(f"ERREUR ouverture PDF (dossiers designes) : {e}")
+        return []
+
     pages = []
-    reader = PyPDF2.PdfReader(io.BytesIO(contenu))
     for page in reader.pages:
-        pages.append((page.extract_text() or "").replace("\x00", ""))
+        try:
+            pages.append((page.extract_text() or "").replace("\x00", ""))
+        except Exception as e:
+            logging.error(f"ERREUR extraction d'une page PDF (dossiers designes) : {e}")
+            pages.append("")
     return pages
 
 

@@ -209,7 +209,7 @@ async def _boucle_vectorisation():
         except Exception as e:
             logging.error(f"ERREUR boucle vectorisation : {e}")
             traites = 0
-        await asyncio.sleep(2 if traites > 0 else 5)
+        await asyncio.sleep(2 if traites > 0 else 20)
 
 
 async def _boucle_vectorisation_dossiers_designes():
@@ -225,7 +225,7 @@ async def _boucle_vectorisation_dossiers_designes():
         except Exception as e:
             logging.error(f"ERREUR boucle vectorisation dossiers désignés : {e}")
             traites = 0
-        await asyncio.sleep(2 if traites > 0 else 5)
+        await asyncio.sleep(2 if traites > 0 else 20)
 
 
 async def _boucle_reessai_echecs_dossiers_designes():
@@ -260,7 +260,7 @@ async def _boucle_extraction_texte_dossiers_designes():
         except Exception as e:
             logging.error(f"ERREUR boucle extraction texte dossiers désignés : {e}")
             traites = 0
-        await asyncio.sleep(2 if traites > 0 else 5)
+        await asyncio.sleep(2 if traites > 0 else 20)
 
 
 async def _boucle_reessai_echecs_extraction_dossiers_designes():
@@ -289,7 +289,7 @@ async def _boucle_description_skills():
         except Exception as e:
             logging.error(f"ERREUR boucle description skills : {e}")
             traites = 0
-        await asyncio.sleep(2 if traites > 0 else 5)
+        await asyncio.sleep(2 if traites > 0 else 20)
 
 
 async def _boucle_reessai_echecs_description():
@@ -319,7 +319,7 @@ async def _boucle_extraction_texte_publique():
         except Exception as e:
             logging.error(f"ERREUR boucle extraction texte publique : {e}")
             traites = 0
-        await asyncio.sleep(2 if traites > 0 else 5)
+        await asyncio.sleep(2 if traites > 0 else 20)
 
 
 async def _boucle_reessai_echecs_extraction_publique():
@@ -368,7 +368,7 @@ async def _boucle_vectorisation_documents_agent():
         except Exception as e:
             logging.error(f"ERREUR boucle vectorisation documents agent : {e}")
             traites = 0
-        await asyncio.sleep(2 if traites > 0 else 5)
+        await asyncio.sleep(2 if traites > 0 else 20)
 
 
 async def _lifespan(app: FastAPI):
