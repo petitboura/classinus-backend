@@ -536,15 +536,21 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # locales + registre_outils_plateforme catégorie 4, vérifié le 17/08
     # pour "clovis" : les 6 y sont déjà cochées et disponibles).
     #
-    # Depuis le 18/08 (voir avertissement en tête de section), CE SONT
-    # LES 6 SEULES ENTRÉES QUE CE BOUTON DOIT AFFICHER. Si tu envisages
-    # d'en ajouter une 7e, relis d'abord l'avertissement ci-dessus.
+    # Depuis le 18/08 (voir avertissement en tête de section), c'etaient
+    # les 6 seules entrees affichees ici. 7e entree ajoutee le 26/09
+    # (demande explicite Bourama) : ui_photo, fusion du bouton "Prendre
+    # une photo" jusque-la code en dur cote frontend dans ce meme systeme
+    # (lib/outils.ts + executerActionOutil, classinus-frontend). Necessite
+    # aussi une ligne dans registre_outils_plateforme (categorie 4,
+    # disponible=true) et dans agents_actions_locales (agent clovis) pour
+    # etre reellement visible, comme les 6 autres.
     "ui_localisation": {"label": "Joindre ma position", "icone": "MapPin", "onglet": "utilitaires"},
     "ui_formule": {"label": "Insérer une formule / réaction chimique", "icone": "Sigma", "onglet": "utilitaires"},
     "ui_editeur_maths": {"label": "Éditeur maths live (texte + formules)", "icone": "Calculator", "onglet": "utilitaires"},
     "ui_recherche": {"label": "Forcer une recherche web", "icone": "Search", "onglet": "utilitaires"},
     "ui_dessin": {"label": "Dessiner (géométrie, graphe, croquis)", "icone": "PenLine", "onglet": "utilitaires"},
     "ui_mode_vocal": {"label": "Mode vocal (bientôt disponible)", "icone": "AudioLines", "onglet": "utilitaires"},
+    "ui_photo": {"label": "Prendre une photo", "icone": "Camera", "onglet": "utilitaires"},
 
     # --- Bibliothèque (gestion) --- toutes les actions de gestion
     # (lister/ajouter/supprimer/classer/déclasser/ranger/retirer/lire_entier)
