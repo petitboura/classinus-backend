@@ -173,6 +173,14 @@ class MonStatutReponse(BaseModel):
     # majeur, voir core/restriction_mineur.py), pas de valeur par
     # défaut à False ici -- distinct de "a explicitement dit non".
     est_majeur: Optional[bool] = None
+    # 26/09/2026, demande Bourama : bouton "je suis prof / je ne suis
+    # pas prof" en haut de la page Bureau -- conditionne l'affichage des
+    # sections Audit hebdomadaire, Programme et Signalements dans la
+    # liste Bureau (voir SECTIONS_BUREAU côté frontend). Jamais exposé
+    # sur le profil public (même convention que est_majeur ci-dessus) :
+    # uniquement via cet endpoint. True par défaut, y compris pour un
+    # compte tout juste créé sans ligne `profiles`.
+    est_professeur: bool = True
 
 
 @router.get("/moi/statut", response_model=MonStatutReponse)
@@ -180,7 +188,7 @@ def mon_statut(utilisateur=Depends(utilisateur_courant)):
     try:
         profil = (
             supabase.table("profiles")
-            .select("est_createur, est_majeur")
+            .select("est_createur, est_majeur, est_professeur")
             .eq("user_id", utilisateur.id)
             .maybe_single()
             .execute()
@@ -188,12 +196,22 @@ def mon_statut(utilisateur=Depends(utilisateur_courant)):
     except Exception as e:
         logging.error(f"ERREUR SUPABASE (lecture statut {utilisateur.id}) : {e}")
         profil = None
-    est_createur = bool((profil.data or {}).get("est_createur")) if profil and profil.data else False
-    est_majeur = (profil.data or {}).get("est_majeur") if profil and profil.data else None
+    donnees = (profil.data or {}) if profil and profil.data else {}
+    est_createur = bool(donnees.get("est_createur"))
+    est_majeur = donnees.get("est_majeur")
+    # Colonne NOT NULL DEFAULT true en base, mais aucune ligne `profiles`
+    # pour ce compte donne un dict vide ici -- .get(..., True) couvre ce
+    # cas (compte tout juste créé, jamais de PATCH /me).
+    est_professeur = bool(donnees.get("est_professeur", True))
 
     agents_administres = _agents_administres_de(utilisateur.id)
 
-    return MonStatutReponse(est_createur=est_createur, agents_administres=agents_administres, est_majeur=est_majeur)
+    return MonStatutReponse(
+        est_createur=est_createur,
+        agents_administres=agents_administres,
+        est_majeur=est_majeur,
+        est_professeur=est_professeur,
+    )
 
 
 @router.get("/{user_id}", response_model=ProfilDetailPublic)
@@ -354,6 +372,9 @@ class MettreAJourProfilPayload(BaseModel):
     # 18/09/2026, chantier "profil contributeur bibliotheque publique" --
     # voir docstring de ProfilPublic. None = champ omis, ne rien changer.
     profil_public: Optional[bool] = None
+    # 26/09/2026, voir docstring de MonStatutReponse. None = champ omis,
+    # ne rien changer.
+    est_professeur: Optional[bool] = None
 
 
 @router.patch("/me", response_model=ProfilPublic)
@@ -419,6 +440,8 @@ def mettre_a_jour_mon_profil(
         ligne["popup_chat_hauteur"] = payload.popup_chat_hauteur
     if payload.profil_public is not None:
         ligne["profil_public"] = payload.profil_public
+    if payload.est_professeur is not None:
+        ligne["est_professeur"] = payload.est_professeur
 
     try:
         deja_existant = (
