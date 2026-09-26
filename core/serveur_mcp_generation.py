@@ -45,6 +45,10 @@ uniquement un déplacement de code :
     "mode cours" (12/09/2026, demande Bourama) -- filet de sécurité en
     plus de l'injection automatique, absorbe les anciens
     consulter_avancement_notion et consulter_signalements_pertinents
+  - outils_changement_mode.py      : changement du mode source/pédagogique
+    par Clovis lui-même (25/09/2026, demande Bourama), chat seulement,
+    seulement si code actif (consigne d'un skill) ou demande explicite de
+    l'élève -- jamais suggéré, jamais de sa propre initiative sinon
 """
 
 # RAPPEL NON NEGOCIABLE (Bourama, 18/08) -- POUR NE PAS OUBLIER :
@@ -91,3 +95,4 @@ import core.outils_verification_code_actif  # noqa: F401
 import core.outils_reponses_qcm  # noqa: F401
 import core.outils_action_agent  # noqa: F401
 import core.outils_minuteurs  # noqa: F401
+import core.outils_changement_mode  # noqa: F401  # 25/09/2026, changement de mode par Clovis lui-même

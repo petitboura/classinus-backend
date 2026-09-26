@@ -2,8 +2,10 @@
 contexte-mode-source-clovis.md, demande Bourama, 16/09/2026) : Aucun,
 Recherche ou Sur pieces, controle QUELLES SOURCES Classinus a le droit
 d'utiliser pour repondre. Un eleve choisit ce mode explicitement (meme
-bouton que le persona pedagogique, groupe separe), jamais l'IA elle-meme
-en cours de conversation.
+bouton que le persona pedagogique, groupe separe) -- depuis le 25/09/2026,
+Clovis peut aussi le changer lui-meme, mais seulement dans les deux cas
+precis de core/outils_changement_mode.py, jamais en reinterpretant
+implicitement la conversation.
 
 ATTENTION NOM (voir aussi la migration) : ce module est DISTINCT de
 core/mode_actif_conversation.py (rattachement enseignant/code de classe)

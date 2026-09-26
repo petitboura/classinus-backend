@@ -700,6 +700,11 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # <outils_actifs>/MODE COURS lui dit d'appeler un outil qui, sans
         # cette ligne, pourrait tout simplement ne pas lui être proposé.
         outils_forces_contexte.append("verifier_consignes_code_actif")
+        # 25/09/2026, demande Bourama : même raison que verifier_consignes_code_actif
+        # juste au-dessus -- si un skill du code actif donne une consigne
+        # sur le mode, rien ne garantit que le routeur juge
+        # changer_mode_conversation pertinent ce tour-ci sans cette ligne.
+        outils_forces_contexte.append("changer_mode_conversation")
     # Outils toujours actifs pour Clovis (04/09/2026, demande Bourama) :
     # "sa source de connaissance dès qu'il connaît pas ou ne comprend
     # pas" -- doivent être disponibles au grand modèle à CHAQUE message,

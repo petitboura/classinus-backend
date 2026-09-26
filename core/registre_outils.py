@@ -606,6 +606,10 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # correct des anciens messages déjà en base, jamais réutilisées pour
     # de nouveaux appels).
     "verifier_consignes_code_actif": {"label": "Vérification du code actif", "icone": "ShieldCheck", "onglet": None},
+    # Changement de mode par Clovis lui-même (25/09/2026, demande Bourama)
+    # -- onglet=None, même logique que verifier_consignes_code_actif :
+    # jamais un bouton cliquable, l'élève ne choisit pas cet outil.
+    "changer_mode_conversation": {"label": "Changement de mode", "icone": "SlidersHorizontal", "onglet": None},
     # Filet de secours (23/09/2026, demande Bourama) au-delà de la fenêtre
     # des 2 messages auto-injectés après un QCM -- voir
     # core/outils_reponses_qcm.py. onglet: None, même logique que
@@ -802,6 +806,7 @@ CATEGORIES_OUTILS = {
         "verifier_consignes_code_actif", "consulter_signalement",
         "consulter_signalements_pertinents", "enregistrer_note_signalement",
         "rattacher_signalement_notion", "lire_reponses_qcm",
+        "changer_mode_conversation",  # 25/09/2026
     ],
     "comportement": ["gerer_comportement", "gerer_comportement_public"],
     "memoire": ["gerer_memoire_utilisateur"],

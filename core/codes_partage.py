@@ -155,7 +155,7 @@ def _generer_code_unique() -> str:
     raise RuntimeError("Impossible de générer un code unique après plusieurs tentatives")
 
 
-_COLONNES_CODE = "id, code, nom, texte_libre, actif, created_at, updated_at"
+_COLONNES_CODE = "id, code, nom, texte_libre, actif, eleve_choisit_mode, created_at, updated_at"
 
 
 def _comportements_par_code(code_ids: list[str]) -> dict[str, list[dict]]:
@@ -576,6 +576,7 @@ def creer_code(
     comportement_ids: list[str] | None = None,
     dossier_ids: list[str] | None = None,
     texte_libre: str | None = None,
+    eleve_choisit_mode: bool | None = None,
 ) -> dict:
     ligne = {
         "proprietaire_id": proprietaire_id,
@@ -583,6 +584,12 @@ def creer_code(
         "nom": (nom or "").strip() or None,
         "texte_libre": (texte_libre or "").strip() or None,
     }
+    # 25/09/2026, demande Bourama : réglage "l'élève peut choisir lui-même
+    # son mode source et son mode pédagogique", coché par défaut (colonne
+    # DB déjà à true par défaut, voir migration) -- on ne l'inclut dans
+    # l'insert que si explicitement fourni, jamais None écrasant le défaut.
+    if eleve_choisit_mode is not None:
+        ligne["eleve_choisit_mode"] = eleve_choisit_mode
     res = supabase.table("codes_partage").insert(ligne).execute()
     code = res.data[0]
     if comportement_ids:
@@ -601,6 +608,7 @@ def modifier_code(
     comportement_ids: list[str] | None = None,
     dossier_ids: list[str] | None = None,
     texte_libre: str | None = None,
+    eleve_choisit_mode: bool | None = None,
 ) -> dict | None:
     """Modification partielle : seuls les champs explicitement fournis
     (non None) sont mis à jour -- permet à un appelant de ne changer que
@@ -609,12 +617,19 @@ def modifier_code(
 
     comportement_ids/dossier_ids : None -> pas touché ; liste (même
     vide) -> remplace ENTIÈREMENT l'ensemble attaché (liste vide = tout
-    détacher)."""
+    détacher).
+
+    eleve_choisit_mode (25/09/2026, demande Bourama) : None -> pas
+    touché ; True/False -> écrase. Si décochée (False), le sélecteur de
+    mode disparaît côté élève ET sa demande explicite à Clovis de
+    changer de mode est refusée (voir core/outils_changement_mode.py)."""
     patch: dict = {}
     if nom is not None:
         patch["nom"] = nom.strip() or None
     if texte_libre is not None:
         patch["texte_libre"] = texte_libre.strip() or None
+    if eleve_choisit_mode is not None:
+        patch["eleve_choisit_mode"] = eleve_choisit_mode
 
     if patch:
         res = (
@@ -744,7 +759,10 @@ def lister_mes_rattachements(receveur_id: str) -> list[dict]:
     try:
         res = (
             supabase.table("rattachements_codes")
-            .select("id, created_at, codes_partage!inner(id, code, nom, texte_libre, actif, proprietaire_id)")
+            .select(
+                "id, created_at, "
+                "codes_partage!inner(id, code, nom, texte_libre, actif, eleve_choisit_mode, proprietaire_id)"
+            )
             .eq("receveur_id", receveur_id)
             .eq("codes_partage.actif", True)
             .order("created_at")
@@ -793,6 +811,10 @@ def lister_mes_rattachements(receveur_id: str) -> list[dict]:
             "a_dossier": bool(dossiers),
             "dossiers": dossiers,  # [{id, nom}, ...]
             "texte_libre": cp.get("texte_libre"),
+            # 25/09/2026, demande Bourama : côté élève, pilote l'affichage
+            # du sélecteur de mode source/pédagogique pour ce code (voir
+            # SelecteurModeActif.tsx / SelecteurPersonaPedagogique.tsx).
+            "eleve_choisit_mode": cp.get("eleve_choisit_mode", True),
         })
     return resultat
 

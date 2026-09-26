@@ -2,8 +2,10 @@
 ScholarFlow AI, volet étudiant, 12/09/2026, demande Bourama) : Socratique,
 Professeur, Tuteur ou Examinateur (voir MODES_PEDAGOGIQUES dans
 core/profils_agents.py, item 1). Un étudiant choisit ce mode explicitement
-(bouton ou raccourci "/", item 8 -- frontend, pas fait ici), jamais l'IA
-elle-même en cours de conversation.
+(bouton ou raccourci "/", item 8 -- frontend, pas fait ici) -- depuis le
+25/09/2026, Clovis peut aussi le changer lui-même, mais seulement dans les
+deux cas précis de core/outils_changement_mode.py, jamais en
+réinterprétant implicitement la conversation.
 
 ATTENTION NOM (voir aussi la migration) : ce module est DISTINCT de
 core/mode_actif_conversation.py, qui gère le rattachement enseignant/code

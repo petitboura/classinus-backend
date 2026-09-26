@@ -38,6 +38,10 @@ class CodePayload(BaseModel):
     # créés dans la bibliothèque perso, plusieurs à la fois possibles.
     dossier_ids: list[str] | None = None
     texte_libre: str | None = None
+    # 25/09/2026, demande Bourama : "l'élève peut choisir lui-même son
+    # mode source et son mode pédagogique" -- None laisse le défaut DB
+    # (true) s'appliquer à la création.
+    eleve_choisit_mode: bool | None = None
 
 
 class CodePatchPayload(BaseModel):
@@ -50,6 +54,7 @@ class CodePatchPayload(BaseModel):
     comportement_ids: list[str] | None = None
     dossier_ids: list[str] | None = None
     texte_libre: str | None = None
+    eleve_choisit_mode: bool | None = None
 
 
 @router_mes_codes.get("")
@@ -65,6 +70,7 @@ def creer(payload: CodePayload, utilisateur=Depends(utilisateur_courant)):
         comportement_ids=payload.comportement_ids,
         dossier_ids=payload.dossier_ids,
         texte_libre=payload.texte_libre,
+        eleve_choisit_mode=payload.eleve_choisit_mode,
     )
 
 
@@ -77,6 +83,7 @@ def modifier(code_id: str, payload: CodePatchPayload, utilisateur=Depends(utilis
         comportement_ids=payload.comportement_ids,
         dossier_ids=payload.dossier_ids,
         texte_libre=payload.texte_libre,
+        eleve_choisit_mode=payload.eleve_choisit_mode,
     )
     if not resultat:
         raise erreur_api(404, "CODE_INTROUVABLE")

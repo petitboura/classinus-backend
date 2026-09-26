@@ -464,7 +464,11 @@ def resoudre_code_actif_eleve(receveur_id: str, rattachement_id: str | None = No
     try:
         res = (
             supabase.table("rattachements_codes")
-            .select("codes_partage(id, nom, code)")
+            # eleve_choisit_mode (25/09/2026, demande Bourama) : ajouté ici
+            # pour que changer_mode_conversation (core/outils_changement_mode.py)
+            # puisse savoir, à partir du code actif déjà résolu, si
+            # l'enseignant a désactivé le choix de mode pour l'élève.
+            .select("codes_partage(id, nom, code, eleve_choisit_mode)")
             .eq("id", rattachement_id)
             .eq("receveur_id", receveur_id)
             .maybe_single()

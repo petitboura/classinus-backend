@@ -374,10 +374,12 @@ INSTRUCTIONS_LONGUEUR_REPONSE = {
 # Ajouté 2026-09-12 (demande Bourama, volet étudiant ScholarFlow AI) :
 # texte de comportement des 4 modes pédagogiques qu'un étudiant peut
 # activer sur une conversation (bouton + raccourci "/" côté frontend --
-# chantier séparé, non fait ici). Le changement de mode est TOUJOURS une
-# action explicite de l'étudiant : ces textes ne doivent jamais pousser
-# le modèle à changer de mode de lui-même en interprétant la conversation
-# (voir REGLE_BASCULE_MODE_PEDAGOGIQUE juste en dessous).
+# chantier séparé, non fait ici). Le changement de mode reste TOUJOURS
+# une action explicite -- de l'étudiant OU, depuis le 25/09/2026, de
+# Clovis lui-même dans deux cas précis seulement (voir
+# core/outils_changement_mode.py) : ces textes ne doivent jamais pousser
+# le modèle à changer de mode en interprétant implicitement la
+# conversation (voir REGLE_BASCULE_MODE_PEDAGOGIQUE juste en dessous).
 #
 # BRANCHÉ (14/09/2026, jonction items 1+8+9 des specs indépendantes) :
 # injecté dans _construire_system_prompt via obtenir_persona_pedagogique
@@ -425,7 +427,7 @@ Si l'étudiant demande explicitement de l'aide pendant l'exercice, tu peux donne
 REGLE_BASCULE_MODE_PEDAGOGIQUE = """
 
 <regle_bascule_mode_pedagogique>
-Le mode pédagogique actif (Socratique, Professeur, Tuteur, ou Examinateur) reste inchangé tant que l'étudiant ne l'a pas changé explicitement via le bouton ou le raccourci dédiés. Ne réinterprète jamais une phrase de l'étudiant dans la conversation comme une demande implicite de changer de mode, même si son ton ou sa formulation évoque un mode différent -- reste dans le mode actif jusqu'à un changement explicite de sa part.
+Le mode pédagogique actif (Socratique, Professeur, Tuteur, ou Examinateur) reste inchangé tant qu'il n'a pas été changé explicitement, soit par l'étudiant via le bouton ou le raccourci dédiés, soit par toi via l'outil changer_mode_conversation dans l'un des deux cas précis où il t'est permis de l'utiliser (voir sa docstring) -- jamais autrement. Ne réinterprète jamais une phrase de l'étudiant dans la conversation comme une demande implicite de changer de mode, même si son ton ou sa formulation évoque un mode différent -- reste dans le mode actif jusqu'à un changement explicite.
 </regle_bascule_mode_pedagogique>"""
 
 
@@ -619,7 +621,10 @@ def construire_instruction_demo() -> str:
 # d'utiliser pour repondre pendant une conversation (Aucun, Recherche, ou
 # Sur pieces). Un eleve choisit ce mode explicitement (meme bouton que le
 # persona pedagogique, groupe separe, voir SelecteurPersonaPedagogique.tsx
-# cote frontend), jamais l'IA elle-meme en cours de conversation.
+# cote frontend) -- depuis le 25/09/2026, Clovis peut aussi le changer
+# lui-meme, mais seulement dans les deux cas precis de
+# core/outils_changement_mode.py (jamais en reinterpretant implicitement
+# la conversation).
 #
 # BRANCHE le 16/09/2026 : injecte dans _construire_system_prompt via
 # obtenir_mode_source (core/mode_source_conversation.py), calcule dans
