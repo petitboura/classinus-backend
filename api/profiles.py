@@ -174,13 +174,16 @@ class MonStatutReponse(BaseModel):
     # défaut à False ici -- distinct de "a explicitement dit non".
     est_majeur: Optional[bool] = None
     # 26/09/2026, demande Bourama : bouton "je suis prof / je ne suis
-    # pas prof" en haut de la page Bureau -- conditionne l'affichage des
-    # sections Audit hebdomadaire, Programme et Signalements dans la
-    # liste Bureau (voir SECTIONS_BUREAU côté frontend). Jamais exposé
-    # sur le profil public (même convention que est_majeur ci-dessus) :
-    # uniquement via cet endpoint. True par défaut, y compris pour un
-    # compte tout juste créé sans ligne `profiles`.
-    est_professeur: bool = True
+    # pas prof". Redesigné le même jour après retour de Bourama (le
+    # premier jet, un interrupteur permanent en haut de Bureau, prenait
+    # trop de place) -- devient une question posée UNE SEULE FOIS à la
+    # première entrée dans Bureau, modifiable ensuite dans Paramètres >
+    # Préférences (voir ParametresPreferences.tsx). None = jamais
+    # répondu (même convention que est_majeur ci-dessus) -- traité comme
+    # "oui" côté affichage (liste Bureau complète) tant que la question
+    # n'a pas de réponse, voir BureauAccueil.tsx. Jamais exposé sur le
+    # profil public, uniquement via cet endpoint.
+    est_professeur: Optional[bool] = None
 
 
 @router.get("/moi/statut", response_model=MonStatutReponse)
@@ -199,10 +202,7 @@ def mon_statut(utilisateur=Depends(utilisateur_courant)):
     donnees = (profil.data or {}) if profil and profil.data else {}
     est_createur = bool(donnees.get("est_createur"))
     est_majeur = donnees.get("est_majeur")
-    # Colonne NOT NULL DEFAULT true en base, mais aucune ligne `profiles`
-    # pour ce compte donne un dict vide ici -- .get(..., True) couvre ce
-    # cas (compte tout juste créé, jamais de PATCH /me).
-    est_professeur = bool(donnees.get("est_professeur", True))
+    est_professeur = donnees.get("est_professeur")
 
     agents_administres = _agents_administres_de(utilisateur.id)
 
