@@ -56,6 +56,7 @@ from routage_outils import (
 from construction_system_prompt import _construire_system_prompt, _est_timeout, _repli_si_reponse_partielle
 from persistance_echanges import _sauvegarder_echange, _finaliser_memoire_en_arriere_plan
 from historique_outils import enrichir_historique_avec_outils
+from historique_conversation import alleger_historique_ancien
 from historique_reponses_qcm import reponses_qcm_a_injecter
 from execution_outils import _resultat_pour_affichage
 from boucle_agent import _agent_groq, _capturer_reponse, _ajouter_segment_texte
@@ -1070,8 +1071,12 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # suivant, meme si son resultat restait affiche a l'ecran cote
     # utilisateur. Voir core/historique_outils.py pour le format choisi et
     # le mecanisme de resume au-dela de SEUIL_CARACTERES_OUTILS_HISTORIQUE.
+    # 27/09/2026 : allege D'ABORD le texte brut des vieux messages (voir
+    # core/historique_conversation.py), PUIS enrichit/allege separement
+    # leurs resultats d'outils -- deux mecanismes independants, meme
+    # principe (rappel gratuit + recuperation a la demande).
     messages_base = [{"role": "system", "content": system_final}]
-    messages_base += enrichir_historique_avec_outils(historique)
+    messages_base += enrichir_historique_avec_outils(alleger_historique_ancien(historique))
     messages_base.append({"role": "user", "content": message_pour_modele})
 
     # ETAPE 5 (11/09/2026) : meta_utilisateur (piece jointe pour affichage

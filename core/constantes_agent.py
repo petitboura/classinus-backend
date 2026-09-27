@@ -137,6 +137,18 @@ TOKENS_MAX_SORTIE_RESUME = 1500
 # pour le reste du prompt (systeme + question + reponses).
 SEUIL_CARACTERES_OUTILS_HISTORIQUE = 12000
 
+# 27/09/2026 (demande explicite Bourama, meme chantier que ci-dessus mais
+# applique cette fois aux MESSAGES eux-memes -- voir
+# core/historique_conversation.py). Au-dela de ce volume de texte brut
+# (questions/reponses), les echanges les plus anciens sont remplaces par
+# un simple rappel de leur existence (sujet + apercu), recuperables en
+# entier via l'outil rappeler_echange_conversation si besoin. Seuil plus
+# large que celui des outils : le texte de conversation pure est
+# generalement plus dense en information utile au mot pres (contrairement
+# a un resultat d'outil souvent verbeux) donc on garde une marge plus
+# genereuse avant de commencer a alleger.
+SEUIL_CARACTERES_HISTORIQUE_CONVERSATION = 20000
+
 # Profil utilisateur dynamique par agent (2026-07-21, voir
 # agents.profil_utilisateur_schema et _mettre_a_jour_profil_utilisateur_si_besoin
 # plus bas). Seuil plus bas que SEUIL_RESUME_MESSAGES : contrairement au
