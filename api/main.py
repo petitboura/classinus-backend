@@ -673,14 +673,22 @@ ORIGINES_AUTORISEES = [
     # cas où elle serait servie directement au lieu d'être redirigée.
     "https://classinus.com",
     "https://www.classinus.com",
+    # Alias historique conserve comme domaine actif sur le projet Vercel
+    # apres son renommage clovis-ai -> classinus (27/09/2026) -- toujours
+    # appelable, mais ne correspond plus au nouveau motif ci-dessous donc
+    # garde ici explicitement.
+    "https://clovis-ai.vercel.app",
 ]
 
-# Vercel donne une URL DIFFERENTE a chaque deploiement de preview (en plus
-# de l'alias stable) -- ce motif autorise automatiquement toutes les URLs
-# Vercel du projet Clovis (ex. clovis-ai-bld5bmptn-petitbouras-projects.
-# vercel.app), sans avoir a retoucher ce fichier a chaque nouveau lien.
-# 26/08 : lien stable renomme en clovis-ai.vercel.app (Bourama).
-MOTIF_ORIGINES_CLOVIS = r"https://clovis-ai[a-z0-9\-]*\.vercel\.app"
+# Vercel donne une URL DIFFERENTE a chaque deploiement de preview, et une
+# URL par branche (ex. classinus-git-integration-editeur-pont-traduction-
+# petitbouras-projects.vercel.app) -- ce motif autorise automatiquement
+# toutes les URLs Vercel du projet, sans avoir a retoucher ce fichier a
+# chaque nouveau lien ou nouvelle branche.
+# 27/09/2026 : projet Vercel renomme clovis-ai -> classinus (Bourama) --
+# motif mis a jour en consequence (l'ancien motif "clovis-ai*" ne
+# correspond a aucune des nouvelles URLs de deploiement/branche).
+MOTIF_ORIGINES_CLOVIS = r"https://classinus[a-z0-9\-]*\.vercel\.app"
 
 app.add_middleware(
     CORSMiddleware,
