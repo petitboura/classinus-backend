@@ -5,6 +5,9 @@ python-multipart
 supabase
 boto3
 PyPDF2
+PyMuPDF
+pytesseract
+Pillow
 python-docx
 openpyxl
 python-pptx

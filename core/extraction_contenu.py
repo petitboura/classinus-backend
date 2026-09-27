@@ -43,6 +43,7 @@ from core.description_multimedia import (
     transcrire_audio_bibliotheque,
     transcrire_et_decrire_video_bibliotheque,
 )
+from core.ocr_pages_scannees import extraire_texte_page_scannee
 
 TYPE_MIME_WORD = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 TYPE_MIME_EXCEL = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -135,7 +136,13 @@ def _extraire_segments_pdf(contenu: bytes) -> list[dict]:
             chemin_temp = tmp.name
         segments = []
         for numero, texte_page in enumerate(extraire_pages_pdf(chemin_temp), start=1):
-            if texte_page.strip():
+            texte_page = texte_page.strip()
+            if not texte_page:
+                # Page scannée (aucun texte natif) : OCR de secours,
+                # voir core/ocr_pages_scannees.py. numero_page est
+                # 0-indexé pour ce module, d'où le "numero - 1".
+                texte_page = (extraire_texte_page_scannee(chemin_temp, numero - 1) or "").strip()
+            if texte_page:
                 segments.append({"texte": texte_page, "page_debut": numero, "page_fin": numero})
         return segments
     finally:

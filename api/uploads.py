@@ -240,11 +240,43 @@ LONGUEUR_MAX_TEXTE_EXTRAIT = 30_000  # caractères, pour ne pas saturer le promp
 
 
 def _extraire_texte_pdf(contenu_bytes):
+    """
+    Extraction texte par page + OCR de secours pour les pages scannées
+    (26/09, plan validé avec Bourama, voir core/ocr_pages_scannees.py).
+    Une page sans texte natif est rendue en image puis passée à
+    Tesseract, avec Gemini vision en filet de sécurité si Tesseract
+    échoue ou est trop pauvre.
+    """
     import io
+    import os
+    import tempfile
+
     import PyPDF2
 
+    from core.ocr_pages_scannees import extraire_texte_page_scannee
+
     reader = PyPDF2.PdfReader(io.BytesIO(contenu_bytes))
-    return "\n".join(page.extract_text() or "" for page in reader.pages)
+    pages_texte = [(page.extract_text() or "").strip() for page in reader.pages]
+    numeros_pages_vides = [i for i, texte in enumerate(pages_texte) if not texte]
+
+    if numeros_pages_vides:
+        chemin_temp = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+                tmp.write(contenu_bytes)
+                chemin_temp = tmp.name
+            for numero in numeros_pages_vides:
+                texte_ocr = extraire_texte_page_scannee(chemin_temp, numero)
+                if texte_ocr:
+                    pages_texte[numero] = texte_ocr
+        finally:
+            if chemin_temp:
+                try:
+                    os.remove(chemin_temp)
+                except OSError:
+                    pass
+
+    return "\n".join(pages_texte)
 
 
 def _extraire_texte_docx(contenu_bytes):
