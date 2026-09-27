@@ -31,13 +31,12 @@ import json
 import logging
 import threading
 
-from groq import Groq
+from openai import OpenAI
 from constantes_agent import (
     supabase,
     get_secret,
-    MODELE_RESUME,
+    DEEPSEEK_PRIMARY,
     DELAI_MAX_PAR_APPEL,
-    TOKENS_MAX_SORTIE_RESUME,
     SEUIL_CARACTERES_HISTORIQUE_CONVERSATION,
     SEUIL_CARACTERES_HISTORIQUE_CONVERSATION_MAX,
 )
@@ -219,48 +218,77 @@ def note_avancement_historique(historique):
     )
 
 
-def _demander_cloture_sujets(historique, limite_protegee):
+def _demander_cloture_sujets(system_prompt, historique, conversation_id):
     """
-    Petit appel dedie (Groq, MODELE_RESUME -- meme modele rapide que
-    _mettre_a_jour_resume_si_besoin, persistance_echanges.py) dont la
-    SEULE tache est de repondre en JSON avec les sujets de la
-    conversation qui sont clairement termines, pour etre passes ensuite a
-    ajouter_sujet_clos. Ne repond jamais a la personne, ne genere aucun
-    resume -- juste une liste.
-    """
-    transcription = "\n".join(
-        f"{'Utilisateur' if m.get('role') == 'user' else 'Assistant'} : {(m.get('content') or '')[:500]}"
-        for m in historique[:limite_protegee]
-        if not (m.get("content") or "").startswith("[Message plus tôt")
-    )
-    if not transcription.strip():
-        return []
+    CORRECTIF (27/09/2026, Bourama : "comment nous on peut savoir que
+    c'est clos, ça n'a pas de sens, nous on ne peut pas repérer les
+    sujets terminés"). Version precedente (fautive) : un petit modele
+    separe (MODELE_RESUME) recevait un extrait tronque de la conversation
+    et devait DEVINER quels sujets etaient "clairement termines" -- sans
+    le contexte complet ni la comprehension que seul le modele ayant
+    reellement mene la conversation peut avoir. Ca n'a pas de sens : ni
+    nous ni un petit modele hors contexte ne pouvons juger a la place du
+    modele qui a suivi l'echange.
 
-    instruction = (
-        "Voici une partie plus ancienne d'une conversation. Identifie les "
-        "sujets qui sont clairement TERMINÉS (question déjà répondue, "
-        "besoin déjà satisfait, sujet peu susceptible de revenir). Réponds "
-        "UNIQUEMENT avec un objet JSON de la forme "
-        '{\"sujets_clos\": [\"description courte du sujet 1\", ...]}. '
-        "Liste vide si rien n'est clairement terminé. Ne réponds jamais à "
-        "la conversation elle-même, ne résume rien -- uniquement ce JSON."
-    )
-    client_groq = Groq(api_key=get_secret("GROQ_API_KEY"), max_retries=0)
-    completion = client_groq.chat.completions.create(
-        model=MODELE_RESUME,
-        messages=[
-            {"role": "system", "content": instruction},
-            {"role": "user", "content": transcription},
-        ],
-        max_completion_tokens=TOKENS_MAX_SORTIE_RESUME,
+    Version correcte : on redemande directement AU MEME MODELE (DeepSeek,
+    la meme cascade que la conversation normale, pas un modele au rabais)
+    de relire SA PROPRE conversation, avec son plein contexte (system
+    prompt + historique complet), et de cloturer lui-meme -- via le meme
+    outil marquer_sujet_clos qu'il a deja -- les sujets qu'il juge
+    reellement termines. On ne fait que le relancer une fois de plus sur
+    ce qu'il connait deja, on ne demande a personne d'autre de deviner.
+    """
+    messages = [{"role": "system", "content": system_prompt}]
+    messages += [{"role": m.get("role"), "content": m.get("content") or ""} for m in historique]
+    messages.append({
+        "role": "user",
+        "content": (
+            "[Vérification automatique -- pas une nouvelle question de "
+            "l'utilisateur, ne réponds pas à la conversation] Relis "
+            "l'échange ci-dessus : y a-t-il un ou plusieurs sujets "
+            "clairement terminés que tu n'as pas encore marqués avec "
+            "marquer_sujet_clos ? Si oui, appelle cet outil maintenant, "
+            "une fois par sujet concerné. S'il n'y a rien de clairement "
+            "terminé, n'appelle rien."
+        ),
+    })
+
+    schema_marquer_sujet_clos = {
+        "type": "function",
+        "function": {
+            "name": "marquer_sujet_clos",
+            "description": "Marque un sujet de cette conversation comme terminé, pour l'alléger dans les prochains messages.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "description": {
+                        "type": "string",
+                        "description": "Quelques mots identifiant le sujet clos, avec un vocabulaire proche des messages concernés.",
+                    }
+                },
+                "required": ["description"],
+            },
+        },
+    }
+
+    client_deepseek = OpenAI(api_key=get_secret("DEEPSEEK_API_KEY"), base_url="https://api.deepseek.com")
+    completion = client_deepseek.chat.completions.create(
+        model=DEEPSEEK_PRIMARY,
+        messages=messages,
+        tools=[schema_marquer_sujet_clos],
+        tool_choice="auto",
         timeout=DELAI_MAX_PAR_APPEL,
-        response_format={"type": "json_object"},
     )
-    donnees = json.loads(completion.choices[0].message.content)
-    return [s for s in (donnees.get("sujets_clos") or []) if isinstance(s, str) and s.strip()]
+    for appel in (completion.choices[0].message.tool_calls or []):
+        try:
+            description = (json.loads(appel.function.arguments).get("description") or "").strip()
+            if description:
+                ajouter_sujet_clos(conversation_id, description)
+        except Exception as e:
+            logging.error(f"ERREUR parsing appel marquer_sujet_clos (rattrapage) : {e}")
 
 
-def forcer_cloture_sujets_en_arriere_plan(historique, conversation_id):
+def forcer_cloture_sujets_en_arriere_plan(system_prompt, historique, conversation_id):
     """
     Filet de securite (27/09/2026, demande explicite Bourama : "un
     deuxieme appel en parallele, apres que l'utilisateur ait vu sa
@@ -291,10 +319,7 @@ def forcer_cloture_sujets_en_arriere_plan(historique, conversation_id):
             if calculer_taille_historique(deja_allege) <= SEUIL_CARACTERES_HISTORIQUE_CONVERSATION:
                 return  # les sujets deja connus suffisent, le modele a bien fait son travail
 
-            n = len(historique)
-            limite_protegee = max(0, n - _MESSAGES_RECENTS_PROTEGES)
-            for sujet in _demander_cloture_sujets(historique, limite_protegee):
-                ajouter_sujet_clos(conversation_id, sujet)
+            _demander_cloture_sujets(system_prompt, historique, conversation_id)
         except Exception as e:
             logging.error(f"ERREUR tache de fond (clôture sujets historique) : {e}")
 

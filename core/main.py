@@ -1334,7 +1334,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
             _finaliser_memoire_en_arriere_plan(user_id, agent_id)
-            forcer_cloture_sujets_en_arriere_plan(historique, conversation_id)
+            forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
         except Exception as e:
             logging.error(f"ERREUR MODELE PREMIUM ({modele_force}) : {e}")
             if not reponse_accumulee:
@@ -1400,7 +1400,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 if ids_historique:
                     yield {"type": "meta", **ids_historique}
                 _finaliser_memoire_en_arriere_plan(user_id, agent_id)
-                forcer_cloture_sujets_en_arriere_plan(historique, conversation_id)
+                forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
                 return
             except Exception as e:
                 if not _est_timeout(e):
@@ -1426,7 +1426,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
             _finaliser_memoire_en_arriere_plan(user_id, agent_id)
-            forcer_cloture_sujets_en_arriere_plan(historique, conversation_id)
+            forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
             return
         except Exception as e:
             if not _est_timeout(e):
@@ -1478,7 +1478,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 if meta_a_envoyer:
                     yield {"type": "meta", **meta_a_envoyer}
                 _finaliser_memoire_en_arriere_plan(user_id, agent_id)
-                forcer_cloture_sujets_en_arriere_plan(historique, conversation_id)
+                forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
                 return
             except Exception as e:
                 if not _est_timeout(e):
@@ -1601,7 +1601,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
             _finaliser_memoire_en_arriere_plan(user_id, agent_id)
-            forcer_cloture_sujets_en_arriere_plan(historique, conversation_id)
+            forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
             return
         except Exception as e:
             if not _est_timeout(e):
