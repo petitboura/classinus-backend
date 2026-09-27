@@ -105,6 +105,11 @@ class EnvoyerMessagePayload(BaseModel):
     # api/uploads.py:uploader_video_chat). Combinable avec image_url mais
     # rarement les deux en même temps en pratique.
     images_base64: Optional[List[str]] = None
+    # Zip(s) joint(s) au message (26/09/2026, chantier "zip en
+    # conversation") : job_id(s) renvoyé(s) par
+    # POST /api/uploads/zip-chat/demarrer, appelé DÈS l'upload (avant
+    # l'envoi) -- voir core/zip_chat.py et core/main.py:chat().
+    zips_en_attente: Optional[List[str]] = None
     # Icône de recherche web dans la barre de saisie (djiguigne-frontend,
     # 2026-07-23) -- forçage manuel EN PLUS de l'activation automatique
     # déjà possible : le modèle peut de toute façon décider seul
@@ -251,6 +256,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
                 localisation=payload.localisation.model_dump() if payload.localisation else None,
                 fuseau_horaire=payload.fuseau_horaire,
                 images_base64=payload.images_base64,
+                zips_en_attente=payload.zips_en_attente,
                 recherche_forcee=payload.recherche_forcee,
                 outil_force=payload.outil_force,
                 ignorer_suggestion_outils=payload.ignorer_suggestion_outils or False,

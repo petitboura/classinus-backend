@@ -24,6 +24,7 @@ from core.mode_source_conversation import obtenir_mode_source
 from core.guide_conversation import obtenir_guide_actif
 from core.plafond_outils_tour import definir_plafond_tour, PLAFOND_OUTILS_GUIDE_VISUEL
 from core.canal_agent_applicatif import obtenir_actions_disponibles
+from core.zip_chat import iterer_statuts as _iterer_statuts_zip, obtenir_etat as _obtenir_etat_zip, construire_digest_zip as _construire_digest_zip
 from avancement_notions_ia import notions_pertinentes_pour_eleve, resoudre_code_actif_eleve
 from signalements import signalements_pertinents_pour_injection
 from mcp_tools import lister_outils_autorises_pour_agent, filtrer_catalogue_par_outil_force, appeler_outil
@@ -134,7 +135,7 @@ def _client_pour_reprise(modele):
     return Groq(api_key=get_secret("GROQ_API_KEY"), max_retries=0)
 
 
-def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False):
+def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None):
     """
     Generateur d'evenements. Chaque element produit est un dictionnaire :
     - {"type": "statut", "texte": "..."}         -> un outil MCP est en cours d'utilisation (ou, depuis le 11/09/2026, Gemini en train de lire une image/video jointe)
@@ -1262,6 +1263,46 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # au lieu d'une description -- jamais perdue silencieusement.
             for piece_jointe in meta_utilisateur["pieces_jointes"]:
                 piece_jointe["description_echec"] = True
+
+    # --- Zip joint (26/09/2026, chantier "zip en conversation", plan
+    # valide par Bourama) : le dezipage a deja demarre en tache de fond
+    # DES l'upload (voir api/uploads.py:demarrer_zip_chat), avant meme
+    # l'envoi de ce message. On reprend ici la ou le thread de fond en
+    # est et on termine le travail restant, en streamant un evenement
+    # statut PAR FICHIER de l'archive (voir core/zip_chat.py:
+    # iterer_statuts) plutot qu'un seul global comme pour l'image
+    # ci-dessus -- ces evenements portent nom_outil/nom_lisible pour
+    # beneficier de la fusion "xN" deja existante cote frontend
+    # (OutilResultatBulle.tsx:cleFusion), exactement comme un outil
+    # appele plusieurs fois de suite. Contrairement a un document seul
+    # (uploader_document_chat, injection immediate du texte extrait),
+    # ici seul un SOMMAIRE est injecte -- au modele de choisir lui-meme
+    # quel(s) fichier(s) lire via gerer_fichier_conversation (action
+    # "lire"), demande explicite de Bourama.
+    if zips_en_attente:
+        # meta_utilisateur vaut None par defaut pour un message texte
+        # classique (voir plus haut) -- jamais initialise ici si aucune
+        # image n'accompagnait le zip, contrairement au chemin image qui
+        # le fait lui-meme plus haut.
+        if meta_utilisateur is None:
+            meta_utilisateur = {"pieces_jointes": []}
+        elif "pieces_jointes" not in meta_utilisateur:
+            meta_utilisateur["pieces_jointes"] = []
+        for job_id in zips_en_attente:
+            for evenement in _iterer_statuts_zip(job_id):
+                yield evenement
+            etat_job = _obtenir_etat_zip(job_id)
+            if etat_job is None:
+                continue
+            digest = _construire_digest_zip(job_id)
+            if digest:
+                message_pour_modele = f"{message_pour_modele}\n\n{digest}"
+                messages_base[-1]["content"] = message_pour_modele
+            meta_utilisateur["pieces_jointes"].append({
+                "nom": etat_job["nom_zip"],
+                "type": "zip",
+                "job_id": job_id,
+            })
 
     if modele_force:
         # Modele premium (Claude/GPT/Gemini/DeepSeek), voir docstring de

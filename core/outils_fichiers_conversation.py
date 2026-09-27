@@ -31,10 +31,11 @@ from core.bibliotheque_fichiers import (
     renommer_fichier_par_url as _renommer_fichier_par_url,
 )
 from core.outils_generation_commun import mcp_generation, Context
+from core.zip_chat import lire_element as _lire_element_zip
 
 
 @mcp_generation.tool()
-def gerer_fichier_conversation(action: str, ctx: Context, url_fichier: str = "", nom: str = "", recherche: str = "") -> str:
+def gerer_fichier_conversation(action: str, ctx: Context, url_fichier: str = "", nom: str = "", recherche: str = "", reference: str = "") -> str:
     """
     Gère les fichiers UPLOADÉS PAR L'ÉTUDIANT en pièce jointe de cette
     conversation (document, image, audio, vidéo -- n'importe quel type
@@ -60,6 +61,15 @@ def gerer_fichier_conversation(action: str, ctx: Context, url_fichier: str = "",
       conversation par son nom (celui donné via "nommer" ci-dessus).
       À utiliser si son lien n'est plus visible plus haut dans la
       conversation. Paramètre : `recherche` (mot-clé).
+    - "lire" : (26/09/2026) va chercher le texte déjà extrait d'un
+      fichier précis à l'intérieur d'une archive .zip jointe à cette
+      conversation -- utilise cette action pour choisir toi-même quel(s)
+      fichier(s) de l'archive lire, plutôt que de tout lire d'un coup.
+      Paramètre : `reference` (le jeton donné juste après chaque nom de
+      fichier dans le sommaire de l'archive, jamais inventé). Si le
+      fichier est listé comme illisible dans ce sommaire, dis-le
+      explicitement à l'étudiant (avec la raison si utile) plutôt que
+      d'appeler "lire" dessus.
     """
     if ctx is None:
         return "Erreur : contexte manquant."
@@ -97,4 +107,17 @@ def gerer_fichier_conversation(action: str, ctx: Context, url_fichier: str = "",
             for f in resultats
         )
 
-    return "Erreur : action inconnue. Actions valides : nommer, chercher."
+    if action == "lire":
+        reference_val = (reference or "").strip()
+        if not reference_val:
+            return "Erreur : reference manquante pour \"lire\"."
+        try:
+            texte = _lire_element_zip(reference_val)
+        except Exception as e:
+            logging.error(f"ERREUR gerer_fichier_conversation (lire) : {e}")
+            return "Erreur : impossible de lire ce fichier, réessaie."
+        if texte is None:
+            return "Erreur : cette référence est introuvable ou ce fichier n'a pas pu être lu."
+        return texte
+
+    return "Erreur : action inconnue. Actions valides : nommer, chercher, lire."
