@@ -230,87 +230,21 @@ async def extraire_formule(
 # core/main.py n'a donc AUCUN changement à faire pour les documents -- le
 # cascade Groq habituel les traite comme du texte normal.
 
-TYPES_DOCUMENTS_AUTORISES = {
-    "application/pdf": "pdf",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
-}
-TAILLE_MAX_DOCUMENT_OCTETS = 15 * 1024 * 1024  # 15 Mo
-LONGUEUR_MAX_TEXTE_EXTRAIT = 30_000  # caractères, pour ne pas saturer le prompt système
-
-
-def _extraire_texte_pdf(contenu_bytes):
-    """
-    Extraction texte par page + OCR de secours pour les pages scannées
-    (26/09, plan validé avec Bourama, voir core/ocr_pages_scannees.py).
-    Une page sans texte natif est rendue en image puis passée à
-    Tesseract, avec Gemini vision en filet de sécurité si Tesseract
-    échoue ou est trop pauvre.
-    """
-    import io
-    import os
-    import tempfile
-
-    import PyPDF2
-
-    from core.ocr_pages_scannees import extraire_texte_page_scannee
-
-    reader = PyPDF2.PdfReader(io.BytesIO(contenu_bytes))
-    pages_texte = [(page.extract_text() or "").strip() for page in reader.pages]
-    numeros_pages_vides = [i for i, texte in enumerate(pages_texte) if not texte]
-
-    if numeros_pages_vides:
-        chemin_temp = None
-        try:
-            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-                tmp.write(contenu_bytes)
-                chemin_temp = tmp.name
-            for numero in numeros_pages_vides:
-                texte_ocr = extraire_texte_page_scannee(chemin_temp, numero)
-                if texte_ocr:
-                    pages_texte[numero] = texte_ocr
-        finally:
-            if chemin_temp:
-                try:
-                    os.remove(chemin_temp)
-                except OSError:
-                    pass
-
-    return "\n".join(pages_texte)
-
-
-def _extraire_texte_docx(contenu_bytes):
-    import io
-    import docx
-
-    document = docx.Document(io.BytesIO(contenu_bytes))
-    morceaux = [p.text for p in document.paragraphs]
-
-    # BUG corrigé le 2026-07-21 : les tableaux Word n'étaient jamais lus
-    # (seuls document.paragraphs l'étaient) -- confirmé en test réel avec
-    # un tableau de scores, dont aucune valeur ne remontait au modèle.
-    # python-docx n'inclut pas les cellules de tableau dans .paragraphs,
-    # il faut parcourir document.tables séparément.
-    for table in document.tables:
-        for ligne in table.rows:
-            morceaux.append("\t".join(cellule.text for cellule in ligne.cells))
-
-    return "\n".join(morceaux)
-
-
-def _extraire_texte_xlsx(contenu_bytes):
-    import io
-    import openpyxl
-
-    classeur = openpyxl.load_workbook(io.BytesIO(contenu_bytes), data_only=True)
-    morceaux = []
-    for feuille in classeur.worksheets:
-        morceaux.append(f"--- Feuille : {feuille.title} ---")
-        for ligne in feuille.iter_rows(values_only=True):
-            morceaux.append(
-                "\t".join("" if v is None else str(v) for v in ligne)
-            )
-    return "\n".join(morceaux)
+# Déplacé dans core/extraction_documents.py le 26/09/2026 (chantier zip
+# en conversation) pour être réutilisable par core/zip_chat.py sans
+# dépendance circulaire -- ré-importé ici tel quel, comportement inchangé
+# (y compris l'OCR de secours du 26/09 sur les pages PDF scannées, voir
+# ce module).
+from core.extraction_documents import (
+    TYPES_DOCUMENTS_AUTORISES,
+    TAILLE_MAX_DOCUMENT_OCTETS,
+    LONGUEUR_MAX_TEXTE_EXTRAIT,
+    extraire_texte_pdf as _extraire_texte_pdf,
+    extraire_texte_docx as _extraire_texte_docx,
+    extraire_texte_xlsx as _extraire_texte_xlsx,
+)
+from core.import_zip import est_zip
+from core.zip_chat import demarrer_extraction_zip_chat, TAILLE_MAX_ZIP_CHAT_OCTETS
 
 
 @router.post("/document-chat")
@@ -414,6 +348,34 @@ async def uploader_document_chat(
             logging.warning(f"Aperçu PDF échoué pour document chat {fichier.filename} (extraction/stockage OK quand même) : {e}")
 
     return {"texte": texte, "tronque": tronque, "url": url_document, "url_apercu": url_apercu}
+
+
+# --- Zip (26/09/2026, chantier "zip en conversation", plan validé par
+# Bourama) : contrairement à document-chat ci-dessus (extraction
+# synchrone, bloquante), une archive peut contenir beaucoup de fichiers
+# -- le dépliage démarre en tâche de fond DÈS l'upload (avant même le
+# clic Envoyer), et cet endpoint répond immédiatement avec un job_id, ne
+# bloque jamais l'attache du fichier côté frontend. Si le job n'est pas
+# terminé au moment de l'envoi du message, core/main.py:chat() termine
+# le travail restant lui-même en streamant une ligne de statut par
+# fichier (voir core/zip_chat.py) -- même mécanisme que pour un outil
+# répété (LigneOutil.tsx, fusion "×N" déjà existante côté frontend).
+@router.post("/zip-chat/demarrer")
+async def demarrer_zip_chat(
+    fichier: UploadFile = File(...),
+    utilisateur=Depends(utilisateur_courant),
+):
+    if not est_zip(fichier.filename or "", fichier.content_type):
+        raise erreur_api(400, "FORMAT_NON_SUPPORTE_ZIP")
+
+    contenu = await fichier.read()
+    if len(contenu) > TAILLE_MAX_ZIP_CHAT_OCTETS:
+        raise erreur_api(400, "ZIP_TROP_LOURD_50_MO_MAX")
+    if len(contenu) == 0:
+        raise erreur_api(400, "FICHIER_VIDE")
+
+    job_id = demarrer_extraction_zip_chat(contenu, fichier.filename or "archive.zip")
+    return {"job_id": job_id}
 
 
 # --- Audio (dictée vocale) : transcription, pas de stockage ----------------
