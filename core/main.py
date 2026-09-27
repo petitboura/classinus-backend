@@ -56,7 +56,7 @@ from routage_outils import (
 from construction_system_prompt import _construire_system_prompt, _est_timeout, _repli_si_reponse_partielle
 from persistance_echanges import _sauvegarder_echange, _finaliser_memoire_en_arriere_plan
 from historique_outils import enrichir_historique_avec_outils
-from historique_conversation import alleger_historique_ancien
+from historique_conversation import alleger_historique_ancien, note_avancement_historique
 from historique_reponses_qcm import reponses_qcm_a_injecter
 from execution_outils import _resultat_pour_affichage
 from boucle_agent import _agent_groq, _capturer_reponse, _ajouter_segment_texte
@@ -1072,11 +1072,14 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # utilisateur. Voir core/historique_outils.py pour le format choisi et
     # le mecanisme de resume au-dela de SEUIL_CARACTERES_OUTILS_HISTORIQUE.
     # 27/09/2026 : allege D'ABORD le texte brut des vieux messages (voir
-    # core/historique_conversation.py), PUIS enrichit/allege separement
-    # leurs resultats d'outils -- deux mecanismes independants, meme
-    # principe (rappel gratuit + recuperation a la demande).
-    messages_base = [{"role": "system", "content": system_final}]
-    messages_base += enrichir_historique_avec_outils(alleger_historique_ancien(historique))
+    # core/historique_conversation.py -- desormais pilote par le modele
+    # lui-meme via marquer_sujet_clos, position fixe en filet de securite
+    # seulement), PUIS enrichit/allege separement leurs resultats d'outils
+    # -- deux mecanismes independants, meme principe (rappel gratuit +
+    # recuperation a la demande). Le suivi de taille est ajoute au prompt
+    # systeme pour que le modele sache s'il doit clore un sujet.
+    messages_base = [{"role": "system", "content": system_final + "\n\n" + note_avancement_historique(historique)}]
+    messages_base += enrichir_historique_avec_outils(alleger_historique_ancien(historique, conversation_id))
     messages_base.append({"role": "user", "content": message_pour_modele})
 
     # ETAPE 5 (11/09/2026) : meta_utilisateur (piece jointe pour affichage

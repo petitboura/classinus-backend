@@ -17,8 +17,7 @@ Expose cote CHAT SEULEMENT, jamais sur le serveur MCP public.
 
 import logging
 
-from constantes_agent import supabase
-from core.outils_generation_commun import mcp_generation, Context
+from core.outils_generation_commun import mcp_generation, Context, _supabase_memoire as supabase
 
 # Meme esprit que core/outils_rappel_resultats.py : au-dela, trop vieux
 # pour valoir la peine d'etre refouille automatiquement.

@@ -33,8 +33,7 @@ core/outils_changement_mode.py) : jamais sur le serveur MCP public.
 
 import logging
 
-from constantes_agent import supabase
-from core.outils_generation_commun import mcp_generation, Context
+from core.outils_generation_commun import mcp_generation, Context, _supabase_memoire as supabase
 
 # Nombre max de lignes historique_conversations relues pour la recherche
 # (au-dela, on considere que c'est trop vieux pour valoir la peine d'etre
