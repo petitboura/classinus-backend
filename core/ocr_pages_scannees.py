@@ -69,6 +69,17 @@ def extraire_texte_page_scannee(chemin_pdf: str, numero_page: int) -> str | None
     if texte_tesseract and len(texte_tesseract) >= LONGUEUR_MIN_TEXTE_OCR_ACCEPTABLE:
         return texte_tesseract
 
+    # Coupe-circuit quota Gemini existant (core/embeddings.py, partagé
+    # par toutes les files de vectorisation) : si la porte est déjà
+    # fermée suite à un quota épuisé ailleurs dans le projet, on
+    # n'ajoute pas des appels Gemini voués à échouer en plus, page par
+    # page, sur un même document scanné. Le texte Tesseract (même
+    # pauvre) reste utilisé s'il y en a un.
+    from core.embeddings import est_en_pause_quota_gemini
+
+    if est_en_pause_quota_gemini():
+        return texte_tesseract or None
+
     from core.description_multimedia import decrire_image_bibliotheque
 
     texte_gemini = decrire_image_bibliotheque(image_bytes, "image/png")

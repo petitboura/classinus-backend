@@ -272,7 +272,16 @@ async def uploader_document_chat(
     extension = TYPES_DOCUMENTS_AUTORISES[fichier.content_type]
     try:
         if extension == "pdf":
-            texte = _extraire_texte_pdf(contenu)
+            # 26/09 : un PDF scanné peut désormais déclencher Tesseract
+            # + Gemini vision page par page (core/ocr_pages_scannees.py),
+            # bien plus lent qu'une extraction de texte natif. Déporté
+            # sur un thread (même pattern qu'ailleurs dans l'API, voir
+            # api/main.py/api/bibliotheque_utilisateur.py) pour ne pas
+            # bloquer la boucle asyncio et les autres requêtes en cours
+            # pendant ce traitement.
+            import asyncio
+
+            texte = await asyncio.to_thread(_extraire_texte_pdf, contenu)
         elif extension == "docx":
             texte = _extraire_texte_docx(contenu)
         else:
