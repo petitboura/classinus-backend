@@ -357,6 +357,44 @@ async def demander_ecriture_champ(user_id: str, action_id: str, texte: str, on_s
     )
 
 
+async def demander_action_systeme(
+    user_id: str, type_action: str, parametres: dict, on_statut=None
+) -> Any | None:
+    """
+    Lot S (27/09/2026, chantier "canal en direct sort de l'appli" --
+    voir plan-canal-en-direct-pc.md). Meme principe exact que
+    demander_execution_action/demander_ecriture_champ ci-dessus, mais
+    pour une action HORS du DOM de la page Classinus : clic a des
+    coordonnees d'ecran, frappe clavier, ouverture d'application,
+    lecture d'ecran. Diffuse {action_systeme, parametres} a toutes les
+    connexions actives de user_id -- la fenetre principale web/DOM et
+    une eventuelle connexion mobile l'ignorent naturellement puisqu'elles
+    ne reconnaissent pas ce type de message ; seule la connexion Electron
+    dediee au systeme (deuxieme connexion WebSocket ouverte par le
+    processus principal Electron, appareil_id distinct de la fenetre
+    principale -- voir capacitor-dossiers-electron et
+    canal-systeme-electron cote clovis-frontend) sait l'executer
+    reellement.
+
+    type_action attendus pour l'instant (a etendre au meme endroit si
+    de nouveaux types sont ajoutes cote Electron) : "cliquer_ecran"
+    ({x, y}), "taper_clavier" ({texte}), "ouvrir_application" ({nom}),
+    "lire_ecran" ({}).
+
+    Pas de confirmation etudiant pour ce lot (decision Bourama du
+    27/09/2026, comme le reste du canal depuis le 19/09/2026) -- le
+    point d'ancrage pour l'ajouter plus tard, si demande, est ici,
+    avant l'appel a _diffuser_et_attendre.
+    """
+    correlation_id = str(uuid.uuid4())
+    return await _diffuser_et_attendre(
+        user_id,
+        {"id": correlation_id, "action_systeme": type_action, "parametres": parametres},
+        on_statut,
+        on_timeout_log=f"action_systeme={type_action}",
+    )
+
+
 async def pousser_texte_clovis(user_id: str, texte: str, duree_secondes: int | None = None) -> int:
     """
     Chantier P (19/09/2026, decision Bourama) : commentaire libre de
