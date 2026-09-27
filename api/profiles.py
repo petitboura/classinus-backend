@@ -184,6 +184,15 @@ class MonStatutReponse(BaseModel):
     # n'a pas de réponse, voir BureauAccueil.tsx. Jamais exposé sur le
     # profil public, uniquement via cet endpoint.
     est_professeur: Optional[bool] = None
+    # 27/09/2026, demande Bourama (chantier "traduction erreurs
+    # execution") : même convention que est_professeur ci-dessus -- None
+    # = jamais répondu (question posée au premier clic sur "Traduire",
+    # voir SortieExecutionCode.tsx), modifiable ensuite dans Paramètres >
+    # Préférences (voir ParametresPreferences.tsx).
+    langue_cible_erreurs: Optional[str] = None
+    # None/False = traduction seulement à la demande (bouton "Traduire"),
+    # True = traduction automatique dès qu'une erreur apparaît.
+    traduction_auto_erreurs: Optional[bool] = None
 
 
 @router.get("/moi/statut", response_model=MonStatutReponse)
@@ -191,7 +200,10 @@ def mon_statut(utilisateur=Depends(utilisateur_courant)):
     try:
         profil = (
             supabase.table("profiles")
-            .select("est_createur, est_majeur, est_professeur")
+            .select(
+                "est_createur, est_majeur, est_professeur, "
+                "langue_cible_erreurs, traduction_auto_erreurs"
+            )
             .eq("user_id", utilisateur.id)
             .maybe_single()
             .execute()
@@ -203,6 +215,8 @@ def mon_statut(utilisateur=Depends(utilisateur_courant)):
     est_createur = bool(donnees.get("est_createur"))
     est_majeur = donnees.get("est_majeur")
     est_professeur = donnees.get("est_professeur")
+    langue_cible_erreurs = donnees.get("langue_cible_erreurs")
+    traduction_auto_erreurs = donnees.get("traduction_auto_erreurs")
 
     agents_administres = _agents_administres_de(utilisateur.id)
 
@@ -211,6 +225,8 @@ def mon_statut(utilisateur=Depends(utilisateur_courant)):
         agents_administres=agents_administres,
         est_majeur=est_majeur,
         est_professeur=est_professeur,
+        langue_cible_erreurs=langue_cible_erreurs,
+        traduction_auto_erreurs=traduction_auto_erreurs,
     )
 
 
@@ -375,6 +391,10 @@ class MettreAJourProfilPayload(BaseModel):
     # 26/09/2026, voir docstring de MonStatutReponse. None = champ omis,
     # ne rien changer.
     est_professeur: Optional[bool] = None
+    # 27/09/2026, voir docstring de MonStatutReponse. None = champ omis,
+    # ne rien changer.
+    langue_cible_erreurs: Optional[str] = None
+    traduction_auto_erreurs: Optional[bool] = None
 
 
 @router.patch("/me", response_model=ProfilPublic)
@@ -442,6 +462,10 @@ def mettre_a_jour_mon_profil(
         ligne["profil_public"] = payload.profil_public
     if payload.est_professeur is not None:
         ligne["est_professeur"] = payload.est_professeur
+    if payload.langue_cible_erreurs is not None:
+        ligne["langue_cible_erreurs"] = payload.langue_cible_erreurs.strip() or None
+    if payload.traduction_auto_erreurs is not None:
+        ligne["traduction_auto_erreurs"] = payload.traduction_auto_erreurs
 
     try:
         deja_existant = (

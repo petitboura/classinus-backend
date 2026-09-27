@@ -26,6 +26,7 @@ from api.notifications_push import router as notifications_push_router
 from api.notifications import router as notifications_router
 from api.chat import router as chat_router
 from api.feedback import router as feedback_router
+from api.traduction_erreurs import router as traduction_erreurs_router
 from api.generation import router as generation_router
 from api.memoire import router as memoire_router
 from api.bibliotheque_utilisateur import router as bibliotheque_utilisateur_router
@@ -731,6 +732,7 @@ app.include_router(uploads_router)
 app.include_router(historique_router)
 app.include_router(chat_router)
 app.include_router(feedback_router)
+app.include_router(traduction_erreurs_router)
 app.include_router(generation_router)
 app.include_router(notifications_push_router)
 app.include_router(notifications_router)
