@@ -27,10 +27,17 @@ Deux seuils (constantes_agent.py) :
   de derniere ligne, jamais le mecanisme principal.
 """
 
+import json
 import logging
+import threading
 
+from groq import Groq
 from constantes_agent import (
     supabase,
+    get_secret,
+    MODELE_RESUME,
+    DELAI_MAX_PAR_APPEL,
+    TOKENS_MAX_SORTIE_RESUME,
     SEUIL_CARACTERES_HISTORIQUE_CONVERSATION,
     SEUIL_CARACTERES_HISTORIQUE_CONVERSATION_MAX,
 )
@@ -160,21 +167,34 @@ def alleger_historique_ancien(historique, conversation_id=None):
                 resultat[i] = {**m, "content": _pointeur_message(m.get("role"), contenu)}
 
     # 2) Filet de securite : seulement si le volume reste excessif malgre
-    # l'etape 1 (ou si le modele n'a rien marque du tout).
+    # l'etape 1 (ou si le modele n'a rien marque du tout). Pas une coupe
+    # aveugle : on evite d'abord de couper un message dont des mots se
+    # retrouvent dans la zone recente (signe que ce sujet est probablement
+    # encore actif, cf. le cas sujet1/sujet2/sujet3/sujet1/sujet1/sujet3
+    # signale par Bourama) -- on ne force la coupe dessus qu'en tout
+    # dernier recours, si rien d'autre ne suffit a repasser sous le seuil.
     taille_restante = calculer_taille_historique(resultat)
     if taille_restante > SEUIL_CARACTERES_HISTORIQUE_CONVERSATION_MAX:
-        taille_cumulee_recente = 0
-        coupure = limite_protegee
-        for k in range(limite_protegee - 1, -1, -1):
-            taille_cumulee_recente += len(resultat[k].get("content") or "")
-            if taille_cumulee_recente > SEUIL_CARACTERES_HISTORIQUE_CONVERSATION_MAX:
-                coupure = k + 1
+        mots_zone_recente = set()
+        for i in range(limite_protegee, n):
+            mots_zone_recente |= _mots(resultat[i].get("content") or "")
+
+        candidats = [
+            i for i in range(limite_protegee)
+            if not (resultat[i].get("content") or "").startswith("[Message plus tôt")
+        ]
+        for proteger_sujets_actifs in (True, False):
+            if taille_restante <= SEUIL_CARACTERES_HISTORIQUE_CONVERSATION_MAX:
                 break
-        for i in range(coupure):
-            m = resultat[i]
-            contenu = m.get("content") or ""
-            if not contenu.startswith("[Message plus tôt"):
-                resultat[i] = {**m, "content": _pointeur_message(m.get("role"), contenu)}
+            for i in list(candidats):
+                if taille_restante <= SEUIL_CARACTERES_HISTORIQUE_CONVERSATION_MAX:
+                    break
+                contenu = resultat[i].get("content") or ""
+                if proteger_sujets_actifs and (_mots(contenu) & mots_zone_recente):
+                    continue  # sujet probablement encore actif, protege pour l'instant
+                resultat[i] = {**resultat[i], "content": _pointeur_message(resultat[i].get("role"), contenu)}
+                taille_restante -= len(contenu)
+                candidats.remove(i)
 
     return resultat
 
@@ -197,3 +217,85 @@ def note_avancement_historique(historique):
         f"est réellement terminé -- ne laisse jamais ce chiffre dépasser "
         f"la limite sans avoir clos au moins un sujet.]"
     )
+
+
+def _demander_cloture_sujets(historique, limite_protegee):
+    """
+    Petit appel dedie (Groq, MODELE_RESUME -- meme modele rapide que
+    _mettre_a_jour_resume_si_besoin, persistance_echanges.py) dont la
+    SEULE tache est de repondre en JSON avec les sujets de la
+    conversation qui sont clairement termines, pour etre passes ensuite a
+    ajouter_sujet_clos. Ne repond jamais a la personne, ne genere aucun
+    resume -- juste une liste.
+    """
+    transcription = "\n".join(
+        f"{'Utilisateur' if m.get('role') == 'user' else 'Assistant'} : {(m.get('content') or '')[:500]}"
+        for m in historique[:limite_protegee]
+        if not (m.get("content") or "").startswith("[Message plus tôt")
+    )
+    if not transcription.strip():
+        return []
+
+    instruction = (
+        "Voici une partie plus ancienne d'une conversation. Identifie les "
+        "sujets qui sont clairement TERMINÉS (question déjà répondue, "
+        "besoin déjà satisfait, sujet peu susceptible de revenir). Réponds "
+        "UNIQUEMENT avec un objet JSON de la forme "
+        '{\"sujets_clos\": [\"description courte du sujet 1\", ...]}. '
+        "Liste vide si rien n'est clairement terminé. Ne réponds jamais à "
+        "la conversation elle-même, ne résume rien -- uniquement ce JSON."
+    )
+    client_groq = Groq(api_key=get_secret("GROQ_API_KEY"), max_retries=0)
+    completion = client_groq.chat.completions.create(
+        model=MODELE_RESUME,
+        messages=[
+            {"role": "system", "content": instruction},
+            {"role": "user", "content": transcription},
+        ],
+        max_completion_tokens=TOKENS_MAX_SORTIE_RESUME,
+        timeout=DELAI_MAX_PAR_APPEL,
+        response_format={"type": "json_object"},
+    )
+    donnees = json.loads(completion.choices[0].message.content)
+    return [s for s in (donnees.get("sujets_clos") or []) if isinstance(s, str) and s.strip()]
+
+
+def forcer_cloture_sujets_en_arriere_plan(historique, conversation_id):
+    """
+    Filet de securite (27/09/2026, demande explicite Bourama : "un
+    deuxieme appel en parallele, apres que l'utilisateur ait vu sa
+    reponse, qui ne sert qu'a demander de tronquer"). A appeler aux memes
+    endroits que _finaliser_memoire_en_arriere_plan (persistance_echanges.py),
+    APRES que la reponse a deja ete envoyee -- fire-and-forget, ne retarde
+    jamais la reponse a la personne, toute erreur reste loguee ici.
+
+    Ne se declenche QUE si le modele n'a pas suffisamment cloture de
+    sujets lui-meme ce tour-ci (marquer_sujet_clos, mecanisme principal,
+    gratuit) : si l'allegement deja connu suffit a repasser sous
+    SEUIL_CARACTERES_HISTORIQUE_CONVERSATION, cette fonction ne fait rien
+    et ne coute rien. Objectif : au prochain tour, le modele voit deja le
+    sujet cloture (via note_avancement_historique) AVANT meme de
+    commencer sa reponse -- il n'a donc plus besoin de s'en souvenir lui
+    meme si le tour precedent l'a rate.
+    """
+    if not conversation_id or not historique:
+        return
+
+    def _tache():
+        try:
+            taille = calculer_taille_historique(historique)
+            if taille <= SEUIL_CARACTERES_HISTORIQUE_CONVERSATION:
+                return  # sous le seuil doux, rien a faire
+
+            deja_allege = alleger_historique_ancien(historique, conversation_id)
+            if calculer_taille_historique(deja_allege) <= SEUIL_CARACTERES_HISTORIQUE_CONVERSATION:
+                return  # les sujets deja connus suffisent, le modele a bien fait son travail
+
+            n = len(historique)
+            limite_protegee = max(0, n - _MESSAGES_RECENTS_PROTEGES)
+            for sujet in _demander_cloture_sujets(historique, limite_protegee):
+                ajouter_sujet_clos(conversation_id, sujet)
+        except Exception as e:
+            logging.error(f"ERREUR tache de fond (clôture sujets historique) : {e}")
+
+    threading.Thread(target=_tache, daemon=True).start()
