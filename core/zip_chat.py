@@ -50,7 +50,7 @@ from extraction_documents import (
 )
 from import_zip import extraire_membres_zip
 
-TAILLE_MAX_ZIP_CHAT_OCTETS = 50 * 1024 * 1024  # 50 Mo -- au-delà de document-chat (15 Mo, un seul fichier), en dessous d'un multiple arbitraire, une archive contenant plusieurs documents doit passer
+TAILLE_MAX_ZIP_CHAT_OCTETS = 200 * 1024 * 1024  # 200 Mo -- relevé de 50 à 200 Mo le 27/09/2026 (bug réel : un dossier exporté depuis Google Drive dépassait 50 Mo, le job ne démarrait jamais, voir MESSAGES_FR dans core/erreurs.py)
 NOMBRE_MAX_FICHIERS_ZIP_CHAT = 20  # aligné sur la limite de fichiers par upload de Claude.ai (chat)
 
 NOM_OUTIL_DEZIP = "dezipper_zip_chat"

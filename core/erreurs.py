@@ -63,6 +63,13 @@ MESSAGES_FR: dict[str, str] = {
     "FICHIER_TROP_LOURD_50_MO_MAX": "Fichier trop lourd (50 Mo max).",
     "FICHIER_VECTORISE_MAIS_ECHEC_DU_STOCKAGE": "Fichier vectorisé mais échec du stockage en bibliothèque.",
     "FICHIER_VIDE": "Fichier vide.",
+    # Zip en conversation (26-27/09/2026, voir core/zip_chat.py) : 50 Mo
+    # s'est avéré trop bas en usage réel (bug signalé par Bourama,
+    # 27/09 -- un dossier exporté depuis Google Drive dépassait cette
+    # limite, le job ne démarrait jamais, le LLM ne recevait donc rien
+    # du tout). Relevé à 200 Mo.
+    "ZIP_TROP_LOURD_200_MO_MAX": "Archive trop lourde (200 Mo max).",
+    "FORMAT_NON_SUPPORTE_ZIP": "Format non supporté (.zip uniquement).",
     "FORMAT_NON_SUPPORTE_JPEG_PNG_OU": "Format non supporté (jpeg, png ou webp uniquement).",
     "FORMAT_NON_SUPPORTE_MP4_WEBM_OU": "Format non supporté (mp4, webm ou mov uniquement).",
     "FORMAT_NON_SUPPORTE_PDF_WORD_DOCX": "Format non supporté (PDF, Word .docx ou Excel .xlsx uniquement).",

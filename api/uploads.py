@@ -379,7 +379,7 @@ async def demarrer_zip_chat(
 
     contenu = await fichier.read()
     if len(contenu) > TAILLE_MAX_ZIP_CHAT_OCTETS:
-        raise erreur_api(400, "ZIP_TROP_LOURD_50_MO_MAX")
+        raise erreur_api(400, "ZIP_TROP_LOURD_200_MO_MAX")
     if len(contenu) == 0:
         raise erreur_api(400, "FICHIER_VIDE")
 
