@@ -16,17 +16,22 @@ tool_call_id (propre a Groq/OpenAI) : un outil deja execute a un tour
 PASSE n'est plus un appel en attente de reponse protocolaire, juste un
 fait de contexte.
 
-Budget : voir SEUIL_CARACTERES_OUTILS_HISTORIQUE (constantes_agent.py) et
-_resumer_outils_anciens ci-dessous -- meme principe que le resume memoire
-long terme existant (_mettre_a_jour_resume_si_besoin,
-persistance_echanges.py) : au-dela du seuil, les resultats les plus
-ANCIENS sont condenses en un seul resume via MODELE_RESUME, les plus
-RECENTS restent intacts.
+Budget : voir SEUIL_CARACTERES_OUTILS_HISTORIQUE (constantes_agent.py).
+
+CHANTIER 27/09/2026 (demande explicite Bourama, "reduire les couts sans
+perdre de contexte") : au-dela du seuil, les resultats les plus ANCIENS
+n'etaient jusqu'ici pas retires, seulement condenses via un appel
+supplementaire a MODELE_RESUME (_resumer_outils_anciens, retire) -- un
+cout a chaque fois que le seuil etait franchi, meme quand ce vieux
+resultat ne servait plus jamais a rien. Remplace par un simple RAPPEL
+("[Outil deja execute plus tot -- <nom>]", voir _pointeur_outil), gratuit
+et deterministe (aucun appel modele), rien n'est perdu : le contenu
+complet reste recuperable via l'outil rappeler_resultat_outil (voir
+core/outils_rappel_resultats.py) si le modele en a reellement besoin.
+Les resultats RECENTS restent intacts, inchange.
 """
 
-import logging
-from groq import Groq
-from constantes_agent import get_secret, MODELE_RESUME, DELAI_MAX_PAR_APPEL, SEUIL_CARACTERES_OUTILS_HISTORIQUE
+from constantes_agent import SEUIL_CARACTERES_OUTILS_HISTORIQUE
 
 
 def _bloc_outil(o):
@@ -37,34 +42,19 @@ def _bloc_outil(o):
     return f"[Résultat de l'outil déjà exécuté -- {nom}]\n{resultat}"
 
 
-def _resumer_outils_anciens(blocs_texte):
-    """
-    Condense une liste de blocs de resultats d'outils devenus trop
-    volumineux en UN SEUL resume factuel, via le meme modele rapide que
-    _mettre_a_jour_resume_si_besoin (persistance_echanges.py). Toute
-    erreur ici est geree par l'appelant (repli sur une troncature simple)
-    -- ne doit jamais faire echouer tout le message.
-    """
-    transcription = "\n\n".join(blocs_texte)
-    instruction = (
-        "Condense les résultats d'outils suivants (recherches, lectures de "
-        "documents, code reçu, etc., obtenus plus tôt dans cette même "
-        "conversation) en un résumé factuel et concis qui garde toutes les "
-        "informations concrètes utiles (chiffres, noms, faits, extraits de "
-        "code pertinents), sans reformuler en réponse ni ajouter de "
-        "commentaire. Ne réponds à rien, résume seulement."
+def _pointeur_outil(o):
+    """Remplace un resultat d'outil devenu trop ancien par un simple
+    rappel de son existence, sans son contenu -- voir
+    core/outils_rappel_resultats.py:rappeler_resultat_outil pour aller le
+    rechercher si besoin. Gratuit (aucun appel modele), contrairement a
+    l'ancien resume via MODELE_RESUME."""
+    nom = o.get("nomLisible") or o.get("nomOutil") or "Outil"
+    return (
+        f"[Outil déjà exécuté plus tôt dans cette conversation -- {nom}. "
+        f"Résultat non affiché ici pour ne pas surcharger le contexte -- "
+        f"utilise rappeler_resultat_outil si tu en as besoin, plutôt que "
+        f"de réexécuter cet outil.]"
     )
-    client_groq = Groq(api_key=get_secret("GROQ_API_KEY"), max_retries=0)
-    completion = client_groq.chat.completions.create(
-        model=MODELE_RESUME,
-        messages=[
-            {"role": "system", "content": instruction},
-            {"role": "user", "content": transcription},
-        ],
-        max_completion_tokens=None,
-        timeout=DELAI_MAX_PAR_APPEL,
-    )
-    return completion.choices[0].message.content.strip()
 
 
 def enrichir_historique_avec_outils(historique):
@@ -81,41 +71,40 @@ def enrichir_historique_avec_outils(historique):
     troncature de secours suffit -- ce module ne doit jamais faire
     planter un message pour cette seule raison.
     """
-    blocs = []  # [(index_message, texte_du_bloc)], ordre chronologique
+    # [(index_message, outil_brut, texte_du_bloc)], ordre chronologique --
+    # l'outil brut est garde a cote du texte pour pouvoir construire un
+    # simple rappel (nom seulement) si ce bloc s'avere trop ancien.
+    blocs = []
     for i, m in enumerate(historique):
         if m.get("role") != "assistant":
             continue
         for o in (m.get("outils") or []):
-            blocs.append((i, _bloc_outil(o)))
+            blocs.append((i, o, _bloc_outil(o)))
 
     if not blocs:
         return historique
 
-    taille_totale = sum(len(t) for _, t in blocs)
+    taille_totale = sum(len(t) for _, _, t in blocs)
 
     if taille_totale > SEUIL_CARACTERES_OUTILS_HISTORIQUE:
-        # Garde les plus RECENTS intacts (en partant de la fin), condense
-        # le reste (les plus ANCIENS) en un seul resume.
+        # Garde les plus RECENTS intacts (en partant de la fin), remplace
+        # le reste (les plus ANCIENS) par un simple rappel de leur
+        # existence -- un par outil concerne, pas un resume groupe :
+        # rappeler_resultat_outil cherche par description, un rappel par
+        # outil (avec son nom) lui donne une meilleure chance de
+        # retrouver le bon.
         taille_cumulee_recente = 0
         coupure = len(blocs)
         for k in range(len(blocs) - 1, -1, -1):
-            taille_cumulee_recente += len(blocs[k][1])
+            taille_cumulee_recente += len(blocs[k][2])
             if taille_cumulee_recente > SEUIL_CARACTERES_OUTILS_HISTORIQUE:
                 coupure = k + 1
                 break
         anciens, recents = blocs[:coupure], blocs[coupure:]
-        if anciens:
-            try:
-                resume = _resumer_outils_anciens([t for _, t in anciens])
-            except Exception as e:
-                logging.error(f"ERREUR résumé outils historique (repli sur troncature) : {e}")
-                resume = "\n\n".join(t[:500] for _, t in anciens)
-            # Rattache au tour le plus ancien concerne, pour rester au
-            # plus pres de sa place chronologique d'origine.
-            blocs = [(anciens[0][0], f"[Résumé des outils exécutés plus tôt dans cette conversation]\n{resume}")] + recents
+        blocs = [(idx, o, _pointeur_outil(o)) for idx, o, _ in anciens] + recents
 
     par_index = {}
-    for idx, texte in blocs:
+    for idx, _o, texte in blocs:
         par_index.setdefault(idx, []).append(texte)
 
     resultat = []
