@@ -48,6 +48,7 @@ from constantes_agent import (
 from moderation_message import _verifier_message_utilisateur
 from filtre_texte_streaming import _ressemble_a_du_json_casse  # réexporté pour core/proactivite.py (05/09/2026)
 from lecture_urls_externes import _construire_parts_gemini, _enrichir_message_avec_urls, _telecharger_image
+from ocr_pages_scannees import ocr_tesseract_image_fiable
 from profils_agents import _nom_agent, _nom_lisible, _nom_lisible_appel, _action_appel
 from routage_outils import (
     _ecrire_outils_retenus, _lire_outils_retenus, _outil_garder_outils, _router_outils,
@@ -1188,29 +1189,50 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 "erreur": "aperçu non conservé après rechargement",
             })
         try:
-            # ETAPE 6 (11/09/2026, demande Bourama) : visuel pour l'eleve
-            # pendant la latence ajoutee par ce chantier -- meme mecanisme
-            # SSE statut/statut_termine deja utilise pour les outils
-            # (StatutOutil.tsx cote frontend, rien de nouveau a creer),
-            # meme style de libelle ("... " / "effectuee" / "a echoue").
-            # Les etapes suivantes ("reflechit" puis le texte de reponse)
-            # sont deja couvertes par l'existant (IndicateurReflexion,
-            # streaming normal) une fois cette bulle disparue.
+            # 27/09/2026 (demande Bourama, suite à l'audit du chantier OCR
+            # scan PDF) : étape 6 déjà notée plus haut comme "reste à
+            # traiter" (coût/latence) -- avant d'appeler Gemini, on tente
+            # Tesseract (gratuit, local) sur chaque image. Si TOUTES les
+            # images donnent un texte suffisant, on saute l'appel Gemini
+            # entièrement (pas de coût, pas de dépendance au quota) ; dès
+            # qu'UNE SEULE image est insuffisante (photo, schéma, écriture
+            # manuscrite...), on revient au comportement Gemini existant
+            # pour tout le lot, inchangé -- pas de mélange partiel qui
+            # complexifierait la suite. Ne s'applique qu'aux images
+            # (`images`, bytes déjà en main) : les frames vidéo passent
+            # aussi par `images`, donc couvertes pareil.
+            textes_tesseract = [ocr_tesseract_image_fiable(contenu_image) for contenu_image, _ in images]
+            tesseract_suffisant = all(textes_tesseract)
+
             yield {"type": "statut", "texte": "Lecture de l'image..."}
-            client_google = genai.Client(api_key=get_secret("GOOGLE_API_KEY"))
-            response = client_google.models.generate_content_stream(
-                model=GOOGLE_MODEL,
-                contents=gemini_messages,
-                config=types.GenerateContentConfig(
-                    system_instruction=instruction_description_gemini
+
+            if tesseract_suffisant:
+                description_generee = "\n\n".join(textes_tesseract)
+                logging.info(f"Description TESSERACT (image) générée : {len(description_generee)} caractères (Gemini non appelé)")
+                yield {"type": "statut_termine", "texte": "Lecture de l'image effectuée"}
+            else:
+                # ETAPE 6 (11/09/2026, demande Bourama) : visuel pour l'eleve
+                # pendant la latence ajoutee par ce chantier -- meme mecanisme
+                # SSE statut/statut_termine deja utilise pour les outils
+                # (StatutOutil.tsx cote frontend, rien de nouveau a creer),
+                # meme style de libelle ("... " / "effectuee" / "a echoue").
+                # Les etapes suivantes ("reflechit" puis le texte de reponse)
+                # sont deja couvertes par l'existant (IndicateurReflexion,
+                # streaming normal) une fois cette bulle disparue.
+                client_google = genai.Client(api_key=get_secret("GOOGLE_API_KEY"))
+                response = client_google.models.generate_content_stream(
+                    model=GOOGLE_MODEL,
+                    contents=gemini_messages,
+                    config=types.GenerateContentConfig(
+                        system_instruction=instruction_description_gemini
+                    )
                 )
-            )
-            for chunk in response:
-                if chunk.text:
-                    description_accumulee.append(chunk.text)
-            description_generee = "".join(description_accumulee)
-            logging.info(f"Description GEMINI (image) générée : {len(description_generee)} caractères")
-            yield {"type": "statut_termine", "texte": "Lecture de l'image effectuée"}
+                for chunk in response:
+                    if chunk.text:
+                        description_accumulee.append(chunk.text)
+                description_generee = "".join(description_accumulee)
+                logging.info(f"Description GEMINI (image) générée : {len(description_generee)} caractères")
+                yield {"type": "statut_termine", "texte": "Lecture de l'image effectuée"}
         except Exception as e:
             # ETAPE 3 (11/09/2026, demande Bourama) : la description echoue
             # -- on continue quand meme vers le grand modele (pas d'arret

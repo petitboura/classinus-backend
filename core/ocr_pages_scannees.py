@@ -54,6 +54,12 @@ def _ocr_tesseract(image_bytes: bytes) -> str | None:
         return None
 
 
+# Alias public : même fonction, utilisable directement sur une image
+# quelconque (pas seulement une page de PDF rendue) -- voir
+# core/main.py, chemin image du chat (27/09/2026, demande Bourama).
+ocr_tesseract_image = _ocr_tesseract
+
+
 def extraire_texte_page_scannee(chemin_pdf: str, numero_page: int) -> str | None:
     """
     Point d'entrée unique : extrait le texte d'une page de PDF déjà
@@ -84,3 +90,42 @@ def extraire_texte_page_scannee(chemin_pdf: str, numero_page: int) -> str | None
 
     texte_gemini = decrire_image_bibliotheque(image_bytes, "image/png")
     return texte_gemini or texte_tesseract or None
+
+
+CONFIANCE_MIN_TESSERACT_IMAGE_CHAT = 75
+MOTS_MIN_TESSERACT_IMAGE_CHAT = 8
+
+
+def ocr_tesseract_image_fiable(image_bytes: bytes) -> str | None:
+    """
+    Pour les images jointes au chat : contrairement à une page de PDF
+    scannée (où le texte est le but), une image peut être une photo ou
+    un schéma où Tesseract sortirait du bruit de plus de 20 caractères.
+    On ne garde donc son texte que si la confiance moyenne de
+    reconnaissance est élevée et si assez de mots sont reconnus.
+    Renvoie None dans tous les autres cas : l'appelant utilise Gemini.
+    """
+    try:
+        import pytesseract
+        from PIL import Image
+
+        image = Image.open(io.BytesIO(image_bytes))
+        donnees = pytesseract.image_to_data(image, lang="fra", output_type=pytesseract.Output.DICT)
+        confiances = []
+        for mot, conf in zip(donnees["text"], donnees["conf"]):
+            if mot and mot.strip():
+                try:
+                    valeur = float(conf)
+                except (TypeError, ValueError):
+                    continue
+                if valeur >= 0:
+                    confiances.append(valeur)
+        if len(confiances) < MOTS_MIN_TESSERACT_IMAGE_CHAT:
+            return None
+        if sum(confiances) / len(confiances) < CONFIANCE_MIN_TESSERACT_IMAGE_CHAT:
+            return None
+        texte = pytesseract.image_to_string(image, lang="fra").strip()
+        return texte or None
+    except Exception as e:
+        logging.error(f"ERREUR TESSERACT (image chat) : {e}")
+        return None
