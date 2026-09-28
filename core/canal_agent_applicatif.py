@@ -45,6 +45,13 @@ _attentes: dict[str, "asyncio.Future[Any]"] = {}
 # on ne devine jamais une liste, on attend la vraie donnee.
 _etat_actions: dict[tuple[str, str], list[dict[str, Any]]] = {}
 
+# Editeur de code (28/09/2026, demande Bourama) : etat de l'editeur monte
+# a l'ecran, pousse par chaque connexion en meme temps que etat_actions
+# (langage, nom du fichier, plein ecran). Jamais le code lui-meme : le
+# contenu se lit a la demande avec l'operation "lire", pour ne pas
+# alourdir chaque poussee ni le prompt.
+_etat_editeur: dict[tuple[str, str], dict[str, Any]] = {}
+
 # Memes paliers que canal_temps_reel.py (coherence pour l'etudiant, qui
 # peut voir les deux types de message dans la meme conversation).
 DELAI_STATUT_1_SECONDES = 5
@@ -89,6 +96,7 @@ async def deconnecter(user_id: str, appareil_id: str, websocket: WebSocket) -> N
             # que de risquer de le laisser trainer et d'etre lu comme
             # encore valable.
             _etat_actions.pop(cle, None)
+            _etat_editeur.pop(cle, None)
 
 
 def mettre_a_jour_etat_actions(user_id: str, appareil_id: str, actions: list[dict[str, Any]]) -> None:
@@ -122,6 +130,31 @@ def obtenir_actions_disponibles(user_id: str) -> list[dict[str, Any]]:
             if isinstance(action_id, str):
                 fusion[action_id] = action
     return list(fusion.values())
+
+
+def mettre_a_jour_etat_editeur(user_id: str, appareil_id: str, etat: Any) -> None:
+    """
+    Editeur de code : remplace l'etat de l'editeur de CETTE connexion.
+    `etat` vaut None (ou tout ce qui n'est pas un dict) quand l'editeur
+    n'est plus monte a l'ecran : l'etat precedent est alors retire.
+    """
+    cle = (user_id, appareil_id)
+    if isinstance(etat, dict):
+        _etat_editeur[cle] = etat
+    else:
+        _etat_editeur.pop(cle, None)
+
+
+def obtenir_etat_editeur(user_id: str) -> dict[str, Any] | None:
+    """
+    Etat de l'editeur ouvert sur l'une des connexions actives de
+    `user_id`, ou None si aucune n'en a un de monte. Jamais un etat
+    invente : uniquement la derniere poussee reelle.
+    """
+    for (cle_user, _appareil), etat in _etat_editeur.items():
+        if cle_user == user_id:
+            return etat
+    return None
 
 
 # Correctif du 19/09/2026 (Bourama : "dans beaucoup de cas Clovis n'arrive
@@ -354,6 +387,25 @@ async def demander_ecriture_champ(user_id: str, action_id: str, texte: str, on_s
         {"id": correlation_id, "action_id": action_id, "texte_a_ecrire": texte},
         on_statut,
         on_timeout_log=f"ecriture action={action_id}",
+    )
+
+
+async def demander_action_editeur(user_id: str, operation: dict[str, Any], on_statut=None) -> Any | None:
+    """
+    Editeur de code (28/09/2026, demande Bourama). Meme principe que
+    demander_ecriture_champ : diffuse {editeur: operation} a toutes les
+    connexions actives de user_id, la premiere connexion qui a
+    l'editeur monte execute l'operation (lire, ecrire ou montrer, voir
+    traiterDemandeEditeur dans lib/canalAgentApplicatif.ts) et repond.
+    Aucune confirmation cote etudiant : c'est l'IA qui decide, selon la
+    conversation, de demander avant d'ecrire ou non.
+    """
+    correlation_id = str(uuid.uuid4())
+    return await _diffuser_et_attendre(
+        user_id,
+        {"id": correlation_id, "editeur": operation},
+        on_statut,
+        on_timeout_log=f"editeur op={operation.get('op')}",
     )
 
 

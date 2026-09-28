@@ -658,6 +658,10 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "montrer_element_application": {"label": "Pointer un élément de l'application", "icone": "Crosshair", "onglet": None},
     # Ecriture dans les champs (20/09/2026, demande Bourama), meme rappel de cache 24h.
     "ecrire_dans_champ": {"label": "Écriture dans un champ", "icone": "PenLine", "onglet": None},
+    # Editeur de code (28/09/2026, demande Bourama), meme rappel de cache 24h.
+    "lire_editeur": {"label": "Lecture de l'éditeur de code", "icone": "FileCode", "onglet": None},
+    "montrer_dans_editeur": {"label": "Montrer des lignes dans l'éditeur", "icone": "Crosshair", "onglet": None},
+    "ecrire_dans_editeur": {"label": "Écriture dans l'éditeur de code", "icone": "PenLine", "onglet": None},
     # Chantier P (canal en direct, 19/09/2026) : commentaire libre pendant
     # une action, meme rappel de cache 24h.
     "dire_a_l_etudiant": {"label": "Message en direct à l'étudiant", "icone": "MessageCircle", "onglet": None},
@@ -837,6 +841,7 @@ CATEGORIES_OUTILS = {
     "agent_applicatif": [
         "executer_action_application",
         "executer_clic_generique", "montrer_element_application", "ecrire_dans_champ",
+        "lire_editeur", "montrer_dans_editeur", "ecrire_dans_editeur",
     ],
     "github": ["gerer_depot_github"],
     "google_drive": [

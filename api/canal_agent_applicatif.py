@@ -15,6 +15,7 @@ from core.canal_agent_applicatif import (
     connecter,
     deconnecter,
     mettre_a_jour_etat_actions,
+    mettre_a_jour_etat_editeur,
     recevoir_reponse,
 )
 from core.canal_temps_reel import fermer_websocket_sans_erreur
@@ -62,6 +63,8 @@ async def canal_temps_reel(websocket: WebSocket):
                 recevoir_reponse(correlation_id, message.get("resultat"))
             elif "etat_actions" in message and isinstance(message.get("etat_actions"), list):
                 mettre_a_jour_etat_actions(utilisateur.id, appareil_id, message["etat_actions"])
+                if "etat_editeur" in message:
+                    mettre_a_jour_etat_editeur(utilisateur.id, appareil_id, message.get("etat_editeur"))
             elif isinstance(message.get("message_etudiant"), str):
                 await accuser_message_etudiant(
                     utilisateur.id, appareil_id, message.get("id_message"), message["message_etudiant"], websocket
