@@ -276,12 +276,16 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # injecte du tout.
     if actions_ecran:
         system_final += _texte_actions_application(actions_ecran)
-        # Editeur de code (28/09/2026) : uniquement quand il est monte a
-        # l'ecran chez l'etudiant. Meme condition que les actions ci-dessus
-        # (canal en direct actif), meme lecture en memoire.
-        etat_editeur = obtenir_etat_editeur(user_id) if user_id else None
-        if etat_editeur:
-            system_final += _texte_editeur(etat_editeur)
+
+    # Editeur de code (28/09/2026) : uniquement quand il est monte a
+    # l'ecran chez l'etudiant. Independant de actions_ecran ci-dessus
+    # (correctif du 28/09/2026 : imbrique dans le if precedent, ce bloc ne
+    # partait jamais si actions_ecran etait vide -- l'IA ne savait alors
+    # jamais que l'editeur existait et n'appelait jamais lire_editeur).
+    # Meme source (canal en direct actif, lu dans chat()).
+    etat_editeur = obtenir_etat_editeur(user_id) if user_id else None
+    if etat_editeur:
+        system_final += _texte_editeur(etat_editeur)
 
     # Injection automatique des reponses QCM (23/09/2026, demande Bourama) :
     # jusqu'ici l'IA ne savait jamais ce que l'etudiant avait repondu a un
