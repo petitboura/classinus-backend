@@ -615,6 +615,13 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # core/outils_reponses_qcm.py. onglet: None, même logique que
     # verifier_consignes_code_actif : jamais un bouton cliquable.
     "lire_reponses_qcm": {"label": "Lecture des réponses QCM", "icone": "ListChecks", "onglet": None},
+    # Gestion de la taille de l'historique (28/09/2026, demande Bourama) :
+    # outils que le modele appelle lui-meme en autonomie, jamais des boutons
+    # cliquables (onglet None, meme logique que lire_reponses_qcm). Icones
+    # deja utilisees ailleurs dans ce registre.
+    "rappeler_resultat_outil": {"label": "Rappel d'un résultat précédent", "icone": "ScrollText", "onglet": None},
+    "rappeler_echange_conversation": {"label": "Rappel d'un échange précédent", "icone": "BookOpen", "onglet": None},
+    "marquer_sujet_clos": {"label": "Archivage d'un sujet terminé", "icone": "ListChecks", "onglet": None},
 
     # --- Actions sur le téléphone de l'étudiant (26/08/2026) ---
     # onglet=None, même logique que les blocs "Programme adaptatif"/
@@ -817,12 +824,18 @@ CATEGORIES_OUTILS = {
         "changer_mode_conversation",  # 25/09/2026
     ],
     "comportement": ["gerer_comportement", "gerer_comportement_public"],
-    "memoire": ["gerer_memoire_utilisateur"],
+    "memoire": [
+        "gerer_memoire_utilisateur",  # ancien systeme, conserve pour l'instant (voir core/memoire_eleve.py)
+        "memoire_sommaire", "memoire_lire", "memoire_ecrire",
+    ],
     "telephone_etudiant": [
         "gerer_dossier_telephone", "explorer_dossier", "gerer_action_mobile",
         "lire_temps_ecran", "gerer_session_concentration",
     ],
-    "historique": ["lister_conversations_historique", "lire_conversation_historique"],
+    "historique": [
+        "lister_conversations_historique", "lire_conversation_historique",
+        "rappeler_resultat_outil", "rappeler_echange_conversation", "marquer_sujet_clos",  # 28/09/2026
+    ],
     # Minuteurs du chat (20/09/2026, demande Bourama, chat seulement).
     "minuteur": ["gerer_minuteur"],
     # lister_actions_disponibles retire le 19/09/2026 (chantier "agent

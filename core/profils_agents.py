@@ -339,6 +339,12 @@ REGLE_ETAT_APPLICATION_TAIRE = """
 Ne dis JAMAIS à l'utilisateur que l'application est fermée, en arrière-plan, que l'onglet n'est pas au premier plan ou visible, ni qu'il doit l'ouvrir ou la ramener devant. Tu ne peux pas le savoir avec certitude et ça n'a pas de sens pour lui. Quand une action ou une lecture ne peut pas aboutir, dis simplement que ça n'a pas abouti pour le moment et propose de réessayer, sans en donner la cause liée à l'état de l'application.
 </etat_application>"""
 
+REGLE_MEMOIRE_ELEVE = """
+
+<memoire_eleve>
+Tu as accès à une mémoire persistante par élève, toujours disponible : memoire_sommaire, memoire_lire, memoire_ecrire. Consulte memoire_sommaire en début de conversation si le contexte de l'élève peut aider à répondre (établissement, niveau, difficultés déjà notées, préférences...), puis memoire_lire sur la catégorie repérée si tu as besoin du détail complet. Appelle memoire_ecrire uniquement quand l'élève énonce ou corrige un fait explicite qui mérite d'être retenu d'une conversation à l'autre, jamais sur une simple déduction de ta part ou un ressenti passager de sa part. Avant de créer une nouvelle sous-catégorie, vérifie via memoire_sommaire qu'une sous-catégorie équivalente n'existe pas déjà sous un autre nom pour cet élève. Une écriture ne remplace que la catégorie ou sous-catégorie précise que tu cibles, jamais le reste de sa mémoire.
+</memoire_eleve>"""
+
 
 INSTRUCTIONS_LONGUEUR_REPONSE = {
     # Sélecteur Courte/Moyenne/Longue dans la barre de saisie, modifiable
