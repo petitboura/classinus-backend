@@ -56,7 +56,15 @@ from routage_outils import (
 )
 from construction_system_prompt import _construire_system_prompt, _est_timeout, _repli_si_reponse_partielle
 from persistance_echanges import _sauvegarder_echange, _finaliser_memoire_en_arriere_plan
-from historique_outils import enrichir_historique_avec_outils
+from historique_outils import enrichir_historique_avec_outils, a_des_outils_allegers
+from historique_conversation import (
+    alleger_historique_ancien,
+    note_avancement_historique,
+    a_des_messages_allegers,
+    calculer_taille_historique,
+    seuil_affichage_note,
+    forcer_cloture_sujets_en_arriere_plan,
+)
 from historique_reponses_qcm import reponses_qcm_a_injecter
 from execution_outils import _resultat_pour_affichage
 from boucle_agent import _agent_groq, _capturer_reponse, _ajouter_segment_texte
@@ -707,6 +715,19 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # sur le mode, rien ne garantit que le routeur juge
         # changer_mode_conversation pertinent ce tour-ci sans cette ligne.
         outils_forces_contexte.append("changer_mode_conversation")
+    # Gestion de l'historique (28/09/2026, demande Bourama) : aucun outil n'est
+    # envoye au modele par defaut (voir filtrer_catalogue_par_outil_force), donc
+    # ces outils doivent etre forces des qu'ils ont un usage ce tour-ci. Sans
+    # cela, les rappels affiches dans l'historique renverraient vers un outil
+    # absent de sa liste. Le calcul de l'historique allege est fait ici UNE
+    # SEULE FOIS et reutilise plus bas pour construire messages_base.
+    historique_allege = alleger_historique_ancien(historique, conversation_id)
+    if a_des_messages_allegers(historique_allege):
+        outils_forces_contexte.append("rappeler_echange_conversation")
+    if a_des_outils_allegers(historique):
+        outils_forces_contexte.append("rappeler_resultat_outil")
+    if calculer_taille_historique(historique_allege) >= seuil_affichage_note():
+        outils_forces_contexte.append("marquer_sujet_clos")
     # Outils toujours actifs pour Clovis (04/09/2026, demande Bourama) :
     # "sa source de connaissance dès qu'il connaît pas ou ne comprend
     # pas" -- doivent être disponibles au grand modèle à CHAQUE message,
@@ -1071,8 +1092,28 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # suivant, meme si son resultat restait affiche a l'ecran cote
     # utilisateur. Voir core/historique_outils.py pour le format choisi et
     # le mecanisme de resume au-dela de SEUIL_CARACTERES_OUTILS_HISTORIQUE.
-    messages_base = [{"role": "system", "content": system_final}]
-    messages_base += enrichir_historique_avec_outils(historique)
+    # 27/09/2026 : allege D'ABORD le texte brut des vieux messages (voir
+    # core/historique_conversation.py -- desormais pilote par le modele
+    # lui-meme via marquer_sujet_clos, position fixe en filet de securite
+    # seulement), PUIS enrichit/allege separement leurs resultats d'outils
+    # -- deux mecanismes independants, meme principe (rappel gratuit +
+    # recuperation a la demande). Le suivi de taille est ajoute au prompt
+    # systeme pour que le modele sache s'il doit clore un sujet.
+    # La version allegee de l'historique n'est utilisee que si l'outil de
+    # rappel correspondant est reellement propose ce tour-ci (jamais de rappel
+    # qui renvoie vers un outil absent, ex. chemin image sans outils).
+    # modele_force (Claude/GPT/Gemini/DeepSeek premium, voir plus bas) ne
+    # recoit JAMAIS d'outils MCP (messages_premium les retire explicitement) :
+    # aucun des 3 outils de gestion d'historique n'y est donc jamais vraiment
+    # disponible, meme si outils_mcp les contient pour le calcul normal.
+    noms_outils_tour = set() if modele_force else {o["function"]["name"] for o in (outils_mcp or [])}
+    if a_des_messages_allegers(historique_allege) and "rappeler_echange_conversation" not in noms_outils_tour:
+        historique_pour_modele = historique
+    else:
+        historique_pour_modele = historique_allege
+    note_historique = note_avancement_historique(historique_pour_modele) if "marquer_sujet_clos" in noms_outils_tour else ""
+    messages_base = [{"role": "system", "content": system_final + (("\n\n" + note_historique) if note_historique else "")}]
+    messages_base += enrichir_historique_avec_outils(historique_pour_modele, "rappeler_resultat_outil" in noms_outils_tour)
     messages_base.append({"role": "user", "content": message_pour_modele})
 
     # ETAPE 5 (11/09/2026) : meta_utilisateur (piece jointe pour affichage
@@ -1348,6 +1389,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
             _finaliser_memoire_en_arriere_plan(user_id, agent_id)
+            forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
         except Exception as e:
             logging.error(f"ERREUR MODELE PREMIUM ({modele_force}) : {e}")
             if not reponse_accumulee:
@@ -1413,6 +1455,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 if ids_historique:
                     yield {"type": "meta", **ids_historique}
                 _finaliser_memoire_en_arriere_plan(user_id, agent_id)
+                forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
                 return
             except Exception as e:
                 if not _est_timeout(e):
@@ -1438,6 +1481,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
             _finaliser_memoire_en_arriere_plan(user_id, agent_id)
+            forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
             return
         except Exception as e:
             if not _est_timeout(e):
@@ -1489,6 +1533,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 if meta_a_envoyer:
                     yield {"type": "meta", **meta_a_envoyer}
                 _finaliser_memoire_en_arriere_plan(user_id, agent_id)
+                forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
                 return
             except Exception as e:
                 if not _est_timeout(e):
@@ -1611,6 +1656,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
             _finaliser_memoire_en_arriere_plan(user_id, agent_id)
+            forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
             return
         except Exception as e:
             if not _est_timeout(e):

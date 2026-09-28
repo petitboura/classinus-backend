@@ -137,6 +137,20 @@ TOKENS_MAX_SORTIE_RESUME = 1500
 # pour le reste du prompt (systeme + question + reponses).
 SEUIL_CARACTERES_OUTILS_HISTORIQUE = 12000
 
+# 27/09/2026 (demande explicite Bourama, meme chantier que ci-dessus mais
+# applique cette fois aux MESSAGES eux-memes -- voir
+# core/historique_conversation.py). SEUIL "doux" : objectif affiche au
+# modele a chaque tour, il doit lui-meme cloturer des sujets (outil
+# marquer_sujet_clos) avant que l'historique n'atteigne ce volume --
+# rien n'est force automatiquement a ce niveau.
+SEUIL_CARACTERES_HISTORIQUE_CONVERSATION = 5000
+
+# SEUIL "dur" : filet de securite seulement, si le modele n'a pas assez
+# allege lui-meme -- au-dela, une coupe automatique (position fixe) est
+# forcee sur le reste. Ne doit normalement jamais etre atteint si le
+# modele respecte le seuil doux ci-dessus.
+SEUIL_CARACTERES_HISTORIQUE_CONVERSATION_MAX = 8000
+
 # Profil utilisateur dynamique par agent (2026-07-21, voir
 # agents.profil_utilisateur_schema et _mettre_a_jour_profil_utilisateur_si_besoin
 # plus bas). Seuil plus bas que SEUIL_RESUME_MESSAGES : contrairement au
