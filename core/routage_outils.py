@@ -421,7 +421,7 @@ def _outils_memoire_toujours_disponibles(outils_mcp, table_routage, catalogue_co
     de core/outils_memoire_eleve.py doivent etre disponibles a CHAQUE
     tour, comme demander_outils (voir _preparer_demander_outils juste
     au-dessus), pour que le modele les utilise en reflexe plutot qu'a
-    l'occasion -- tout le principe de la refonte, l'ancien systeme
+    l'occasion, tout le principe de la refonte, l'ancien systeme
     (gerer_memoire_utilisateur) n'etait utilise que quand le routeur ou
     demander_outils le laissait passer.
 
@@ -433,7 +433,7 @@ def _outils_memoire_toujours_disponibles(outils_mcp, table_routage, catalogue_co
 
     IMPORTANT : ajouter le schema a outils_mcp seul NE SUFFIT PAS.
     main.py execute les appels via `table_routage` (voir appeler_outil),
-    pas table_routage_complet -- un outil present dans outils_mcp mais
+    pas table_routage_complet : un outil present dans outils_mcp mais
     absent de table_routage echouerait silencieusement au premier appel
     du modele. D'ou le parametre table_routage ici, mis a jour en meme
     temps que outils_mcp.

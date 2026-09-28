@@ -2,12 +2,12 @@
 Outils MCP de la mémoire élève (chantier 27/09/2026, demande Bourama).
 Trois actions séparées plutôt qu'un seul outil à actions (contrairement
 à gerer_memoire_utilisateur) : `memoire_sommaire` doit pouvoir être
-appelé très souvent, à moindre coût, sans jamais charger de contenu --
+appelé très souvent, à moindre coût, sans jamais charger de contenu ,
 un seul outil "action" aurait quand même une description unique plus
 longue à envoyer à chaque tour.
 
 RAPPEL NON NEGOCIABLE (voir core/outils_generation_commun.py, ligne 47) :
-question explicite à poser à Bourama avant tout déploiement -- ces
+question explicite à poser à Bourama avant tout déploiement, ces
 outils doivent-ils aussi être exposés sur le serveur MCP PUBLIC
 (core/serveur_mcp_espace.py) ? Pas supposé ici, pas fait ici.
 
@@ -17,7 +17,7 @@ demander_outils (catégorie "memoire", voir registre_outils.py). Le
 principe "toujours disponible, comme demander_outils" décidé par Bourama
 est une décision d'INJECTION dans outils_mcp, câblée séparément dans
 core/routage_outils.py (_outils_memoire_toujours_disponibles) et
-core/main.py -- ne dépend pas de ce fichier. Voir patch-wiring.md pour
+core/main.py, ne dépend pas de ce fichier. Voir patch-wiring.md pour
 le détail exact (l'injection dans outils_mcp seule ne suffit PAS,
 l'entrée correspondante dans table_routage est nécessaire aussi, sans
 quoi l'appel échoue silencieusement à l'exécution).
@@ -43,7 +43,7 @@ def _user_id(ctx: Context) -> str | None:
 def memoire_sommaire(ctx: Context) -> str:
     """
     Renvoie la liste des catégories/sous-catégories déjà connues pour CET
-    élève -- JAMAIS leur contenu, juste de quoi savoir où aller (une
+    élève, JAMAIS leur contenu, juste de quoi savoir où aller (une
     ligne = une catégorie ou sous-catégorie, sa description en une
     phrase, sa date de dernière mise à jour). Les catégories du socle
     (identite, scolarite, apprentissage, preferences) apparaissent même
@@ -53,10 +53,10 @@ def memoire_sommaire(ctx: Context) -> str:
     À appeler en début de conversation si le contexte de l'élève peut
     aider à répondre, et systématiquement AVANT d'écrire une nouvelle
     sous-catégorie (pour vérifier qu'une sous-catégorie équivalente
-    n'existe pas déjà -- ex. ne pas créer "ecole" si "etablissement"
+    n'existe pas déjà, ex. ne pas créer "ecole" si "etablissement"
     existe déjà pour cet élève). Une fois la ligne pertinente repérée
     ici, utilise memoire_lire pour son contenu complet, ou memoire_ecrire
-    pour la créer/modifier -- jamais besoin de relire tout le sommaire à
+    pour la créer/modifier, jamais besoin de relire tout le sommaire à
     chaque fois, seulement quand tu as besoin d'une vue d'ensemble.
     """
     user_id = _user_id(ctx)
@@ -74,7 +74,7 @@ def memoire_sommaire(ctx: Context) -> str:
         if l["description"] is None:
             textes.append(f"{chemin}: (vide)")
         else:
-            textes.append(f"{chemin}: {l['description']} — [maj: {l['updated_at']}]")
+            textes.append(f"{chemin}: {l['description']} (maj: {l['updated_at']})")
     return "\n".join(textes)
 
 
@@ -108,7 +108,7 @@ def memoire_lire(categorie: str, ctx: Context, sous_categorie: str = "") -> str:
 def memoire_ecrire(categorie: str, contenu_json: str, description: str, ctx: Context, sous_categorie: str = "") -> str:
     """
     Crée ou remplace le contenu d'UNE catégorie ou sous-catégorie précise
-    de la mémoire de CET élève -- ne touche JAMAIS aux autres
+    de la mémoire de CET élève, ne touche JAMAIS aux autres
     catégories/sous-catégories déjà notées. À utiliser dès que l'élève
     énonce ou corrige un fait explicite qui mérite d'être retenu d'une
     conversation à l'autre (établissement, niveau, difficulté récurrente,
@@ -122,7 +122,7 @@ def memoire_ecrire(categorie: str, contenu_json: str, description: str, ctx: Con
     niveaux (ex. "maths.derivees") ; laisse vide pour écrire directement
     au niveau de la catégorie racine. `contenu_json` : objet JSON avec le
     contenu complet de cette catégorie/sous-catégorie après mise à jour
-    (remplace tout ce qui y était noté avant, pas une fusion partielle --
+    (remplace tout ce qui y était noté avant, pas une fusion partielle ,
     relis d'abord avec memoire_lire si tu dois compléter plutôt que
     remplacer). `description` : résumé en une phrase de ce que contient
     désormais cette ligne, affiché ensuite dans memoire_sommaire.

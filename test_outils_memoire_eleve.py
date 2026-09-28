@@ -3,8 +3,8 @@ Test manuel des outils mémoire élève (chantier "mémoire eleve", 27/09/2026,
 demande Bourama, Lot D). Même convention que test_envoyer_message_manuel.py :
 vraie requête Starlette (ctx.request_context.request.query_params réel, pas
 mocké), seules les fonctions core.memoire_eleve.* qui appellent Supabase sont
-mockées ici (le vrai test contre la base réelle -- isolation entre catégories
-et non-régénération globale, notamment -- a été fait à part directement
+mockées ici (le vrai test contre la base réelle, isolation entre catégories
+et non-régénération globale, notamment, a été fait à part directement
 contre le projet Supabase "Clovis" via de vraies requêtes SQL sur un profil
 jetable créé puis supprimé, pas dans ce fichier).
 
@@ -58,7 +58,7 @@ async def cas_sommaire_utilisateur_non_identifie():
     ctx = construire_ctx(user_id=None)
     resultat = ome.memoire_sommaire(ctx=ctx)
     assert resultat == "Erreur : impossible d'identifier l'élève.", resultat
-    print("OK  -- memoire_sommaire, user_id absent -> erreur claire")
+    print("OK , memoire_sommaire, user_id absent -> erreur claire")
 
 
 async def cas_sommaire_nominal():
@@ -75,14 +75,14 @@ async def cas_sommaire_nominal():
     assert "apprentissage.maths: Notions vues" in resultat, resultat
     assert "identite: (vide)" in resultat, resultat
     assert "scolarite: Etablissement et niveau" in resultat, resultat
-    print("OK  -- memoire_sommaire, cas nominal -> catégories vides et remplies bien formatées, jamais de contenu")
+    print("OK , memoire_sommaire, cas nominal -> catégories vides et remplies bien formatées, jamais de contenu")
 
 
 async def cas_lire_categorie_invalide():
     ctx = construire_ctx(user_id="u1")
     resultat = ome.memoire_lire(categorie="hobbies", ctx=ctx)
     assert resultat.startswith("Erreur : categorie 'hobbies' invalide"), resultat
-    print("OK  -- memoire_lire, categorie hors socle -> refusée avant tout appel Supabase")
+    print("OK , memoire_lire, categorie hors socle -> refusée avant tout appel Supabase")
 
 
 async def cas_lire_rien_note():
@@ -91,7 +91,7 @@ async def cas_lire_rien_note():
         resultat = ome.memoire_lire(categorie="preferences", ctx=ctx)
     mock.assert_called_once_with("u1", "preferences", None)
     assert resultat == "Rien noté à cet endroit pour l'instant.", resultat
-    print("OK  -- memoire_lire, rien noté -> message clair, pas d'erreur brute")
+    print("OK , memoire_lire, rien noté -> message clair, pas d'erreur brute")
 
 
 async def cas_lire_nominal_avec_sous_categorie():
@@ -100,35 +100,35 @@ async def cas_lire_nominal_avec_sous_categorie():
         resultat = ome.memoire_lire(categorie="apprentissage", sous_categorie="maths", ctx=ctx)
     mock.assert_called_once_with("u1", "apprentissage", "maths")
     assert resultat == '{"notions_vues": ["derivees"]}', resultat
-    print("OK  -- memoire_lire, sous-catégorie précise -> contenu JSON renvoyé tel quel")
+    print("OK , memoire_lire, sous-catégorie précise -> contenu JSON renvoyé tel quel")
 
 
 async def cas_ecrire_categorie_invalide():
     ctx = construire_ctx(user_id="u1")
     resultat = ome.memoire_ecrire(categorie="hobbies", contenu_json="{}", description="x", ctx=ctx)
     assert "invalide" in resultat, resultat
-    print("OK  -- memoire_ecrire, categorie hors socle -> refusée avant tout appel Supabase")
+    print("OK , memoire_ecrire, categorie hors socle -> refusée avant tout appel Supabase")
 
 
 async def cas_ecrire_json_invalide():
     ctx = construire_ctx(user_id="u1")
     resultat = ome.memoire_ecrire(categorie="scolarite", contenu_json="pas du json", description="x", ctx=ctx)
     assert resultat == "Erreur : contenu_json doit être un objet JSON valide.", resultat
-    print("OK  -- memoire_ecrire, JSON malformé -> erreur claire, pas de 500 brut")
+    print("OK , memoire_ecrire, JSON malformé -> erreur claire, pas de 500 brut")
 
 
 async def cas_ecrire_json_pas_un_objet():
     ctx = construire_ctx(user_id="u1")
     resultat = ome.memoire_ecrire(categorie="scolarite", contenu_json="[1, 2, 3]", description="x", ctx=ctx)
     assert "objet JSON" in resultat, resultat
-    print("OK  -- memoire_ecrire, JSON valide mais pas un objet (liste) -> refusé")
+    print("OK , memoire_ecrire, JSON valide mais pas un objet (liste) -> refusé")
 
 
 async def cas_ecrire_description_manquante():
     ctx = construire_ctx(user_id="u1")
     resultat = ome.memoire_ecrire(categorie="scolarite", contenu_json="{}", description="   ", ctx=ctx)
     assert resultat == "Erreur : description manquante.", resultat
-    print("OK  -- memoire_ecrire, description vide -> refusée (nécessaire au sommaire)")
+    print("OK , memoire_ecrire, description vide -> refusée (nécessaire au sommaire)")
 
 
 async def cas_ecrire_nominal():
@@ -140,7 +140,7 @@ async def cas_ecrire_nominal():
         )
     mock.assert_called_once_with("u1", "apprentissage", "maths", {"notions_vues": ["derivees"]}, "Notions vues en maths")
     assert resultat == "Mémoire mise à jour (apprentissage.maths).", resultat
-    print("OK  -- memoire_ecrire, cas nominal -> bonne catégorie/sous-catégorie transmise, jamais les autres")
+    print("OK , memoire_ecrire, cas nominal -> bonne catégorie/sous-catégorie transmise, jamais les autres")
 
 
 async def cas_ecrire_echec_supabase():
@@ -148,7 +148,7 @@ async def cas_ecrire_echec_supabase():
     with patch.object(ome, "_ecrire_categorie", return_value=(False, "Erreur : categorie 'x' invalide. Catégories possibles : identite, scolarite, apprentissage, preferences.")):
         resultat = ome.memoire_ecrire(categorie="scolarite", contenu_json="{}", description="x", ctx=ctx)
     assert resultat.startswith("Erreur :"), resultat
-    print("OK  -- memoire_ecrire, échec côté couche données -> message d'erreur relayé, pas de succès menteur")
+    print("OK , memoire_ecrire, échec côté couche données -> message d'erreur relayé, pas de succès menteur")
 
 
 async def main():

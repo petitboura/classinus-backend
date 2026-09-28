@@ -28,6 +28,7 @@ from api.chat import router as chat_router
 from api.feedback import router as feedback_router
 from api.generation import router as generation_router
 from api.memoire import router as memoire_router
+from api.memoire_eleve import router as memoire_eleve_router
 from api.bibliotheque_utilisateur import router as bibliotheque_utilisateur_router
 from api.dossiers_bibliotheque import router as dossiers_bibliotheque_router
 from api.contenu_dynamique_matiere import router_enseignant as contenu_matiere_enseignant_router
@@ -727,6 +728,7 @@ app.include_router(generation_router)
 app.include_router(notifications_push_router)
 app.include_router(notifications_router)
 app.include_router(memoire_router)
+app.include_router(memoire_eleve_router)
 app.include_router(bibliotheque_utilisateur_router)
 app.include_router(dossiers_bibliotheque_router)
 # roles_router (ancien systeme etablissement/enseignant/etudiant) retire

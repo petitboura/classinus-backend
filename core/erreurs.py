@@ -244,6 +244,7 @@ MESSAGES_FR: dict[str, str] = {
     "PAS_LE_DROIT_SUR_CET_AGENT": "Tu n'as pas le droit de modifier cet agent.",
     "DESTINATAIRE_INTROUVABLE": "Destinataire introuvable.",
     "MESSAGE_VIDE": "Le message ne peut pas être vide.",
+    "MEMOIRE_ELEVE_LECTURE_ECHEC": "Impossible de charger ta progression pour le moment.",
     "ANNONCE_VIDE": "L'annonce ne peut pas être vide.",
     "TEXTE_REQUIS": "Le texte ne peut pas être vide.",
     "COMPORTEMENT_INTROUVABLE": "Comportement introuvable.",

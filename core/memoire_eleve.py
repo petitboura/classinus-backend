@@ -2,7 +2,7 @@
 Mémoire élève persistante et incrémentale (chantier 27/09/2026, demande
 Bourama). Remplace le principe de core/outils_memoire_profil.py
 (gerer_memoire_utilisateur / consulter_profil_utilisateur /
-mettre_a_jour_profil_utilisateur), gardés en place pour l'instant --
+mettre_a_jour_profil_utilisateur), gardés en place pour l'instant ,
 migration ou retrait des données existantes (tables
 conversation_summaries et agent_user_profiles) pas décidé, à trancher
 avec Bourama avant d'y toucher, même logique que les autres points
@@ -11,10 +11,10 @@ ouverts flagués dans ce dépôt.
 Le système précédent stockait tout dans un unique JSON par élève, fusion
 au premier niveau seulement (dict.update) : une mise à jour sur une clé
 de premier niveau déjà utilisée écrasait tout son contenu imbriqué au
-lieu de le compléter -- symptôme rapporté par Bourama d'une mémoire qui
+lieu de le compléter, symptôme rapporté par Bourama d'une mémoire qui
 "change" au lieu de s'accumuler. Nouveau principe ici : une ligne par
 (élève, catégorie, sous_categorie) dans memoire_eleve (voir
-migrations/2026_09_27_memoire_eleve.sql), jamais de réécriture globale --
+migrations/2026_09_27_memoire_eleve.sql), jamais de réécriture globale ,
 une écriture ne touche jamais que sa propre ligne.
 
 Catégories de premier niveau imposées (CATEGORIES_MEMOIRE_ELEVE) : le
@@ -22,7 +22,7 @@ modèle ne peut pas en créer d'autres à ce niveau. Sous-catégories
 libres, décidées par le modèle selon chaque élève.
 
 Ce module ne connaît rien du protocole MCP (voir
-core/outils_memoire_eleve.py pour les outils appelés par le modèle) --
+core/outils_memoire_eleve.py pour les outils appelés par le modèle) ,
 seulement l'accès Supabase, même découpage que
 core/historique_reponses_qcm.py / core/outils_reponses_qcm.py.
 """
@@ -56,7 +56,7 @@ def _vers_api(sous_categorie: str) -> str | None:
 def obtenir_sommaire(user_id: str) -> list[dict]:
     """
     Une entrée par catégorie/sous-catégorie déjà connue pour cet élève :
-    categorie, sous_categorie, description, updated_at -- JAMAIS le
+    categorie, sous_categorie, description, updated_at, JAMAIS le
     contenu (voir lire_categorie pour ça, à n'appeler que sur la ligne
     précise identifiée ici). Les catégories du socle sans aucune ligne
     existante sont quand même incluses, description=None, pour que le
@@ -118,7 +118,7 @@ def ecrire_categorie(
 ) -> tuple[bool, str | None]:
     """
     Crée ou remplace le contenu d'UNE SEULE ligne (categorie/sous_categorie),
-    jamais les autres lignes de cet élève -- c'est tout le principe de
+    jamais les autres lignes de cet élève, c'est tout le principe de
     cette refonte (voir docstring de module). `categorie` doit faire
     partie du socle (CATEGORIES_MEMOIRE_ELEVE), sinon l'écriture est
     refusée AVANT tout appel Supabase (pas de garde-fou côté base, la
