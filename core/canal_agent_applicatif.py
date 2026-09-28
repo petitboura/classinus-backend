@@ -389,7 +389,9 @@ async def demander_action_systeme(
     type_action attendus pour l'instant (a etendre au meme endroit si
     de nouveaux types sont ajoutes cote Electron) : "cliquer_ecran"
     ({x, y}), "taper_clavier" ({texte}), "ouvrir_application" ({nom}),
-    "lire_ecran" ({}).
+    "lire_ecran" ({nb_max_elements, nb_max_fenetres, longueur_max_nom,
+    longueur_max_valeur, profondeur_max, delai_max_ms}, voir
+    core/outils_action_agent_pc.py).
 
     Pas de confirmation etudiant pour ce lot (decision Bourama du
     27/09/2026, comme le reste du canal depuis le 19/09/2026) -- le
