@@ -1,37 +1,39 @@
 """
 Ajoute le 15/09/2026 (demande Bourama) : jusqu'ici, l'historique renvoye
 par le frontend a chaque nouveau message ne contenait que le texte final
-(role/content) -- tout resultat d'outil obtenu a un tour precedent
-(lecture de bibliotheque, skill, recherche web, code recu...) etait donc
-invisible pour le modele au tour suivant, qui devait rappeler l'outil pour
-le "redecouvrir". Ce module reinjecte ces resultats dans ce qui part au
+(role/content). Tout resultat d'outil obtenu a un tour precedent (lecture
+de bibliotheque, skill, recherche web, code recu...) etait donc invisible
+pour le modele au tour suivant, qui devait rappeler l'outil pour le
+"redecouvrir". Ce module reinjecte ces resultats dans ce qui part au
 modele (voir core/main.py, construction de messages_base).
 
 Format choisi : le resultat de chaque outil est prefixe DANS le contenu du
-message assistant concerne (pas un message separe) -- garde une stricte
+message assistant concerne (pas un message separe). Cela garde une stricte
 alternance user/assistant, identique a la structure d'origine de
 l'historique, donc aucune adaptation par fournisseur necessaire (Groq,
-DeepSeek, Gemini, premium) contrairement au format natif tool_calls/
-tool_call_id (propre a Groq/OpenAI) : un outil deja execute a un tour
-PASSE n'est plus un appel en attente de reponse protocolaire, juste un
-fait de contexte.
+DeepSeek, Gemini, premium), contrairement au format natif tool_calls/
+tool_call_id : un outil deja execute a un tour PASSE n'est plus un appel en
+attente de reponse protocolaire, juste un fait de contexte.
 
 Budget : voir SEUIL_CARACTERES_OUTILS_HISTORIQUE (constantes_agent.py).
 
-CHANTIER 27/09/2026 (demande explicite Bourama, "reduire les couts sans
-perdre de contexte") : au-dela du seuil, les resultats les plus ANCIENS
-n'etaient jusqu'ici pas retires, seulement condenses via un appel
-supplementaire a MODELE_RESUME (_resumer_outils_anciens, retire) -- un
-cout a chaque fois que le seuil etait franchi, meme quand ce vieux
-resultat ne servait plus jamais a rien. Remplace par un simple RAPPEL
-("[Outil deja execute plus tot -- <nom>]", voir _pointeur_outil), gratuit
-et deterministe (aucun appel modele), rien n'est perdu : le contenu
+Chantier du 27/09/2026 (demande explicite Bourama, reduire les couts sans
+perdre de contexte) : au-dela du seuil, les resultats les plus ANCIENS ne
+sont plus renvoyes. Ils etaient auparavant condenses par un appel
+supplementaire a un petit modele, ce qui coutait a chaque franchissement
+du seuil. Ils sont maintenant remplaces par un simple rappel (voir
+_pointeur_outil), gratuit et deterministe. Rien n'est perdu : le contenu
 complet reste recuperable via l'outil rappeler_resultat_outil (voir
-core/outils_rappel_resultats.py) si le modele en a reellement besoin.
-Les resultats RECENTS restent intacts, inchange.
+core/outils_rappel_resultats.py) si le modele en a reellement besoin. Les
+resultats RECENTS restent intacts.
 """
 
 from constantes_agent import SEUIL_CARACTERES_OUTILS_HISTORIQUE
+
+# Un rappel ne remplace un resultat que si le resultat est nettement plus
+# long que le rappel lui-meme, sinon on ferait grossir le contexte au lieu
+# de le reduire.
+_MARGE_MIN_REMPLACEMENT = 100
 
 
 def _bloc_outil(o):
@@ -42,44 +44,61 @@ def _bloc_outil(o):
     return f"[Résultat de l'outil déjà exécuté -- {nom}]\n{resultat}"
 
 
-def _pointeur_outil(o):
-    """Remplace un resultat d'outil devenu trop ancien par un simple
-    rappel de son existence, sans son contenu -- voir
-    core/outils_rappel_resultats.py:rappeler_resultat_outil pour aller le
-    rechercher si besoin. Gratuit (aucun appel modele), contrairement a
-    l'ancien resume via MODELE_RESUME."""
+def _pointeur_outil(o, mentionner_outil_rappel=True):
+    """Remplace un resultat d'outil devenu trop ancien par un simple rappel
+    de son existence, sans son contenu. Gratuit (aucun appel modele).
+    `mentionner_outil_rappel` vaut False quand on sait DEJA que
+    rappeler_resultat_outil n'est pas propose ce tour-ci (voir core/main.py).
+    Meme quand il vaut True, la formulation reste souple (28/09/2026) : un
+    chemin de reponse sans aucun outil peut survenir apres coup (filet de
+    secours Gemini, voir core/main.py) sans que ce calcul ait pu le savoir a
+    l'avance -- le modele doit pouvoir continuer sans ce detail si besoin."""
     nom = o.get("nomLisible") or o.get("nomOutil") or "Outil"
+    if mentionner_outil_rappel:
+        return (
+            f"[Outil déjà exécuté plus tôt dans cette conversation : {nom}. "
+            f"Résultat non affiché ici pour ne pas surcharger le contexte. "
+            f"Si l'outil rappeler_resultat_outil est disponible et que ce "
+            f"résultat redevient utile, utilise-le plutôt que de réexécuter "
+            f"cet outil. Sinon, continue normalement sans ce détail.]"
+        )
     return (
-        f"[Outil déjà exécuté plus tôt dans cette conversation -- {nom}. "
-        f"Résultat non affiché ici pour ne pas surcharger le contexte -- "
-        f"utilise rappeler_resultat_outil si tu en as besoin, plutôt que "
-        f"de réexécuter cet outil.]"
+        f"[Outil déjà exécuté plus tôt dans cette conversation : {nom}. "
+        f"Résultat non affiché ici pour ne pas surcharger le contexte.]"
     )
 
 
-def enrichir_historique_avec_outils(historique):
-    """
-    `historique` : liste de dicts {role, content, outils?} tels qu'envoyes
-    par le frontend (voir api/chat.py:MessageHistorique -- `outils`
-    provient de meta.outils, deja sauvegarde pour l'affichage, voir
-    core/persistance_echanges.py). Renvoie une NOUVELLE liste (n'altere
-    jamais l'original), meme longueur, memes roles -- seul le `content`
-    des messages assistant concernes est enrichi.
-
-    Ignore silencieusement (renvoie l'historique tel quel) si aucun
-    message n'a d'outils, ou si le resume de secours echoue ET que la
-    troncature de secours suffit -- ce module ne doit jamais faire
-    planter un message pour cette seule raison.
-    """
-    # [(index_message, outil_brut, texte_du_bloc)], ordre chronologique --
-    # l'outil brut est garde a cote du texte pour pouvoir construire un
-    # simple rappel (nom seulement) si ce bloc s'avere trop ancien.
+def _blocs_outils(historique):
+    """[(index_message, outil_brut, texte_du_bloc)] dans l'ordre chronologique."""
     blocs = []
-    for i, m in enumerate(historique):
+    for i, m in enumerate(historique or []):
         if m.get("role") != "assistant":
             continue
         for o in (m.get("outils") or []):
             blocs.append((i, o, _bloc_outil(o)))
+    return blocs
+
+
+def a_des_outils_allegers(historique):
+    """Vrai si le volume total de resultats d'outils depasse le seuil, donc
+    si enrichir_historique_avec_outils va remplacer les plus anciens par un
+    rappel. Utilise par core/main.py pour proposer rappeler_resultat_outil
+    au modele seulement quand il peut en avoir besoin."""
+    return sum(len(t) for _, _, t in _blocs_outils(historique)) > SEUIL_CARACTERES_OUTILS_HISTORIQUE
+
+
+def enrichir_historique_avec_outils(historique, mentionner_outil_rappel=True):
+    """
+    `historique` : liste de dicts {role, content, outils?} tels qu'envoyes
+    par le frontend (voir api/chat.py:MessageHistorique). `outils` provient
+    de meta.outils, deja sauvegarde pour l'affichage (voir
+    core/persistance_echanges.py). Renvoie une NOUVELLE liste (n'altere
+    jamais l'original), meme longueur, memes roles. Seul le `content` des
+    messages assistant concernes est enrichi.
+
+    Renvoie l'historique tel quel si aucun message n'a d'outils.
+    """
+    blocs = _blocs_outils(historique)
 
     if not blocs:
         return historique
@@ -87,12 +106,11 @@ def enrichir_historique_avec_outils(historique):
     taille_totale = sum(len(t) for _, _, t in blocs)
 
     if taille_totale > SEUIL_CARACTERES_OUTILS_HISTORIQUE:
-        # Garde les plus RECENTS intacts (en partant de la fin), remplace
-        # le reste (les plus ANCIENS) par un simple rappel de leur
-        # existence -- un par outil concerne, pas un resume groupe :
-        # rappeler_resultat_outil cherche par description, un rappel par
-        # outil (avec son nom) lui donne une meilleure chance de
-        # retrouver le bon.
+        # Garde les plus RECENTS intacts (en partant de la fin), remplace le
+        # reste (les plus ANCIENS) par un simple rappel de leur existence,
+        # un par outil concerne : rappeler_resultat_outil cherche par
+        # description, un rappel par outil (avec son nom) lui donne une
+        # meilleure chance de retrouver le bon.
         taille_cumulee_recente = 0
         coupure = len(blocs)
         for k in range(len(blocs) - 1, -1, -1):
@@ -101,7 +119,14 @@ def enrichir_historique_avec_outils(historique):
                 coupure = k + 1
                 break
         anciens, recents = blocs[:coupure], blocs[coupure:]
-        blocs = [(idx, o, _pointeur_outil(o)) for idx, o, _ in anciens] + recents
+        allege = []
+        for idx, o, texte in anciens:
+            rappel = _pointeur_outil(o, mentionner_outil_rappel)
+            if len(texte) > len(rappel) + _MARGE_MIN_REMPLACEMENT:
+                allege.append((idx, o, rappel))
+            else:
+                allege.append((idx, o, texte))
+        blocs = allege + recents
 
     par_index = {}
     for idx, _o, texte in blocs:

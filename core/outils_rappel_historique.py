@@ -1,16 +1,14 @@
 """
 Outil MCP "rappeler_echange_conversation" (27/09/2026, demande explicite
-Bourama, meme chantier que core/outils_rappel_resultats.py mais applique
-au texte des MESSAGES (questions/reponses) plutot qu'aux resultats
-d'outils -- voir core/historique_conversation.py pour la partie qui
-remplace les vieux messages par un simple rappel avant l'envoi au modele.
+Bourama). Meme chantier que core/outils_rappel_resultats.py, applique au
+texte des MESSAGES (questions et reponses). Voir
+core/historique_conversation.py pour la partie qui remplace les vieux
+messages d'un sujet clos par un simple rappel avant l'envoi au modele.
 
-Meme choix de conception que outils_rappel_resultats.py, pour les memes
-raisons (voir sa docstring) : recherche par DESCRIPTION plutot que par
-identifiant (le frontend n'envoie aucun id de message), via conversation_id
-lu directement depuis ctx, requete directement contre historique_
-conversations (deja sauvegarde pour l'affichage, voir
-core/persistance_echanges.py) -- aucune nouvelle table, aucune migration.
+Meme choix de conception : recherche par DESCRIPTION (le frontend n'envoie
+aucun identifiant de message), conversation_id lu depuis ctx, relecture dans
+historique_conversations (deja sauvegardee pour l'affichage, voir
+core/persistance_echanges.py). Aucune nouvelle table.
 
 Expose cote CHAT SEULEMENT, jamais sur le serveur MCP public.
 """
@@ -18,54 +16,54 @@ Expose cote CHAT SEULEMENT, jamais sur le serveur MCP public.
 import logging
 
 from core.outils_generation_commun import mcp_generation, Context, _supabase_memoire as supabase
+from core.texte_recherche_simple import mots_significatifs
 
-# Meme esprit que core/outils_rappel_resultats.py : au-dela, trop vieux
-# pour valoir la peine d'etre refouille automatiquement.
-_LIMITE_LIGNES_RELUES = 300
+# Nombre de lignes les plus recentes relues pour la recherche (limite le
+# volume lu dans Supabase).
+_LIMITE_LIGNES_RELUES = 200
 
-# Un echange = la question ET sa reponse -- renvoyer les deux donne au
-# modele le contexte complet du moment, pas juste une moitie.
+# Un echange est la question ET sa reponse : renvoyer les deux donne au
+# modele le contexte complet du moment.
 _LIMITE_ECHANGES_RENVOYES = 3
-
-
-def _mots(texte):
-    return set((texte or "").lower().split())
 
 
 def _rechercher(conversation_id, requete):
     lignes = (
         supabase.table("historique_conversations")
-        .select("role, content, parent_id, created_at")
-        .eq("conversation_id", conversation_id)
-        .order("created_at", desc=False)
+        .select("role, content, created_at")
+        .eq("conversation_id", str(conversation_id))
+        .order("created_at", desc=True)
         .limit(_LIMITE_LIGNES_RELUES)
         .execute()
     ).data or []
+    lignes.reverse()  # ordre chronologique
 
-    requete_mots = _mots(requete)
-    scores = [
-        (len(requete_mots & _mots(ligne.get("content"))), i)
-        for i, ligne in enumerate(lignes)
-    ]
-    scores = [(s, i) for s, i in scores if s > 0]
+    mots_requete = mots_significatifs(requete)
+    if not mots_requete:
+        return []
+    scores = []
+    for i, ligne in enumerate(lignes):
+        s = len(mots_requete & mots_significatifs(ligne.get("content")))
+        if s > 0:
+            scores.append((s, i))
     scores.sort(key=lambda c: c[0], reverse=True)
 
-    # Pour chaque message trouve, renvoie l'ECHANGE complet (question +
-    # reponse) plutot que la seule ligne qui a matche -- une question
-    # utilisateur trouvee sans sa reponse (ou l'inverse) serait a moitie
-    # inutile au modele.
-    indices_echanges = []
+    # Pour chaque message trouve, renvoie l'ECHANGE complet (question et
+    # reponse), pas seulement la ligne qui correspond.
+    paires = []
     for _, i in scores:
         paire = (i, i + 1) if lignes[i]["role"] == "user" else (i - 1, i)
-        if paire not in indices_echanges:
-            indices_echanges.append(paire)
-        if len(indices_echanges) >= _LIMITE_ECHANGES_RENVOYES:
+        if paire not in paires:
+            paires.append(paire)
+        if len(paires) >= _LIMITE_ECHANGES_RENVOYES:
             break
 
     resultat = []
-    for debut, fin in indices_echanges:
+    deja_vus = set()
+    for debut, fin in sorted(paires):
         for i in (debut, fin):
-            if 0 <= i < len(lignes):
+            if 0 <= i < len(lignes) and i not in deja_vus:
+                deja_vus.add(i)
                 resultat.append(lignes[i])
     return resultat
 
@@ -73,23 +71,22 @@ def _rechercher(conversation_id, requete):
 @mcp_generation.tool()
 def rappeler_echange_conversation(requete: str, ctx: Context) -> str:
     """
-    Rappelle le texte COMPLET d'un échange (question + réponse) déjà eu
-    plus tôt dans cette même conversation, sans redemander à
-    l'utilisateur de le répéter.
+    Rappelle le texte COMPLET d'un échange (question et réponse) déjà eu plus
+    tôt dans cette même conversation, sans demander à l'utilisateur de le
+    répéter.
 
-    À utiliser quand l'historique mentionne qu'un message plus ancien a
-    été allégé ("[Message plus tôt dans cette conversation -- ...]") et
-    que son contenu complet redevient utile pour répondre à la question
-    actuelle.
+    À utiliser quand l'historique indique qu'un message plus ancien a été
+    allégé ("[Message plus tôt dans cette conversation : ...]") et que son
+    contenu complet redevient utile pour répondre à la question actuelle.
 
-    RÈGLE IMPORTANTE : si l'utilisateur fait référence à quelque chose
-    évoqué plus tôt ("comme je disais", "reprends ce qu'on a vu avant",
-    ou simplement une question qui suppose un contexte déjà donné),
-    appelle cet outil AVANT de répondre plutôt que de deviner ou de
-    demander à l'utilisateur de se répéter.
+    RÈGLE IMPORTANTE : si l'utilisateur fait référence à quelque chose évoqué
+    plus tôt ("comme je disais", "reprends ce qu'on a vu avant", ou une
+    question qui suppose un contexte déjà donné), appelle cet outil AVANT de
+    répondre plutôt que de deviner ou de demander à l'utilisateur de se
+    répéter.
 
-    `requete` : décris en quelques mots le sujet de l'échange recherché
-    -- ex. "ce qu'on avait dit sur son projet de voyage", "la liste
+    `requete` : décris en quelques mots le sujet de l'échange recherché, par
+    exemple "ce qu'on avait dit sur son projet de voyage" ou "la liste
     qu'elle avait donnée plus tôt".
     """
     conversation_id = ctx.request_context.request.query_params.get("conversation_id")
