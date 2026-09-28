@@ -485,7 +485,7 @@ async def ecrire_dans_editeur(mode: str, texte: str, ctx: Context, ligne_debut: 
 
     Les numéros de lignes sont ceux de lire_editeur (la première ligne est
     1). Lis l'éditeur juste avant d'écrire si l'étudiant a pu le modifier.
-    L'étudiant peut annuler ce que tu écris avec Annuler dans l'éditeur.
+    L'étudiant peut annuler ce que tu écris avec Ctrl+Z (Cmd+Z sur Mac).
 
     C'est toi qui décides, selon la conversation, d'écrire directement ou de
     demander d'abord à l'étudiant dans ta réponse : aucune confirmation

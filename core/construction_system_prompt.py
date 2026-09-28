@@ -103,7 +103,7 @@ def _texte_editeur(etat):
         "- ecrire_dans_editeur : écris ou modifie son code, il te voit taper. Trois modes : tout remplacer, remplacer des lignes, insérer après une ligne.\n"
         "- Parle-lui avec dire_a_l_etudiant pendant que tu montres ou écris : la bulle reste visible en plein écran.\n"
         "- Selon la conversation, tu écris directement quand il te l'a demandé ou l'a accepté, ou tu lui demandes d'abord dans ta réponse si tu juges plus prudent "
-        "de confirmer, surtout avant de remplacer un code qu'il a écrit lui même. Dis toujours ce que tu changes. Il peut annuler avec Annuler dans l'éditeur.\n"
+        "de confirmer, surtout avant de remplacer un code qu'il a écrit lui même. Dis toujours ce que tu changes. Il peut annuler avec Ctrl+Z (Cmd+Z sur Mac).\n"
         "- Les boutons de l'éditeur (Exécuter, Ouvrir, Enregistrer, Vers le chat, plein écran) sont dans la liste des éléments à l'écran.\n"
     )
 
