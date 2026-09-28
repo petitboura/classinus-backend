@@ -35,12 +35,11 @@ comment on column public.memoire_eleve.description is
 alter table public.memoire_eleve enable row level security;
 
 /*
-Unicité déjà utile pour trier le sommaire par catégorie, mais un index
-dédié évite un scan complet dès que la table grossit (beaucoup
-d'élèves), memoire_sommaire filtrant systématiquement sur user_id.
+Pas d'index supplementaire sur user_id : la contrainte d'unicite (user_id, categorie,
+sous_categorie) ci-dessus cree deja un index sur exactement ces colonnes, qui sert
+aussi les lectures filtrees par user_id (memoire_sommaire). Un second index serait
+un doublon a mettre a jour a chaque ecriture.
 */
-create index if not exists idx_memoire_eleve_user
-  on public.memoire_eleve(user_id, categorie, sous_categorie);
 
 /*
 Déclaration côté plateforme (voir core/mcp_tools.py,
