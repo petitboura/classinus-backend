@@ -107,8 +107,10 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # precis ; le laisser dans les rares cas ou catalogue_complet est
     # None (message image/video, voir plus bas dans chat()) est sans
     # consequence, le modele n'a simplement pas les outils a appeler ce
-    # tour-la.
-    system_final = INSTRUCTIONS_FORMATS_AFFICHAGE + INSTRUCTIONS_ARBITRAGE_CALCUL + REGLE_CONTEXTE_INVISIBLE + REGLE_ETAT_APPLICATION_TAIRE + REGLE_MEMOIRE_ELEVE
+    # tour-la. Seulement si user_id est connu : un visiteur sans compte n'a
+    # pas de memoire (les 3 outils ne lui sont pas proposes non plus, voir
+    # core/main.py), la consigne serait trompeuse.
+    system_final = INSTRUCTIONS_FORMATS_AFFICHAGE + INSTRUCTIONS_ARBITRAGE_CALCUL + REGLE_CONTEXTE_INVISIBLE + REGLE_ETAT_APPLICATION_TAIRE + (REGLE_MEMOIRE_ELEVE if user_id else "")
     system_final += "\n\n" + (get_system_prompt(agent_id) or "")
 
     # Mécanisme "à la skill" (13/08/2026) : le texte long n'est plus

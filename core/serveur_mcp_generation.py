@@ -45,6 +45,9 @@ uniquement un déplacement de code :
     "mode cours" (12/09/2026, demande Bourama) -- filet de sécurité en
     plus de l'injection automatique, absorbe les anciens
     consulter_avancement_notion et consulter_signalements_pertinents
+  - outils_memoire_eleve.py      : mémoire élève structurée par catégorie
+    (27/09/2026, demande Bourama), chat seulement, pas sur le serveur MCP
+    public (décision explicite de Bourama)
   - outils_changement_mode.py      : changement du mode source/pédagogique
     par Clovis lui-même (25/09/2026, demande Bourama), chat seulement,
     seulement si code actif (consigne d'un skill) ou demande explicite de
@@ -96,3 +99,4 @@ import core.outils_reponses_qcm  # noqa: F401
 import core.outils_action_agent  # noqa: F401
 import core.outils_minuteurs  # noqa: F401
 import core.outils_changement_mode  # noqa: F401  # 25/09/2026, changement de mode par Clovis lui-même
+import core.outils_memoire_eleve  # noqa: F401  # 27/09/2026, mémoire élève structurée (sommaire, lecture, écriture)

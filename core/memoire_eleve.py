@@ -106,7 +106,11 @@ def lire_categorie(user_id: str, categorie: str, sous_categorie: str | None = No
     except Exception as e:
         logging.error(f"ERREUR SUPABASE (lecture memoire_eleve, user {user_id}, {categorie}/{sous_categorie}) : {e}")
         return None
-    return res.data or None
+    # maybe_single().execute() renvoie None (pas un objet vide) quand la ligne
+    # n'existe pas, comme partout ailleurs dans le depot : tester res avant res.data.
+    if not res or not res.data:
+        return None
+    return res.data
 
 
 def ecrire_categorie(

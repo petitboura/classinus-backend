@@ -1042,9 +1042,12 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # rien a chaque message avec image jointe.
     if catalogue_complet is not None:
         outils_mcp = _preparer_demander_outils(outils_mcp, catalogue_complet, table_routage_complet)
-        outils_mcp, table_routage = _outils_memoire_toujours_disponibles(
-            outils_mcp, table_routage, catalogue_complet, table_routage_complet
-        )
+        # Memoire eleve (27/09/2026) : seulement pour un utilisateur connecte,
+        # un visiteur sans compte n'a pas de memoire a lire ni a ecrire.
+        if user_id:
+            outils_mcp, table_routage = _outils_memoire_toujours_disponibles(
+                outils_mcp, table_routage, catalogue_complet, table_routage_complet
+            )
 
     if localisation and localisation.get("latitude") is not None and localisation.get("longitude") is not None:
         # Contexte "système/environnement" (2026-07-20) : position GPS
