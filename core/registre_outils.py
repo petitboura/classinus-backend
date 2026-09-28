@@ -653,6 +653,12 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "ecrire_dans_champ": {"label": "Écriture dans un champ", "icone": "PenLine", "onglet": None},
     # Lot U (28/09/2026) : lecture du texte visible de la page, meme rappel de cache 24h.
     "lire_page": {"label": "Lecture de la page", "icone": "Eye", "onglet": None},
+    # Lot S (canal en direct sur PC, 27/09/2026) : actions sur le systeme du PC via l'appli Electron,
+    # appelees par le modele, jamais cliquables a la main (onglet None), meme rappel de cache 24h.
+    "cliquer_ecran": {"label": "Clic à l'écran", "icone": "MousePointer2", "onglet": None},
+    "taper_clavier": {"label": "Saisie au clavier", "icone": "Keyboard", "onglet": None},
+    "ouvrir_application": {"label": "Ouverture d'une application", "icone": "AppWindow", "onglet": None},
+    "lire_ecran": {"label": "Lecture de l'écran", "icone": "Eye", "onglet": None},
     # Chantier P (canal en direct, 19/09/2026) : commentaire libre pendant
     # une action, meme rappel de cache 24h.
     "dire_a_l_etudiant": {"label": "Message en direct à l'étudiant", "icone": "MessageCircle", "onglet": None},
@@ -827,6 +833,7 @@ CATEGORIES_OUTILS = {
         "executer_action_application",
         "executer_clic_generique", "montrer_element_application", "ecrire_dans_champ",
         "lire_page",
+        "cliquer_ecran", "taper_clavier", "ouvrir_application", "lire_ecran",
     ],
     "github": ["gerer_depot_github"],
     "google_drive": [
