@@ -52,7 +52,7 @@ from ocr_pages_scannees import ocr_tesseract_image_fiable
 from profils_agents import _nom_agent, _nom_lisible, _nom_lisible_appel, _action_appel
 from routage_outils import (
     _ecrire_outils_retenus, _lire_outils_retenus, _outil_garder_outils, _router_outils,
-    _preparer_demander_outils, _catalogue_pour_demander_outils,
+    _preparer_demander_outils, _catalogue_pour_demander_outils, _outils_memoire_toujours_disponibles,
 )
 from construction_system_prompt import _construire_system_prompt, _est_timeout, _repli_si_reponse_partielle
 from persistance_echanges import _sauvegarder_echange, _finaliser_memoire_en_arriere_plan
@@ -1064,6 +1064,12 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # rien a chaque message avec image jointe.
     if catalogue_complet is not None:
         outils_mcp = _preparer_demander_outils(outils_mcp, catalogue_complet, table_routage_complet)
+        # Memoire eleve (27/09/2026) : seulement pour un utilisateur connecte,
+        # un visiteur sans compte n'a pas de memoire a lire ni a ecrire.
+        if user_id:
+            outils_mcp, table_routage = _outils_memoire_toujours_disponibles(
+                outils_mcp, table_routage, catalogue_complet, table_routage_complet
+            )
 
     if localisation and localisation.get("latitude") is not None and localisation.get("longitude") is not None:
         # Contexte "système/environnement" (2026-07-20) : position GPS

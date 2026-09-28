@@ -816,7 +816,10 @@ CATEGORIES_OUTILS = {
         "changer_mode_conversation",  # 25/09/2026
     ],
     "comportement": ["gerer_comportement", "gerer_comportement_public"],
-    "memoire": ["gerer_memoire_utilisateur"],
+    "memoire": [
+        "gerer_memoire_utilisateur",  # ancien systeme, conserve pour l'instant (voir core/memoire_eleve.py)
+        "memoire_sommaire", "memoire_lire", "memoire_ecrire",
+    ],
     "telephone_etudiant": [
         "gerer_dossier_telephone", "explorer_dossier", "gerer_action_mobile",
         "lire_temps_ecran", "gerer_session_concentration",

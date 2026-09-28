@@ -412,6 +412,51 @@ def _preparer_demander_outils(outils_mcp, catalogue_complet, table_routage_compl
     return (outils_mcp or []) + [_outil_demander_outils()]
 
 
+NOMS_OUTILS_MEMOIRE_TOUJOURS_DISPONIBLES = ("memoire_sommaire", "memoire_lire", "memoire_ecrire")
+
+
+def _outils_memoire_toujours_disponibles(outils_mcp, table_routage, catalogue_complet, table_routage_complet):
+    """
+    Chantier "memoire eleve" (27/09/2026, demande Bourama) : les 3 outils
+    de core/outils_memoire_eleve.py doivent etre disponibles a CHAQUE
+    tour, comme demander_outils (voir _preparer_demander_outils juste
+    au-dessus), pour que le modele les utilise en reflexe plutot qu'a
+    l'occasion, tout le principe de la refonte, l'ancien systeme
+    (gerer_memoire_utilisateur) n'etait utilise que quand le routeur ou
+    demander_outils le laissait passer.
+
+    Contrairement a demander_outils/garder_outils, CE SONT de vrais
+    outils MCP (deja dans catalogue_complet, voir
+    core/outils_memoire_eleve.py) : extraits du catalogue deja recupere
+    et ajoutes a outils_mcp s'ils n'y sont pas deja (evite un doublon si
+    le routeur ou demander_outils les avait deja proposes ce tour-ci).
+
+    IMPORTANT : ajouter le schema a outils_mcp seul NE SUFFIT PAS.
+    main.py execute les appels via `table_routage` (voir appeler_outil),
+    pas table_routage_complet : un outil present dans outils_mcp mais
+    absent de table_routage echouerait silencieusement au premier appel
+    du modele. D'ou le parametre table_routage ici, mis a jour en meme
+    temps que outils_mcp.
+
+    Renvoie (outils_mcp, table_routage) mis a jour. Inchanges si
+    catalogue_complet ne contient pas encore ces 3 noms (ex.
+    registre_outils_plateforme pas encore a jour, voir
+    migrations/2026_09_27_memoire_eleve.sql).
+    """
+    deja_presents = {o["function"]["name"] for o in (outils_mcp or [])}
+    a_ajouter = [
+        o for o in (catalogue_complet or [])
+        if o["function"]["name"] in NOMS_OUTILS_MEMOIRE_TOUJOURS_DISPONIBLES
+        and o["function"]["name"] not in deja_presents
+    ]
+    table_routage = dict(table_routage or {})
+    for o in a_ajouter:
+        nom = o["function"]["name"]
+        if nom in (table_routage_complet or {}):
+            table_routage[nom] = table_routage_complet[nom]
+    return (outils_mcp or []) + a_ajouter, table_routage
+
+
 def _catalogue_pour_demander_outils(user_id, agent_id, outils_mcp, conversation_id=None):
     """
     Variante de _preparer_demander_outils pour les deux chemins de
