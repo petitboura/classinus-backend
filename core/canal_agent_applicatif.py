@@ -52,6 +52,31 @@ _etat_actions: dict[tuple[str, str], list[dict[str, Any]]] = {}
 # alourdir chaque poussee ni le prompt.
 _etat_editeur: dict[tuple[str, str], dict[str, Any]] = {}
 
+# Lecture de l'éditeur jointe au tour HTTP du chat. Scopée par utilisateur
+# et conversation : l'outil lire_editeur peut s'en servir si le WebSocket
+# n'a pas encore publié son état ou s'est déconnecté. Elle n'est jamais
+# réutilisée après la fin du flux SSE.
+_lectures_editeur_chat: dict[tuple[str, str], dict[str, Any]] = {}
+
+
+def definir_lecture_editeur_chat(user_id: str, conversation_id: str | None, lecture: Any) -> None:
+    cle = (user_id, conversation_id or "")
+    if isinstance(lecture, dict) and isinstance(lecture.get("code"), str):
+        _lectures_editeur_chat[cle] = lecture
+    else:
+        _lectures_editeur_chat.pop(cle, None)
+
+
+def obtenir_lecture_editeur_chat(user_id: str, conversation_id: str | None) -> dict[str, Any] | None:
+    return _lectures_editeur_chat.get((user_id, conversation_id or ""))
+
+
+def retirer_lecture_editeur_chat(user_id: str, conversation_id: str | None, lecture: Any) -> None:
+    cle = (user_id, conversation_id or "")
+    # Un autre tour de la même conversation a pu démarrer entre-temps.
+    if _lectures_editeur_chat.get(cle) is lecture:
+        _lectures_editeur_chat.pop(cle, None)
+
 # Memes paliers que canal_temps_reel.py (coherence pour l'etudiant, qui
 # peut voir les deux types de message dans la meme conversation).
 DELAI_STATUT_1_SECONDES = 5
