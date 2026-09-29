@@ -660,6 +660,8 @@ for _chemin_public in ("/mcp/public", "/mcp/espace"):
 # Clovis restent ici, les origines Djiguignè (djiguign-ai.vercel.app,
 # app.djiguigne.com) retirées puisque ce service ne les sert plus.
 ORIGINES_AUTORISEES = [
+    # Origine du renderer Electron (runtime @capawesome/capacitor-electron).
+    "capacitor-electron://localhost",
     "http://localhost:3000",
     # App mobile Capacitor (Android/iOS) : la WebView sert le site depuis
     # un serveur local interne au telephone, sous cette adresse fixe par

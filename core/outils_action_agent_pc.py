@@ -127,31 +127,134 @@ async def ouvrir_application(nom: str, ctx: Context) -> str:
     return f"Application « {nom} » lancée."
 
 
+# Lot V (28/09/2026, decision Bourama : aucune image envoyee au modele,
+# seulement du texte, et seulement la fenetre au premier plan). Toutes les
+# limites de lecture sont gardees ICI, a un seul endroit : elles sont
+# envoyees avec chaque demande, le processus Electron n'a pas de valeurs a
+# lui (voir electron/src/lectureFenetreWindows.mts). Valeurs de depart, pas
+# des limites produit tranchees avec Bourama : a valider.
+NB_MAX_ELEMENTS_LECTURE_ECRAN = 120
+NB_MAX_FENETRES_LECTURE_ECRAN = 15
+LONGUEUR_MAX_NOM_LECTURE_ECRAN = 80
+LONGUEUR_MAX_VALEUR_LECTURE_ECRAN = 400
+PROFONDEUR_MAX_LECTURE_ECRAN = 25
+DELAI_MAX_LECTURE_ECRAN_MS = 6000
+# Taille maximale du texte final rendu au modele (environ 1500 tokens).
+LONGUEUR_MAX_TEXTE_LECTURE_ECRAN = 6000
+
+
+def _formater_element_lu(element: dict) -> str:
+    """Une ligne de texte pour un element lu (voir LectureFenetre cote Electron)."""
+    genre = element.get("type") or "élément"
+    nom = element.get("nom") or ""
+    details = []
+    if element.get("valeur_masquee"):
+        details.append("valeur masquée")
+    elif element.get("valeur"):
+        details.append(f"valeur : « {element['valeur']} »")
+    etats = element.get("etats")
+    if isinstance(etats, list):
+        details.extend(e for e in etats if isinstance(e, str) and e)
+    suite = f" ({', '.join(details)})" if details else ""
+    nom_txt = f" « {nom} »" if nom else ""
+    return f"[{genre}{nom_txt}{suite}, clic possible en ({element.get('x')}, {element.get('y')})]"
+
+
+def _formater_lecture_ecran(resultat: dict) -> str:
+    """
+    Transforme le resultat structure du processus Electron en texte court
+    pour le modele. Fonction pure (testable sans connexion), plafonnee par
+    LONGUEUR_MAX_TEXTE_LECTURE_ECRAN.
+    """
+    titre = resultat.get("titre_fenetre_active")
+    application = resultat.get("application")
+    fenetres = [f for f in (resultat.get("fenetres_ouvertes") or []) if isinstance(f, str) and f]
+
+    lignes = []
+    if titre:
+        appli_txt = f" ({application})" if application else ""
+        lignes.append(f"Fenêtre au premier plan : « {titre} »{appli_txt}")
+    else:
+        lignes.append("Aucune fenêtre au premier plan n'a été trouvée.")
+    if fenetres:
+        lignes.append("Autres fenêtres ouvertes : " + ", ".join(f"« {f} »" for f in fenetres))
+
+    if resultat.get("fenetre_classinus"):
+        lignes.append(
+            "La fenêtre au premier plan est Classinus lui-même : pour lire ce qui y est affiché, "
+            "utilise lire_page."
+        )
+        return "\n".join(lignes)
+
+    elements = [e for e in (resultat.get("elements") or []) if isinstance(e, dict)]
+    if resultat.get("mode") != "uia" or not elements:
+        lignes.append(
+            "Le contenu de cette fenêtre n'a pas pu être lu (l'application ne le rend pas lisible). "
+            "Tu peux seulement t'appuyer sur son titre. Ne devine jamais ce qu'elle contient ni "
+            "l'endroit où cliquer."
+        )
+        return "\n".join(lignes)
+
+    lignes.append("Contenu visible (les coordonnées sont en pixels d'écran, utilisables avec cliquer_ecran) :")
+    total = sum(len(l) + 1 for l in lignes)
+    coupe = bool(resultat.get("coupe"))
+    for element in elements:
+        ligne = _formater_element_lu(element)
+        if total + len(ligne) + 1 > LONGUEUR_MAX_TEXTE_LECTURE_ECRAN:
+            coupe = True
+            break
+        lignes.append(ligne)
+        total += len(ligne) + 1
+    if coupe:
+        lignes.append(
+            "[Lecture coupée : la limite de taille est atteinte, la suite de ce qui est affiché "
+            "n'est pas incluse. Ne devine pas la suite.]"
+        )
+    return "\n".join(lignes)
+
+
 @mcp_generation.tool()
 async def lire_ecran(ctx: Context) -> str:
     """
-    Lot S (27/09/2026). Prend une capture de l'écran entier du PC de
-    l'étudiant et renvoie ce qui a pu en être extrait (pour l'instant :
-    le titre de la fenêtre au premier plan, quand disponible -- la
-    lecture fine du contenu affiché n'est pas encore faite, voir
-    plan-canal-en-direct-pc.md, Lot S : "à trancher selon la difficulté
-    réelle").
+    Lot S (27/09/2026), reecrit au Lot V (28/09/2026, decision Bourama :
+    aucune image, seulement du texte). Lit ce qu'il y a dans la fenetre
+    au premier plan du PC de l'etudiant : son titre, les titres des autres
+    fenetres ouvertes, et le contenu visible de la fenetre (textes,
+    boutons, champs avec leur valeur, cases, onglets...), chacun avec ses
+    coordonnees d'ecran pour cliquer_ecran. La valeur d'un champ mot de
+    passe n'est jamais lue.
 
-    Appelle cet outil avant cliquer_ecran/taper_clavier chaque fois que
-    tu n'es pas certain de ce qui est affiché ou de l'endroit exact où
-    agir : ne devine jamais.
+    Appelle cet outil avant cliquer_ecran ou taper_clavier chaque fois que
+    tu n'es pas certain de ce qui est affiche ou de l'endroit exact ou
+    agir : ne devine jamais des coordonnees. Pas a chaque message : seulement
+    quand ce contenu t'est necessaire.
+
+    Ne lit QUE la fenetre au premier plan (pas les autres, pas tout
+    l'ecran). Certaines applications (jeux, bureau a distance) ne rendent
+    presque rien lisible : l'outil le dit, dans ce cas ne devine pas. Pour
+    ce qui est affiche dans Classinus lui meme, utilise lire_page.
     """
     user_id, erreur = _user_id_ou_erreur(ctx)
     if erreur:
         return erreur
 
-    resultat = await _demander_action_systeme(user_id, "lire_ecran", {})
+    resultat = await _demander_action_systeme(
+        user_id,
+        "lire_ecran",
+        {
+            "nb_max_elements": NB_MAX_ELEMENTS_LECTURE_ECRAN,
+            "nb_max_fenetres": NB_MAX_FENETRES_LECTURE_ECRAN,
+            "longueur_max_nom": LONGUEUR_MAX_NOM_LECTURE_ECRAN,
+            "longueur_max_valeur": LONGUEUR_MAX_VALEUR_LECTURE_ECRAN,
+            "profondeur_max": PROFONDEUR_MAX_LECTURE_ECRAN,
+            "delai_max_ms": DELAI_MAX_LECTURE_ECRAN_MS,
+        },
+    )
     if resultat is None:
         return MESSAGE_ECHEC_SYSTEME
-    if isinstance(resultat, dict) and resultat.get("erreur"):
+    if not isinstance(resultat, dict):
+        return "La lecture de l'écran n'a pas donné de résultat exploitable."
+    if resultat.get("erreur"):
         return f"Erreur : {resultat['erreur']}"
 
-    titre = resultat.get("titre_fenetre_active") if isinstance(resultat, dict) else None
-    if titre:
-        return f"Capture d'écran prise. Fenêtre au premier plan : « {titre} »."
-    return "Capture d'écran prise, mais aucune information supplémentaire n'a pu être extraite."
+    return _formater_lecture_ecran(resultat)

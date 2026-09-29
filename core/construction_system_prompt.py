@@ -27,7 +27,7 @@ def _texte_actions_application(actions):
         "Dès que tu dois cliquer sur quelque chose pour l'étudiant, utilise directement "
         "executer_action_application avec l'id correspondant de la liste ci-dessous. Dès que tu dois "
         "écrire du texte dans un champ de saisie (input, zone de texte), utilise ecrire_dans_champ avec "
-        "l'id du champ. Cette liste est actuelle à cet instant : c'est TOUT ce que tu vois à l'écran. "
+        "l'id du champ. Cette liste est actuelle à cet instant : elle décrit les actions de la page Classinus. "
         "Aucune confirmation n'est nécessaire par défaut, agis directement. Demande confirmation à "
         "l'étudiant dans ta réponse normale seulement s'il te l'a explicitement demandé, ou si tu juges "
         "toi-même plus prudent de confirmer avant d'agir.\n\n"
@@ -56,7 +56,9 @@ def _texte_actions_application(actions):
         "ni les messages d'erreur, ni ce qui est écrit dans les champs. Quand tu as besoin de voir ce que l'étudiant "
         "lit (répondre à une question sur ce qui est à l'écran, vérifier le résultat d'une action, comprendre où il en "
         "est), appelle lire_page. Ne l'appelle pas à chaque message ni avant chaque clic : uniquement quand ce contenu "
-        "t'est nécessaire. Si la lecture est coupée, ne devine pas la suite.\n\n"
+        "t'est nécessaire. Pour voir les fenêtres du PC en dehors de Classinus, appelle lire_ecran : "
+        "le scan de cette page ne décrit pas leur contenu. La superposition du canal ne constitue pas la page "
+        "à lire. Si la lecture est coupée, ne devine pas la suite.\n\n"
         # 20/09/2026, demande Bourama : le modèle croyait que l'étudiant voit tout ce qu'il écrit,
         # alors que l'étudiant ne voit que la bulle affichée à l'instant.
         "## Ce que l'étudiant voit vraiment\n"
