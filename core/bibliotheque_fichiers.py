@@ -211,12 +211,19 @@ def indexer_fichier_existant(
     user_id: str = None,
     description: str = None,
     taille_octets: int = None,
+    origine: str = "bibliotheque",
 ) -> dict:
     """
     Indexe dans fichiers_uploades un fichier DÉJÀ stocké ailleurs (ex.
     bucket images-publiques pour les images de chat) -- évite un second
     upload redondant vers le bucket "bibliotheque" quand le fichier
     existe déjà quelque part avec une URL publique utilisable.
+
+    29/09/2026 : le paramètre `origine` manquait ici alors que
+    api/uploads.py le passait déjà pour les images du chat (origine="chat") :
+    l'appel plantait à chaque image envoyée depuis le 27/09, l'image
+    n'arrivait jamais dans la bibliothèque. Même valeurs possibles que pour
+    enregistrer_fichier ci-dessus.
     """
     try:
         insertion = supabase.table("fichiers_uploades").insert({
@@ -230,6 +237,7 @@ def indexer_fichier_existant(
             "type_mime": type_mime,
             "description": description,
             "taille_octets": taille_octets,
+            "origine": origine,
         }).execute()
     except Exception as e:
         logging.error(f"ERREUR ECRITURE fichiers_uploades (indexation {chemin_stockage}) : {e}")
