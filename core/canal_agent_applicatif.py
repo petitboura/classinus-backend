@@ -139,9 +139,6 @@ def mettre_a_jour_etat_editeur(user_id: str, appareil_id: str, etat: Any) -> Non
     n'est plus monte a l'ecran : l'etat precedent est alors retire.
     """
     cle = (user_id, appareil_id)
-    # LOG TEMPORAIRE (29/09/2026) : diagnostic du bug "editeur toujours
-    # ferme". A retirer une fois confirme.
-    logging.info(f"[diag-editeur] mettre_a_jour_etat_editeur user={user_id} appareil={appareil_id} recu={etat!r}")
     if isinstance(etat, dict):
         _etat_editeur[cle] = etat
     else:

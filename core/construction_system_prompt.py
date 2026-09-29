@@ -284,9 +284,6 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # jamais que l'editeur existait et n'appelait jamais lire_editeur).
     # Meme source (canal en direct actif, lu dans chat()).
     etat_editeur = obtenir_etat_editeur(user_id) if user_id else None
-    # LOG TEMPORAIRE (29/09/2026) : diagnostic du bug "editeur toujours
-    # ferme". A retirer une fois confirme.
-    logging.info(f"[diag-editeur] construction_system_prompt user_id={user_id!r} etat_editeur={etat_editeur!r}")
     if etat_editeur:
         system_final += _texte_editeur(etat_editeur)
 
