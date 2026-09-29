@@ -442,7 +442,7 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
             "que de prétendre n'avoir aucune capacité. Le texte de ta réponse ne doit "
             "contenir aucun outil inventé ni pseudo-syntaxe d'appel (TOOL_CODE, "
             "nom_outil(...), nom_outil{...}, call:nom_outil{...}). Les blocs "
-            "d'affichage mermaid/chart/carte/widget/geometrie restent disponibles : "
+            "d'affichage mermaid/chart/carte/widget/animation/geometrie restent disponibles : "
             "ce sont des formats de sortie, pas des outils.\n"
             "ORDRE DE RECHERCHE (12/09/2026, demande Bourama) : quand tu appelles "
             "demander_outils, décris d'abord le besoin le plus précis possible pour "
