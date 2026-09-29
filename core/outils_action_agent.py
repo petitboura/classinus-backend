@@ -20,6 +20,9 @@ from core.canal_agent_applicatif import (
     demander_clic_generique as _demander_clic_generique,
     demander_pointage_action as _demander_pointage_action,
     demander_ecriture_champ as _demander_ecriture_champ,
+    demander_lecture_page as _demander_lecture_page,
+    LONGUEUR_MAX_LECTURE_PAGE,
+    MARGE_NOTE_COUPURE_LECTURE_PAGE,
     demander_action_editeur as _demander_action_editeur,
     obtenir_etat_editeur as _obtenir_etat_editeur,
     obtenir_lecture_editeur_chat as _obtenir_lecture_editeur_chat,
@@ -222,6 +225,52 @@ async def ecrire_dans_champ(action_id: str, texte: str, ctx: Context) -> str:
     if isinstance(resultat, dict) and resultat.get("erreur"):
         return f"Erreur : {resultat['erreur']}"
     return "Texte écrit avec succès.\n" + await _observer_changement_ecran(user_id, avant)
+
+
+@mcp_generation.tool()
+async def lire_page(ctx: Context) -> str:
+    """
+    Lot U (28/09/2026, decision Bourama) : lit ce que l'etudiant a reellement
+    sous les yeux dans Classinus, en ce moment. La liste des elements de ce
+    prompt systeme ne contient que ce sur quoi tu peux agir : elle n'a ni
+    les titres, ni les paragraphes, ni les messages d'erreur, ni ce qui est
+    ecrit dans les champs. Cet outil te les donne : le texte visible a
+    l'ecran, et pour chaque bouton, lien ou champ son nom, son id (le meme
+    que dans la liste), sa valeur et son etat (coche, deplie, selectionne,
+    desactive).
+
+    Appelle-le seulement quand tu as besoin de voir ce contenu : pour
+    repondre a une question sur ce qui est affiche, verifier le resultat
+    d'une action, ou comprendre ou en est l'etudiant. Pas a chaque message,
+    pas avant chaque clic : la liste des elements te suffit pour agir.
+
+    Ne lit que ce qui est visible dans la fenetre : ce qui est plus bas, hors
+    de l'ecran, ou cache derriere une fenetre ouverte n'est pas inclus. La
+    valeur d'un champ mot de passe n'est jamais lue. Si le resultat indique
+    que la lecture est coupee, ne devine pas la suite : dis-le, ou demande a
+    l'etudiant de faire defiler. Ne lit que la page Classinus, pas une autre
+    application du PC (pour ca, utilise lire_ecran).
+
+    Lecture seule : rien n'est modifie dans la page.
+    """
+    user_id = ctx.request_context.request.query_params.get("user_id")
+    if not user_id:
+        return "Erreur : impossible d'identifier l'utilisateur."
+
+    resultat = await _demander_lecture_page(user_id)
+
+    if resultat is None:
+        return (
+            "La page n'a pas pu être lue pour le moment. "
+            "Ne mentionne jamais l'état de l'application (fermée, en arrière-plan, onglet non visible) : dis simplement que ça n'a pas abouti pour le moment et propose de réessayer."
+        )
+    if isinstance(resultat, dict) and resultat.get("erreur"):
+        return f"Erreur : {resultat['erreur']}"
+
+    texte = resultat.get("texte") if isinstance(resultat, dict) else None
+    if not isinstance(texte, str) or not texte.strip():
+        return "La page ne contient aucun texte lisible à cet instant."
+    return texte[: LONGUEUR_MAX_LECTURE_PAGE + MARGE_NOTE_COUPURE_LECTURE_PAGE]
 
 
 # Plafond de longueur d'un commentaire en direct : la bulle du canal est
