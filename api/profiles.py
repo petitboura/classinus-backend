@@ -600,6 +600,7 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
         ("conversations", "conversations", "user_id"),
         ("historique_conversations", "historique_conversations", "user_id"),
         ("resumes_conversations", "conversation_summaries", "user_id"),
+        ("memoire_eleve", "memoire_eleve", "user_id"),
         ("documents_bibliotheque", "documents_bibliotheque", "user_id"),
         ("dossiers_bibliotheque", "dossiers_bibliotheque", "user_id"),
         ("fichiers_uploades", "fichiers_uploades", "user_id"),
@@ -688,7 +689,12 @@ def supprimer_mon_compte(request: Request, utilisateur=Depends(utilisateur_coura
     except Exception as e:
         logging.error(f"ERREUR SUPABASE (liste agents à purger, compte {user_id}) : {e}")
 
+    # memoire_eleve a une cle etrangere vers profiles SANS suppression en
+    # cascade : sans cette purge, la suppression du profil plus bas echouait
+    # (loguee puis ignoree, etape best-effort) et laissait la memoire de
+    # l'eleve en base apres la suppression du compte.
     for table, colonne in (
+        ("memoire_eleve", "user_id"),
         ("posts", "user_id"),
         ("agent_comments", "user_id"),
         ("agent_ratings", "user_id"),

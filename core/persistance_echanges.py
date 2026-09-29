@@ -1,11 +1,10 @@
 # Extrait de main.py le 05/09/2026 (demande Bourama : diviser les fichiers
 # trop longs). Sauvegarde d'un echange (message + reponse) et mise a jour
-# periodique du resume memoire de l'utilisateur.
+# periodique du profil utilisateur par agent.
 import logging
 import threading
-from groq import Groq
-from constantes_agent import get_secret, supabase, MODELE_RESUME, SEUIL_RESUME_MESSAGES, DELAI_MAX_PAR_APPEL, TAILLE_MAX_MESSAGE_RESUME, TOKENS_MAX_SORTIE_RESUME
-from profils_agents import _charger_resume_memoire, _mettre_a_jour_profil_utilisateur_si_besoin
+from constantes_agent import supabase
+from profils_agents import _mettre_a_jour_profil_utilisateur_si_besoin
 
 def _sauvegarder_echange(user_id, agent_id, message_utilisateur, reponse_finale, conversation_id=None, modele=None, meta_utilisateur=None, meta_assistant=None, parent_id=None, sauvegarder_message_utilisateur=True):
     """
@@ -157,144 +156,26 @@ def _sauvegarder_echange(user_id, agent_id, message_utilisateur, reponse_finale,
     return ids_historique
 
 
-def _mettre_a_jour_resume_si_besoin(user_id):
-    """
-    Si assez de nouveaux messages bruts se sont accumules (>= SEUIL_RESUME_MESSAGES)
-    depuis le dernier resume, en regenere un condense (ancien resume + messages
-    recents) via un modele Groq rapide, l'ecrit dans conversation_summaries, puis
-    purge les messages bruts desormais condenses. Ne bloque jamais la reponse a
-    la personne : toute erreur est juste loguee, jamais remontee a l'appelant.
-
-    Compte unifie (juillet 2026) : scope par user_id seul, tous agents
-    confondus. `agent_id` reste present dans `conversations` en tant que
-    simple metadonnee de tracabilite (colonne non retiree par la
-    migration), mais ne filtre plus rien ici -> les messages de tous les
-    agents de la plateforme alimentent le meme resume.
-    """
-    if not user_id:
-        return
-    try:
-        messages = (
-            supabase.table("conversations")
-            .select("id, role, content, created_at")
-            .eq("user_id", user_id)
-            .order("created_at", desc=True)
-            .limit(SEUIL_RESUME_MESSAGES)
-            .execute()
-        ).data or []
-
-        if len(messages) < SEUIL_RESUME_MESSAGES:
-            return  # pas encore assez de matiere pour justifier un resume
-
-        ancien_resume = _charger_resume_memoire(user_id)
-        def _tronquer(texte):
-            texte = texte or ""
-            if len(texte) <= TAILLE_MAX_MESSAGE_RESUME:
-                return texte
-            return texte[:TAILLE_MAX_MESSAGE_RESUME] + " [...]"
-
-        messages_recents = "\n".join(
-            f"{'Utilisateur' if m['role'] == 'user' else 'Assistant'} : {_tronquer(m['content'])}"
-            for m in reversed(messages)
-        )
-
-        # Neutralisé le 2026-07-22 (Bourama : la plateforme n'est pas
-        # réservée aux étudiants, ce n'était que le point de départ du
-        # projet -- un ancien prompt ici forçait "niveau apparent" et
-        # "sujets de difficulté d'étudiant" sur N'IMPORTE QUELLE
-        # conversation, y compris des sessions de test technique sans
-        # aucun rapport avec l'école, produisant des résumés inventés/hors
-        # sujet). Ne présuppose plus rien sur qui est cette personne ni
-        # sur la nature de l'agent avec qui elle parle.
-        instruction_resume = (
-            "Condense ce qui suit en un résumé factuel et concis (5-8 lignes maximum) "
-            "de cette personne, utile pour personnaliser une future session avec elle : "
-            "ses centres d'intérêt ou sujets récurrents, ses préférences, le contexte "
-            "réellement présent dans les échanges. N'invente rien qui ne soit pas "
-            "clairement indiqué -- ne présuppose ni niveau scolaire, ni statut "
-            "d'étudiant, ni progression pédagogique si rien dans la conversation ne "
-            "l'indique explicitement. Pas de politesse, pas de méta-commentaire, "
-            "juste les faits utiles."
-        )
-
-        # CORRECTIF (16/08, decouvert via lire_memoire cote MCP -- capture
-        # d'ecran Bourama) -- le resume genere par ce petit modele rapide
-        # (llama-3.1-8b-instant) etait parfois une reponse conversationnelle
-        # ("Je vais bien, merci !...") au lieu d'un resume, sauvegardee
-        # telle quelle en base. Cause : tout partait dans un seul message
-        # role="user" qui se terminait par "Utilisateur : <dernier
-        # message>" -- un modele rapide/leger suit alors le pattern de la
-        # transcription et "repond" a ce dernier tour au lieu d'executer la
-        # consigne, placee plus haut, loin de la fin. Fix : instruction en
-        # role="system" (jamais melangee a la transcription), transcription
-        # nettement delimitee et explicitement marquee comme NE PAS y
-        # repondre, et rappel de la consigne juste apres (les modeles
-        # legers suivent mieux une instruction proche de la fin du prompt).
-        contenu_utilisateur = ""
-        if ancien_resume:
-            contenu_utilisateur += f"Résumé précédent :\n{ancien_resume}\n\n"
-        contenu_utilisateur += (
-            "Transcription à condenser (ne PAS y répondre, ne PAS continuer "
-            "cette conversation -- ta seule tâche est de la résumer selon la "
-            "consigne ci-dessus) :\n"
-            "--- DÉBUT TRANSCRIPTION ---\n"
-            f"{messages_recents}\n"
-            "--- FIN TRANSCRIPTION ---\n\n"
-            "Rappel : produis uniquement le résumé factuel demandé (5-8 lignes), "
-            "jamais une réponse à la personne."
-        )
-
-        client_groq = Groq(api_key=get_secret("GROQ_API_KEY"), max_retries=0)
-        completion = client_groq.chat.completions.create(
-            model=MODELE_RESUME,
-            messages=[
-                {"role": "system", "content": instruction_resume},
-                {"role": "user", "content": contenu_utilisateur},
-            ],
-            max_completion_tokens=TOKENS_MAX_SORTIE_RESUME,
-            timeout=DELAI_MAX_PAR_APPEL,
-        )
-        nouveau_resume = completion.choices[0].message.content.strip()
-
-        supabase.table("conversation_summaries").upsert({
-            "user_id": user_id,
-            "summary": nouveau_resume,
-        }).execute()
-
-        # Purge les messages bruts maintenant condenses, pour ne pas
-        # reconstruire indefiniment le meme resume a chaque appel suivant.
-        ids_a_purger = [m["id"] for m in messages if m.get("id") is not None]
-        if ids_a_purger:
-            supabase.table("conversations").delete().in_("id", ids_a_purger).execute()
-
-        logging.info(f"Résumé mémoire mis à jour pour user={user_id}.")
-    except Exception as e:
-        logging.error(f"ERREUR mise à jour résumé mémoire : {e}")
-
-
 def _finaliser_memoire_en_arriere_plan(user_id, agent_id):
     """
-    Lance _mettre_a_jour_resume_si_besoin et _mettre_a_jour_profil_utilisateur_si_besoin
-    en tache de fond, SANS attendre leur resultat (11/09/2026, demande
-    Bourama : "rien qui retarde ne serait-ce que d'une milliseconde la
-    reponse de l'IA"). Ces deux mises a jour ne concernent jamais la
-    reponse deja affichee a l'instant meme -- elles preparent seulement la
-    memoire pour les PROCHAINS messages. Avant ce fix, chat() attendait
-    ces deux appels (une lecture en base systematique, parfois un appel
-    Groq complet en plus) avant de considerer l'echange termine, ce qui
-    retardait la disponibilite des identifiants de message (evenement
-    "meta", necessaires aux boutons like/dislike) sans aucune raison lice
-    a CE message-ci.
+    Lance _mettre_a_jour_profil_utilisateur_si_besoin en tache de fond,
+    SANS attendre son resultat (11/09/2026, demande Bourama : "rien qui
+    retarde ne serait-ce que d'une milliseconde la reponse de l'IA").
+    Cette mise a jour ne concerne jamais la reponse deja affichee a
+    l'instant meme, elle prepare seulement le profil pour les PROCHAINS
+    messages. Avant ce fix, chat() attendait cet appel (une lecture en
+    base systematique, parfois un appel Groq complet en plus) avant de
+    considerer l'echange termine, ce qui retardait la disponibilite des
+    identifiants de message (evenement "meta", necessaires aux boutons
+    like/dislike) sans aucune raison liee a CE message-ci.
 
-    Fire-and-forget assume : toute erreur reste loguee a l'interieur des
-    deux fonctions elles-memes (deja le cas avant ce fix), jamais remontee
-    ici ni a l'appelant.
+    La memoire de l'eleve n'est plus mise a jour ici : c'est le modele
+    lui-meme qui l'ecrit pendant la conversation (core/outils_memoire_eleve.py).
+
+    Fire-and-forget assume : toute erreur reste loguee a l'interieur de la
+    fonction elle-meme, jamais remontee ici ni a l'appelant.
     """
     def _tache():
-        try:
-            _mettre_a_jour_resume_si_besoin(user_id)
-        except Exception as e:
-            logging.error(f"ERREUR tache de fond (résumé mémoire) : {e}")
         try:
             _mettre_a_jour_profil_utilisateur_si_besoin(user_id, agent_id)
         except Exception as e:
