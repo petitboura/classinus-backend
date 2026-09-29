@@ -35,6 +35,7 @@ def test_etat_editeur_du_tour_est_prioritaire_sur_le_websocket():
         "langage": "javascript",
         "nom_fichier": "ancien.js",
         "plein_ecran": False,
+        "code": "console.log('obsolet')",
     }
 
     with patch.object(csp, "get_system_prompt", return_value="PROMPT_BASE"), patch.object(
