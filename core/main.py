@@ -144,7 +144,7 @@ def _client_pour_reprise(modele):
     return Groq(api_key=get_secret("GROQ_API_KEY"), max_retries=0)
 
 
-def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None):
+def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None):
     """
     Generateur d'evenements. Chaque element produit est un dictionnaire :
     - {"type": "statut", "texte": "..."}         -> un outil MCP est en cours d'utilisation (ou, depuis le 11/09/2026, Gemini en train de lire une image/video jointe)
@@ -622,14 +622,14 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             persona_pedagogique = f_persona_pedagogique.result() if f_persona_pedagogique else None
             guide_actif = f_guide_actif.result() if f_guide_actif else {"actif": False, "sous_mode": "textuel"}
             mode_source = f_mode_source.result() if f_mode_source else None
-            # Agent applicatif (correctif 19/09/2026) : liste COMPLETE et
-            # actuelle des elements cliquables a l'ecran, a CHAQUE tour,
-            # uniquement quand le canal en direct est actif (les outils de
-            # clic ne sont disponibles que dans ce cas). Simple lecture en
-            # memoire, pas besoin du lot parallele. Voir
-            # core/canal_agent_applicatif.py pour la raison du retrait de
-            # l'ancienne injection par difference.
-            actions_ecran = obtenir_actions_disponibles(user_id) if (canal_en_direct and user_id) else None
+            # Agent applicatif : l'etat courant des elements interactifs de
+            # l'ecran reste visible par le modele a CHAQUE tour, comme avant
+            # le mode "canal en direct". Le flag canal_en_direct controle
+            # l'activation des outils d'action (clic, ecriture, etc.), pas la
+            # lecture de l'ecran. Cela evite de faire disparaitre les boutons
+            # et l'etat general de l'application du prompt du chat normal.
+            # Simple lecture en memoire, pas besoin du lot parallele.
+            actions_ecran = obtenir_actions_disponibles(user_id)
 
         # rattachement_id_actif (voir core/mode_actif_conversation.py) vaut :
         # - None si conversation_id est absent ou si aucun mode actif n'a
@@ -901,7 +901,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id)
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force_contexte_seul)
             outil_force_verifie_optimiste = [o["function"]["name"] for o in outils_mcp] if outil_force_contexte_seul else None
-            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes)
+            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur)
             return outils_mcp, table_routage, system_final, catalogue_complet, table_routage_complet
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -1020,7 +1020,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id)
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force)
             outil_force_verifie = [o["function"]["name"] for o in outils_mcp] if outil_force else outil_force
-        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes)
+        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur)
 
         # PERF (10/08) : second (et dernier) point de vérification --
         # couvre tous les chemins qui ne passent PAS par le premier

@@ -22,6 +22,7 @@ from core.canal_agent_applicatif import (
     demander_ecriture_champ as _demander_ecriture_champ,
     demander_action_editeur as _demander_action_editeur,
     obtenir_etat_editeur as _obtenir_etat_editeur,
+    obtenir_lecture_editeur_chat as _obtenir_lecture_editeur_chat,
     observer_changement_ecran as _observer_changement_ecran,
     photographier_ecran as _photographier_ecran,
 )
@@ -395,15 +396,28 @@ LONGUEUR_MAX_SORTIE_LUE = 2000
 
 async def _operation_editeur(ctx: Context, operation: dict):
     """Renvoie (texte_d_erreur_ou_None, resultat_ou_None)."""
-    user_id = ctx.request_context.request.query_params.get("user_id")
+    query_params = ctx.request_context.request.query_params
+    user_id = query_params.get("user_id")
     if not user_id:
         return "Erreur : impossible d'identifier l'utilisateur.", None
+
+    # Le snapshot HTTP appartient au tour courant. Pour une lecture, il
+    # reste utilisable même si le canal interactif n'a pas d'état à jour.
+    lecture = _obtenir_lecture_editeur_chat(user_id, query_params.get("conversation_id"))
+    est_lecture = operation.get("op") == "lire"
     if _obtenir_etat_editeur(user_id) is None:
+        if est_lecture and lecture is not None:
+            return None, lecture
         return TEXTE_EDITEUR_FERME, None
+
     resultat = await _demander_action_editeur(user_id, operation)
     if resultat is None:
+        if est_lecture and lecture is not None:
+            return None, lecture
         return TEXTE_EDITEUR_ECHEC, None
     if isinstance(resultat, dict) and resultat.get("erreur"):
+        if est_lecture and lecture is not None:
+            return None, lecture
         return f"Erreur : {resultat['erreur']}", None
     return None, resultat
 
