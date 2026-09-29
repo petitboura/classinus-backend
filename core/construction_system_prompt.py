@@ -108,7 +108,7 @@ def _texte_editeur(etat):
     )
 
 
-def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None, reponses_qcm_recentes=None):
+def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None, reponses_qcm_recentes=None, etat_editeur=None):
     # Restauré le 14/08 (voir commentaire des constantes plus haut) : la
     # page Notion de l'agent (get_system_prompt) ne doit plus contenir QUE
     # la personnalité/le comportement propre à l'agent -- les 3 blocs fixes
@@ -283,9 +283,17 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # partait jamais si actions_ecran etait vide -- l'IA ne savait alors
     # jamais que l'editeur existait et n'appelait jamais lire_editeur).
     # Meme source (canal en direct actif, lu dans chat()).
-    etat_editeur = obtenir_etat_editeur(user_id) if user_id else None
-    if etat_editeur:
-        system_final += _texte_editeur(etat_editeur)
+    # L'état transmis avec la requête HTTP est la source de vérité du tour.
+    # Le WebSocket reste un cache utile pour les autres mécanismes du canal,
+    # mais ne doit jamais pouvoir masquer un éditeur qui était bien ouvert
+    # au moment où l'étudiant a envoyé son message.
+    etat_editeur_effectif = etat_editeur
+    if etat_editeur_effectif is None and user_id:
+        # Compatibilité avec les anciens appelants internes qui ne fournissent
+        # pas encore le nouvel argument.
+        etat_editeur_effectif = obtenir_etat_editeur(user_id)
+    if isinstance(etat_editeur_effectif, dict):
+        system_final += _texte_editeur(etat_editeur_effectif)
 
     # Injection automatique des reponses QCM (23/09/2026, demande Bourama) :
     # jusqu'ici l'IA ne savait jamais ce que l'etudiant avait repondu a un
