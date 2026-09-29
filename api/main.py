@@ -679,6 +679,18 @@ ORIGINES_AUTORISEES = [
     # appelable, mais ne correspond plus au nouveau motif ci-dessous donc
     # garde ici explicitement.
     "https://clovis-ai.vercel.app",
+    # Appli PC Electron (canal en direct sur PC, 29/09/2026, demande
+    # Bourama). Contrairement au web, cette appli n'a pas de serveur
+    # Next.js intermediaire : chaque appel part directement du navigateur
+    # integre a Electron vers ce backend. Origine fixe du protocole
+    # personnalise enregistre par le runtime @capawesome/capacitor-electron
+    # (scheme + hostname par defaut, aucun des deux redefini dans
+    # classinus-frontend/electron/capacitor.electron.config.ts), a
+    # verifier si l'un des deux change un jour. Sans cette ligne, l'appli
+    # PC etait bloquee comme l'app mobile l'aurait ete sans la ligne
+    # "https://localhost" juste au dessus (bouton du canal, journal,
+    # chat, tout ce qui appelle ce backend).
+    "capacitor-electron://localhost",
 ]
 
 # Vercel donne une URL DIFFERENTE a chaque deploiement de preview, et une
