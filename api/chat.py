@@ -166,6 +166,9 @@ class EnvoyerMessagePayload(BaseModel):
     # core/main.py:chat() -- sans dépendre de ce que le grand modèle
     # pense de demander via demander_outils.
     canal_en_direct: Optional[bool] = False
+    # État exact de l'éditeur capturé au moment de l'envoi HTTP. Il est
+    # prioritaire sur le cache WebSocket pour le tour courant.
+    etat_editeur: Optional[dict] = None
     # Minuteurs du chat (20/09/2026, demande Bourama) : vrai quand ce
     # "message de l'etudiant" n'en est pas un, c'est l'appli qui reveille
     # Clovis parce qu'un minuteur est arrive a zero (voir
@@ -264,6 +267,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
                 sans_enseignant=payload.sans_enseignant or False,
                 natif=payload.natif or False,
                 canal_en_direct=payload.canal_en_direct or False,
+                etat_editeur=payload.etat_editeur,
                 message_automatique=payload.message_automatique or False,
                 parent_id=payload.parent_id,
                 regenerer=payload.regenerer or False,
