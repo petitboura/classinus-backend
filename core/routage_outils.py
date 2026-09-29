@@ -527,7 +527,7 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "n'est pertinent (question générale, conversation normale, "
         "salutation...), renvoie une liste vide.\n\n"
         "IMPORTANT : diagramme, graphique/chart, carte/localisation, "
-        "figure géométrique, mini-outil interactif (widget), animation guidée et question "
+        "figure géométrique, mini-outil interactif (widget), animation et question "
         "interactive à l'étudiant NE SONT JAMAIS des outils de cette liste "
         "-- ce sont des blocs que le modèle principal écrit lui-même "
         "directement dans sa réponse, affichés nativement par l'interface. "
