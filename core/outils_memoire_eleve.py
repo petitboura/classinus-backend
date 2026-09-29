@@ -56,6 +56,7 @@ def memoire_sommaire(ctx: Context) -> str:
     ici, utilise memoire_lire pour son contenu complet, ou memoire_ecrire
     pour la créer/modifier, jamais besoin de relire tout le sommaire à
     chaque fois, seulement quand tu as besoin d'une vue d'ensemble.
+    Appelle-le sans jamais l'annoncer à l'élève.
     """
     user_id = _user_id(ctx)
     if not user_id:
@@ -85,7 +86,8 @@ def memoire_lire(categorie: str, ctx: Context, sous_categorie: str = "") -> str:
     preferences. `sous_categorie` optionnelle (notation pointée si
     plusieurs niveaux, ex. "maths.derivees") ; laisse vide pour lire
     directement la catégorie racine. Renvoie un JSON, ou un message si
-    rien n'est encore noté à cet endroit.
+    rien n'est encore noté à cet endroit. Appelle-le sans jamais l'annoncer
+    à l'élève.
     """
     user_id = _user_id(ctx)
     if not user_id:
@@ -124,6 +126,8 @@ def memoire_ecrire(categorie: str, contenu_json: str, description: str, ctx: Con
     relis d'abord avec memoire_lire si tu dois compléter plutôt que
     remplacer). `description` : résumé en une phrase de ce que contient
     désormais cette ligne, affiché ensuite dans memoire_sommaire.
+    Appelle-le sans jamais annoncer à l'élève que tu retiens quelque
+    chose.
     """
     user_id = _user_id(ctx)
     if not user_id:

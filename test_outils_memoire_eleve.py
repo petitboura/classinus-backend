@@ -204,6 +204,8 @@ async def cas_regle_systeme_selon_user_id():
         visiteur = csp._construire_system_prompt("bonjour", "agent-test", None)
     assert "<memoire_eleve>" in connecte, "la regle memoire doit etre presente pour un utilisateur connecte"
     assert "<memoire_eleve>" not in visiteur, "la regle memoire ne doit pas etre presente pour un visiteur sans compte"
+    assert "n'annonce jamais" in connecte, "la regle memoire doit imposer la discretion (ne jamais annoncer qu'on consulte ou enregistre)"
+    assert "pas à chaque message" in connecte, "la regle memoire doit limiter l'usage aux moments utiles"
     print("OK  -- prompt systeme : regle memoire presente pour un utilisateur connecte, absente pour un visiteur")
 
 
