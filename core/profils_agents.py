@@ -75,29 +75,6 @@ def _nom_lisible_appel(appel):
     return _nom_lisible(appel["name"], _action_appel(appel))
 
 
-def _charger_resume_memoire(user_id):
-    """
-    Recupere le resume long-terme (table conversation_summaries) de cet
-    utilisateur, valable pour tous les agents de la plateforme (compte
-    unifie, juillet 2026). Retourne "" si l'utilisateur n'est pas connecte
-    (user_id=None) ou si aucun resume n'existe encore.
-    """
-    if not user_id:
-        return ""
-    try:
-        res = (
-            supabase.table("conversation_summaries")
-            .select("summary")
-            .eq("user_id", user_id)
-            .maybe_single()
-            .execute()
-        )
-        return (res.data or {}).get("summary") or ""
-    except Exception as e:
-        logging.error(f"ERREUR SUPABASE (lecture conversation_summaries) : {e}")
-        return ""
-
-
 def _charger_schema_profil(agent_id):
     """
     Renvoie la liste de champs définie par le créateur pour SON agent
@@ -151,19 +128,14 @@ def _charger_profil_utilisateur(agent_id, user_id):
 
 def _mettre_a_jour_profil_utilisateur_si_besoin(user_id, agent_id):
     """
-    Pendant du profil dynamique à _mettre_a_jour_resume_si_besoin
-    ci-dessous, mais scopé à un seul agent (pas tous agents confondus) et
-    guidé par un schéma défini par le créateur plutôt que par un résumé
-    libre. Ne fait rien si : utilisateur non connecté, agent sans schéma
+    Profil dynamique scopé à un seul agent (pas tous agents confondus) et
+    guidé par un schéma défini par le créateur. Ne fait rien si : utilisateur non connecté, agent sans schéma
     défini (profil_utilisateur_schema vide -- cas par défaut, aucun coût
     ajouté pour les agents qui n'utilisent pas cette fonctionnalité), ou
     pas encore assez de nouveaux messages avec CET agent.
 
-    Contrairement à _mettre_a_jour_resume_si_besoin, ne purge PAS les
-    messages bruts de `conversations` -- ce n'est pas son rôle (le résumé
-    mémoire s'en charge déjà, tous agents confondus) ; lire les mêmes
-    lignes deux fois pour deux mécanismes différents ne pose aucun
-    problème tant qu'aucun des deux n'écrit sur les données de l'autre.
+    Ne purge PAS les messages bruts de `conversations` : plus rien ne les
+    purge depuis le retrait du résumé automatique de l'ancienne mémoire.
     Ne bloque jamais la réponse à l'utilisateur : toute erreur est juste
     loguée, jamais remontée à l'appelant.
     """

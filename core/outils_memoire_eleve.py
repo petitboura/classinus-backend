@@ -1,18 +1,16 @@
 """
 Outils MCP de la mémoire élève (chantier 27/09/2026, demande Bourama).
-Trois actions séparées plutôt qu'un seul outil à actions (contrairement
-à gerer_memoire_utilisateur) : `memoire_sommaire` doit pouvoir être
+Trois actions séparées plutôt qu'un seul outil à actions :
+`memoire_sommaire` doit pouvoir être
 appelé très souvent, à moindre coût, sans jamais charger de contenu ,
 un seul outil "action" aurait quand même une description unique plus
 longue à envoyer à chaque tour.
 
-RAPPEL NON NEGOCIABLE (voir core/outils_generation_commun.py, ligne 47) :
-question explicite à poser à Bourama avant tout déploiement, ces
-outils doivent-ils aussi être exposés sur le serveur MCP PUBLIC
-(core/serveur_mcp_espace.py) ? Pas supposé ici, pas fait ici.
+Décision de Bourama (27/09/2026) : ces outils ne sont PAS exposés sur le
+serveur MCP PUBLIC (core/serveur_mcp_espace.py).
 
-Ces outils sont enregistrés comme des outils MCP normaux (comme
-gerer_memoire_utilisateur avant eux), donc découvrables via
+Ces outils sont enregistrés comme des outils MCP normaux, donc
+découvrables via
 demander_outils (catégorie "memoire", voir registre_outils.py). Le
 principe "toujours disponible, comme demander_outils" décidé par Bourama
 est une décision d'INJECTION dans outils_mcp, câblée séparément dans

@@ -297,9 +297,6 @@ OUTILS_SENSIBLES = {
     # action précise est sensible, pas les 11 autres du même outil (voir
     # _est_outil_sensible dans main.py, qui sait lire ce format composite).
     "gerer_document_bibliotheque:supprimer",
-    # Consolidé le 26/08 en une action de gerer_memoire_utilisateur (même
-    # format composite "nom_outil:action").
-    "gerer_memoire_utilisateur:effacer",
     # Dossiers de la bibliothèque personnelle (22/08, demande Bourama) :
     # peut supprimer des fichiers avec le dossier (voir
     # core/dossiers_bibliotheque.py:supprimer_dossier) -- irréversible,
@@ -518,7 +515,13 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # rappel, lui, avait déjà été retiré le 17/08 (voir plus bas dans
     # l'historique git de ce fichier).
     "envoyer_message": {"label": "Envoi d'un message", "icone": "Send", "onglet": None},
-    "gerer_memoire_utilisateur": {"label": "Ta mémoire", "icone": "Brain", "onglet": None},
+    # Nouvelle mémoire élève (core/outils_memoire_eleve.py). Ces trois outils
+    # n'avaient aucune entrée ici : le chat affichait leur nom technique et
+    # l'icône générique. Même icône principale pour les trois, la petite
+    # icône de verbe (VERBES_ACTIONS) distingue la lecture.
+    "memoire_sommaire": {"label": "Aperçu de ta mémoire", "icone": "Brain", "onglet": None},
+    "memoire_lire": {"label": "Lecture de ta mémoire", "icone": "Brain", "onglet": None},
+    "memoire_ecrire": {"label": "Enregistrement dans ta mémoire", "icone": "Brain", "onglet": None},
     "consulter_profil_utilisateur": {"label": "Consultation de ton profil", "icone": "UserCircle", "onglet": None},
     "mettre_a_jour_profil_utilisateur": {"label": "Mise à jour de ton profil", "icone": "UserCog", "onglet": None},
 
@@ -821,7 +824,6 @@ CATEGORIES_OUTILS = {
     ],
     "comportement": ["gerer_comportement", "gerer_comportement_public"],
     "memoire": [
-        "gerer_memoire_utilisateur",  # ancien systeme, conserve pour l'instant (voir core/memoire_eleve.py)
         "memoire_sommaire", "memoire_lire", "memoire_ecrire",
     ],
     "telephone_etudiant": [

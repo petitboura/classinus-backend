@@ -217,9 +217,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     `user_id` (session.user.id de Supabase Auth, ou None si l'utilisateur n'est
     pas connecte) est transmis au registre d'outils pour que les outils "par
     utilisateur" (ex: Notion) sachent pour qui aller chercher un token. Il sert
-    aussi a scoper la memoire long-terme (conversation_summaries, scope par
-    user_id seul depuis le compte unifie de juillet 2026 -> le resume suit
-    l'utilisateur d'un agent a l'autre, pas cloisonne par agent) : sans user_id
+    aussi a scoper la memoire de l'eleve (table memoire_eleve, scope par
+    user_id seul depuis le compte unifie de juillet 2026 -> la memoire suit
+    l'utilisateur d'un agent a l'autre, pas cloisonnee par agent) : sans user_id
     (utilisateur non connecte), rien n'est lu ni ecrit en memoire.
 
     `agent_id` (optionnel) determine quel prompt systeme et quelles donnees

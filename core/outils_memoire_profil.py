@@ -1,6 +1,6 @@
 """
-Outils MCP liés à l'utilisateur : mémoire de conversation, historique,
-profil, messagerie interne (envoyer_message) et rappels programmés
+Outils MCP liés à l'utilisateur : historique, profil,
+messagerie interne (envoyer_message) et rappels programmés
 (planifier_rappel).
 
 Extrait de core/serveur_mcp_generation.py le 05/09/2026 (découpage d'un
@@ -28,106 +28,6 @@ from core.notifications_push import (
 
 from core.outils_generation_commun import mcp_generation, Context, _supabase_memoire
 
-
-
-@mcp_generation.tool()
-def gerer_memoire_utilisateur(
-    action: str,
-    ctx: Context,
-    champs_json: str = "",
-) -> str:
-    """
-    Gère la mémoire long-terme structurée de CET utilisateur, valable
-    d'une conversation à l'autre (préférences, matières suivies,
-    difficultés récurrentes, projets en cours, etc.), consolidé le
-    26/08, un seul outil, plusieurs actions.
-
-    `action` doit être l'une de :
-    - "consulter" : renvoie ce qui est déjà su de cet utilisateur, sous
-      forme de JSON (peut être vide si rien n'a encore été noté). À
-      utiliser au début d'une conversation si ça peut aider à mieux
-      répondre, ou dès qu'un élément de contexte passé serait utile.
-      Aucun paramètre.
-    - "mettre_a_jour" : note ou met à jour un ou plusieurs éléments, à
-      utiliser dès que tu apprends quelque chose d'utile à retenir pour
-      les prochaines conversations (préférence, difficulté récurrente,
-      projet en cours, etc.). Le schéma est libre : garde les clés déjà
-      utilisées si elles collent (ex. "profil_personnel",
-      "preferences_pedagogiques", "matieres_ou_sujets",
-      "objectifs_et_projets", "points_de_continuite"), ou crée-en de
-      nouvelles si aucune ne convient. Paramètre `champs_json` : objet
-      JSON, ex. '{"preferences_pedagogiques": {"style_explication":
-      "avec des exemples concrets"}}', fusionné avec la mémoire
-      existante (les clés de premier niveau fournies remplacent leur
-      ancienne valeur, le reste est conservé tel quel). N'écris ici que
-      ce qui a une vraie valeur à long terme, pas le contenu d'un seul
-      message.
-    - "effacer" : efface DÉFINITIVEMENT le résumé long-terme ("oublie
-      tout ce que tu sais de moi"). Aucun paramètre. SENSIBLE : demande
-      toujours confirmation à l'utilisateur avant d'être exécuté, quelle
-      que soit la formulation de sa demande.
-    """
-    requete = ctx.request_context.request
-    user_id = requete.query_params.get("user_id")
-    if not user_id:
-        return "Erreur : impossible d'identifier l'utilisateur."
-
-    if action == "consulter":
-        try:
-            res = (
-                _supabase_memoire.table("conversation_summaries")
-                .select("donnees")
-                .eq("user_id", user_id)
-                .maybe_single()
-                .execute()
-            )
-            donnees = (res.data or {}).get("donnees") or {}
-            if not donnees:
-                return "Rien en mémoire pour cet utilisateur pour l'instant."
-            return json.dumps(donnees, ensure_ascii=False)
-        except Exception as e:
-            logging.error(f"ERREUR gerer_memoire_utilisateur (consulter) : {e}")
-            return "Erreur : impossible de consulter la mémoire, réessaie."
-
-    if action == "mettre_a_jour":
-        try:
-            try:
-                patch = json.loads(champs_json)
-            except Exception:
-                return "Erreur : champs_json doit être un objet JSON valide."
-            if not isinstance(patch, dict):
-                return "Erreur : champs_json doit être un objet JSON (pas une liste ou une valeur simple)."
-
-            res = (
-                _supabase_memoire.table("conversation_summaries")
-                .select("donnees")
-                .eq("user_id", user_id)
-                .maybe_single()
-                .execute()
-            )
-            actuel = (res.data or {}).get("donnees") or {}
-            actuel.update(patch)
-
-            _supabase_memoire.table("conversation_summaries").upsert(
-                {"user_id": user_id, "donnees": actuel}, on_conflict="user_id"
-            ).execute()
-            return "Mémoire mise à jour."
-        except Exception as e:
-            logging.error(f"ERREUR gerer_memoire_utilisateur (mettre_a_jour) : {e}")
-            return "Erreur : la mise à jour de la mémoire a échoué, réessaie."
-
-    if action == "effacer":
-        try:
-            _supabase_memoire.table("conversation_summaries").delete().eq("user_id", user_id).execute()
-        except Exception as e:
-            logging.error(f"ERREUR gerer_memoire_utilisateur (effacer) : {e}")
-            return "Erreur : impossible d'effacer la mémoire, réessaie."
-        return "Mémoire effacée."
-
-    return (
-        f"Erreur : action '{action}' inconnue. Actions valides : consulter, "
-        "mettre_a_jour, effacer."
-    )
 
 
 @mcp_generation.tool()
@@ -261,8 +161,7 @@ def mettre_a_jour_profil_utilisateur(champs_json: str, ctx: Context) -> str:
     """
     Met à jour le profil de CET utilisateur dès que tu apprends une
     information utile à retenir sur qui il est (pas sur ce qu'il sait
-    ou apprend, ça c'est la mémoire, voir gerer_memoire_utilisateur
-    action "mettre_a_jour").
+    ou apprend, ça c'est la mémoire, voir memoire_ecrire).
     Schéma libre, mêmes règles que pour la mémoire : `champs_json` est
     un objet JSON fusionné avec le profil existant.
     """
