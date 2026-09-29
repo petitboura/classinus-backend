@@ -1,9 +1,13 @@
 """Régressions du transport de l'état de l'éditeur vers le chat IA."""
 
+import asyncio
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from api.chat import EnvoyerMessagePayload
 import construction_system_prompt as csp
+from core.canal_agent_applicatif import definir_lecture_editeur_chat, retirer_lecture_editeur_chat
+from core.outils_action_agent import _operation_editeur
 
 
 def test_payload_chat_accepte_etat_editeur():
@@ -72,3 +76,27 @@ def test_ancien_appelant_sans_etat_editeur_utilise_le_cache_websocket():
 
     assert "cache.py" in prompt
     assert "python" in prompt
+
+
+def test_lecture_editeur_sans_etat_websocket_utilise_snapshot_du_tour():
+    lecture = {
+        "code": "print('visible')",
+        "langage": "python",
+        "derniere_execution": {"lignes": ["visible"], "erreur": None},
+    }
+    ctx = SimpleNamespace(
+        request_context=SimpleNamespace(
+            request=SimpleNamespace(query_params={"user_id": "u-test", "conversation_id": "c-test"})
+        )
+    )
+    definir_lecture_editeur_chat("u-test", "c-test", lecture)
+    try:
+        with patch("core.outils_action_agent._obtenir_etat_editeur", return_value=None), patch(
+            "core.outils_action_agent._demander_action_editeur"
+        ) as envoyer_websocket:
+            erreur, resultat = asyncio.run(_operation_editeur(ctx, {"op": "lire"}))
+        assert erreur is None
+        assert resultat is lecture
+        envoyer_websocket.assert_not_called()
+    finally:
+        retirer_lecture_editeur_chat("u-test", "c-test", lecture)
