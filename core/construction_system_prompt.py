@@ -81,32 +81,52 @@ def _texte_actions_application(actions):
 
 def _texte_editeur(etat):
     """
-    Editeur de code (28/09/2026, demande Bourama). Bloc injecte seulement
-    quand l'editeur de l'etudiant est ouvert a l'ecran (etat pousse par le
-    frontend, voir core/canal_agent_applicatif.py). L'IA y lit, montre et
-    ecrit directement, plein ecran ou non, au lieu de mettre le code dans
-    un bloc du chat. C'est elle qui decide, selon la conversation, de
-    demander confirmation avant d'ecrire : rien n'est impose.
+    Editeur de code (28/09/2026). Le snapshot transmis avec la requête
+    HTTP est la source de vérité pour CE tour : métadonnées, code courant
+    et dernière exécution. Cela permet au modèle de voir le code même si
+    le WebSocket est momentanément absent ou en reconnexion.
+
+    Les outils lire/montrer/ecrire restent disponibles pour les actions
+    interactives et pour obtenir un état plus récent après une modification.
     """
     langage = str(etat.get("langage") or "inconnu")[:40]
     nom = str(etat.get("nom_fichier") or "sans nom")[:80]
     plein_ecran = "oui" if etat.get("plein_ecran") else "non"
+    code = str(etat.get("code") or "")
+    derniere_execution = etat.get("derniere_execution")
+    lignes = code.split("\n") if code else []
+    largeur = len(str(len(lignes))) if lignes else 1
+    numerote = "\n".join(f"{i + 1:>{largeur}} | {ligne}" for i, ligne in enumerate(lignes))
+    if len(numerote) > 20000:
+        numerote = numerote[:20000] + "\n(Code tronqué à 20 000 caractères.)"
+
+    bloc_execution = ""
+    if isinstance(derniere_execution, dict):
+        sortie = [str(x) for x in (derniere_execution.get("lignes") or [])][-40:]
+        if sortie:
+            bloc_execution += "\nSortie de la dernière exécution :\n" + "\n".join(sortie)[:2000]
+        if derniere_execution.get("erreur"):
+            bloc_execution += "\nErreur de la dernière exécution :\n" + str(derniere_execution["erreur"])[:2000]
+
     return (
         "\n\n## Éditeur de code de l'étudiant\n"
         f"L'étudiant a son éditeur de code ouvert (langage : {langage}, fichier : {nom}, plein écran : {plein_ecran}). "
-        "Tant qu'il est ouvert, travaille directement dedans, plein écran ou non, au lieu d'écrire le code dans un bloc du chat, "
-        "sauf si l'étudiant te demande explicitement un bloc dans le chat.\n"
-        "- lire_editeur : lis son code (avec les numéros de lignes) et le résultat de sa dernière exécution avant de le conseiller ou de le modifier. "
-        "Relis-le juste avant d'écrire s'il a pu le changer, car les numéros de lignes bougent quand il tape.\n"
+        "Le snapshot ci-dessous est celui capturé exactement au moment de l'envoi de ce message : "
+        "considère-le comme l'état courant de l'éditeur pour CE tour. "
+        "Tu peux donc lire et analyser ce code directement, même si le canal WebSocket est en reconnexion.\n"
+        "Code courant (numéro de ligne | contenu) :\n"
+        + (numerote if numerote else "(éditeur vide)")
+        + bloc_execution
+        + "\n"
+        "- lire_editeur : relis l'éditeur quand tu dois obtenir un état plus récent, notamment si l'étudiant a pu modifier le code depuis l'envoi du message. "
+        "Cette opération dépend du canal interactif et ne remplace pas le snapshot déjà fourni pour CE tour.\n"
         "- montrer_dans_editeur : montre-lui une ligne ou un groupe de lignes (défilement, surlignage, curseur). "
         "Explique en même temps ce qu'il doit regarder avec dire_a_l_etudiant.\n"
         "- ecrire_dans_editeur : écris ou modifie son code, il te voit taper. Trois modes : tout remplacer, remplacer des lignes, insérer après une ligne.\n"
         "- Parle-lui avec dire_a_l_etudiant pendant que tu montres ou écris : la bulle reste visible en plein écran.\n"
-        "- Selon la conversation, tu écris directement quand il te l'a demandé ou l'a accepté, ou tu lui demandes d'abord dans ta réponse si tu juges plus prudent "
-        "de confirmer, surtout avant de remplacer un code qu'il a écrit lui même. Dis toujours ce que tu changes. Il peut annuler avec Ctrl+Z (Cmd+Z sur Mac).\n"
+        "- Selon la conversation, tu écris directement quand il te l'a demandé ou l'a accepté, ou tu lui demandes d'abord dans ta réponse si tu juges plus prudent de confirmer, surtout avant de remplacer un code qu'il a écrit lui-même. Dis toujours ce que tu changes. Il peut annuler avec Ctrl+Z (Cmd+Z sur Mac).\n"
         "- Les boutons de l'éditeur (Exécuter, Ouvrir, Enregistrer, Vers le chat, plein écran) sont dans la liste des éléments à l'écran.\n"
     )
-
 
 def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None, reponses_qcm_recentes=None, etat_editeur=None):
     # Restauré le 14/08 (voir commentaire des constantes plus haut) : la
