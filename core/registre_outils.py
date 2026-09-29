@@ -661,6 +661,8 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "montrer_element_application": {"label": "Pointer un élément de l'application", "icone": "Crosshair", "onglet": None},
     # Ecriture dans les champs (20/09/2026, demande Bourama), meme rappel de cache 24h.
     "ecrire_dans_champ": {"label": "Écriture dans un champ", "icone": "PenLine", "onglet": None},
+    # Lot U : lecture de la page Classinus, dans le canal applicatif existant.
+    "lire_page": {"label": "Lecture de la page", "icone": "Eye", "onglet": None},
     # Editeur de code (28/09/2026, demande Bourama), meme rappel de cache 24h.
     "lire_editeur": {"label": "Lecture de l'éditeur de code", "icone": "FileCode", "onglet": None},
     "montrer_dans_editeur": {"label": "Montrer des lignes dans l'éditeur", "icone": "Crosshair", "onglet": None},
@@ -844,6 +846,7 @@ CATEGORIES_OUTILS = {
         "executer_action_application",
         "executer_clic_generique", "montrer_element_application", "ecrire_dans_champ",
         "lire_editeur", "montrer_dans_editeur", "ecrire_dans_editeur",
+        "lire_page",
     ],
     "github": ["gerer_depot_github"],
     "google_drive": [
