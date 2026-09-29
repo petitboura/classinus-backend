@@ -44,7 +44,6 @@ def test_etat_editeur_du_tour_est_prioritaire_sur_le_websocket():
             "corrige mon code",
             "agent-test",
             user_id="u1",
-            canal_en_direct=True if False else None,
             etat_editeur=etat_frais,
         )
 
