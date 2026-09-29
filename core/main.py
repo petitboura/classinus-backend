@@ -622,14 +622,14 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             persona_pedagogique = f_persona_pedagogique.result() if f_persona_pedagogique else None
             guide_actif = f_guide_actif.result() if f_guide_actif else {"actif": False, "sous_mode": "textuel"}
             mode_source = f_mode_source.result() if f_mode_source else None
-            # Agent applicatif (correctif 19/09/2026) : liste COMPLETE et
-            # actuelle des elements cliquables a l'ecran, a CHAQUE tour,
-            # uniquement quand le canal en direct est actif (les outils de
-            # clic ne sont disponibles que dans ce cas). Simple lecture en
-            # memoire, pas besoin du lot parallele. Voir
-            # core/canal_agent_applicatif.py pour la raison du retrait de
-            # l'ancienne injection par difference.
-            actions_ecran = obtenir_actions_disponibles(user_id) if (canal_en_direct and user_id) else None
+            # Agent applicatif : l'etat courant des elements interactifs de
+            # l'ecran reste visible par le modele a CHAQUE tour, comme avant
+            # le mode "canal en direct". Le flag canal_en_direct controle
+            # l'activation des outils d'action (clic, ecriture, etc.), pas la
+            # lecture de l'ecran. Cela evite de faire disparaitre les boutons
+            # et l'etat general de l'application du prompt du chat normal.
+            # Simple lecture en memoire, pas besoin du lot parallele.
+            actions_ecran = obtenir_actions_disponibles(user_id)
 
         # rattachement_id_actif (voir core/mode_actif_conversation.py) vaut :
         # - None si conversation_id est absent ou si aucun mode actif n'a
