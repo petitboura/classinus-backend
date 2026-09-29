@@ -51,6 +51,13 @@ def _texte_actions_application(actions):
         "- Quand une ligne commence par une zone (barre latérale, page, fenêtre, barre du bas), c'est "
         "l'endroit où se trouve l'élément. Une ligne marquée « page actuelle, déjà ouverte » est la page "
         "où l'étudiant se trouve déjà : ne clique pas dessus pour y aller.\n\n"
+        # Lot U (28/09/2026, decision Bourama) : la liste ne montre que ce qui est actionnable.
+        "## Lire ce qui est affiché\n"
+        "La liste ci-dessus ne contient que les éléments sur lesquels tu peux agir : ni les textes, ni les titres, "
+        "ni les messages d'erreur, ni ce qui est écrit dans les champs. Quand tu as besoin de voir ce que l'étudiant "
+        "lit (répondre à une question sur ce qui est à l'écran, vérifier le résultat d'une action, comprendre où il en "
+        "est), appelle lire_page. Ne l'appelle pas à chaque message ni avant chaque clic : uniquement quand ce contenu "
+        "t'est nécessaire. Si la lecture est coupée, ne devine pas la suite.\n\n"
         # 20/09/2026, demande Bourama : le modèle croyait que l'étudiant voit tout ce qu'il écrit,
         # alors que l'étudiant ne voit que la bulle affichée à l'instant.
         "## Ce que l'étudiant voit vraiment\n"
