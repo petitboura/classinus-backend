@@ -26,7 +26,10 @@ from pydantic import BaseModel
 from typing import List, Optional, Literal
 
 from api.auth import utilisateur_optionnel, supabase
-from core.canal_agent_applicatif import debuter_tour, renvoyer_messages_non_lus, terminer_tour
+from core.canal_agent_applicatif import (
+    debuter_tour, definir_lecture_editeur_chat, renvoyer_messages_non_lus,
+    retirer_lecture_editeur_chat, terminer_tour,
+)
 from core.plafond_outils_tour import retirer_plafond_tour
 from core.limitation_debit import limiteur
 from core.restriction_mineur import acces_chat_bloque_pour_mineur
@@ -237,6 +240,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
     # envoyer un message qui sera lu par la boucle d'agent au prochain
     # aller-retour (voir core/canal_agent_applicatif.py).
     if user_id:
+        definir_lecture_editeur_chat(user_id, payload.conversation_id, payload.etat_editeur)
         debuter_tour(user_id)
     try:
         if payload.reprise is not None:
@@ -279,6 +283,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
         yield f"data: {json.dumps({'type': 'reponse', 'texte': 'Une erreur est survenue, réessaie dans un instant.'})}\n\n"
     finally:
         if user_id:
+            retirer_lecture_editeur_chat(user_id, payload.conversation_id, payload.etat_editeur)
             retirer_plafond_tour(user_id)
             renvoyer_messages_non_lus(user_id, terminer_tour(user_id))
     # Signal de fin explicite : côté Next.js, permet de savoir que le flux
