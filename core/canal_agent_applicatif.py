@@ -198,6 +198,15 @@ def obtenir_etat_editeur(user_id: str) -> dict[str, Any] | None:
 # calme apres un changement du DOM avant de repousser (voir
 # lib/canalAgentApplicatif.ts), plus le temps de l'animation.
 DELAI_OBSERVATION_ECRAN_SECONDES = 0.9
+# Lot U (lire_page) : taille maximale, en caracteres, du texte lu dans la
+# page de l'etudiant. Valeur de depart, pas une limite produit tranchee
+# avec Bourama (a valider) : environ 2000 tokens. Gardee ICI seulement :
+# elle est envoyee avec chaque demande, le frontend n'a pas sa propre
+# valeur (voir lib/lecturePage.ts).
+LONGUEUR_MAX_LECTURE_PAGE = 8000
+# Le frontend ajoute une phrase de coupure apres avoir atteint la limite :
+# cette marge evite que le filet de securite du backend la retire.
+MARGE_NOTE_COUPURE_LECTURE_PAGE = 300
 NB_MAX_ELEMENTS_CITES_APRES_CLIC = 40
 
 
@@ -413,6 +422,27 @@ async def demander_ecriture_champ(user_id: str, action_id: str, texte: str, on_s
         on_statut,
         on_timeout_log=f"ecriture action={action_id}",
     )
+
+
+async def demander_lecture_page(user_id: str, on_statut=None) -> Any | None:
+    """
+    Lot U (28/09/2026, decision Bourama : Clovis ne voyait que les elements
+    cliquables, jamais ce que l'etudiant lit). Meme principe que
+    demander_ecriture_champ, mais en lecture seule : diffuse
+    {lire_page, longueur_max} a toutes les connexions actives de user_id,
+    la premiere qui repond renvoie le texte visible de la page
+    (voir lib/lecturePage.ts cote frontend). Rien n'est modifie dans la
+    page. Ne lit que la page Classinus : pour une autre application sur
+    le PC, c'est lire_ecran (core/outils_action_agent_pc.py).
+    """
+    correlation_id = str(uuid.uuid4())
+    return await _diffuser_et_attendre(
+        user_id,
+        {"id": correlation_id, "lire_page": True, "longueur_max": LONGUEUR_MAX_LECTURE_PAGE},
+        on_statut,
+        on_timeout_log="lecture page",
+    )
+
 
 
 async def demander_action_editeur(user_id: str, operation: dict[str, Any], on_statut=None) -> Any | None:
