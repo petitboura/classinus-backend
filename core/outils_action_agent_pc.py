@@ -218,6 +218,50 @@ async def taper_clavier(texte: str, ctx: Context) -> str:
 
 
 @mcp_generation.tool()
+async def appuyer_touches(touches: str, ctx: Context) -> str:
+    """
+    Canal en direct PC (30/09/2026, decision Bourama : Clovis controle le
+    clavier comme un utilisateur). Appuie sur des touches seules ou des
+    raccourcis clavier, sur le PC de l'etudiant, dans la fenetre deja au
+    premier plan. Pour ECRIRE du texte, utilise taper_clavier.
+
+    `touches` : une combinaison avec "+" (les touches sont tenues ensemble),
+    ou plusieurs combinaisons separees par des espaces (faites a la suite).
+    Exemples : "ctrl+c", "ctrl+shift+esc", "alt+tab", "win+d", "enter",
+    "esc", "f5", "ctrl+a ctrl+c", "tab tab enter".
+    Modificateurs : ctrl, shift, alt, altgr, win. Touches : a-z, 0-9, f1-f24,
+    enter, esc, tab, space, backspace, delete, insert, home, end, pageup,
+    pagedown, up, down, left, right, et la ponctuation - = , . / ; ' [ ] \\ `.
+    Une touche non reconnue est refusee : n'invente jamais un nom.
+
+    Comme un vrai utilisateur : tout raccourci est permis. Chaque raccourci
+    est annonce a l'etudiant dans son journal avant d'etre execute. Regarde
+    d'abord l'ecran avec lire_ecran si tu n'es pas certain de ce qui a le
+    focus, et verifie le resultat apres avec lire_ecran.
+
+    Aucune confirmation etudiant (meme regle que le reste du canal en direct
+    depuis le 19/09/2026).
+    """
+    user_id, erreur = _user_id_ou_erreur(ctx)
+    if erreur:
+        return erreur
+    if not isinstance(touches, str) or not touches.strip():
+        return "Erreur : paramètre 'touches' manquant (exemple : \"ctrl+c\")."
+
+    resultat = await _demander_action_systeme(user_id, "appuyer_touches", {"touches": touches})
+    if resultat is None:
+        return MESSAGE_ECHEC_SYSTEME
+    if isinstance(resultat, dict) and resultat.get("erreur"):
+        return f"Erreur : {resultat['erreur']}"
+    if not isinstance(resultat, dict) or resultat.get("ok") is not True:
+        return "Erreur : l'appui sur les touches n'a pas été confirmé."
+    faites = resultat.get("combinaisons")
+    if isinstance(faites, list) and faites:
+        return "Touches pressées : " + ", ".join(str(f) for f in faites) + "."
+    return "Touches pressées avec succès."
+
+
+@mcp_generation.tool()
 async def ouvrir_application(nom: str, ctx: Context) -> str:
     """
     Lot S (27/09/2026). Lance une application installée sur le PC de
@@ -279,7 +323,12 @@ def _formater_element_lu(element: dict) -> str:
             f", zone : gauche {element.get('gauche')}, haut {element.get('haut')}, "
             f"largeur {element.get('largeur')}, hauteur {element.get('hauteur')}"
         )
-    return f"[{genre}{nom_txt}{suite}, clic possible en ({element.get('x')}, {element.get('y')}){taille}]"
+    # Elements d'un menu / menu contextuel / liste deroulante ouvert au-dessus
+    # de la fenetre (fenetre a part cote Windows, champ "zone" cote Electron).
+    # Ne pas confondre avec "zone : gauche..., haut..." ci-dessus (rectangle de l'element).
+    zone = element.get("zone")
+    zone_txt = f", dans le {zone}" if isinstance(zone, str) and zone else ""
+    return f"[{genre}{nom_txt}{suite}{zone_txt}, clic possible en ({element.get('x')}, {element.get('y')}){taille}]"
 
 
 def _formater_lecture_ecran(resultat: dict) -> str:
@@ -319,6 +368,16 @@ def _formater_lecture_ecran(resultat: dict) -> str:
             lignes.append(f"[Détail technique de l'échec : {str(resultat['erreur_lecture'])[:300]}]")
         return "\n".join(lignes)
 
+    if resultat.get("menu_ouvert"):
+        lignes.append(
+            "Un menu, un menu contextuel ou une liste déroulante est ouvert au-dessus de cette fenêtre : "
+            "ses éléments sont listés en premier, marqués « dans le menu ouvert »."
+        )
+    if resultat.get("texte_long_ignore"):
+        lignes.append(
+            "[Le texte long (document, champ multiligne) n'a pas pu être lu sur cette fenêtre ; "
+            "seule sa structure (boutons, menus, champs courts) l'est. Ne devine pas son contenu.]"
+        )
     lignes.append("Contenu visible (les coordonnées sont en pixels d'écran, utilisables avec cliquer_ecran ; la zone de chaque élément sert à marquer_ecran) :")
     total = sum(len(l) + 1 for l in lignes)
     coupe = bool(resultat.get("coupe"))
@@ -357,8 +416,13 @@ async def lire_ecran(ctx: Context) -> str:
     externe derrière Classinus, sans la mettre au premier plan. Pour agir
     dessus, le pont restaure son focus avant le clic ou la frappe.
 
+    Apres un clic sur un bouton qui ouvre un menu, un menu contextuel ou
+    une liste deroulante, rappelle lire_ecran : ce menu ouvert apparait
+    en premier dans la lecture, marque « dans le menu ouvert », avec les
+    coordonnees de chacun de ses choix.
+
     Ne lit QUE cette fenetre (pas toutes les autres, pas tout
-    l'ecran). Certaines applications (jeux, bureau a distance) ne rendent
+    l'ecran), plus les menus qu'elle a ouverts. Certaines applications (jeux, bureau a distance) ne rendent
     presque rien lisible : l'outil le dit, dans ce cas ne devine pas. Pour
     ce qui est affiche dans Classinus lui meme, utilise lire_page.
     """

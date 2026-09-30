@@ -659,6 +659,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "pointer_ecran": {"label": "Pointage à l'écran", "icone": "Crosshair", "onglet": None},
     "marquer_ecran": {"label": "Marque à l'écran", "icone": "Highlighter", "onglet": None},
     "taper_clavier": {"label": "Saisie au clavier", "icone": "Keyboard", "onglet": None},
+    "appuyer_touches": {"label": "Raccourci clavier", "icone": "Keyboard", "onglet": None},
     "ouvrir_application": {"label": "Ouverture d'une application", "icone": "AppWindow", "onglet": None},
     "lire_ecran": {"label": "Lecture de l'écran", "icone": "Eye", "onglet": None},
     # Chantier P (canal en direct, 19/09/2026) : commentaire libre pendant
@@ -835,7 +836,7 @@ CATEGORIES_OUTILS = {
         "executer_action_application",
         "executer_clic_generique", "montrer_element_application", "ecrire_dans_champ",
         "lire_page",
-        "pointer_ecran", "marquer_ecran", "cliquer_ecran", "taper_clavier", "ouvrir_application", "lire_ecran",
+        "pointer_ecran", "marquer_ecran", "cliquer_ecran", "taper_clavier", "appuyer_touches", "ouvrir_application", "lire_ecran",
     ],
     "github": ["gerer_depot_github"],
     "google_drive": [
