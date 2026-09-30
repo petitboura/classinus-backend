@@ -23,6 +23,8 @@ une fenetre externe comme le Bloc-notes) : c'est lire_ecran, plus bas,
 qui joue ce role pour les actions systeme.
 """
 
+import logging
+
 from core.canal_agent_applicatif import demander_action_systeme as _demander_action_systeme
 from core.canal_agent_applicatif import demander_pointage_ecran
 from core.outils_generation_commun import mcp_generation, Context
@@ -60,8 +62,10 @@ async def pointer_ecran(x: int, y: int, ctx: Context) -> str:
         return erreur
     resultat = await demander_pointage_ecran(user_id, x, y)
     if resultat is None:
+        logging.warning("Pointage écran : aucune réponse du pont Electron.")
         return MESSAGE_ECHEC_SYSTEME
     if not isinstance(resultat, dict) or resultat.get("succes") is not True:
+        logging.warning("Pointage écran : %s", resultat.get("erreur", "réponse sans succès") if isinstance(resultat, dict) else "réponse invalide")
         return f"Erreur : {resultat.get('erreur', 'pointage non effectué') if isinstance(resultat, dict) else 'pointage non effectué'}"
     return f"Curseur de Clovis positionné à ({x}, {y}), sans déplacer le pointeur Windows."
 

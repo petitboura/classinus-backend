@@ -422,12 +422,8 @@ async def demander_action_systeme(
 
 
 async def demander_pointage_ecran(user_id: str, x: int, y: int) -> Any | None:
-    """Pointage visuel traité par le renderer Electron, jamais par la souris native."""
-    return await _diffuser_et_attendre(
-        user_id,
-        {"id": str(uuid.uuid4()), "pointer_ecran": {"x": x, "y": y}},
-        on_timeout_log="pointage ecran",
-    )
+    """Même transport PC que lire_ecran ; l'action reste purement visuelle."""
+    return await demander_action_systeme(user_id, "pointer_ecran", {"x": x, "y": y})
 
 
 async def demander_lecture_page(user_id: str, on_statut=None) -> Any | None:
