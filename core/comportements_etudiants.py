@@ -122,6 +122,30 @@ def _appliquer_nom_affichage(skill_md: str, nom: str) -> str:
     return f"---\n{chr(10).join(lignes)}\n---\n\n{corps.strip()}\n"
 
 
+def _appliquer_description_manuelle(skill_md: str, description: str) -> str:
+    """29/09/2026, demande Bourama, onglet "Configuration" de Bureau :
+    champ optionnel "quand l'utiliser" -- si l'utilisateur le remplit,
+    SA phrase devient la description (celle que l'IA lit pour décider
+    quand appliquer ce skill), au lieu de la description générée
+    automatiquement. Même patron que _appliquer_nom_affichage
+    ci-dessus : remplace la ligne `description:` du frontmatter, ou
+    l'ajoute si absente."""
+    correspondance = _RE_FRONTMATTER.match(skill_md)
+    if not correspondance:
+        return skill_md
+    entete, corps = correspondance.group(1), correspondance.group(2)
+    lignes = entete.splitlines()
+    remplace = False
+    for i, ligne in enumerate(lignes):
+        if ligne.strip().lower().startswith("description:"):
+            lignes[i] = f"description: {description}"
+            remplace = True
+            break
+    if not remplace:
+        lignes.append(f"description: {description}")
+    return f"---\n{chr(10).join(lignes)}\n---\n\n{corps.strip()}\n"
+
+
 def _longueur_description_cible(texte: str) -> int:
     """28/09/2026, demande Bourama ("le skill généré doit être
     proportionnel à celui du texte écrit, surtout pour les règles qui
@@ -573,6 +597,7 @@ def ajouter_comportement(
     lien_type: str | None = None,
     lien_id: str | None = None,
     categorie: str | None = None,
+    quand_utiliser: str | None = None,
 ) -> dict:
     """
     lien_type/lien_id (16/08/2026, demande Bourama) : rattache
@@ -603,17 +628,31 @@ def ajouter_comportement(
     l'outil MCP gerer_comportement (core/outils_comportements_connaissance.py)
     -- l'IA ne doit jamais pouvoir créer elle même une entrée catégorisée,
     seulement un humain via un bouton dans l'appli.
+
+    quand_utiliser (29/09/2026, demande Bourama, même chantier) : champ
+    optionnel, seulement proposé à l'écran pour les 4 catégories de
+    Configuration ("cette fois un champ optionnel quand l'utiliser").
+    Rempli -> devient directement la description (ce que l'IA lit pour
+    savoir quand appliquer ce skill), à la place de la description
+    générée automatiquement. Vide/absent -> comportement inchangé,
+    description auto-générée par _generer_skill (proportionnelle à la
+    longueur du texte, voir _longueur_description_cible).
     """
     texte = texte.strip()
     nom = (nom or "").strip()
+    quand_utiliser = (quand_utiliser or "").strip()
     skill = _generer_skill(texte)
     nom_final = nom or skill["nom"]
+    description_finale = quand_utiliser or skill["description"]
+    skill_md = _appliquer_nom_affichage(skill["skill_md"], nom_final)
+    if quand_utiliser:
+        skill_md = _appliquer_description_manuelle(skill_md, quand_utiliser)
     ligne_a_inserer = {
         "agent_id": agent_id,
         "etudiant_id": etudiant_id,
         "texte": texte,
-        "description": skill["description"],
-        "skill_md": _appliquer_nom_affichage(skill["skill_md"], nom_final),
+        "description": description_finale,
+        "skill_md": skill_md,
         "nom": nom_final,
         "lien_type": lien_type,
         "lien_id": lien_id,
@@ -693,7 +732,7 @@ def importer_comportement_depuis_skill_md(
 
 
 def modifier_comportement(
-    agent_id: str, etudiant_id: str, comportement_id: str, texte: str, nom: str | None = None
+    agent_id: str, etudiant_id: str, comportement_id: str, texte: str, nom: str | None = None, quand_utiliser: str | None = None
 ) -> dict | None:
     """Modifie le texte -- ne touche jamais lien_type/lien_id (pas
     demandé ici : modifier le TEXTE d'un comportement lié ne doit pas
@@ -706,17 +745,30 @@ def modifier_comportement(
     auto régénéré avec le nouveau skill ; rempli -> gardé tel quel.
     L'appelant doit donc renvoyer le nom manuel actuel s'il veut le
     préserver lors d'une modification du texte seul (voir
-    api/comportements_etudiants.py)."""
+    api/comportements_etudiants.py).
+
+    quand_utiliser (29/09/2026) : même règle qu'à la création (voir
+    ajouter_comportement) -- rempli -> devient la description ; vide ->
+    description régénérée automatiquement à partir du nouveau texte.
+    Même remarque, l'appelant doit renvoyer la valeur actuelle du champ
+    s'il veut la préserver lors d'une modification du texte seul.
+    Ne touche jamais `categorie` (fixée à la création, jamais
+    modifiable -- voir CATEGORIES_CONFIGURATION)."""
     texte = texte.strip()
     nom = (nom or "").strip()
+    quand_utiliser = (quand_utiliser or "").strip()
     skill = _generer_skill(texte)
     nom_final = nom or skill["nom"]
+    description_finale = quand_utiliser or skill["description"]
+    skill_md = _appliquer_nom_affichage(skill["skill_md"], nom_final)
+    if quand_utiliser:
+        skill_md = _appliquer_description_manuelle(skill_md, quand_utiliser)
     res = (
         supabase.table("comportements_etudiants")
         .update({
             "texte": texte,
-            "description": skill["description"],
-            "skill_md": _appliquer_nom_affichage(skill["skill_md"], nom_final),
+            "description": description_finale,
+            "skill_md": skill_md,
             "nom": nom_final,
         })
         .eq("id", comportement_id)
@@ -737,6 +789,7 @@ def modifier_comportement(
         "lien_type": ligne.get("lien_type"),
         "lien_id": ligne.get("lien_id"),
         "actif": ligne.get("actif", True),
+        "categorie": ligne.get("categorie"),
     }
 
 
