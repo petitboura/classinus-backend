@@ -118,6 +118,12 @@ class ComportementPayload(BaseModel):
     # ajouter_comportement -- une valeur invalide est refusée avec 400,
     # jamais silencieusement ignorée.
     categorie: str | None = None
+    # 29/09/2026, demande Bourama : champ "quand l'utiliser", seulement
+    # affiché à l'écran pour les 4 catégories de Configuration. Rempli ->
+    # devient la description directement (voir
+    # _appliquer_description_manuelle). Vide/absent -> description
+    # générée automatiquement, comportement inchangé.
+    quand_utiliser: str | None = None
 
 
 class AttacherPayload(BaseModel):
@@ -198,6 +204,7 @@ def ajouter_mon_comportement(agent_id: str, payload: ComportementPayload, utilis
             lien_type=payload.lien_type,
             lien_id=payload.lien_id,
             categorie=payload.categorie,
+            quand_utiliser=payload.quand_utiliser,
         )
     )
 
@@ -228,7 +235,9 @@ async def importer_mon_comportement(
 def modifier_mon_comportement(agent_id: str, comportement_id: str, payload: ComportementPayload, utilisateur=Depends(utilisateur_courant)):
     if not payload.texte.strip():
         raise erreur_api(400, "TEXTE_REQUIS")
-    resultat = modifier_comportement(agent_id, utilisateur.id, comportement_id, payload.texte, nom=payload.nom)
+    resultat = modifier_comportement(
+        agent_id, utilisateur.id, comportement_id, payload.texte, nom=payload.nom, quand_utiliser=payload.quand_utiliser
+    )
     if not resultat:
         raise erreur_api(404, "COMPORTEMENT_INTROUVABLE")
     return _avec_libelle(resultat)
