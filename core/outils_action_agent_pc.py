@@ -23,8 +23,11 @@ une fenetre externe comme le Bloc-notes) : c'est lire_ecran, plus bas,
 qui joue ce role pour les actions systeme.
 """
 
+import asyncio
 import logging
+import os
 
+from core import lecture_ecran_continue
 from core.canal_agent_applicatif import demander_action_systeme as _demander_action_systeme
 from core.canal_agent_applicatif import demander_pointage_ecran
 from core.outils_generation_commun import mcp_generation, Context
@@ -44,6 +47,61 @@ MESSAGE_ECHEC_SYSTEME = (
     "le moment, et si le contexte s'y prête, propose de vérifier que l'application PC est "
     "bien ouverte."
 )
+
+
+# Verrou "premiere lecture" et lecture continue (30/09/2026, decision Bourama) :
+# voir core/lecture_ecran_continue.py. Tant que l'IA n'a pas lu l'ecran une
+# premiere fois dans la conversation, aucune action PC n'est executee : le
+# backend lit lui-meme l'ecran et le renvoie. Ensuite, chaque action renvoie
+# l'etat de l'ecran qui suit. Delais d'attente avant cette relecture, en
+# secondes : valeurs de depart a ajuster selon les tests reels (une fenetre qui
+# s'ouvre est plus lente qu'un clic). Reglables sans toucher au code.
+DELAI_APRES_CLIC_SECONDES = float(os.environ.get("CLASSINUS_PC_DELAI_APRES_CLIC_S", "0.8"))
+DELAI_APRES_CLAVIER_SECONDES = float(os.environ.get("CLASSINUS_PC_DELAI_APRES_CLAVIER_S", "0.5"))
+DELAI_APRES_OUVERTURE_SECONDES = float(os.environ.get("CLASSINUS_PC_DELAI_APRES_OUVERTURE_S", "2.0"))
+
+MESSAGE_LECTURE_PREALABLE = (
+    "Action NON exécutée : tu n'avais pas encore lu l'écran du PC dans cette conversation. "
+    "Voici l'écran à cet instant. Choisis maintenant ce que tu fais, en t'appuyant sur ce contenu "
+    "et ses coordonnées. À partir de maintenant, chaque action sur le PC te renvoie elle-même l'état "
+    "de l'écran qui suit : n'appelle pas lire_ecran juste après une action."
+)
+
+
+def _conversation_id(ctx: Context) -> str | None:
+    return ctx.request_context.request.query_params.get("conversation_id") or None
+
+
+async def _lecture_prealable_si_necessaire(user_id: str, conversation_id: str | None) -> str | None:
+    """
+    Verrou "premiere lecture". Renvoie None si l'IA a deja lu l'ecran dans
+    cette conversation (l'action peut s'executer). Sinon lit l'ecran a sa
+    place, renvoie le texte a retourner au modele (l'action ne doit PAS
+    s'executer) et, si la lecture a abouti, active le mode continu.
+    """
+    if lecture_ecran_continue.a_deja_lu(user_id, conversation_id):
+        return None
+    texte, ok = await _lire_ecran_pour_modele(user_id)
+    if not ok:
+        return "Action NON exécutée : la lecture préalable de l'écran n'a pas abouti. " + texte
+    lecture_ecran_continue.marquer_lu(user_id, conversation_id)
+    return MESSAGE_LECTURE_PREALABLE + "\n\n" + texte
+
+
+async def _relire_apres_action(user_id: str, message_action: str, delai_secondes: float) -> str:
+    """
+    Mode continu : apres une action PC reussie, attend que la fenetre se
+    stabilise puis fait UNE lecture de l'ecran, renvoyee avec le resultat de
+    l'action. L'IA voit ainsi l'etat reel qui suit, sans avoir a relire.
+    """
+    await asyncio.sleep(delai_secondes)
+    texte, ok = await _lire_ecran_pour_modele(user_id)
+    if not ok:
+        return (
+            message_action + "\n\nLa lecture automatique de l'écran après cette action n'a pas abouti. "
+            "Appelle lire_ecran avant l'action suivante. " + texte
+        )
+    return message_action + "\n\nÉtat de l'écran après l'action :\n" + texte
 
 
 @mcp_generation.tool()
@@ -163,9 +221,11 @@ async def cliquer_ecran(x: int, y: int, ctx: Context) -> str:
     l'application ne rejoue pas le clic pour éviter une double action.
 
     N'utilise cet outil que pour agir en dehors de Classinus (une autre
-    fenetre, un autre site, le bureau). Avant de cliquer a un endroit
-    precis, appelle lire_ecran pour savoir ou se trouve reellement ce
-    que tu cherches : ne devine jamais des coordonnees.
+    fenetre, un autre site, le bureau). Ne devine jamais des coordonnees :
+    prends-les dans la derniere lecture de l'ecran. Tant que tu n'as pas lu
+    l'ecran dans cette conversation, le clic n'est pas execute et l'ecran
+    t'est renvoye. Ensuite, le resultat du clic contient deja l'etat de
+    l'ecran qui suit : inutile d'appeler lire_ecran apres.
 
     Aucune confirmation etudiant pour ce lot (meme regle que le reste du
     canal en direct depuis le 19/09/2026).
@@ -173,6 +233,10 @@ async def cliquer_ecran(x: int, y: int, ctx: Context) -> str:
     user_id, erreur = _user_id_ou_erreur(ctx)
     if erreur:
         return erreur
+
+    bloque = await _lecture_prealable_si_necessaire(user_id, _conversation_id(ctx))
+    if bloque is not None:
+        return bloque
 
     resultat = await _demander_action_systeme(user_id, "cliquer_ecran", {"x": x, "y": y})
     if resultat is None:
@@ -182,10 +246,12 @@ async def cliquer_ecran(x: int, y: int, ctx: Context) -> str:
     if not isinstance(resultat, dict) or resultat.get("ok") is not True:
         return "Erreur : le clic n'a pas été confirmé."
     if resultat.get("curseur_reel_utilise") is True:
-        return f"Clic effectué à ({x}, {y}) avec le pointeur de l'étudiant, après l'annonce automatique et sans demande de validation."
-    if resultat.get("curseur_reel_utilise") is False:
-        return f"Clic effectué à ({x}, {y}) avec le curseur de Clovis, sans déplacer le pointeur Windows."
-    return f"Clic effectué à l'écran, position ({x}, {y})."
+        message = f"Clic effectué à ({x}, {y}) avec le pointeur de l'étudiant, après l'annonce automatique et sans demande de validation."
+    elif resultat.get("curseur_reel_utilise") is False:
+        message = f"Clic effectué à ({x}, {y}) avec le curseur de Clovis, sans déplacer le pointeur Windows."
+    else:
+        message = f"Clic effectué à l'écran, position ({x}, {y})."
+    return await _relire_apres_action(user_id, message, DELAI_APRES_CLIC_SECONDES)
 
 
 @mcp_generation.tool()
@@ -198,7 +264,11 @@ async def taper_clavier(texte: str, ctx: Context) -> str:
     core/outils_action_agent.py).
 
     Si un champ precis doit d'abord recevoir le focus, clique dessus
-    avec cliquer_ecran avant d'appeler cet outil.
+    avec cliquer_ecran avant d'appeler cet outil. Pour une touche seule ou
+    un raccourci (Entree, Ctrl+C, Alt+Tab), utilise appuyer_touches. Tant
+    que tu n'as pas lu l'ecran dans cette conversation, rien n'est tape et
+    l'ecran t'est renvoye. Ensuite, le resultat contient deja l'etat de
+    l'ecran qui suit : inutile d'appeler lire_ecran apres.
 
     Aucune confirmation etudiant pour ce lot (meme regle que le reste du
     canal en direct depuis le 19/09/2026).
@@ -209,12 +279,16 @@ async def taper_clavier(texte: str, ctx: Context) -> str:
     if not texte:
         return "Erreur : paramètre 'texte' manquant."
 
+    bloque = await _lecture_prealable_si_necessaire(user_id, _conversation_id(ctx))
+    if bloque is not None:
+        return bloque
+
     resultat = await _demander_action_systeme(user_id, "taper_clavier", {"texte": texte})
     if resultat is None:
         return MESSAGE_ECHEC_SYSTEME
     if isinstance(resultat, dict) and resultat.get("erreur"):
         return f"Erreur : {resultat['erreur']}"
-    return "Texte tapé au clavier avec succès."
+    return await _relire_apres_action(user_id, "Texte tapé au clavier avec succès.", DELAI_APRES_CLAVIER_SECONDES)
 
 
 @mcp_generation.tool()
@@ -235,9 +309,10 @@ async def appuyer_touches(touches: str, ctx: Context) -> str:
     Une touche non reconnue est refusee : n'invente jamais un nom.
 
     Comme un vrai utilisateur : tout raccourci est permis. Chaque raccourci
-    est annonce a l'etudiant dans son journal avant d'etre execute. Regarde
-    d'abord l'ecran avec lire_ecran si tu n'es pas certain de ce qui a le
-    focus, et verifie le resultat apres avec lire_ecran.
+    est annonce a l'etudiant dans son journal avant d'etre execute. Tant que
+    tu n'as pas lu l'ecran dans cette conversation, rien n'est presse et
+    l'ecran t'est renvoye. Ensuite, le resultat contient deja l'etat de
+    l'ecran qui suit : inutile d'appeler lire_ecran apres.
 
     Aucune confirmation etudiant (meme regle que le reste du canal en direct
     depuis le 19/09/2026).
@@ -248,6 +323,10 @@ async def appuyer_touches(touches: str, ctx: Context) -> str:
     if not isinstance(touches, str) or not touches.strip():
         return "Erreur : paramètre 'touches' manquant (exemple : \"ctrl+c\")."
 
+    bloque = await _lecture_prealable_si_necessaire(user_id, _conversation_id(ctx))
+    if bloque is not None:
+        return bloque
+
     resultat = await _demander_action_systeme(user_id, "appuyer_touches", {"touches": touches})
     if resultat is None:
         return MESSAGE_ECHEC_SYSTEME
@@ -257,8 +336,10 @@ async def appuyer_touches(touches: str, ctx: Context) -> str:
         return "Erreur : l'appui sur les touches n'a pas été confirmé."
     faites = resultat.get("combinaisons")
     if isinstance(faites, list) and faites:
-        return "Touches pressées : " + ", ".join(str(f) for f in faites) + "."
-    return "Touches pressées avec succès."
+        message = "Touches pressées : " + ", ".join(str(f) for f in faites) + "."
+    else:
+        message = "Touches pressées avec succès."
+    return await _relire_apres_action(user_id, message, DELAI_APRES_CLAVIER_SECONDES)
 
 
 @mcp_generation.tool()
@@ -270,6 +351,11 @@ async def ouvrir_application(nom: str, ctx: Context) -> str:
     installées : n'invente jamais un nom au hasard, demande à
     l'étudiant si tu n'es pas sûr du nom exact.
 
+    Tant que tu n'as pas lu l'ecran dans cette conversation, rien n'est
+    lance et l'ecran t'est renvoye. Ensuite, le resultat contient deja
+    l'etat de l'ecran qui suit (apres un court delai pour laisser la fenetre
+    s'ouvrir) : inutile d'appeler lire_ecran apres.
+
     Aucune confirmation etudiant pour ce lot (meme regle que le reste du
     canal en direct depuis le 19/09/2026).
     """
@@ -279,12 +365,16 @@ async def ouvrir_application(nom: str, ctx: Context) -> str:
     if not nom:
         return "Erreur : paramètre 'nom' manquant."
 
+    bloque = await _lecture_prealable_si_necessaire(user_id, _conversation_id(ctx))
+    if bloque is not None:
+        return bloque
+
     resultat = await _demander_action_systeme(user_id, "ouvrir_application", {"nom": nom})
     if resultat is None:
         return MESSAGE_ECHEC_SYSTEME
     if isinstance(resultat, dict) and resultat.get("erreur"):
         return f"Erreur : {resultat['erreur']}"
-    return f"Application « {nom} » lancée."
+    return await _relire_apres_action(user_id, f"Application « {nom} » lancée.", DELAI_APRES_OUVERTURE_SECONDES)
 
 
 # Lot V (28/09/2026, decision Bourama : aucune image envoyee au modele,
@@ -351,11 +441,10 @@ def _formater_lecture_ecran(resultat: dict) -> str:
         lignes.append("Autres fenêtres ouvertes : " + ", ".join(f"« {f} »" for f in fenetres))
 
     if resultat.get("fenetre_classinus"):
-        lignes.append(
-            "La fenêtre au premier plan est Classinus lui-même : pour lire ce qui y est affiché, "
-            "utilise lire_page."
+        return (
+            "Aucune fenêtre en dehors de Classinus n'a pu être lue : seule Classinus est ouverte ou au "
+            "premier plan. Ne devine pas ce qui pourrait être affiché ailleurs sur le PC."
         )
-        return "\n".join(lignes)
 
     elements = [e for e in (resultat.get("elements") or []) if isinstance(e, dict)]
     if resultat.get("mode") != "uia" or not elements:
@@ -396,40 +485,13 @@ def _formater_lecture_ecran(resultat: dict) -> str:
     return "\n".join(lignes)
 
 
-@mcp_generation.tool()
-async def lire_ecran(ctx: Context) -> str:
+async def _lire_ecran_pour_modele(user_id: str) -> tuple[str, bool]:
     """
-    Lot S (27/09/2026), reecrit au Lot V (28/09/2026, decision Bourama :
-    aucune image, seulement du texte). Lit ce qu'il y a dans la fenetre
-    au premier plan du PC de l'etudiant : son titre, les titres des autres
-    fenetres ouvertes, et le contenu visible de la fenetre (textes,
-    boutons, champs avec leur valeur, cases, onglets...), chacun avec ses
-    coordonnees d'ecran pour cliquer_ecran. La valeur d'un champ mot de
-    passe n'est jamais lue.
-
-    Appelle cet outil avant cliquer_ecran ou taper_clavier chaque fois que
-    tu n'es pas certain de ce qui est affiche ou de l'endroit exact ou
-    agir : ne devine jamais des coordonnees. Pas a chaque message : seulement
-    quand ce contenu t'est necessaire.
-
-    Si Classinus ou sa barre flottante a le focus, lit la première fenêtre
-    externe derrière Classinus, sans la mettre au premier plan. Pour agir
-    dessus, le pont restaure son focus avant le clic ou la frappe.
-
-    Apres un clic sur un bouton qui ouvre un menu, un menu contextuel ou
-    une liste deroulante, rappelle lire_ecran : ce menu ouvert apparait
-    en premier dans la lecture, marque « dans le menu ouvert », avec les
-    coordonnees de chacun de ses choix.
-
-    Ne lit QUE cette fenetre (pas toutes les autres, pas tout
-    l'ecran), plus les menus qu'elle a ouverts. Certaines applications (jeux, bureau a distance) ne rendent
-    presque rien lisible : l'outil le dit, dans ce cas ne devine pas. Pour
-    ce qui est affiche dans Classinus lui meme, utilise lire_page.
+    Lit la fenetre externe au premier plan du PC (via le pont Electron) et
+    renvoie (texte pour le modele, lecture_reussie). Utilisee par lire_ecran,
+    par le verrou de premiere lecture et par la relecture apres action : une
+    seule facon de lire l'ecran, a un seul endroit.
     """
-    user_id, erreur = _user_id_ou_erreur(ctx)
-    if erreur:
-        return erreur
-
     resultat = await _demander_action_systeme(
         user_id,
         "lire_ecran",
@@ -443,29 +505,51 @@ async def lire_ecran(ctx: Context) -> str:
         },
     )
     if resultat is None:
-        return MESSAGE_ECHEC_SYSTEME
+        return MESSAGE_ECHEC_SYSTEME, False
     if not isinstance(resultat, dict):
-        return "La lecture de l'écran n'a pas donné de résultat exploitable."
+        return "La lecture de l'écran n'a pas donné de résultat exploitable.", False
     if resultat.get("erreur"):
-        return f"Erreur : {resultat['erreur']}"
+        return f"Erreur : {resultat['erreur']}", False
+    # Pas de trace du contenu brut dans les logs : ce sont des textes affiches
+    # sur l'ecran de l'etudiant, et la lecture est maintenant automatique.
+    return _formater_lecture_ecran(resultat), True
 
-    # Diagnostic staging (30/09/2026) : trace du resultat brut renvoye par
-    # l'application PC (elements coupes a 1500 caracteres), pour comprendre
-    # pourquoi seul le titre de la fenetre remonte. Pas de valeur de champ
-    # mot de passe : l'application PC ne les envoie jamais.
-    try:
-        import json as _json
-        import logging as _logging
-        _logging.info(
-            "lire_ecran brut : mode=%s erreur_lecture=%s titre=%r application=%r nb_elements=%s coupe=%s brut=%s",
-            resultat.get("mode"),
-            resultat.get("erreur_lecture"),
-            resultat.get("titre_fenetre_active"),
-            resultat.get("application"),
-            len(resultat.get("elements") or []),
-            resultat.get("coupe"),
-            _json.dumps(resultat, ensure_ascii=False)[:1500],
-        )
-    except Exception:
-        pass
-    return _formater_lecture_ecran(resultat)
+
+@mcp_generation.tool()
+async def lire_ecran(ctx: Context) -> str:
+    """
+    Lot S (27/09/2026), reecrit au Lot V (28/09/2026, decision Bourama :
+    aucune image, seulement du texte). Lit UNIQUEMENT ce qu'il y a dans les
+    fenetres du PC de l'etudiant EN DEHORS de Classinus : le titre de la
+    fenetre externe au premier plan, les titres des autres fenetres
+    ouvertes, et le contenu visible de la fenetre (textes, boutons, champs
+    avec leur valeur, cases, onglets...), chacun avec ses coordonnees
+    d'ecran. La valeur d'un champ mot de passe n'est jamais lue. Ne lit
+    jamais la page Classinus ni sa barre flottante.
+
+    C'est la premiere lecture obligatoire avant toute action sur le PC dans
+    une conversation : tant qu'elle n'est pas faite, cliquer_ecran,
+    taper_clavier, appuyer_touches et ouvrir_application n'executent rien.
+    Une fois faite, chaque action te renvoie elle-meme l'etat de l'ecran qui
+    suit : rappelle lire_ecran seulement pour regarder sans agir.
+
+    Si Classinus a le focus, lit la premiere fenetre externe derriere
+    Classinus, sans la mettre au premier plan. Pour agir dessus, le pont
+    restaure son focus avant le clic ou la frappe.
+
+    Quand un clic ouvre un menu, un menu contextuel ou une liste deroulante,
+    la lecture renvoyee avec ce clic le montre en premier, marque « dans le
+    menu ouvert », avec les coordonnees de chacun de ses choix.
+
+    Ne lit QUE cette fenetre (pas toutes les autres, pas tout
+    l'ecran), plus les menus qu'elle a ouverts. Certaines applications (jeux, bureau a distance) ne rendent
+    presque rien lisible : l'outil le dit, dans ce cas ne devine pas.
+    """
+    user_id, erreur = _user_id_ou_erreur(ctx)
+    if erreur:
+        return erreur
+
+    texte, ok = await _lire_ecran_pour_modele(user_id)
+    if ok:
+        lecture_ecran_continue.marquer_lu(user_id, _conversation_id(ctx))
+    return texte
