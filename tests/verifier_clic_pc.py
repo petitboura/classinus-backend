@@ -1,7 +1,16 @@
 """Vrai outil MCP, transport remplacé : aucune fausse confirmation de clic."""
 import asyncio
 import serveur_canal_pc
+from core import lecture_ecran_continue
 from core import outils_action_agent_pc as outils
+
+# Ce test porte sur le clic, pas sur le verrou de premiere lecture (voir
+# verifier_lecture_continue_pc.py) : la lecture est deja faite, et la relecture
+# apres le clic est servie par le meme faux transport.
+outils.DELAI_APRES_CLIC_SECONDES = 0
+lecture_ecran_continue.marquer_lu("test-pc", None)
+LECTURE = {"titre_fenetre_active": "Bloc-notes test", "mode": "uia", "fenetre_classinus": False,
+           "elements": [{"type": "texte", "nom": "Texte Windows vérifié"}]}
 
 
 async def verifier():
@@ -12,7 +21,9 @@ async def verifier():
         ({"ok": True}, "Clic effectué à l'écran"),
         ({"erreur": "Clic incertain"}, "Clic incertain"),
     ):
-        async def demander(user_id, action, parametres, resultat=resultat):
+        async def demander(user_id, action, parametres, on_statut=None, resultat=resultat):
+            if action == "lire_ecran":
+                return LECTURE
             assert action == "cliquer_ecran"
             assert parametres == {"x": 120, "y": 80}
             return resultat
