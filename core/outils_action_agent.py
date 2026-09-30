@@ -227,6 +227,12 @@ async def ecrire_dans_champ(action_id: str, texte: str, ctx: Context) -> str:
 @mcp_generation.tool()
 async def lire_page(ctx: Context) -> str:
     """
+    UNIQUEMENT la page Classinus (jamais une autre fenetre ni une autre
+    application du PC). Si l'etudiant parle de son ecran, de ses fenetres,
+    d'une autre application (Bloc-notes, navigateur, Word, jeu...) ou de
+    quelque chose qui n'est pas dans Classinus, n'appelle PAS cet outil :
+    appelle lire_ecran.
+
     Lot U (28/09/2026, decision Bourama) : lit ce que l'etudiant a reellement
     sous les yeux dans Classinus, en ce moment. La liste des elements de ce
     prompt systeme ne contient que ce sur quoi tu peux agir : elle n'a ni
@@ -267,7 +273,12 @@ async def lire_page(ctx: Context) -> str:
     texte = resultat.get("texte") if isinstance(resultat, dict) else None
     if not isinstance(texte, str) or not texte.strip():
         return "La page ne contient aucun texte lisible à cet instant."
-    return texte[: LONGUEUR_MAX_LECTURE_PAGE + MARGE_NOTE_COUPURE_LECTURE_PAGE]
+    return (
+        texte[: LONGUEUR_MAX_LECTURE_PAGE + MARGE_NOTE_COUPURE_LECTURE_PAGE]
+        + "\n\n[Cette lecture ne montre QUE la page Classinus. Si l'étudiant parle de son écran, "
+        "d'une autre fenêtre ou d'une autre application du PC, ce qu'il cherche n'est pas ici : "
+        "appelle lire_ecran avant de répondre, ne dis pas que tu ne le vois pas sans l'avoir appelé.]"
+    )
 
 
 # Plafond de longueur d'un commentaire en direct : la bulle du canal est
