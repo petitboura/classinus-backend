@@ -70,6 +70,80 @@ async def pointer_ecran(x: int, y: int, ctx: Context) -> str:
     return f"Curseur de Clovis positionné à ({x}, {y}), sans déplacer le pointeur Windows."
 
 
+FORMES_MARQUE_ECRAN = ("entourer", "souligner", "surligner")
+DUREE_MIN_MARQUE_SECONDES = 1
+DUREE_MAX_MARQUE_SECONDES = 60
+DUREE_DEFAUT_MARQUE_SECONDES = 5
+DELAI_MAX_MARQUE_SECONDES = 30
+
+
+@mcp_generation.tool()
+async def marquer_ecran(
+    forme: str,
+    gauche: int,
+    haut: int,
+    largeur: int,
+    hauteur: int,
+    ctx: Context,
+    duree_secondes: int = DUREE_DEFAUT_MARQUE_SECONDES,
+    delai_secondes: int = 0,
+) -> str:
+    """Dessine une marque de Clovis par-dessus l'écran du PC pour montrer un endroit.
+
+    forme : "entourer" (cercle autour), "souligner" (trait dessous) ou
+    "surligner" (fond jaune). gauche, haut, largeur, hauteur : la zone de
+    l'élément à marquer, en pixels d'écran, exactement comme les donne
+    lire_ecran pour chaque élément (« zone : gauche…, haut…, largeur…,
+    hauteur… ») : lis l'écran avant de marquer, ne devine jamais une zone.
+    On marque un élément entier (bouton, onglet, ligne, zone de texte), pas
+    un mot précis à l'intérieur d'un paragraphe.
+
+    duree_secondes : combien de temps la marque reste visible (1 à 60, 5 par
+    défaut) ; choisis-la selon ce que l'étudiant doit avoir le temps de voir
+    ou de lire. delai_secondes : attendre avant de l'afficher (0 à 30, 0 par
+    défaut), pour la faire apparaître au moment où tu en parles, par
+    exemple après un message dire_a_l_etudiant. L'outil rend la main tout de
+    suite : la marque apparaît puis disparaît toute seule. Ne clique pas et
+    ne bouge pas le pointeur Windows de l'étudiant.
+    """
+    user_id, erreur = _user_id_ou_erreur(ctx)
+    if erreur:
+        return erreur
+    forme_propre = (forme or "").strip().lower()
+    if forme_propre not in FORMES_MARQUE_ECRAN:
+        return "Erreur : forme inconnue. Choisis entourer, souligner ou surligner."
+    for valeur in (gauche, haut, largeur, hauteur, duree_secondes, delai_secondes):
+        if isinstance(valeur, bool) or not isinstance(valeur, int):
+            return "Erreur : la zone, la durée et le délai doivent être des nombres entiers."
+    if largeur <= 0 or hauteur <= 0:
+        return "Erreur : la zone à marquer doit avoir une largeur et une hauteur positives (prends celles de lire_ecran)."
+    duree = max(DUREE_MIN_MARQUE_SECONDES, min(DUREE_MAX_MARQUE_SECONDES, duree_secondes))
+    delai = max(0, min(DELAI_MAX_MARQUE_SECONDES, delai_secondes))
+
+    resultat = await _demander_action_systeme(
+        user_id,
+        "marquer_ecran",
+        {
+            "forme": forme_propre,
+            "x": gauche,
+            "y": haut,
+            "largeur": largeur,
+            "hauteur": hauteur,
+            "duree_secondes": duree,
+            "delai_secondes": delai,
+        },
+    )
+    if resultat is None:
+        logging.warning("Marque écran : aucune réponse du pont Electron.")
+        return MESSAGE_ECHEC_SYSTEME
+    if not isinstance(resultat, dict) or resultat.get("succes") is not True:
+        detail = resultat.get("erreur", "marque non affichée") if isinstance(resultat, dict) else "marque non affichée"
+        logging.warning("Marque écran : %s", detail)
+        return f"Erreur : {detail}"
+    quand = "tout de suite" if delai == 0 else f"dans {delai} secondes"
+    return f"Marque « {forme_propre} » programmée : elle s'affiche {quand} pendant {duree} secondes, puis disparaît toute seule."
+
+
 @mcp_generation.tool()
 async def cliquer_ecran(x: int, y: int, ctx: Context) -> str:
     """
@@ -199,7 +273,13 @@ def _formater_element_lu(element: dict) -> str:
         details.extend(e for e in etats if isinstance(e, str) and e)
     suite = f" ({', '.join(details)})" if details else ""
     nom_txt = f" « {nom} »" if nom else ""
-    return f"[{genre}{nom_txt}{suite}, clic possible en ({element.get('x')}, {element.get('y')})]"
+    taille = ""
+    if element.get("largeur") and element.get("hauteur"):
+        taille = (
+            f", zone : gauche {element.get('gauche')}, haut {element.get('haut')}, "
+            f"largeur {element.get('largeur')}, hauteur {element.get('hauteur')}"
+        )
+    return f"[{genre}{nom_txt}{suite}, clic possible en ({element.get('x')}, {element.get('y')}){taille}]"
 
 
 def _formater_lecture_ecran(resultat: dict) -> str:
@@ -239,7 +319,7 @@ def _formater_lecture_ecran(resultat: dict) -> str:
             lignes.append(f"[Détail technique de l'échec : {str(resultat['erreur_lecture'])[:300]}]")
         return "\n".join(lignes)
 
-    lignes.append("Contenu visible (les coordonnées sont en pixels d'écran, utilisables avec cliquer_ecran) :")
+    lignes.append("Contenu visible (les coordonnées sont en pixels d'écran, utilisables avec cliquer_ecran ; la zone de chaque élément sert à marquer_ecran) :")
     total = sum(len(l) + 1 for l in lignes)
     coupe = bool(resultat.get("coupe"))
     for element in elements:
