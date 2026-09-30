@@ -421,6 +421,15 @@ async def demander_action_systeme(
     )
 
 
+async def demander_pointage_ecran(user_id: str, x: int, y: int) -> Any | None:
+    """Pointage visuel traité par le renderer Electron, jamais par la souris native."""
+    return await _diffuser_et_attendre(
+        user_id,
+        {"id": str(uuid.uuid4()), "pointer_ecran": {"x": x, "y": y}},
+        on_timeout_log="pointage ecran",
+    )
+
+
 async def demander_lecture_page(user_id: str, on_statut=None) -> Any | None:
     """
     Lot U (28/09/2026, decision Bourama : Clovis ne voyait que les elements

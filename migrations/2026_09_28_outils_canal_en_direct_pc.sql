@@ -12,6 +12,7 @@
 
 insert into registre_outils_plateforme (nom_outil, categorie, nom_serveur, disponible, updated_at)
 values
+  ('pointer_ecran', 1, 'generation', true, now()),
   ('cliquer_ecran', 1, 'generation', true, now()),
   ('taper_clavier', 1, 'generation', true, now()),
   ('ouvrir_application', 1, 'generation', true, now()),
