@@ -46,6 +46,7 @@ def libelle_emplacement(lien_type: str | None, lien_id: str | None) -> str | Non
 def proprietaire_lien_comportement(lien_type: str | None, lien_id: str | None) -> str | None:
     return None
 from core.comportements_etudiants import (
+    CATEGORIES_CONFIGURATION,
     lister_comportements,
     lister_comportements_par_lien,
     ajouter_comportement,
@@ -88,6 +89,12 @@ class Comportement(BaseModel):
     # autre, ou pas de lien).
     matiere_id: str | None = None
     matiere_nom: str | None = None
+    # 28/09/2026, demande Bourama, onglet "Configuration" de Bureau :
+    # None = skill classique ("Mes skills"), inchangé. Sinon une des 4
+    # catégories créées depuis leur propre onglet séparé (Procédure/
+    # Règle/Comportement/Style) -- voir CATEGORIES_CONFIGURATION,
+    # core/comportements_etudiants.py.
+    categorie: str | None = None
 
 
 class ComportementPayload(BaseModel):
@@ -103,6 +110,14 @@ class ComportementPayload(BaseModel):
     # jamais fait confiance au lien_id fourni tel quel.
     lien_type: str | None = None
     lien_id: str | None = None
+    # 28/09/2026, demande Bourama : renseigné UNIQUEMENT par le bouton "+"
+    # propre à chacun des 4 onglets de Configuration -- jamais un choix
+    # proposé à l'utilisateur au moment de créer, le lieu de création la
+    # détermine. Vide/absent -> skill classique, comportement inchangé.
+    # Validé ci-dessous (_verifier_categorie) avant d'atteindre
+    # ajouter_comportement -- une valeur invalide est refusée avec 400,
+    # jamais silencieusement ignorée.
+    categorie: str | None = None
 
 
 class AttacherPayload(BaseModel):
@@ -122,6 +137,15 @@ def _verifier_lien(lien_type: str | None, lien_id: str | None, utilisateur_id: s
         raise erreur_api(404, "EMPLACEMENT_INTROUVABLE")
 
 
+def _verifier_categorie(categorie: str | None) -> None:
+    """28/09/2026, demande Bourama : même filet que côté base (contrainte
+    SQL comportements_etudiants_categorie_valide), mais renvoyé en erreur
+    claire au frontend plutôt que de laisser Supabase renvoyer une erreur
+    SQL brute."""
+    if categorie is not None and categorie not in CATEGORIES_CONFIGURATION:
+        raise erreur_api(400, "CATEGORIE_INVALIDE")
+
+
 def _avec_libelle(ligne: dict) -> dict:
     """Ajoute lien_libelle (20/08, pour affichage direct dans "Mes
     comportements" sans que le frontend ait à refaire un appel par
@@ -132,8 +156,21 @@ def _avec_libelle(ligne: dict) -> dict:
 
 
 @router.get("", response_model=list[Comportement])
-def lire_mes_comportements(agent_id: str, utilisateur=Depends(utilisateur_courant)):
-    return [_avec_libelle(c) for c in lister_comportements(agent_id, utilisateur.id)]
+def lire_mes_comportements(agent_id: str, categorie: str | None = None, utilisateur=Depends(utilisateur_courant)):
+    """28/09/2026, demande Bourama : `categorie` optionnel, pour que
+    chacun des 4 onglets de Configuration (Procédure/Règle/Comportement/
+    Style) ne lise que SA propre liste, jamais mélangée avec "Mes
+    skills". Filtré ici plutôt que dans lister_comportements pour ne pas
+    toucher au cache existant (clé (agent_id, etudiant_id) uniquement,
+    liste complète) -- le volume par utilisateur reste faible, filtrer
+    en mémoire après coup ne coûte rien de notable.
+    `categorie` absent/None -> comportement inchangé, "Mes skills"
+    classique (categorie NULL en base uniquement)."""
+    tous = [_avec_libelle(c) for c in lister_comportements(agent_id, utilisateur.id)]
+    if categorie is None:
+        return [c for c in tous if not c.get("categorie")]
+    _verifier_categorie(categorie)
+    return [c for c in tous if c.get("categorie") == categorie]
 
 
 @router.get("/par-lien/{lien_type}/{lien_id}", response_model=list[Comportement])
@@ -151,9 +188,16 @@ def ajouter_mon_comportement(agent_id: str, payload: ComportementPayload, utilis
     if not payload.texte.strip():
         raise erreur_api(400, "TEXTE_REQUIS")
     _verifier_lien(payload.lien_type, payload.lien_id, utilisateur.id)
+    _verifier_categorie(payload.categorie)
     return _avec_libelle(
         ajouter_comportement(
-            agent_id, utilisateur.id, payload.texte, nom=payload.nom, lien_type=payload.lien_type, lien_id=payload.lien_id
+            agent_id,
+            utilisateur.id,
+            payload.texte,
+            nom=payload.nom,
+            lien_type=payload.lien_type,
+            lien_id=payload.lien_id,
+            categorie=payload.categorie,
         )
     )
 
