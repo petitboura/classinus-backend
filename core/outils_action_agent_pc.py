@@ -24,6 +24,7 @@ qui joue ce role pour les actions systeme.
 """
 
 from core.canal_agent_applicatif import demander_action_systeme as _demander_action_systeme
+from core.canal_agent_applicatif import demander_pointage_ecran
 from core.outils_generation_commun import mcp_generation, Context
 
 
@@ -41,6 +42,28 @@ MESSAGE_ECHEC_SYSTEME = (
     "le moment, et si le contexte s'y prête, propose de vérifier que l'application PC est "
     "bien ouverte."
 )
+
+
+@mcp_generation.tool()
+async def pointer_ecran(x: int, y: int, ctx: Context) -> str:
+    """Montre un endroit de l'écran avec le curseur dessiné de Clovis uniquement.
+
+    Ne clique pas, ne déplace jamais le pointeur Windows de l'étudiant et
+    ne change pas le focus. x/y sont les coordonnées en pixels physiques
+    renvoyées par lire_ecran : lis l'écran avant de viser, ne les devine pas.
+    Utilise cet outil pour montrer, pointer ou guider sur le PC ; pour un
+    élément identifié dans Classinus, utilise montrer_element_application.
+    Le curseur reste visible à l'arrivée, indépendant du pointeur Windows.
+    """
+    user_id, erreur = _user_id_ou_erreur(ctx)
+    if erreur:
+        return erreur
+    resultat = await demander_pointage_ecran(user_id, x, y)
+    if resultat is None:
+        return MESSAGE_ECHEC_SYSTEME
+    if not isinstance(resultat, dict) or resultat.get("succes") is not True:
+        return f"Erreur : {resultat.get('erreur', 'pointage non effectué') if isinstance(resultat, dict) else 'pointage non effectué'}"
+    return f"Curseur de Clovis positionné à ({x}, {y}), sans déplacer le pointeur Windows."
 
 
 @mcp_generation.tool()
