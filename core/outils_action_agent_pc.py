@@ -229,7 +229,11 @@ async def lire_ecran(ctx: Context) -> str:
     agir : ne devine jamais des coordonnees. Pas a chaque message : seulement
     quand ce contenu t'est necessaire.
 
-    Ne lit QUE la fenetre au premier plan (pas les autres, pas tout
+    Si Classinus ou sa barre flottante a le focus, lit la première fenêtre
+    externe derrière Classinus, sans la mettre au premier plan. Pour agir
+    dessus, le pont restaure son focus avant le clic ou la frappe.
+
+    Ne lit QUE cette fenetre (pas toutes les autres, pas tout
     l'ecran). Certaines applications (jeux, bureau a distance) ne rendent
     presque rien lisible : l'outil le dit, dans ce cas ne devine pas. Pour
     ce qui est affiche dans Classinus lui meme, utilise lire_page.

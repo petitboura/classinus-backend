@@ -33,6 +33,7 @@ from fastapi import WebSocket
 # QUELLE connexion precise a declenche quel changement), meme si
 # l'execution d'action (ce fichier) ne cible jamais un appareil precis.
 _connexions: dict[tuple[str, str], WebSocket] = {}
+_relais_systeme: set[tuple[str, str]] = set()
 _verrou_connexions = asyncio.Lock()
 _verrous_envoi: dict[tuple[str, str], asyncio.Lock] = {}
 
@@ -64,13 +65,17 @@ async def _verrou_envoi_pour(cle: tuple[str, str]) -> asyncio.Lock:
         return verrou
 
 
-async def connecter(user_id: str, appareil_id: str, websocket: WebSocket) -> None:
+async def connecter(user_id: str, appareil_id: str, websocket: WebSocket,
+                    actions_systeme_via_renderer: bool = False) -> None:
     global _boucle_evenements
     _boucle_evenements = asyncio.get_running_loop()
     cle = (user_id, appareil_id)
     async with _verrou_connexions:
         ancienne = _connexions.get(cle)
         _connexions[cle] = websocket
+        _relais_systeme.discard(cle)
+        if actions_systeme_via_renderer:
+            _relais_systeme.add(cle)
     if ancienne is not None and ancienne is not websocket:
         try:
             await ancienne.close()
@@ -83,6 +88,7 @@ async def deconnecter(user_id: str, appareil_id: str, websocket: WebSocket) -> N
     async with _verrou_connexions:
         if _connexions.get(cle) is websocket:
             del _connexions[cle]
+            _relais_systeme.discard(cle)
             _verrous_envoi.pop(cle, None)
             # Chantier D : une connexion fermee n'a plus rien de monte a
             # l'ecran, son etat pousse serait perime -- le retirer plutot
@@ -232,6 +238,14 @@ async def _diffuser_et_attendre(
     """
     async with _verrou_connexions:
         connexions = [(cle, ws) for cle, ws in _connexions.items() if cle[0] == user_id]
+
+        if "action_systeme" in message:
+            # Un seul chemin par PC : le renderer principal appelle le plugin
+            # par IPC. La seconde WS reste compatible avec les anciennes apps.
+            relais = [(cle, ws) for cle, ws in connexions if cle in _relais_systeme]
+            if relais:
+                connexions = relais
+                message = {**message, "via_renderer": True}
 
     if not connexions:
         return None
