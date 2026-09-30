@@ -122,12 +122,27 @@ def _appliquer_nom_affichage(skill_md: str, nom: str) -> str:
     return f"---\n{chr(10).join(lignes)}\n---\n\n{corps.strip()}\n"
 
 
+def _longueur_description_cible(texte: str) -> int:
+    """28/09/2026, demande Bourama ("le skill généré doit être
+    proportionnel à celui du texte écrit, surtout pour les règles qui
+    sont généralement courtes") : avant, la description générée visait
+    TOUJOURS jusqu'à 500 caractères, peu importe la longueur du texte
+    d'origine -- une règle d'une ligne se retrouvait avec une description
+    artificiellement gonflée. Ici, la cible suit la longueur du texte lui
+    même (la moitié, arrondi), avec un plancher pour rester lisible et un
+    plafond pour ne jamais dépasser l'ancienne limite. S'applique à TOUS
+    les comportements (skills classiques ET les 4 catégories de
+    Configuration), pas seulement les nouvelles."""
+    return max(40, min(500, round(len(texte) * 0.6)))
+
+
 def _skill_repli(texte: str) -> dict:
     """Skill minimal construit sans appel LLM -- fail-safe utilisé
     SEULEMENT si _generer_skill échoue, pour ne jamais bloquer la
     création/modification d'un comportement (une description imparfaite
     vaut mieux qu'un enregistrement qui échoue)."""
-    description = texte if len(texte) <= 120 else texte[:117] + "..."
+    cible = _longueur_description_cible(texte)
+    description = texte if len(texte) <= cible else texte[: max(cible - 3, 1)] + "..."
     nom = texte if len(texte) <= 60 else texte[:57] + "..."
     skill_md = f"---\nname: {_slugifier(description)}\ndescription: {description}\n---\n\n{texte}\n"
     return {"nom": nom, "description": description, "skill_md": skill_md}
@@ -161,6 +176,7 @@ def _generer_skill(texte: str) -> dict:
     l'étudiant). Utilisé seulement si l'étudiant n'a pas choisi son propre
     nom (voir ajouter_comportement/modifier_comportement).
     """
+    cible = _longueur_description_cible(texte)
     try:
         client = Groq(api_key=get_secret("GROQ_API_KEY"), max_retries=0, timeout=20.0)
         completion = client.chat.completions.create(
@@ -176,7 +192,10 @@ def _generer_skill(texte: str) -> dict:
                     "caractères), `description` (UNE phrase à la troisième "
                     "personne, qui dit CE QUE fait ce comportement ET QUAND "
                     "l'appliquer, avec des mots concrets qui déclenchent son usage, "
-                    "max 500 caractères) et `nom_affichage` (un nom court et soigné, "
+                    f"environ {cible} caractères -- PROPORTIONNELLE à la longueur du "
+                    "texte source ci-dessous : si le texte source est court, la "
+                    "description doit rester courte, ne jamais l'allonger "
+                    "artificiellement) et `nom_affichage` (un nom court et soigné, "
                     "2 à 5 mots, avec accents/majuscules/espaces normaux, pensé pour "
                     "être LU par l'étudiant dans une liste -- pas un slug technique, "
                     "max 40 caractères), suivi d'un corps en Markdown qui détaille "
@@ -249,7 +268,7 @@ def lister_comportements(agent_id: str, etudiant_id: str) -> list[dict]:
     try:
         res = (
             supabase.table("comportements_etudiants")
-            .select("id, texte, description, nom, lien_type, lien_id, actif, depuis_audit")
+            .select("id, texte, description, nom, lien_type, lien_id, actif, depuis_audit, categorie")
             .eq("agent_id", agent_id)
             .eq("etudiant_id", etudiant_id)
             .order("created_at")
@@ -320,6 +339,7 @@ def lister_comportements(agent_id: str, etudiant_id: str) -> list[dict]:
                 "depuis_public": ligne["id"] in ids_depuis_public,
                 "matiere_id": matiere_id,
                 "matiere_nom": matiere_nom,
+                "categorie": ligne.get("categorie"),
             }
         )
     _cache_comportements[cle] = {"valeur": resultat, "expire_a": maintenant + _DUREE_CACHE_SECONDES}
@@ -542,6 +562,9 @@ def choisir_comportements_pertinents(message_utilisateur: str, comportements: li
         return []
 
 
+CATEGORIES_CONFIGURATION = ("procedure", "regle", "comportement", "style")
+
+
 def ajouter_comportement(
     agent_id: str,
     etudiant_id: str,
@@ -549,6 +572,7 @@ def ajouter_comportement(
     nom: str | None = None,
     lien_type: str | None = None,
     lien_id: str | None = None,
+    categorie: str | None = None,
 ) -> dict:
     """
     lien_type/lien_id (16/08/2026, demande Bourama) : rattache
@@ -565,6 +589,20 @@ def ajouter_comportement(
     l'étudiant. Vide/absent -> mode "auto" : on prend le nom_affichage
     généré par _generer_skill (même appel LLM que le skill, aucun coût
     supplémentaire).
+
+    categorie (28/09/2026, demande Bourama, onglet "Configuration" de
+    Bureau) : None -> skill classique inchangé ("Mes skills"). Une des 4
+    valeurs de CATEGORIES_CONFIGURATION -> skill créé depuis l'un des 4
+    onglets séparés (Procédure/Règle/Comportement/Style), chacun avec son
+    propre bouton "+", jamais choisie par l'utilisateur au moment de la
+    création (le lieu de création la détermine). L'appelant est
+    responsable de valider cette valeur AVANT d'appeler cette fonction
+    (voir api/comportements_etudiants.py) -- la contrainte SQL
+    comportements_etudiants_categorie_valide est le filet de sécurité
+    final. IMPORTANT : ce paramètre n'est volontairement PAS exposé par
+    l'outil MCP gerer_comportement (core/outils_comportements_connaissance.py)
+    -- l'IA ne doit jamais pouvoir créer elle même une entrée catégorisée,
+    seulement un humain via un bouton dans l'appli.
     """
     texte = texte.strip()
     nom = (nom or "").strip()
@@ -579,6 +617,7 @@ def ajouter_comportement(
         "nom": nom_final,
         "lien_type": lien_type,
         "lien_id": lien_id,
+        "categorie": categorie,
     }
     res = supabase.table("comportements_etudiants").insert(ligne_a_inserer).execute()
     ligne = res.data[0]
@@ -591,6 +630,7 @@ def ajouter_comportement(
         "lien_type": ligne.get("lien_type"),
         "lien_id": ligne.get("lien_id"),
         "actif": ligne.get("actif", True),
+        "categorie": ligne.get("categorie"),
     }
 
 

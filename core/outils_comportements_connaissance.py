@@ -93,6 +93,12 @@ def gerer_comportement(
       création hâtive et mal comprise est pire qu'aucune création : elle
       pollue durablement ses instructions et influence toutes ses
       conversations futures avec toi. Paramètre : `texte`.
+      28/09/2026, demande Bourama : cette action crée TOUJOURS un skill
+      classique ("Mes skills"), jamais une entrée des 4 catégories de
+      l'onglet "Configuration" de Bureau (Procédure/Règle/Comportement/
+      Style) -- ce paramètre n'existe volontairement pas ici, ces 4
+      catégories ne sont créées QUE par un humain via leur propre bouton
+      dans l'appli, jamais par toi.
     - "modifier" : remplace le texte COMPLET d'un comportement existant
       (à partir de son id, vu via "consulter" ou la description courte
       donnée dans le message système). Utilise cette action quand
