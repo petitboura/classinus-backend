@@ -193,6 +193,8 @@ def _formater_lecture_ecran(resultat: dict) -> str:
             "Tu peux seulement t'appuyer sur son titre. Ne devine jamais ce qu'elle contient ni "
             "l'endroit où cliquer."
         )
+        if resultat.get("erreur_lecture"):
+            lignes.append(f"[Détail technique de l'échec : {str(resultat['erreur_lecture'])[:300]}]")
         return "\n".join(lignes)
 
     lignes.append("Contenu visible (les coordonnées sont en pixels d'écran, utilisables avec cliquer_ecran) :")
@@ -261,4 +263,23 @@ async def lire_ecran(ctx: Context) -> str:
     if resultat.get("erreur"):
         return f"Erreur : {resultat['erreur']}"
 
+    # Diagnostic staging (30/09/2026) : trace du resultat brut renvoye par
+    # l'application PC (elements coupes a 1500 caracteres), pour comprendre
+    # pourquoi seul le titre de la fenetre remonte. Pas de valeur de champ
+    # mot de passe : l'application PC ne les envoie jamais.
+    try:
+        import json as _json
+        import logging as _logging
+        _logging.info(
+            "lire_ecran brut : mode=%s erreur_lecture=%s titre=%r application=%r nb_elements=%s coupe=%s brut=%s",
+            resultat.get("mode"),
+            resultat.get("erreur_lecture"),
+            resultat.get("titre_fenetre_active"),
+            resultat.get("application"),
+            len(resultat.get("elements") or []),
+            resultat.get("coupe"),
+            _json.dumps(resultat, ensure_ascii=False)[:1500],
+        )
+    except Exception:
+        pass
     return _formater_lecture_ecran(resultat)
