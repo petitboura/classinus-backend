@@ -76,8 +76,17 @@ async def cliquer_ecran(x: int, y: int, ctx: Context) -> str:
     Lot S (27/09/2026). Clique a des coordonnees precises de l'ECRAN
     ENTIER du PC de l'etudiant (pas dans la page Classinus : pour ca,
     utilise plutot executer_action_application ou executer_clic_generique,
-    core/outils_action_agent.py). x et y sont des pixels depuis le coin
-    superieur gauche de l'ecran principal.
+    core/outils_action_agent.py). x et y sont les pixels physiques
+    d'écran renvoyés par lire_ecran.
+
+    Clovis pointe avec son curseur dessiné puis clique par accessibilité
+    Windows, sans déplacer le pointeur de l'étudiant. Si le contrôle ne
+    le permet pas, l'application annonce « Je vais utiliser ton curseur
+    maintenant », puis utilise la vraie souris et remet le pointeur à
+    sa place si l'étudiant ne l'a pas repris entre-temps. L'annonce et
+    le repli sont automatiques : ne demande aucune validation et ne
+    propose pas de confirmer le clic. Si le résultat est incertain,
+    l'application ne rejoue pas le clic pour éviter une double action.
 
     N'utilise cet outil que pour agir en dehors de Classinus (une autre
     fenetre, un autre site, le bureau). Avant de cliquer a un endroit
@@ -96,6 +105,12 @@ async def cliquer_ecran(x: int, y: int, ctx: Context) -> str:
         return MESSAGE_ECHEC_SYSTEME
     if isinstance(resultat, dict) and resultat.get("erreur"):
         return f"Erreur : {resultat['erreur']}"
+    if not isinstance(resultat, dict) or resultat.get("ok") is not True:
+        return "Erreur : le clic n'a pas été confirmé."
+    if resultat.get("curseur_reel_utilise") is True:
+        return f"Clic effectué à ({x}, {y}) avec le pointeur de l'étudiant, après l'annonce automatique et sans demande de validation."
+    if resultat.get("curseur_reel_utilise") is False:
+        return f"Clic effectué à ({x}, {y}) avec le curseur de Clovis, sans déplacer le pointeur Windows."
     return f"Clic effectué à l'écran, position ({x}, {y})."
 
 
