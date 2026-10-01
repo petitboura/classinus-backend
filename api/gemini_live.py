@@ -23,7 +23,9 @@ def creer_token_gemini_live(utilisateur=Depends(utilisateur_courant)):
     if not api_key:
         raise erreur_api(503, "Le service vocal Gemini n est pas configuré.", "GEMINI_LIVE_NON_CONFIGURE")
     try:
-        client = genai.Client(api_key=api_key)
+        # Les jetons éphémères ne sont acceptés que par la version v1alpha
+        # de l'API Gemini Live (documentation Google).
+        client = genai.Client(api_key=api_key, http_options={"api_version": "v1alpha"})
         maintenant = datetime.now(timezone.utc)
         token = client.auth_tokens.create(
             config={
