@@ -552,7 +552,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "ui_editeur_maths": {"label": "Éditeur maths live (texte + formules)", "icone": "Calculator", "onglet": "utilitaires"},
     "ui_recherche": {"label": "Forcer une recherche web", "icone": "Search", "onglet": "utilitaires"},
     "ui_dessin": {"label": "Dessiner (géométrie, graphe, croquis)", "icone": "PenLine", "onglet": "utilitaires"},
-    "ui_mode_vocal": {"label": "Mode vocal (bientôt disponible)", "icone": "AudioLines", "onglet": "utilitaires"},
+    "ui_mode_vocal": {"label": "Mode vocal", "icone": "AudioLines", "onglet": "utilitaires"},
     "ui_photo": {"label": "Prendre une photo", "icone": "Camera", "onglet": "utilitaires"},
 
     # --- Bibliothèque (gestion) --- toutes les actions de gestion
