@@ -667,6 +667,15 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "lire_editeur": {"label": "Lecture de l'éditeur de code", "icone": "FileCode", "onglet": None},
     "montrer_dans_editeur": {"label": "Montrer des lignes dans l'éditeur", "icone": "Crosshair", "onglet": None},
     "ecrire_dans_editeur": {"label": "Écriture dans l'éditeur de code", "icone": "PenLine", "onglet": None},
+    # Lot S (canal en direct sur PC, 27/09/2026) : actions sur le systeme du PC via l'appli Electron,
+    # appelees par le modele, jamais cliquables a la main (onglet None), meme rappel de cache 24h.
+    "cliquer_ecran": {"label": "Clic à l'écran", "icone": "MousePointer2", "onglet": None},
+    "pointer_ecran": {"label": "Pointage à l'écran", "icone": "Crosshair", "onglet": None},
+    "marquer_ecran": {"label": "Marque à l'écran", "icone": "Highlighter", "onglet": None},
+    "taper_clavier": {"label": "Saisie au clavier", "icone": "Keyboard", "onglet": None},
+    "appuyer_touches": {"label": "Raccourci clavier", "icone": "Keyboard", "onglet": None},
+    "ouvrir_application": {"label": "Ouverture d'une application", "icone": "AppWindow", "onglet": None},
+    "lire_ecran": {"label": "Lecture de l'écran", "icone": "Eye", "onglet": None},
     # Chantier P (canal en direct, 19/09/2026) : commentaire libre pendant
     # une action, meme rappel de cache 24h.
     "dire_a_l_etudiant": {"label": "Message en direct à l'étudiant", "icone": "MessageCircle", "onglet": None},
@@ -847,6 +856,7 @@ CATEGORIES_OUTILS = {
         "executer_clic_generique", "montrer_element_application", "ecrire_dans_champ",
         "lire_editeur", "montrer_dans_editeur", "ecrire_dans_editeur",
         "lire_page",
+        "pointer_ecran", "marquer_ecran", "cliquer_ecran", "taper_clavier", "appuyer_touches", "ouvrir_application", "lire_ecran",
     ],
     "github": ["gerer_depot_github"],
     "google_drive": [
