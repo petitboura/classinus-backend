@@ -622,14 +622,13 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             persona_pedagogique = f_persona_pedagogique.result() if f_persona_pedagogique else None
             guide_actif = f_guide_actif.result() if f_guide_actif else {"actif": False, "sous_mode": "textuel"}
             mode_source = f_mode_source.result() if f_mode_source else None
-            # Agent applicatif : l'etat courant des elements interactifs de
-            # l'ecran reste visible par le modele a CHAQUE tour, comme avant
-            # le mode "canal en direct". Le flag canal_en_direct controle
-            # l'activation des outils d'action (clic, ecriture, etc.), pas la
-            # lecture de l'ecran. Cela evite de faire disparaitre les boutons
-            # et l'etat general de l'application du prompt du chat normal.
-            # Simple lecture en memoire, pas besoin du lot parallele.
-            actions_ecran = obtenir_actions_disponibles(user_id)
+            # Agent applicatif : la liste des elements de l'ecran n'est lue
+            # (et donc injectee dans le prompt) que lorsque le canal en
+            # direct est actif pour ce tour (decision Bourama, 30/09/2026 :
+            # canal desactive, le modele ne voit pas l'ecran et le prompt ne
+            # paie pas cette liste). Simple lecture en memoire, pas besoin du
+            # lot parallele.
+            actions_ecran = obtenir_actions_disponibles(user_id) if canal_en_direct else None
 
         # rattachement_id_actif (voir core/mode_actif_conversation.py) vaut :
         # - None si conversation_id est absent ou si aucun mode actif n'a
@@ -816,6 +815,13 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # est réellement construit (sans passer par ce bouton) : le prompt
     # optimiste et la branche outil_force directe, plus bas.
     outils_retenus_precedents = _lire_outils_retenus(conversation_id)
+    # Canal en direct désactivé (30/09/2026, demande Bourama : c'est fini) :
+    # les outils d'action sur l'application, de lecture de page, d'éditeur et
+    # de bulle ne restent jamais proposés, même retenus d'un tour précédent
+    # où le canal était actif.
+    if not canal_en_direct:
+        outils_agent_applicatif = set(CATEGORIES_OUTILS.get("agent_applicatif", [])) | {"dire_a_l_etudiant"}
+        outils_retenus_precedents = [o for o in (outils_retenus_precedents or []) if o not in outils_agent_applicatif]
 
     def _fusionner_outils(liste_base, extra):
         """Union ordonnée sans doublons, jamais liste vide (None si rien)."""
