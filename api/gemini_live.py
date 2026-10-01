@@ -18,24 +18,21 @@ MODEL_GEMINI_LIVE = "gemini-3.8-live"
 
 @router.post("/token")
 def creer_token_gemini_live(utilisateur=Depends(utilisateur_courant)):
-    """Retourne un token Live à usage unique, lié au modèle et à l audio."""
+    """Retourne un token Live à usage unique, valable une minute pour ouvrir la session."""
     api_key = get_secret("GOOGLE_API_KEY")
     if not api_key:
         raise erreur_api(503, "Le service vocal Gemini n est pas configuré.", "GEMINI_LIVE_NON_CONFIGURE")
     try:
-        # Les jetons éphémères ne sont acceptés que par la version v1alpha
-        # de l'API Gemini Live (documentation Google).
-        client = genai.Client(api_key=api_key, http_options={"api_version": "v1alpha"})
+        # Même création de jeton que l'exemple officiel Google pour Gemini 3.8 Live
+        # (version v1beta, aucune restriction sur le jeton).
+        client = genai.Client(api_key=api_key)
         maintenant = datetime.now(timezone.utc)
         token = client.auth_tokens.create(
             config={
                 "uses": 1,
                 "expire_time": maintenant + timedelta(minutes=30),
                 "new_session_expire_time": maintenant + timedelta(minutes=1),
-                "live_connect_constraints": {
-                    "model": MODEL_GEMINI_LIVE,
-                    "config": {"response_modalities": ["AUDIO"]},
-                },
+                "http_options": {"api_version": "v1beta"},
             }
         )
     except Exception as e:
