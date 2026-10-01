@@ -67,6 +67,7 @@ TYPES_VISUELS: dict[str, str] = {
     "question": "Question interactive",
     "fiche": "Fiche de révision",
     "widget": "Widget interactif",
+    "animation": "Animation",
     "html": "Widget interactif",
 }
 
