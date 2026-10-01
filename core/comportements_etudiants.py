@@ -153,11 +153,13 @@ def _longueur_description_cible(texte: str) -> int:
     TOUJOURS jusqu'à 500 caractères, peu importe la longueur du texte
     d'origine -- une règle d'une ligne se retrouvait avec une description
     artificiellement gonflée. Ici, la cible suit la longueur du texte lui
-    même (la moitié, arrondi), avec un plancher pour rester lisible et un
-    plafond pour ne jamais dépasser l'ancienne limite. S'applique à TOUS
-    les comportements (skills classiques ET les 4 catégories de
-    Configuration), pas seulement les nouvelles."""
-    return max(40, min(500, round(len(texte) * 0.6)))
+    même, avec un plancher pour rester lisible. 01/10/2026, demande
+    Bourama ("ne pas imposer de limite, la dernière fois ça coupait les
+    skills") : le plafond de 500 caractères est retiré, la cible suit
+    simplement la longueur du texte sans jamais en couper une partie.
+    S'applique à TOUS les comportements (skills classiques ET les 4
+    catégories de Configuration), pas seulement les nouvelles."""
+    return max(40, round(len(texte) * 0.6))
 
 
 def _skill_repli(texte: str) -> dict:
@@ -224,7 +226,14 @@ def _generer_skill(texte: str) -> dict:
                     "être LU par l'étudiant dans une liste -- pas un slug technique, "
                     "max 40 caractères), suivi d'un corps en Markdown qui détaille "
                     "l'instruction de façon claire et directe, à la deuxième "
-                    "personne, comme des consignes que l'assistant doit suivre. Ne "
+                    "personne, comme des consignes que l'assistant doit suivre. Le "
+                    "corps doit être PROPORTIONNEL à l'instruction de l'étudiant, du "
+                    "même ordre de grandeur : une instruction courte (une règle d'une "
+                    "ligne par exemple) donne un corps court, sans sections, sans "
+                    "exemples inventés et sans rien ajouter qui n'est pas dans le "
+                    "texte ; une instruction longue donne un corps plus développé. "
+                    "Garde tout ce que l'étudiant a écrit, ne retire et ne résume "
+                    "aucune partie, et ne coupe jamais le texte. Ne "
                     "réponds QUE avec le contenu du fichier, rien d'autre autour, "
                     "en commençant directement par ---.\n\n"
                     f"Instruction de l'étudiant :\n{texte}"
