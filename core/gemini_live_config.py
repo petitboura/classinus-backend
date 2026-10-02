@@ -11,6 +11,9 @@ de code :
 - GEMINI_LIVE_CONSIGNES
 - GEMINI_LIVE_ACCUEIL (vide pour supprimer la phrase d'accueil)
 - GEMINI_LIVE_DESCRIPTION_OUTIL
+- GEMINI_LIVE_RELANCE_ATTENTE (vide pour supprimer les nouvelles pendant l'attente)
+- GEMINI_LIVE_DELAI_RELANCE_SECONDES
+- GEMINI_LIVE_RELANCES_MAX
 
 La voix est un interprète : elle transmet la demande de l'étudiant à Clovis,
 le cerveau de Classinus, puis résume son travail à voix haute. Elle ne répond
@@ -52,10 +55,31 @@ DESCRIPTION_OUTIL_PAR_DEFAUT = (
     "n'est que l'interface, Clovis fait le vrai travail et renvoie sa réponse écrite."
 )
 
+# Quand Clovis met du temps, la voix ne reste jamais muette : toutes les
+# DELAI_RELANCE_PAR_DEFAUT secondes (au plus RELANCES_MAX_PAR_DEFAUT fois, et
+# jamais pendant qu'elle parle déjà), ce message lui rappelle de donner un mot
+# de patience à l'étudiant.
+RELANCE_ATTENTE_PAR_DEFAUT = (
+    "Clovis travaille encore sur la demande de l'étudiant. Dis une très courte phrase pour le "
+    "faire patienter, sans répéter ce que tu as déjà dit et sans rappeler l'outil."
+)
+DELAI_RELANCE_PAR_DEFAUT = 20
+RELANCES_MAX_PAR_DEFAUT = 3
+
 
 def _lire(nom, defaut):
     valeur = os.environ.get(nom)
     return defaut if valeur is None else valeur
+
+
+def _lire_entier(nom, defaut):
+    brut = os.environ.get(nom)
+    if brut is None:
+        return defaut
+    try:
+        return max(0, int(brut))
+    except ValueError:
+        return defaut
 
 
 def reglages_gemini_live():
@@ -66,4 +90,7 @@ def reglages_gemini_live():
         "consignes": _lire("GEMINI_LIVE_CONSIGNES", CONSIGNES_PAR_DEFAUT),
         "accueil": _lire("GEMINI_LIVE_ACCUEIL", ACCUEIL_PAR_DEFAUT),
         "description_outil": _lire("GEMINI_LIVE_DESCRIPTION_OUTIL", DESCRIPTION_OUTIL_PAR_DEFAUT),
+        "relance_attente": _lire("GEMINI_LIVE_RELANCE_ATTENTE", RELANCE_ATTENTE_PAR_DEFAUT),
+        "delai_relance_secondes": _lire_entier("GEMINI_LIVE_DELAI_RELANCE_SECONDES", DELAI_RELANCE_PAR_DEFAUT),
+        "relances_max": _lire_entier("GEMINI_LIVE_RELANCES_MAX", RELANCES_MAX_PAR_DEFAUT),
     }
