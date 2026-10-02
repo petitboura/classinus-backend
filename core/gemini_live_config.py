@@ -67,12 +67,12 @@ RELANCE_ATTENTE_PAR_DEFAUT = (
     "faire patienter, sans répéter ce que tu as déjà dit et sans rappeler l'outil."
 )
 # Quand l'étudiant tape un message dans le chat alors que la voix est active,
-# la réponse écrite de Clovis s'affiche dans le chat et la voix en dit
+# la réponse écrite de Classinus s'affiche dans le chat et la voix en dit
 # l'essentiel. Ce message précède le texte de la réponse envoyé à la voix.
 ANNONCE_REPONSE_PAR_DEFAUT = (
-    "Clovis vient de répondre par écrit à un message que l'étudiant a tapé dans le chat. "
+    "Classinus vient de répondre par écrit à un message que l'étudiant a tapé dans le chat. "
     "N'appelle pas l'outil. Dis seulement l'essentiel de sa réponse en une ou deux phrases, "
-    "puis précise que le détail est écrit dans le chat. Voici la réponse de Clovis :"
+    "puis précise que le détail est écrit dans le chat. Voici la réponse de Classinus :"
 )
 DELAI_RELANCE_PAR_DEFAUT = 20
 RELANCES_MAX_PAR_DEFAUT = 3
