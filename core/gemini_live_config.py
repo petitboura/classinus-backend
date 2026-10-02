@@ -13,11 +13,12 @@ de code :
 - GEMINI_LIVE_DESCRIPTION_OUTIL
 - GEMINI_LIVE_RELANCE_ATTENTE (vide pour supprimer les nouvelles pendant l'attente)
 - GEMINI_LIVE_ANNONCE_REPONSE (vide pour que la voix ne dise rien d'une réponse à un message tapé)
+- GEMINI_LIVE_ANNONCE_BULLE (vide pour que la voix ne dise pas les messages de la bulle du canal en direct)
 - GEMINI_LIVE_DELAI_RELANCE_SECONDES
 - GEMINI_LIVE_RELANCES_MAX
 
 La voix est un interprète : elle transmet la demande de l'étudiant au cerveau
-de Classinus, puis résume son travail à voix haute. Elle ne répond
+de Classinus, puis lit sa réponse à voix haute. Elle ne répond
 jamais à la place du cerveau de Classinus.
 """
 
@@ -42,9 +43,10 @@ CONSIGNES_PAR_DEFAUT = (
     "2. Appelle l'outil demander_a_clovis (c'est le nom technique de la liaison avec le cerveau "
     "de Classinus, ne le prononce jamais) en transmettant fidèlement la demande, avec les mots de "
     "l'étudiant.\n"
-    "3. Quand le cerveau de Classinus a répondu, ne lis pas sa réponse en entier. Dis seulement l'essentiel en une "
-    "ou deux phrases, puis précise que le détail est écrit dans le chat et demande à l'étudiant "
-    "s'il veut le voir.\n"
+    "3. Quand le cerveau de Classinus a répondu, lis sa réponse à voix haute en entier, "
+    "naturellement, sans la résumer ni rien ajouter. Pour ce qui ne peut pas se lire à voix "
+    "haute (code, tableau, lien, image, carte, fichier), dis seulement en une phrase de quoi "
+    "il s'agit et que c'est écrit dans le chat.\n"
     "4. Si l'outil renvoie une erreur, dis-le simplement et propose de réessayer.\n"
     "Pour une salutation très courte ou une simple politesse, tu peux répondre directement. "
     "Parle toujours dans la langue de l'étudiant, de façon naturelle et brève."
@@ -67,12 +69,23 @@ RELANCE_ATTENTE_PAR_DEFAUT = (
     "faire patienter, sans répéter ce que tu as déjà dit et sans rappeler l'outil."
 )
 # Quand l'étudiant tape un message dans le chat alors que la voix est active,
-# la réponse écrite de Classinus s'affiche dans le chat et la voix en dit
-# l'essentiel. Ce message précède le texte de la réponse envoyé à la voix.
+# la réponse écrite de Classinus s'affiche dans le chat et la voix la lit en
+# entier. Ce message précède le texte de la réponse envoyé à la voix.
 ANNONCE_REPONSE_PAR_DEFAUT = (
     "Classinus vient de répondre par écrit à un message que l'étudiant a tapé dans le chat. "
-    "N'appelle pas l'outil. Dis seulement l'essentiel de sa réponse en une ou deux phrases, "
-    "puis précise que le détail est écrit dans le chat. Voici la réponse de Classinus :"
+    "N'appelle pas l'outil. Lis sa réponse à voix haute en entier, naturellement, sans la "
+    "résumer ni rien ajouter. Pour ce qui ne peut pas se lire à voix haute (code, tableau, "
+    "lien, image, carte, fichier), dis seulement en une phrase de quoi il s'agit et que c'est "
+    "écrit dans le chat. Voici la réponse de Classinus :"
+)
+# Canal en direct : quand la voix est allumée, tout ce que Classinus dit dans sa
+# bulle (ses commentaires et ses réponses) est lu à voix haute. Ce message
+# précède chaque texte de la bulle envoyé à la voix.
+ANNONCE_BULLE_PAR_DEFAUT = (
+    "Classinus vient d'afficher ce message dans sa bulle à l'écran. N'appelle pas l'outil. "
+    "Dis ce message à voix haute, naturellement et en entier, sans rien ajouter ni résumer. "
+    "Pour ce qui ne peut pas se lire à voix haute (code, tableau, lien, image, carte, "
+    "fichier), dis seulement en une phrase de quoi il s'agit. Voici le message :"
 )
 DELAI_RELANCE_PAR_DEFAUT = 20
 RELANCES_MAX_PAR_DEFAUT = 3
@@ -103,6 +116,7 @@ def reglages_gemini_live():
         "description_outil": _lire("GEMINI_LIVE_DESCRIPTION_OUTIL", DESCRIPTION_OUTIL_PAR_DEFAUT),
         "relance_attente": _lire("GEMINI_LIVE_RELANCE_ATTENTE", RELANCE_ATTENTE_PAR_DEFAUT),
         "annonce_reponse": _lire("GEMINI_LIVE_ANNONCE_REPONSE", ANNONCE_REPONSE_PAR_DEFAUT),
+        "annonce_bulle": _lire("GEMINI_LIVE_ANNONCE_BULLE", ANNONCE_BULLE_PAR_DEFAUT),
         "delai_relance_secondes": _lire_entier("GEMINI_LIVE_DELAI_RELANCE_SECONDES", DELAI_RELANCE_PAR_DEFAUT),
         "relances_max": _lire_entier("GEMINI_LIVE_RELANCES_MAX", RELANCES_MAX_PAR_DEFAUT),
     }
