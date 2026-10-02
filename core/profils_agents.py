@@ -75,29 +75,6 @@ def _nom_lisible_appel(appel):
     return _nom_lisible(appel["name"], _action_appel(appel))
 
 
-def _charger_resume_memoire(user_id):
-    """
-    Recupere le resume long-terme (table conversation_summaries) de cet
-    utilisateur, valable pour tous les agents de la plateforme (compte
-    unifie, juillet 2026). Retourne "" si l'utilisateur n'est pas connecte
-    (user_id=None) ou si aucun resume n'existe encore.
-    """
-    if not user_id:
-        return ""
-    try:
-        res = (
-            supabase.table("conversation_summaries")
-            .select("summary")
-            .eq("user_id", user_id)
-            .maybe_single()
-            .execute()
-        )
-        return (res.data or {}).get("summary") or ""
-    except Exception as e:
-        logging.error(f"ERREUR SUPABASE (lecture conversation_summaries) : {e}")
-        return ""
-
-
 def _charger_schema_profil(agent_id):
     """
     Renvoie la liste de champs définie par le créateur pour SON agent
@@ -151,19 +128,14 @@ def _charger_profil_utilisateur(agent_id, user_id):
 
 def _mettre_a_jour_profil_utilisateur_si_besoin(user_id, agent_id):
     """
-    Pendant du profil dynamique à _mettre_a_jour_resume_si_besoin
-    ci-dessous, mais scopé à un seul agent (pas tous agents confondus) et
-    guidé par un schéma défini par le créateur plutôt que par un résumé
-    libre. Ne fait rien si : utilisateur non connecté, agent sans schéma
+    Profil dynamique scopé à un seul agent (pas tous agents confondus) et
+    guidé par un schéma défini par le créateur. Ne fait rien si : utilisateur non connecté, agent sans schéma
     défini (profil_utilisateur_schema vide -- cas par défaut, aucun coût
     ajouté pour les agents qui n'utilisent pas cette fonctionnalité), ou
     pas encore assez de nouveaux messages avec CET agent.
 
-    Contrairement à _mettre_a_jour_resume_si_besoin, ne purge PAS les
-    messages bruts de `conversations` -- ce n'est pas son rôle (le résumé
-    mémoire s'en charge déjà, tous agents confondus) ; lire les mêmes
-    lignes deux fois pour deux mécanismes différents ne pose aucun
-    problème tant qu'aucun des deux n'écrit sur les données de l'autre.
+    Ne purge PAS les messages bruts de `conversations` : plus rien ne les
+    purge depuis le retrait du résumé automatique de l'ancienne mémoire.
     Ne bloque jamais la réponse à l'utilisateur : toute erreur est juste
     loguée, jamais remontée à l'appelant.
     """
@@ -278,6 +250,7 @@ Utilise ces blocs dès qu'ils apportent une vraie valeur à la compréhension, d
 - ```chart``` : JSON {"type": "line"|"bar"|"pie", "data": [...], "titre"?: "..."}. "data" = tableau d'objets plats, 1ère clé = axe X, suivantes = séries.
 - ```carte``` : JSON {"lat": ..., "lng": ..., "label"?: "..."} pour localiser un lieu — utilise ce bloc plutôt qu'un lien texte brut Maps/OSM.
 - ```widget```/```html``` : mini-outil interactif autonome. Fond sombre par défaut ; si tu le changes, adapte aussi la couleur du texte. Palette de l'interface (jamais de bleu, ni aucune couleur froide, comme couleur d'accent/de mise en avant PAR DÉFAUT) : c'est une palette chaude orange/brun -- accent doré/ambré autour de #E3B341 sur fond sombre (#B8860B sur fond clair), dégradé vers du brun/orange plus profond (#8A6A1F sur fond sombre, #6B5416 sur fond clair) pour les boutons ou éléments mis en avant. Laisse les champs, boutons et textes sans style explicite quand tu peux : ils reprennent automatiquement ces couleurs. Si tu dois styliser toi-même un bouton, un lien, une barre de progression ou tout élément d'accent SANS que l'utilisateur ait demandé une couleur précise, utilise cette palette chaude, jamais un bleu ou un violet par défaut. Si l'utilisateur demande explicitement une couleur ou un thème particulier pour ce widget (ex: "en bleu", "aux couleurs de mon équipe", un dégradé précis), suis sa demande normalement -- cette palette est la valeur par défaut, pas une contrainte absolue qui prime sur une demande explicite. Pour toute démonstration ou animation (CSS, JS, SVG) : le CSS et le JS seuls n'affichent rien sans du HTML à styliser/animer, et un bloc SVG à part n'est pas rendu comme dessin ici -- regroupe donc toujours tout (structure HTML, style dans `<style>`, script dans `<script>`, SVG intégré si besoin) dans CE bloc, jamais en blocs séparés. Si on te demande juste le code sans vouloir le voir tourner, donne-le en bloc de code classique. Si on exige du CSS seul sans HTML, n'écris pas de code CSS comme s'il allait s'afficher -- explique qu'il ne peut rien montrer seul.
+- ```animation``` : animation qui se regarde comme une vidéo (lecture, pause, barre de progression), en 2D ou en 3D, pour n'importe quel sujet : explication, démonstration, simulation, schéma qui prend vie, illustration, visuel créatif. Utilise-la quand l'utilisateur la demande, ou quand tu juges qu'elle apporte plus qu'un texte, une image fixe ou un widget ; jamais obligatoire (le widget reste le bon choix pour un outil que l'utilisateur manipule lui même : calculateur, formulaire, jeu). Le lecteur, le thème et les couleurs sont fournis : tu écris uniquement du JavaScript brut dans le bloc (pas de JSON, pas de HTML). Structure : mode('3d') en toute première ligne pour la 3D seulement ; installer(function(S){...}) crée UNE fois tous les éléments et pose leur état de départ (ce qui doit apparaître plus tard démarre avec opacity 0) ; puis animer(secondes, function(p,S){...}) où p va de 0 à 1 pendant ces secondes. Un seul animer suffit pour un mouvement continu ; tu peux en enchaîner plusieurs si l'animation a plusieurs temps. Titre et légende sont facultatifs : animer(secondes, fn, {titre:"...", legende:"..."}) ajoute une phrase sous l'image et un titre cliquable (affiché seulement quand au moins deux parties en ont un), à n'utiliser que si ça aide vraiment. Chaque animer ne fait que régler ce qu'il anime en fonction de p : jamais de setTimeout, de boucle ni d'état mémorisé ; le lecteur rejoue les parties passées avec p=1 pour retrouver l'état exact, donc rien à remettre à zéro. Aides : seg(p,a,b) progression douce de 0 à 1 entre a et b, ease(x), lerp(a,b,x), mixerChemin(d1,d2,x) pour transformer un tracé en un autre (mêmes nombres dans les deux), et l'objet C de couleurs du thème (C.texte, C.muet, C.accent, C.a, C.b, C.c, C.d pour mettre en évidence, C.bordure, C.fond, C.surface), à utiliser plutôt que des couleurs fixes. 2D, scène de 640 x 360 : S.ligne(x1,y1,x2,y2,a), S.rect(x,y,l,h,a), S.cercle(cx,cy,r,a), S.polygone([[x,y],...],a), S.chemin(d,a), S.texte(x,y,"texte",a), S.groupe(a), où a est un objet d'attributs SVG ({fill:C.a, stroke:C.texte, opacity:0.5, textAnchor:"middle"}, et dans:groupe pour ranger dans un groupe) ; sur chaque élément : .set({...}) change des attributs, .pose(dx,dy,angleDegres,centreX,centreY,echelle) déplace, tourne ou agrandit, .trace(p) dessine un trait progressivement ; S.camera(centreX,centreY,zoom) pour zoomer sur une zone. Formules en symboles unicode (², √, ×, π), pas de LaTeX. 3D : S.boite(l,h,p,couleur), S.sphere(r,couleur), S.cylindre(r,h,couleur), S.cone(r,h,couleur), S.aretes(maille,couleur), S.ligne3d([[x,y,z],...],couleur), S.orbite(angleHorizontal,angleVertical,distance,[cx,cy,cz]) pour la caméra, et S.THREE, S.scene, S.camera pour le reste ; les mailles se règlent avec .position, .rotation, .scale, .visible. Reste lisible : peu d'éléments à la fois, des durées qui laissent le temps de voir, et une phrase avant le bloc pour annoncer ce qu'on va voir.
 - ```geometrie``` : JSON {"titre"?, "repere"?: bool, "points": [{"id", "x", "y", "label"?}], "elements": [...]} pour figures exactes (prioritaire sur mermaid/widget dès qu'il y a des coordonnées). Éléments référencent les points par "id" : segment{de,a}, polygone{points,rempli?}, cercle{centre,rayon}, vecteur{de,a,label?}, angle{sommet,point1,point2,label?}. Bornes auto-calculées.
 - ```qcm``` : JSON {"question": "...", "choix": ["...", "..."], "reponse": index (0-based) de la bonne réponse dans "choix", "explication"?: "..."} pour un exercice à choix multiple, corrigé directement au clic dans l'interface (l'étudiant sélectionne, la bonne/mauvaise réponse s'affiche aussitôt). Au moins deux choix. "explication" doit couvrir à la fois pourquoi la bonne réponse est correcte et pourquoi une confusion courante mène à une mauvaise réponse, en langage naturel -- jamais de numéro de page, d'extrait cité ni de niveau de confiance, ce format ne suit pas la discipline de citation.
 - ```fiche``` : JSON pour une fiche de révision affichée avec une mise en page adaptée au type, jamais un résumé générique en texte brut. Champ "type" obligatoire, "titre"? optionnel, puis selon "type" : "formules" -> "items":[{"nom","expression","description"?}] ; "dates" -> "evenements":[{"date","texte","description"?}] (ordre chronologique) ; "vocabulaire" -> "termes":[{"terme","definition","exemple"?}] ; "carte-mentale" -> "racine":"...","branches":[{"texte","enfants"?:[même structure, récursif]}] (2-3 niveaux, reste lisible) ; "tableau-comparatif" -> "colonnes":["..."],"lignes":[{"label","valeurs":["..."]}] (autant de "valeurs" que de "colonnes", même ordre). Comme qcm, jamais de numéro de page, d'extrait cité ni de niveau de confiance, discipline de citation hors périmètre ici aussi.
@@ -342,7 +315,9 @@ Ne dis JAMAIS à l'utilisateur que l'application est fermée, en arrière-plan, 
 REGLE_MEMOIRE_ELEVE = """
 
 <memoire_eleve>
-Tu as accès à une mémoire persistante par élève, toujours disponible : memoire_sommaire, memoire_lire, memoire_ecrire. Consulte memoire_sommaire en début de conversation si le contexte de l'élève peut aider à répondre (établissement, niveau, difficultés déjà notées, préférences...), puis memoire_lire sur la catégorie repérée si tu as besoin du détail complet. Appelle memoire_ecrire uniquement quand l'élève énonce ou corrige un fait explicite qui mérite d'être retenu d'une conversation à l'autre, jamais sur une simple déduction de ta part ou un ressenti passager de sa part. Avant de créer une nouvelle sous-catégorie, vérifie via memoire_sommaire qu'une sous-catégorie équivalente n'existe pas déjà sous un autre nom pour cet élève. Une écriture ne remplace que la catégorie ou sous-catégorie précise que tu cibles, jamais le reste de sa mémoire.
+Tu as accès à une mémoire persistante par élève, toujours disponible : memoire_sommaire, memoire_lire, memoire_ecrire. Utilise-la seulement quand c'est utile, pas à chaque message. Consulte memoire_sommaire quand le contexte de l'élève peut vraiment aider à répondre (établissement, niveau, difficultés déjà notées, préférences...), puis memoire_lire sur la catégorie repérée si tu as besoin du détail complet. Appelle memoire_ecrire uniquement quand l'élève énonce ou corrige un fait explicite qui mérite d'être retenu d'une conversation à l'autre, jamais sur une simple déduction de ta part ou un ressenti passager de sa part. Avant de créer une nouvelle sous-catégorie, vérifie via memoire_sommaire qu'une sous-catégorie équivalente n'existe pas déjà sous un autre nom pour cet élève. Une écriture ne remplace que la catégorie ou sous-catégorie précise que tu cibles, jamais le reste de sa mémoire.
+
+Fais tout cela en toute discrétion : n'annonce jamais que tu consultes ou que tu enregistres quelque chose en mémoire. Ne dis pas « je note ça », « je retiens », « je vérifie ce que je sais de toi » ou « c'est enregistré », ne commente pas ces appels et ne les mentionne pas dans ta réponse. L'élève doit simplement sentir que tu te souviens de lui. Ne parle de ta mémoire que s'il t'interroge lui-même dessus, ou s'il te demande explicitement de retenir ou d'oublier quelque chose. Si un appel échoue, continue ta réponse normalement sans en parler.
 </memoire_eleve>"""
 
 
@@ -559,7 +534,7 @@ def construire_instruction_guide_visuel(sections: list[dict]) -> str:
 # Classinus sait faire", en trois familles, choix Bourama 20/09/2026 :
 # - "affichages" : les formats enrichis documentes dans
 #   INSTRUCTIONS_FORMATS_AFFICHAGE plus haut dans ce fichier (mermaid,
-#   chart, carte, widget/html, geometrie, qcm, fiche, question).
+#   chart, carte, widget/html, animation, geometrie, qcm, fiche, question).
 # - "outils" : les categories du menu Outils du frontend, memes
 #   categories que REGISTRE_AFFICHAGE_OUTILS (core/registre_outils.py) --
 #   "generer", "rechercher", "action_app", "utilitaires".
@@ -592,7 +567,7 @@ Si l'utilisateur n'a encore rien choisi dans cette conversation, ta toute premie
 Tes sources pour la Demo : les formats d'affichage deja decrits dans tes instructions et tes outils. Tu peux aussi consulter gerer_base_connaissance quand tu as besoin de comprendre ou d'expliquer un point precis, mais jamais pour derouler un parcours de l'application.
 
 Regles par famille :
-- Affichages (mermaid, schemas, cartes, widgets interactifs, geometrie, QCM, fiches, questions -- voir la section formats d'affichage de tes instructions) : demontre LITTERALEMENT TOUS les types, un par un, categorie par categorie -- jamais un simple echantillon.
+- Affichages (mermaid, schemas, cartes, widgets interactifs, animations, geometrie, QCM, fiches, questions -- voir la section formats d'affichage de tes instructions) : demontre LITTERALEMENT TOUS les types, un par un, categorie par categorie -- jamais un simple echantillon.
 - Outils (les categories du menu Outils : generer, rechercher, action dans l'app, utilitaires) : demontre LITTERALEMENT TOUS les outils de chaque categorie -- SAUF si une categorie en contient enormement, auquel cas choisis toi-meme les plus utiles ou les plus impressionnants plutot que de tous les montrer un par un. Ajoute aussi les minuteurs du chat, qui ne sont pas dans le menu Outils : lance-en un vrai (duree courte, avec ce que tu feras a la fin) et precise que l'utilisateur peut aussi en lancer un lui-meme avec le bouton horloge en haut a droite du chat.
 - Canal en direct : contrairement aux deux familles ci-dessus, quelques exemples cibles suffisent (pas besoin d'etre exhaustif). Tu ne peux pas cliquer depuis le chat normal : pour montrer cette famille, tu dois d'abord OUVRIR le canal avec l'outil ouvrir_canal_en_direct, dans l'un de ces deux cas seulement :
   (a) l'utilisateur choisit "Le canal en direct" ou "Voir le canal en direct" (ou le demande clairement) : appelle l'outil aussitot ;

@@ -1,14 +1,10 @@
 """
 Mémoire élève persistante et incrémentale (chantier 27/09/2026, demande
-Bourama). Remplace le principe de core/outils_memoire_profil.py
-(gerer_memoire_utilisateur / consulter_profil_utilisateur /
-mettre_a_jour_profil_utilisateur), gardés en place pour l'instant ,
-migration ou retrait des données existantes (tables
-conversation_summaries et agent_user_profiles) pas décidé, à trancher
-avec Bourama avant d'y toucher, même logique que les autres points
-ouverts flagués dans ce dépôt.
+Bourama). C'est l'unique système de mémoire de l'élève : l'ancien
+système (résumé automatique et outil gerer_memoire_utilisateur, table
+conversation_summaries) a été retiré.
 
-Le système précédent stockait tout dans un unique JSON par élève, fusion
+L'ancien système stockait tout dans un unique JSON par élève, fusion
 au premier niveau seulement (dict.update) : une mise à jour sur une clé
 de premier niveau déjà utilisée écrasait tout son contenu imbriqué au
 lieu de le compléter, symptôme rapporté par Bourama d'une mémoire qui

@@ -110,28 +110,10 @@ MESSAGE_CONTENU_BLOQUE = "Je ne peux pas répondre à ce message. Reformule ta q
 # (doit rester alignee avec AGENT_ID_PAR_DEFAUT dans retriever.py).
 AGENT_ID_PAR_DEFAUT = "clovis"  # 12/08 : ce depot isole ne sert plus que Clovis
 
-# Au-dela de ce nombre de messages non resumes (table conversations), on
-# redemande un resume condense au modele plutot que d'empiler indefiniment
-# l'historique brut dans conversation_summaries.
-SEUIL_RESUME_MESSAGES = 20
-MODELE_RESUME = "openai/gpt-oss-20b"  # 17/08 : llama-3.1-8b-instant decommissionne par Groq (404 en prod) -- quota TPM separe de la cascade principale, evite la contention
-
-# 24/09/2026 : plafonds pour que la requete de resume ne depasse jamais la
-# limite de 8 000 tokens par minute de openai/gpt-oss-20b (Groq, tier
-# gratuit). Constate en prod : 20 messages d'assistant longs bruts
-# faisaient 11 000 a 17 000 tokens demandes -> erreur 413, le resume
-# n'etait jamais mis a jour ET les messages n'etaient jamais purges, donc
-# la requete grossissait a chaque nouvel essai. Chaque message est
-# tronque (le debut suffit pour un resume factuel), et la sortie est
-# bornee.
-TAILLE_MAX_MESSAGE_RESUME = 700  # caracteres gardes par message dans la transcription envoyee
-TOKENS_MAX_SORTIE_RESUME = 1500
-
 # Ajoute le 15/09/2026 (demande Bourama) : au-dela de ce volume cumule
 # (en caracteres) de resultats d'outils reinjectes dans l'historique d'une
 # meme conversation (voir core/historique_outils.py), les plus ANCIENS
-# sont condenses en un seul resume via MODELE_RESUME plutot que renvoyes
-# integralement -- pour ne jamais depasser la fenetre de contexte du
+# ne sont plus renvoyes integralement, pour ne jamais depasser la fenetre de contexte du
 # modele sur une conversation longue et riche en outils. ~12000 caracteres
 # ~= 3000 tokens, une marge large mais qui laisse encore beaucoup de place
 # pour le reste du prompt (systeme + question + reponses).
@@ -153,20 +135,17 @@ SEUIL_CARACTERES_HISTORIQUE_CONVERSATION_MAX = 8000
 
 # Profil utilisateur dynamique par agent (2026-07-21, voir
 # agents.profil_utilisateur_schema et _mettre_a_jour_profil_utilisateur_si_besoin
-# plus bas). Seuil plus bas que SEUIL_RESUME_MESSAGES : contrairement au
-# resume memoire (qui compte TOUS les messages de l'utilisateur, tous agents
-# confondus), celui-ci compte seulement les messages avec CET agent -- ils
-# s'accumulent donc plus lentement, un seuil identique mettrait
-# potentiellement des semaines a se declencher pour un agent utilise
-# occasionnellement.
+# plus bas). Ce seuil compte seulement les messages avec CET agent : ils
+# s'accumulent lentement, un seuil eleve mettrait potentiellement des
+# semaines a se declencher pour un agent utilise occasionnellement.
 SEUIL_PROFIL_MESSAGES = 10
-MODELE_PROFIL = "openai/gpt-oss-20b"  # 17/08 : llama-3.1-8b-instant decommissionne par Groq (404 en prod) -- meme raison que MODELE_RESUME : quota TPM separe
+MODELE_PROFIL = "openai/gpt-oss-20b"  # 17/08 : llama-3.1-8b-instant decommissionne par Groq (404 en prod), quota TPM separe
 
 # Routeur d'outils (2026-07-28, demande Bourama) : premier appel LLM
 # séparé, rapide, qui juge quels outils seraient pertinents pour la
 # question -- voir _router_outils plus bas. Tâche de classification
 # simple (pas besoin de raisonnement) -- un petit modèle rapide et open
-# source plutôt que MODELE_PROFIL/MODELE_RESUME (llama-3.3-70b-versatile).
+# source plutôt que MODELE_PROFIL (llama-3.3-70b-versatile).
 #
 # 06/09/2026, demande Bourama : passe de openai/gpt-oss-20b a
 # groq/compound-mini comme modele PRINCIPAL -- 70 000 TPM sur le tier

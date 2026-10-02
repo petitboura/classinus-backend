@@ -421,9 +421,7 @@ def _outils_memoire_toujours_disponibles(outils_mcp, table_routage, catalogue_co
     de core/outils_memoire_eleve.py doivent etre disponibles a CHAQUE
     tour, comme demander_outils (voir _preparer_demander_outils juste
     au-dessus), pour que le modele les utilise en reflexe plutot qu'a
-    l'occasion, tout le principe de la refonte, l'ancien systeme
-    (gerer_memoire_utilisateur) n'etait utilise que quand le routeur ou
-    demander_outils le laissait passer.
+    l'occasion : c'est l'unique systeme de memoire de l'eleve.
 
     Contrairement a demander_outils/garder_outils, CE SONT de vrais
     outils MCP (deja dans catalogue_complet, voir
@@ -529,7 +527,7 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "n'est pertinent (question générale, conversation normale, "
         "salutation...), renvoie une liste vide.\n\n"
         "IMPORTANT : diagramme, graphique/chart, carte/localisation, "
-        "figure géométrique, mini-outil interactif (widget) et question "
+        "figure géométrique, mini-outil interactif (widget), animation et question "
         "interactive à l'étudiant NE SONT JAMAIS des outils de cette liste "
         "-- ce sont des blocs que le modèle principal écrit lui-même "
         "directement dans sa réponse, affichés nativement par l'interface. "

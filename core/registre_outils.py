@@ -297,9 +297,6 @@ OUTILS_SENSIBLES = {
     # action précise est sensible, pas les 11 autres du même outil (voir
     # _est_outil_sensible dans main.py, qui sait lire ce format composite).
     "gerer_document_bibliotheque:supprimer",
-    # Consolidé le 26/08 en une action de gerer_memoire_utilisateur (même
-    # format composite "nom_outil:action").
-    "gerer_memoire_utilisateur:effacer",
     # Dossiers de la bibliothèque personnelle (22/08, demande Bourama) :
     # peut supprimer des fichiers avec le dossier (voir
     # core/dossiers_bibliotheque.py:supprimer_dossier) -- irréversible,
@@ -518,7 +515,13 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # rappel, lui, avait déjà été retiré le 17/08 (voir plus bas dans
     # l'historique git de ce fichier).
     "envoyer_message": {"label": "Envoi d'un message", "icone": "Send", "onglet": None},
-    "gerer_memoire_utilisateur": {"label": "Ta mémoire", "icone": "Brain", "onglet": None},
+    # Nouvelle mémoire élève (core/outils_memoire_eleve.py). Ces trois outils
+    # n'avaient aucune entrée ici : le chat affichait leur nom technique et
+    # l'icône générique. Même icône principale pour les trois, la petite
+    # icône de verbe (VERBES_ACTIONS) distingue la lecture.
+    "memoire_sommaire": {"label": "Aperçu de ta mémoire", "icone": "Brain", "onglet": None},
+    "memoire_lire": {"label": "Lecture de ta mémoire", "icone": "Brain", "onglet": None},
+    "memoire_ecrire": {"label": "Enregistrement dans ta mémoire", "icone": "Brain", "onglet": None},
     "consulter_profil_utilisateur": {"label": "Consultation de ton profil", "icone": "UserCircle", "onglet": None},
     "mettre_a_jour_profil_utilisateur": {"label": "Mise à jour de ton profil", "icone": "UserCog", "onglet": None},
 
@@ -549,7 +552,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "ui_editeur_maths": {"label": "Éditeur maths live (texte + formules)", "icone": "Calculator", "onglet": "utilitaires"},
     "ui_recherche": {"label": "Forcer une recherche web", "icone": "Search", "onglet": "utilitaires"},
     "ui_dessin": {"label": "Dessiner (géométrie, graphe, croquis)", "icone": "PenLine", "onglet": "utilitaires"},
-    "ui_mode_vocal": {"label": "Mode vocal (bientôt disponible)", "icone": "AudioLines", "onglet": "utilitaires"},
+    "ui_mode_vocal": {"label": "Mode vocal", "icone": "AudioLines", "onglet": "utilitaires"},
     "ui_photo": {"label": "Prendre une photo", "icone": "Camera", "onglet": "utilitaires"},
 
     # --- Bibliothèque (gestion) --- toutes les actions de gestion
@@ -669,6 +672,10 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "appuyer_touches": {"label": "Raccourci clavier", "icone": "Command", "onglet": None},
     "ouvrir_application": {"label": "Ouverture d'une application", "icone": "AppWindow", "onglet": None},
     "lire_ecran": {"label": "Lecture de l'écran", "icone": "Eye", "onglet": None},
+    # Editeur de code (28/09/2026, demande Bourama), meme rappel de cache 24h.
+    "lire_editeur": {"label": "Lecture de l'éditeur de code", "icone": "FileCode", "onglet": None},
+    "montrer_dans_editeur": {"label": "Montrer des lignes dans l'éditeur", "icone": "Crosshair", "onglet": None},
+    "ecrire_dans_editeur": {"label": "Écriture dans l'éditeur de code", "icone": "PenLine", "onglet": None},
     # Chantier P (canal en direct, 19/09/2026) : commentaire libre pendant
     # une action, meme rappel de cache 24h.
     "dire_a_l_etudiant": {"label": "Message en direct à l'étudiant", "icone": "MessageCircle", "onglet": None},
@@ -828,7 +835,6 @@ CATEGORIES_OUTILS = {
     ],
     "comportement": ["gerer_comportement", "gerer_comportement_public"],
     "memoire": [
-        "gerer_memoire_utilisateur",  # ancien systeme, conserve pour l'instant (voir core/memoire_eleve.py)
         "memoire_sommaire", "memoire_lire", "memoire_ecrire",
     ],
     "telephone_etudiant": [
@@ -850,6 +856,7 @@ CATEGORIES_OUTILS = {
         "executer_clic_generique", "montrer_element_application", "ecrire_dans_champ",
         "lire_page",
         "pointer_ecran", "marquer_ecran", "cliquer_ecran", "taper_clavier", "appuyer_touches", "ouvrir_application", "lire_ecran",
+        "lire_editeur", "montrer_dans_editeur", "ecrire_dans_editeur",
     ],
     "github": ["gerer_depot_github"],
     "google_drive": [

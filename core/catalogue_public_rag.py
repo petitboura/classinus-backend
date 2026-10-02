@@ -291,6 +291,11 @@ def chercher_catalogue_public(
     catalogue_public pour la lecture intégrale, sur demande explicite
     de l'utilisateur uniquement).
 
+    Depuis le 29/09/2026 les deux recherches (sens + mots-clés) sont
+    TOUJOURS lancées ensemble et fusionnées : voir le commentaire dans le
+    corps de la fonction. Le paragraphe ci-dessous décrit l'origine du
+    circuit mots-clés.
+
     Fallback mots-clés (2026-09-05, demande Bourama : "la recherche du
     catalogue public ne marche pas" -- cause réelle : quota journalier
     Gemini épuisé, 429 RESOURCE_EXHAUSTED sur embed_content, voir
@@ -318,20 +323,48 @@ def chercher_catalogue_public(
         "p_classe": (classe or "").strip() or None,
         "p_specialite": (specialite or "").strip() or None,
     }
+    # 29/09/2026, demande Bourama : la recherche par mots-cles ne servait QUE
+    # de secours quand la recherche par le sens tombait en panne. Or la
+    # recherche par le sens ne voit que les documents deja decoupes et
+    # indexes (171 PDF publies sur 174 ne le sont pas, vectorisation a la
+    # demande) : un PDF n'etait donc jamais retrouve par son nom ou des
+    # mots-cles, seulement en ouvrant son dossier. Les deux recherches sont
+    # maintenant TOUJOURS lancees et leurs resultats fusionnes.
+    resultats_semantiques = []
     try:
         vecteur = vectoriser(question, task_type="RETRIEVAL_QUERY")
-    except Exception as e:
-        logging.warning(f"Recherche sémantique catalogue public indisponible (Gemini), bascule sur la recherche par mots-clés : {e}")
-        return chercher_catalogue_public_mots_cles(question, match_count, dossier_id, pays, niveau, categorie, classe, specialite)
-
-    try:
-        return supabase.rpc(
+        resultats_semantiques = supabase.rpc(
             "recherche_catalogue_public",
             {"query_embedding": vecteur, "match_count": match_count, **parametres_filtres},
         ).execute().data or []
     except Exception as e:
-        logging.error(f"ERREUR SUPABASE RPC recherche_catalogue_public, bascule sur la recherche par mots-clés : {e}")
-        return chercher_catalogue_public_mots_cles(question, match_count, dossier_id, pays, niveau, categorie, classe, specialite)
+        logging.warning(f"Recherche sémantique catalogue public indisponible, la recherche par mots-clés répond seule : {e}")
+
+    resultats_mots_cles = chercher_catalogue_public_mots_cles(question, match_count, dossier_id, pays, niveau, categorie, classe, specialite)
+    return _fusionner_resultats_recherche(resultats_semantiques, resultats_mots_cles, match_count)
+
+
+def _fusionner_resultats_recherche(semantiques: list, mots_cles: list, match_count: int) -> list:
+    """
+    Fusionne les deux listes en alternant un resultat de chaque (sens, puis
+    mots-cles, puis sens...), sans doublon, dans la limite de match_count :
+    aucune des deux recherches ne peut masquer l'autre, meme si l'une
+    renvoie beaucoup de resultats peu pertinents.
+    """
+    fusion, vus = [], set()
+    for i in range(max(len(semantiques), len(mots_cles))):
+        for liste in (semantiques, mots_cles):
+            if i >= len(liste):
+                continue
+            resultat = liste[i]
+            identifiant = resultat.get("fichier_id")
+            if identifiant in vus:
+                continue
+            vus.add(identifiant)
+            fusion.append(resultat)
+            if len(fusion) >= match_count:
+                return fusion
+    return fusion
 
 
 def chercher_catalogue_public_mots_cles(

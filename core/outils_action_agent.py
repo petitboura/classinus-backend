@@ -23,6 +23,9 @@ from core.canal_agent_applicatif import (
     demander_lecture_page as _demander_lecture_page,
     LONGUEUR_MAX_LECTURE_PAGE,
     MARGE_NOTE_COUPURE_LECTURE_PAGE,
+    demander_action_editeur as _demander_action_editeur,
+    obtenir_etat_editeur as _obtenir_etat_editeur,
+    obtenir_lecture_editeur_chat as _obtenir_lecture_editeur_chat,
     observer_changement_ecran as _observer_changement_ecran,
     photographier_ecran as _photographier_ecran,
 )
@@ -424,3 +427,151 @@ async def ouvrir_canal_en_direct(ctx: Context) -> str:
         "Le canal en direct s'ouvre. Termine ta reponse par une seule phrase courte qui l'annonce "
         "(sans bloc question) : la suite de la demo demarre automatiquement."
     )
+
+
+# Editeur de code (28/09/2026, demande Bourama) : l'IA lit, montre et ecrit
+# directement dans l'editeur de l'etudiant, plein ecran ou non, sans passer
+# par un bloc de code dans le chat.
+TEXTE_EDITEUR_FERME = (
+    "L'éditeur de code n'est pas ouvert chez l'étudiant en ce moment. "
+    "Ne mentionne jamais l'état de l'application : si tu as besoin de l'éditeur, "
+    "cherche dans la liste des éléments à l'écran comment l'ouvrir, ou propose-le à l'étudiant."
+)
+TEXTE_EDITEUR_ECHEC = (
+    "Cette action sur l'éditeur n'a pas pu être exécutée pour le moment. "
+    "Ne mentionne jamais l'état de l'application (fermée, en arrière-plan, onglet non visible) : "
+    "dis simplement que ça n'a pas abouti pour le moment et propose de réessayer."
+)
+LONGUEUR_MAX_CODE_LU = 20000
+NB_MAX_LIGNES_SORTIE_LUES = 40
+LONGUEUR_MAX_SORTIE_LUE = 2000
+
+
+async def _operation_editeur(ctx: Context, operation: dict):
+    """Renvoie (texte_d_erreur_ou_None, resultat_ou_None)."""
+    query_params = ctx.request_context.request.query_params
+    user_id = query_params.get("user_id")
+    if not user_id:
+        return "Erreur : impossible d'identifier l'utilisateur.", None
+
+    # Le snapshot HTTP appartient au tour courant. Pour une lecture, il
+    # reste utilisable même si le canal interactif n'a pas d'état à jour.
+    lecture = _obtenir_lecture_editeur_chat(user_id, query_params.get("conversation_id"))
+    est_lecture = operation.get("op") == "lire"
+    if _obtenir_etat_editeur(user_id) is None:
+        if est_lecture and lecture is not None:
+            return None, lecture
+        return TEXTE_EDITEUR_FERME, None
+
+    resultat = await _demander_action_editeur(user_id, operation)
+    if resultat is None:
+        if est_lecture and lecture is not None:
+            return None, lecture
+        return TEXTE_EDITEUR_ECHEC, None
+    if isinstance(resultat, dict) and resultat.get("erreur"):
+        if est_lecture and lecture is not None:
+            return None, lecture
+        return f"Erreur : {resultat['erreur']}", None
+    return None, resultat
+
+
+@mcp_generation.tool()
+async def lire_editeur(ctx: Context) -> str:
+    """
+    Lit l'éditeur de code de l'étudiant : le code actuel avec le numéro de
+    chaque ligne, le langage, le nom du fichier et le résultat de sa
+    dernière exécution (sortie et erreur). À utiliser avant de conseiller,
+    de corriger ou de modifier son code, et de nouveau juste avant d'écrire
+    si l'étudiant a pu le modifier entre temps : les numéros de lignes
+    changent quand il tape.
+
+    Disponible uniquement quand l'éditeur est ouvert (indiqué dans ce prompt).
+    """
+    erreur, resultat = await _operation_editeur(ctx, {"op": "lire"})
+    if erreur:
+        return erreur
+    donnees = resultat if isinstance(resultat, dict) else {}
+    code = str(donnees.get("code") or "")
+    lignes = code.split("\n") if code else []
+    largeur = len(str(len(lignes))) if lignes else 1
+    numerote = "\n".join(f"{i + 1:>{largeur}} | {ligne}" for i, ligne in enumerate(lignes))
+    tronque = ""
+    if len(numerote) > LONGUEUR_MAX_CODE_LU:
+        numerote = numerote[:LONGUEUR_MAX_CODE_LU]
+        tronque = "\n(Code tronqué : il est plus long que ce qui peut être lu d'un coup.)"
+
+    nom = donnees.get("nom_fichier") or "sans nom"
+    texte = f"Éditeur de code : langage {donnees.get('langage') or 'inconnu'}, fichier {nom}, {len(lignes)} ligne(s).\n"
+    texte += "L'éditeur est vide.\n" if not lignes else f"Code (numéro de ligne | contenu) :\n{numerote}{tronque}\n"
+
+    execution = donnees.get("derniere_execution")
+    if isinstance(execution, dict):
+        sortie = [str(x) for x in (execution.get("lignes") or [])][-NB_MAX_LIGNES_SORTIE_LUES:]
+        if sortie:
+            texte += "\nSortie de la dernière exécution :\n" + "\n".join(sortie)[:LONGUEUR_MAX_SORTIE_LUE] + "\n"
+        if execution.get("erreur"):
+            texte += "\nErreur de la dernière exécution :\n" + str(execution["erreur"])[:LONGUEUR_MAX_SORTIE_LUE] + "\n"
+    return texte
+
+
+@mcp_generation.tool()
+async def montrer_dans_editeur(ligne_debut: int, ctx: Context, ligne_fin: int | None = None) -> str:
+    """
+    Montre à l'étudiant une ligne ou un groupe de lignes de son éditeur de
+    code : l'éditeur défile jusqu'à elles, les surligne un court instant et
+    le curseur de Classinus les désigne. Ne modifie jamais le code.
+
+    `ligne_debut` et `ligne_fin` sont des numéros de lignes tels que les
+    donne lire_editeur (la première ligne est 1). Sans `ligne_fin`, une
+    seule ligne est montrée. Explique en même temps ce qu'il faut regarder
+    avec dire_a_l_etudiant, ce pointage est silencieux.
+    """
+    if ligne_debut is None or ligne_debut < 1:
+        return "Erreur : 'ligne_debut' doit être un numéro de ligne à partir de 1."
+    operation = {"op": "montrer", "ligne_debut": ligne_debut, "ligne_fin": ligne_fin if ligne_fin is not None else ligne_debut}
+    erreur, _ = await _operation_editeur(ctx, operation)
+    if erreur:
+        return erreur
+    return "Lignes montrées à l'étudiant."
+
+
+@mcp_generation.tool()
+async def ecrire_dans_editeur(mode: str, texte: str, ctx: Context, ligne_debut: int | None = None, ligne_fin: int | None = None) -> str:
+    """
+    Écrit directement dans l'éditeur de code de l'étudiant, avec une frappe
+    visible : il voit le code apparaître, en plein écran comme en petit.
+    À utiliser à la place d'un bloc de code dans le chat quand l'éditeur
+    est ouvert.
+
+    Trois modes :
+    - "tout" : remplace tout le contenu de l'éditeur par `texte`.
+    - "lignes" : remplace les lignes `ligne_debut` à `ligne_fin` (incluses,
+      `ligne_fin` par défaut égale à `ligne_debut`) par `texte`.
+    - "apres_ligne" : insère `texte` après la ligne `ligne_debut` (0 pour
+      insérer tout en haut).
+
+    Les numéros de lignes sont ceux de lire_editeur (la première ligne est
+    1). Lis l'éditeur juste avant d'écrire si l'étudiant a pu le modifier.
+    L'étudiant peut annuler ce que tu écris avec Ctrl+Z (Cmd+Z sur Mac).
+
+    C'est toi qui décides, selon la conversation, d'écrire directement ou de
+    demander d'abord à l'étudiant dans ta réponse : aucune confirmation
+    n'est imposée par l'application. Prudence si tu remplaces un code que
+    l'étudiant a écrit lui même : dis-lui ce que tu changes.
+    """
+    if mode not in ("tout", "lignes", "apres_ligne"):
+        return "Erreur : 'mode' doit valoir \"tout\", \"lignes\" ou \"apres_ligne\"."
+    if texte is None:
+        return "Erreur : paramètre 'texte' manquant."
+    if mode in ("lignes", "apres_ligne"):
+        if ligne_debut is None:
+            return "Erreur : 'ligne_debut' est obligatoire pour ce mode."
+        if ligne_debut < (0 if mode == "apres_ligne" else 1):
+            return "Erreur : numéro de ligne invalide."
+    operation = {"op": "ecrire", "mode": mode, "texte": texte, "ligne_debut": ligne_debut, "ligne_fin": ligne_fin}
+    erreur, resultat = await _operation_editeur(ctx, operation)
+    if erreur:
+        return erreur
+    nb = resultat.get("nb_lignes") if isinstance(resultat, dict) else None
+    suite = f" L'éditeur contient maintenant {nb} ligne(s)." if isinstance(nb, int) else ""
+    return "Code écrit dans l'éditeur." + suite
