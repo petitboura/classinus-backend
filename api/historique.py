@@ -461,14 +461,18 @@ def lister_fils_pagines(
     )
 
 
-@router.patch("/{agent_id}/fils/{cle}", response_model=FilPage)
+@router.patch("/{agent_id}/fils/{cle}")
 def modifier_fil(
     agent_id: str,
     cle: str,
     modification: ModificationFil,
     utilisateur=Depends(utilisateur_courant),
 ):
-    """Epingler / desepingler (`epingle`) et/ou renommer (`titre`) un fil."""
+    """
+    Epingler / desepingler (`epingle`) et/ou renommer (`titre`) un fil.
+    Deux requetes seulement (verification + ecriture) et une reponse
+    minimale : l'appli met deja la liste a jour de son cote.
+    """
     _verifier_cle_fil(cle)
     if modification.epingle is None and modification.titre is None:
         raise erreur_api(400, "TITRE_FIL_INVALIDE")
@@ -510,13 +514,6 @@ def modifier_fil(
         supabase.table("historique_fils_meta").upsert(
             ligne_meta, on_conflict="user_id,agent_id,cle"
         ).execute()
-
-        lignes = (
-            supabase.rpc(
-                "lister_fils_historique",
-                {"p_user": utilisateur.id, "p_agent": agent_id, "p_epingles": modification.epingle is True},
-            ).execute()
-        ).data or []
     except HTTPException:
         raise
     except Exception as e:
@@ -525,44 +522,7 @@ def modifier_fil(
             f"agent_id={agent_id}, cle={cle}) : {e}"
         )
         raise erreur_api(500, "IMPOSSIBLE_DE_MODIFIER_LE_FIL")
-
-    # Quand le fil vient d'etre epingle, il est dans la liste des epingles ;
-    # sinon on relit simplement sa ligne de metadonnees pour repondre.
-    for ligne in lignes:
-        if ligne["cle"] == cle:
-            return _fil_page_depuis_ligne(ligne)
-    return _fil_apres_modification(utilisateur.id, agent_id, cle)
-
-
-def _fil_apres_modification(user_id: str, agent_id: str, cle: str) -> FilPage:
-    """Relit un fil precis (cas ou il n'est pas dans la liste des epingles)."""
-    meta = (
-        supabase.table("historique_fils_meta")
-        .select("epingle_le, titre_perso")
-        .eq("user_id", user_id)
-        .eq("agent_id", agent_id)
-        .eq("cle", cle)
-        .limit(1)
-        .execute()
-    ).data or [{}]
-    lignes = _filtrer_fil(
-        supabase.table("historique_conversations")
-        .select("role, content, created_at")
-        .eq("user_id", user_id)
-        .eq("agent_id", agent_id),
-        cle,
-    ).order("created_at").execute().data or []
-    premier = next((l["content"] for l in lignes if l["role"] == "user"), None)
-    return _fil_page_depuis_ligne(
-        {
-            "conversation_id": None if cle == "legacy" else cle,
-            "cle": cle,
-            "titre_perso": meta[0].get("titre_perso"),
-            "premier_message": premier,
-            "derniere_activite": lignes[-1]["created_at"] if lignes else datetime.now(timezone.utc).isoformat(),
-            "epingle_le": meta[0].get("epingle_le"),
-        }
-    )
+    return {"ok": True}
 
 
 @router.delete("/{agent_id}/fils/{cle}")
