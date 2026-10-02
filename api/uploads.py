@@ -14,6 +14,7 @@ migration Supabase `pivot_social_etape_b_tables`).
 """
 
 import logging
+import mimetypes
 import uuid
 import base64
 import os
@@ -236,12 +237,10 @@ async def extraire_formule(
 # (y compris l'OCR de secours du 26/09 sur les pages PDF scannées, voir
 # ce module).
 from core.extraction_documents import (
-    TYPES_DOCUMENTS_AUTORISES,
     TAILLE_MAX_DOCUMENT_OCTETS,
-    LONGUEUR_MAX_TEXTE_EXTRAIT,
-    extraire_texte_pdf as _extraire_texte_pdf,
-    extraire_texte_docx as _extraire_texte_docx,
-    extraire_texte_xlsx as _extraire_texte_xlsx,
+    EXTENSIONS_AVEC_APERCU,
+    extension_fichier,
+    lire_fichier,
 )
 from core.import_zip import est_zip
 from core.zip_chat import demarrer_extraction_zip_chat, TAILLE_MAX_ZIP_CHAT_OCTETS
@@ -253,50 +252,50 @@ async def uploader_document_chat(
     utilisateur=Depends(utilisateur_courant),
 ):
     """
-    Extrait le texte d'un PDF/Word/Excel joint à un message de chat, pour
-    injection dans le message avant envoi à /api/chat. Le fichier original
-    est aussi stocké (voir enregistrer_fichier ci-dessous, depuis le
-    2026-07-22) et, pour Word/Excel, converti en PDF pour permettre un
-    aperçu visuel côté frontend (FichierChip.tsx) -- un PDF n'a pas besoin
-    de conversion, il est déjà son propre aperçu.
+    Lit n'importe quel fichier joint à un message de chat, pour injection de
+    son texte dans le message avant envoi à /api/chat : PDF, Word, Excel,
+    PowerPoint, anciens formats Office, texte et code, et tout fichier dont
+    le contenu se lit comme du texte (voir core/extraction_documents.py).
+    Aucun format n'est refusé d'emblée : un fichier réellement illisible
+    (binaire inconnu) est accepté et stocké, la réponse porte alors
+    lisible=False et un texte vide. Le fichier original est aussi stocké
+    (voir enregistrer_fichier ci-dessous, depuis le 2026-07-22) et, pour les
+    formats Office, converti en PDF pour permettre un aperçu visuel côté
+    frontend (FichierChip.tsx) : un PDF n'a pas besoin de conversion, il est
+    déjà son propre aperçu.
     """
-    if fichier.content_type not in TYPES_DOCUMENTS_AUTORISES:
-        raise erreur_api(400, "FORMAT_NON_SUPPORTE_PDF_WORD_DOCX")
-
     contenu = await fichier.read()
     if len(contenu) > TAILLE_MAX_DOCUMENT_OCTETS:
         raise erreur_api(400, "DOCUMENT_TROP_LOURD_15_MO_MAX")
     if len(contenu) == 0:
         raise erreur_api(400, "FICHIER_VIDE")
 
-    extension = TYPES_DOCUMENTS_AUTORISES[fichier.content_type]
-    try:
-        if extension == "pdf":
-            # 26/09 : un PDF scanné peut désormais déclencher Tesseract
-            # + Gemini vision page par page (core/ocr_pages_scannees.py),
-            # bien plus lent qu'une extraction de texte natif. Déporté
-            # sur un thread (même pattern qu'ailleurs dans l'API, voir
-            # api/main.py/api/bibliotheque_utilisateur.py) pour ne pas
-            # bloquer la boucle asyncio et les autres requêtes en cours
-            # pendant ce traitement.
-            import asyncio
+    nom_fichier = fichier.filename or "document"
+    extension = extension_fichier(nom_fichier) or "bin"
+    type_mime = fichier.content_type
+    if not type_mime or type_mime == "application/octet-stream":
+        type_mime = mimetypes.guess_type(nom_fichier)[0] or "application/octet-stream"
 
-            texte = await asyncio.to_thread(_extraire_texte_pdf, contenu)
-        elif extension == "docx":
-            texte = _extraire_texte_docx(contenu)
-        else:
-            texte = _extraire_texte_xlsx(contenu)
-    except Exception as e:
-        logging.error(f"ERREUR EXTRACTION DOCUMENT ({fichier.filename}) : {e}")
-        raise erreur_api(500, "ECHEC_DE_LA_LECTURE_DU_DOCUMENT")
+    # 26/09 : un PDF scanné peut déclencher Tesseract + Gemini vision page
+    # par page (core/ocr_pages_scannees.py), bien plus lent qu'une
+    # extraction de texte natif, et la conversion d'un ancien format Office
+    # attend CloudConvert. Déporté sur un thread (même pattern qu'ailleurs
+    # dans l'API) pour ne pas bloquer la boucle asyncio et les autres
+    # requêtes en cours pendant ce traitement.
+    import asyncio
 
-    texte = texte.strip()
-    if not texte:
-        raise erreur_api(400, "AUCUN_TEXTE_TROUVE_DOCUMENT_SCANNE_IMAGE")
-
-    tronque = len(texte) > LONGUEUR_MAX_TEXTE_EXTRAIT
-    if tronque:
-        texte = texte[:LONGUEUR_MAX_TEXTE_EXTRAIT]
+    lecture = await asyncio.to_thread(lire_fichier, nom_fichier, contenu, type_mime)
+    texte = lecture["texte"]
+    tronque = lecture["tronque"]
+    lisible = texte is not None
+    if not lisible:
+        if lecture["raison"] == "ECHEC_EXTRACTION":
+            raise erreur_api(500, "ECHEC_DE_LA_LECTURE_DU_DOCUMENT")
+        if lecture["raison"] == "AUCUN_TEXTE_TROUVE":
+            raise erreur_api(400, "AUCUN_TEXTE_TROUVE_DOCUMENT_SCANNE_IMAGE")
+        # TYPE_NON_PRIS_EN_CHARGE ou CONVERSION_INDISPONIBLE : accepté et
+        # stocké tel quel, seul son contenu n'est pas lu.
+        texte = ""
 
     # Persistance bibliothèque (2026-07-22) : contrairement à avant, le
     # document original est maintenant gardé (pas seulement son texte
@@ -326,8 +325,8 @@ async def uploader_document_chat(
     try:
         ligne = enregistrer_fichier(
             contenu=contenu,
-            nom_fichier=fichier.filename or f"document.{extension}",
-            type_mime=fichier.content_type,
+            nom_fichier=nom_fichier,
+            type_mime=type_mime,
             niveau="utilisateur",
             uploade_par=utilisateur.id,
             user_id=utilisateur.id,
@@ -339,15 +338,16 @@ async def uploader_document_chat(
         logging.warning(f"Indexation bibliothèque échouée pour document chat {fichier.filename} (extraction OK quand même) : {e}")
         url_document = None
 
-    # Aperçu PDF (25/07) : uniquement pour Word/Excel -- un PDF uploadé
-    # est déjà consultable tel quel, pas besoin de conversion. Best-effort
+    # Aperçu PDF (25/07) : uniquement pour les formats Office (voir
+    # EXTENSIONS_AVEC_APERCU) -- un PDF uploadé est déjà consultable tel
+    # quel, un fichier texte n'a rien à convertir. Best-effort
     # comme le reste de cette fonction : CLOUDCONVERT_API_KEY absente ou
     # conversion échouée -> url_apercu reste None, le texte extrait et le
     # fichier original restent utilisables sans aperçu visuel.
     url_apercu = None
-    if extension != "pdf" and conversion_disponible():
+    if extension in EXTENSIONS_AVEC_APERCU and conversion_disponible():
         try:
-            pdf_bytes = convertir_en_pdf(contenu, fichier.filename or f"document.{extension}")
+            pdf_bytes = convertir_en_pdf(contenu, nom_fichier)
             chemin_apercu = f"apercus/{uuid.uuid4()}.pdf"
             stockage_r2.from_("images-publiques").upload(
                 chemin_apercu, pdf_bytes, {"content-type": "application/pdf"}
@@ -356,7 +356,7 @@ async def uploader_document_chat(
         except Exception as e:
             logging.warning(f"Aperçu PDF échoué pour document chat {fichier.filename} (extraction/stockage OK quand même) : {e}")
 
-    return {"texte": texte, "tronque": tronque, "url": url_document, "url_apercu": url_apercu}
+    return {"texte": texte, "tronque": tronque, "lisible": lisible, "url": url_document, "url_apercu": url_apercu}
 
 
 # --- Zip (26/09/2026, chantier "zip en conversation", plan validé par
