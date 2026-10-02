@@ -12,6 +12,7 @@ import logging
 from retriever import chercher_candidats as _chercher_candidats
 from contenu_dynamique_matiere import resoudre_system_prompt as _resoudre_system_prompt_matiere
 
+from core.configuration_etudiant import libelle_categorie as _libelle_categorie
 from core.comportements_etudiants import (
     obtenir_comportement_skill as _obtenir_comportement_skill,
     lister_comportements as _lister_comportements,
@@ -60,7 +61,11 @@ def gerer_comportement(
       "lister" répond à une vraie demande d'énumération. Quand tu
       présentes cette liste à l'étudiant, utilise TOUJOURS le nom donné
       ici (jamais un nom que tu inventerais toi-même à partir de la
-      description) et NE MONTRE JAMAIS L'ID -- c'est un détail technique
+      description). Les éléments de la configuration de l'utilisateur
+      portent leur type entre crochets (Règle, Procédure, Comportement,
+      Style) : quand il parle de "mes règles", "mon style", "mes
+      procédures" ou "mes comportements", ce sont ces éléments, les autres
+      sont ses skills classiques. NE MONTRE JAMAIS L'ID -- c'est un détail technique
       interne, utile seulement pour toi si tu dois ensuite appeler
       "consulter"/"modifier"/"supprimer" sur un skill précis, jamais une
       information à afficher à l'étudiant. Aucun paramètre.
@@ -126,7 +131,9 @@ def gerer_comportement(
             return "Aucun comportement enregistré pour l'instant."
         lignes = []
         for c in comportements:
-            ligne = f"- {c.get('nom') or '(sans nom)'} : {c['description']}"
+            type_element = _libelle_categorie(c)
+            etiquette = f"[{type_element}] " if type_element else ""
+            ligne = f"- {etiquette}{c.get('nom') or '(sans nom)'} : {c['description']}"
             if c.get("lien_type") and c.get("lien_id"):
                 libelle = _libelle_emplacement(c["lien_type"], c["lien_id"]) if c["lien_type"] in TYPES_EMPLACEMENT_BIBLIOTHEQUE else None
                 ligne += f"\n  lié à : {libelle or (c['lien_type'] + ' ' + c['lien_id'])}"
