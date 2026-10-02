@@ -12,6 +12,7 @@ de code :
 - GEMINI_LIVE_ACCUEIL (vide pour supprimer la phrase d'accueil)
 - GEMINI_LIVE_DESCRIPTION_OUTIL
 - GEMINI_LIVE_RELANCE_ATTENTE (vide pour supprimer les nouvelles pendant l'attente)
+- GEMINI_LIVE_ANNONCE_REPONSE (vide pour que la voix ne dise rien d'une réponse à un message tapé)
 - GEMINI_LIVE_DELAI_RELANCE_SECONDES
 - GEMINI_LIVE_RELANCES_MAX
 
@@ -63,6 +64,14 @@ RELANCE_ATTENTE_PAR_DEFAUT = (
     "Clovis travaille encore sur la demande de l'étudiant. Dis une très courte phrase pour le "
     "faire patienter, sans répéter ce que tu as déjà dit et sans rappeler l'outil."
 )
+# Quand l'étudiant tape un message dans le chat alors que la voix est active,
+# la réponse écrite de Clovis s'affiche dans le chat et la voix en dit
+# l'essentiel. Ce message précède le texte de la réponse envoyé à la voix.
+ANNONCE_REPONSE_PAR_DEFAUT = (
+    "Clovis vient de répondre par écrit à un message que l'étudiant a tapé dans le chat. "
+    "N'appelle pas l'outil. Dis seulement l'essentiel de sa réponse en une ou deux phrases, "
+    "puis précise que le détail est écrit dans le chat. Voici la réponse de Clovis :"
+)
 DELAI_RELANCE_PAR_DEFAUT = 20
 RELANCES_MAX_PAR_DEFAUT = 3
 
@@ -91,6 +100,7 @@ def reglages_gemini_live():
         "accueil": _lire("GEMINI_LIVE_ACCUEIL", ACCUEIL_PAR_DEFAUT),
         "description_outil": _lire("GEMINI_LIVE_DESCRIPTION_OUTIL", DESCRIPTION_OUTIL_PAR_DEFAUT),
         "relance_attente": _lire("GEMINI_LIVE_RELANCE_ATTENTE", RELANCE_ATTENTE_PAR_DEFAUT),
+        "annonce_reponse": _lire("GEMINI_LIVE_ANNONCE_REPONSE", ANNONCE_REPONSE_PAR_DEFAUT),
         "delai_relance_secondes": _lire_entier("GEMINI_LIVE_DELAI_RELANCE_SECONDES", DELAI_RELANCE_PAR_DEFAUT),
         "relances_max": _lire_entier("GEMINI_LIVE_RELANCES_MAX", RELANCES_MAX_PAR_DEFAUT),
     }
