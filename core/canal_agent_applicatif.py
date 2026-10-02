@@ -565,7 +565,7 @@ async def pousser_texte_clovis(user_id: str, texte: str, duree_secondes: int | N
     return atteintes
 
 
-async def demander_ouverture_canal(user_id: str, conversation_id: str | None, texte_suite: str) -> int:
+async def demander_ouverture_canal(user_id: str, conversation_id: str | None, texte_suite: str | None = None) -> int:
     """
     Demo (20/09/2026) : demande au frontend d'ouvrir le canal en direct sur
     la conversation `conversation_id` (celle de la demo, pour que le mode
@@ -576,6 +576,11 @@ async def demander_ouverture_canal(user_id: str, conversation_id: str | None, te
     le canal ne doit s'ouvrir qu'a un seul endroit, et le message de suite
     doit partir de cet endroit-la). Renvoie 0 si l'application n'est
     ouverte nulle part pour ce compte (rien n'est alors programme).
+
+    02/10/2026 (demande Bourama, Clovis ouvre le canal depuis le chat
+    normal) : texte_suite est optionnel. Sans lui, le canal s'ouvre et rien
+    n'est programme : un message de suite serait montre comme un message de
+    l'etudiant, ce qui n'a pas de sens hors de la demo.
     """
     async with _verrou_connexions:
         connexions = [(cle, ws) for cle, ws in _connexions.items() if cle[0] == user_id]
@@ -589,9 +594,33 @@ async def demander_ouverture_canal(user_id: str, conversation_id: str | None, te
     except Exception as e:
         logging.error(f"ERREUR ouverture canal en direct (user={user_id}, appareil={cle[1]}) : {e}")
         return 0
-    with _verrou_messages_etudiant:
-        _continuations_canal[user_id] = texte_suite
+    if texte_suite:
+        with _verrou_messages_etudiant:
+            _continuations_canal[user_id] = texte_suite
     return 1
+
+
+async def demander_fermeture_canal(user_id: str) -> int:
+    """
+    02/10/2026 (demande Bourama) : demande au frontend de desactiver le canal
+    en direct, comme le fait le bouton du canal. Diffuse a toutes les
+    connexions actives du compte (une connexion qui n'a pas le canal actif
+    ignore le message, voir traiterFermetureCanal dans
+    lib/canalAgentApplicatif.ts cote frontend). Renvoie le nombre de
+    connexions atteintes (0 si l'application n'est ouverte nulle part).
+    """
+    async with _verrou_connexions:
+        connexions = [(cle, ws) for cle, ws in _connexions.items() if cle[0] == user_id]
+    atteintes = 0
+    for cle, websocket in connexions:
+        verrou_envoi = await _verrou_envoi_pour(cle)
+        try:
+            async with verrou_envoi:
+                await websocket.send_json({"fermer_canal_en_direct": True})
+            atteintes += 1
+        except Exception as e:
+            logging.error(f"ERREUR fermeture canal en direct (user={user_id}, appareil={cle[1]}) : {e}")
+    return atteintes
 
 
 # Message de l'etudiant PENDANT que Clovis travaille (canal en direct,

@@ -779,6 +779,19 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     if canal_en_direct:
         outils_forces_contexte += CATEGORIES_OUTILS.get("agent_applicatif", []) + ["dire_a_l_etudiant"]
 
+    # Activation par Clovis (02/10/2026, demande Bourama : "il faut que Classinus,
+    # dans le chat, puisse activer le canal en direct") : tant que le canal est
+    # inactif, l'outil qui l'active est propose. La demo garde son propre outil
+    # (ouvrir_canal_en_direct, plus bas) et sa suite automatique. La
+    # desactivation est dans la categorie agent_applicatif, donc proposee des
+    # que le canal est actif.
+    if (
+        agent_id == "clovis"
+        and not canal_en_direct
+        and not (isinstance(guide_actif, dict) and guide_actif.get("actif") and guide_actif.get("sous_mode") == "demo")
+    ):
+        outils_forces_contexte.append("activer_canal_en_direct")
+
     # Demo (20/09/2026, decision Bourama : la demo tourne dans le chat
     # normal et n'ouvre le canal qu'au moment de le demontrer) : tant que
     # le canal n'est pas ouvert, la demo a besoin de l'outil qui l'ouvre.
