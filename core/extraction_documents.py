@@ -1,4 +1,10 @@
 """
+Extraction de texte de tous les fichiers joints en conversation (PDF, Word,
+Excel, PowerPoint, anciens formats Office, texte et code, et tout fichier
+dont le contenu se lit comme du texte), via lire_fichier() en fin de
+module. Les fichiers réellement illisibles (binaires inconnus) ne sont pas
+refusés : ils sont acceptés et stockés, seul leur contenu n'est pas lu.
+
 Extraction de texte PDF/Word/Excel, partagée entre l'upload de document
 seul en conversation (api/uploads.py:uploader_document_chat) et le
 dézipage d'une archive en conversation (core/zip_chat.py, 26/09/2026).
@@ -102,3 +108,168 @@ def extraire_texte_par_type_mime(contenu_bytes, type_mime):
     if extension == "xlsx":
         return extraire_texte_xlsx(contenu_bytes)
     return None
+
+
+TYPE_MIME_PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
+# Formats Office anciens ou voisins : pas de lecteur Python dédié, on les
+# convertit en PDF via CloudConvert (si configuré, voir core/conversion_pdf.py)
+# puis on extrait le texte du PDF.
+EXTENSIONS_OFFICE_ANCIEN = {"doc", "xls", "ppt", "rtf", "odt", "ods", "odp"}
+
+# Formats Office pour lesquels un aperçu PDF a du sens dans le chat. Un
+# fichier texte ou du code n'en a pas besoin (et ne doit pas consommer le
+# quota de conversion).
+EXTENSIONS_AVEC_APERCU = {"docx", "xlsx", "pptx"} | EXTENSIONS_OFFICE_ANCIEN
+
+EXTENSIONS_TEXTE = {
+    "txt", "md", "markdown", "csv", "tsv", "json", "jsonl", "yml", "yaml", "xml",
+    "html", "htm", "css", "scss", "less", "svg", "tex", "bib", "log", "ini", "toml",
+    "cfg", "conf", "env", "srt", "vtt", "rst", "org",
+    "py", "ipynb", "js", "jsx", "mjs", "ts", "tsx", "vue", "svelte", "sql",
+    "sh", "bash", "zsh", "bat", "ps1", "java", "kt", "swift", "c", "h", "cpp", "hpp",
+    "cs", "go", "rs", "rb", "php", "pl", "r", "m", "lua", "dart", "scala", "gradle",
+}
+
+TYPES_MIME_TEXTE = {
+    "application/json", "application/xml", "application/x-yaml", "application/yaml",
+    "application/javascript", "application/x-sh", "application/sql", "application/x-tex",
+}
+
+
+def extension_fichier(nom_fichier):
+    nom = nom_fichier or ""
+    return nom.rsplit(".", 1)[-1].lower() if "." in nom else ""
+
+
+def type_document(nom_fichier, type_mime):
+    """Famille de traitement d'un fichier joint : pdf, docx, xlsx, pptx,
+    office_ancien, texte ou inconnu. L'extension passe avant le type MIME,
+    que le navigateur rapporte souvent de travers (octet-stream, vide)."""
+    extension = extension_fichier(nom_fichier)
+    mime = (type_mime or "").strip().lower()
+    if extension == "pdf" or mime == "application/pdf":
+        return "pdf"
+    if extension == "docx" or mime == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        return "docx"
+    if extension == "xlsx" or mime == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+        return "xlsx"
+    if extension == "pptx" or mime == TYPE_MIME_PPTX:
+        return "pptx"
+    if extension in EXTENSIONS_OFFICE_ANCIEN:
+        return "office_ancien"
+    if extension in EXTENSIONS_TEXTE or mime.startswith("text/") or mime in TYPES_MIME_TEXTE:
+        return "texte"
+    return "inconnu"
+
+
+def decoder_texte(contenu_bytes):
+    """Décode un contenu en texte, ou renvoie None s'il est binaire. Jamais
+    d'échec sur un encodage : UTF-8 d'abord, puis Windows-1252, puis
+    Latin-1 en dernier recours (qui accepte tous les octets)."""
+    if contenu_bytes[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        return contenu_bytes.decode("utf-16", errors="replace")
+    if b"\x00" in contenu_bytes[:8192]:
+        return None
+    for encodage in ("utf-8-sig", "cp1252"):
+        try:
+            return contenu_bytes.decode(encodage)
+        except UnicodeDecodeError:
+            continue
+    return contenu_bytes.decode("latin-1")
+
+
+def _ressemble_a_du_texte(texte):
+    """Garde-fou pour un fichier d'extension inconnue : lisible seulement si
+    presque tous les caractères sont imprimables."""
+    if not texte.strip():
+        return False
+    echantillon = texte[:20000]
+    imprimables = sum(1 for c in echantillon if c.isprintable() or c in "\n\r\t")
+    return imprimables / len(echantillon) >= 0.95
+
+
+def _textes_formes_pptx(formes):
+    from pptx.enum.shapes import MSO_SHAPE_TYPE
+
+    morceaux = []
+    for forme in formes:
+        if forme.shape_type == MSO_SHAPE_TYPE.GROUP:
+            morceaux.extend(_textes_formes_pptx(forme.shapes))
+            continue
+        if forme.has_text_frame and forme.text_frame.text.strip():
+            morceaux.append(forme.text_frame.text)
+        if getattr(forme, "has_table", False) and forme.has_table:
+            for ligne in forme.table.rows:
+                morceaux.append("\t".join(cellule.text for cellule in ligne.cells))
+    return morceaux
+
+
+def extraire_texte_pptx(contenu_bytes):
+    import io
+    from pptx import Presentation
+
+    presentation = Presentation(io.BytesIO(contenu_bytes))
+    morceaux = []
+    for numero, diapositive in enumerate(presentation.slides, start=1):
+        morceaux.append(f"--- Diapositive {numero} ---")
+        morceaux.extend(_textes_formes_pptx(diapositive.shapes))
+        if diapositive.has_notes_slide:
+            notes = diapositive.notes_slide.notes_text_frame.text
+            if notes.strip():
+                morceaux.append(f"Notes : {notes}")
+    return "\n".join(morceaux)
+
+
+def extraire_texte_office_ancien(contenu_bytes, nom_fichier):
+    """Texte d'un ancien format Office via conversion PDF. None si la
+    conversion n'est pas configurée (CLOUDCONVERT_API_KEY absente)."""
+    try:
+        from conversion_pdf import conversion_disponible, convertir_en_pdf
+    except ImportError:
+        from core.conversion_pdf import conversion_disponible, convertir_en_pdf
+
+    if not conversion_disponible():
+        return None
+    return extraire_texte_pdf(convertir_en_pdf(contenu_bytes, nom_fichier or "document"))
+
+
+def lire_fichier(nom_fichier, contenu_bytes, type_mime):
+    """Point d'entrée unique de lecture d'un fichier joint, quel que soit
+    son format. Renvoie {"texte", "tronque", "raison"} :
+    - texte lu et raison None en cas de succès ;
+    - texte None et raison donnée sinon : TYPE_NON_PRIS_EN_CHARGE (binaire
+      inconnu), CONVERSION_INDISPONIBLE (ancien format Office sans clé de
+      conversion), AUCUN_TEXTE_TROUVE (fichier lisible mais vide, ou scan
+      sans texte), ECHEC_EXTRACTION (erreur pendant la lecture)."""
+    famille = type_document(nom_fichier, type_mime)
+    try:
+        if famille == "pdf":
+            texte = extraire_texte_pdf(contenu_bytes)
+        elif famille == "docx":
+            texte = extraire_texte_docx(contenu_bytes)
+        elif famille == "xlsx":
+            texte = extraire_texte_xlsx(contenu_bytes)
+        elif famille == "pptx":
+            texte = extraire_texte_pptx(contenu_bytes)
+        elif famille == "office_ancien":
+            texte = extraire_texte_office_ancien(contenu_bytes, nom_fichier)
+            if texte is None:
+                return {"texte": None, "tronque": False, "raison": "CONVERSION_INDISPONIBLE"}
+        else:
+            texte = decoder_texte(contenu_bytes)
+            if texte is None or (famille == "inconnu" and not _ressemble_a_du_texte(texte)):
+                return {"texte": None, "tronque": False, "raison": "TYPE_NON_PRIS_EN_CHARGE"}
+    except Exception as e:
+        import logging
+
+        logging.error(f"ERREUR LECTURE FICHIER ({nom_fichier}) : {e}")
+        return {"texte": None, "tronque": False, "raison": "ECHEC_EXTRACTION"}
+
+    texte = (texte or "").strip()
+    if not texte:
+        return {"texte": None, "tronque": False, "raison": "AUCUN_TEXTE_TROUVE"}
+    tronque = len(texte) > LONGUEUR_MAX_TEXTE_EXTRAIT
+    if tronque:
+        texte = texte[:LONGUEUR_MAX_TEXTE_EXTRAIT]
+    return {"texte": texte, "tronque": tronque, "raison": None}

@@ -43,25 +43,13 @@ import threading
 import time
 import uuid
 
-from extraction_documents import (
-    TYPES_DOCUMENTS_AUTORISES,
-    LONGUEUR_MAX_TEXTE_EXTRAIT,
-    extraire_texte_par_type_mime,
-)
+from extraction_documents import lire_fichier
 from import_zip import extraire_membres_zip
 
 TAILLE_MAX_ZIP_CHAT_OCTETS = 200 * 1024 * 1024  # 200 Mo -- relevé de 50 à 200 Mo le 27/09/2026 (bug réel : un dossier exporté depuis Google Drive dépassait 50 Mo, le job ne démarrait jamais, voir MESSAGES_FR dans core/erreurs.py)
 NOMBRE_MAX_FICHIERS_ZIP_CHAT = 20  # aligné sur la limite de fichiers par upload de Claude.ai (chat)
 
 NOM_OUTIL_DEZIP = "dezipper_zip_chat"
-
-# Extensions lisibles en texte brut sans bibliothèque dédiée (au-delà de
-# TYPES_DOCUMENTS_AUTORISES qui couvre pdf/docx/xlsx) -- code source,
-# notes, données tabulaires simples.
-EXTENSIONS_TEXTE_BRUT = {
-    ".txt", ".md", ".csv", ".json", ".py", ".js", ".jsx", ".ts", ".tsx",
-    ".html", ".css", ".yml", ".yaml", ".xml", ".log",
-}
 
 _JOBS: dict[str, dict] = {}
 _VERROU = threading.Lock()
@@ -76,28 +64,13 @@ def _nom_lisible_pour_membre(nom_zip: str, sous_chemin: tuple) -> str:
 
 
 def _extraire_texte_membre(nom_fichier: str, contenu: bytes, type_mime: str) -> tuple[str | None, str | None]:
-    """Renvoie (texte, raison_echec). texte=None si illisible -- raison
-    donnée pour que le LLM puisse l'expliquer lui-même à l'étudiant
-    plutôt qu'un message d'erreur système générique."""
-    try:
-        if type_mime in TYPES_DOCUMENTS_AUTORISES:
-            texte = extraire_texte_par_type_mime(contenu, type_mime)
-        elif any(nom_fichier.lower().endswith(ext) for ext in EXTENSIONS_TEXTE_BRUT):
-            texte = contenu.decode("utf-8", errors="strict")
-        else:
-            return None, "TYPE_NON_PRIS_EN_CHARGE"
-    except UnicodeDecodeError:
-        return None, "ENCODAGE_ILLISIBLE"
-    except Exception as e:
-        logging.warning(f"ZIP CHAT : extraction échouée pour {nom_fichier} : {e}")
-        return None, "ECHEC_EXTRACTION"
-
-    texte = (texte or "").strip()
-    if not texte:
-        return None, "AUCUN_TEXTE_TROUVE"
-    if len(texte) > LONGUEUR_MAX_TEXTE_EXTRAIT:
-        texte = texte[:LONGUEUR_MAX_TEXTE_EXTRAIT]
-    return texte, None
+    """Renvoie (texte, raison_echec). texte=None si illisible, raison
+    donnée pour que le LLM puisse l'expliquer lui-même à l'étudiant plutôt
+    qu'un message d'erreur système générique. La lecture est la même que
+    pour un fichier joint seul (core/extraction_documents.py:lire_fichier),
+    tous formats confondus."""
+    resultat = lire_fichier(nom_fichier, contenu, type_mime)
+    return resultat["texte"], resultat["raison"]
 
 
 def _executer(job_id: str, contenu_zip: bytes, nom_zip: str) -> None:
