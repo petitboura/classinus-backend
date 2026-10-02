@@ -11,14 +11,15 @@ from fastapi import APIRouter, Depends
 
 from api.auth import get_secret, utilisateur_courant
 from core.erreurs import erreur_api
+from core.gemini_live_config import reglages_gemini_live
 from google import genai
 
 router = APIRouter(prefix="/api/gemini-live", tags=["gemini-live"])
-MODEL_GEMINI_LIVE = "gemini-3.8-live"
 
 @router.post("/token")
 def creer_token_gemini_live(utilisateur=Depends(utilisateur_courant)):
     """Retourne un token Live à usage unique, valable une minute pour ouvrir la session."""
+    reglages = reglages_gemini_live()
     api_key = get_secret("GOOGLE_API_KEY")
     if not api_key:
         raise erreur_api(503, "Le service vocal Gemini n est pas configuré.", "GEMINI_LIVE_NON_CONFIGURE")
@@ -39,4 +40,4 @@ def creer_token_gemini_live(utilisateur=Depends(utilisateur_courant)):
         raise erreur_api(503, "Impossible d initialiser le canal vocal.", "GEMINI_LIVE_TOKEN_ECHEC") from e
     if not token or not getattr(token, "name", None):
         raise erreur_api(503, "Impossible d initialiser le canal vocal.", "GEMINI_LIVE_TOKEN_ECHEC")
-    return {"token": token.name, "model": MODEL_GEMINI_LIVE, "utilisateur_id": utilisateur.id}
+    return {"token": token.name, "utilisateur_id": utilisateur.id, **reglages}
