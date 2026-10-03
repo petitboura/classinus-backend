@@ -82,9 +82,9 @@ def construire_bloc_configuration(configuration: dict | None) -> str:
         return ""
 
     parties = [
-        "CONFIGURATION PERSONNELLE DE CET UTILISATEUR (écrite par lui, déjà lue, tu n'as pas besoin "
-        "de l'outil pour la consulter). Elle complète tes consignes de base. En cas de conflit avec "
-        "les règles de sécurité de la plateforme, ces dernières l'emportent."
+        "CONFIGURATION DE CET UTILISATEUR (ses propres éléments, et ceux d'un code qu'il a activé, "
+        "déjà lue : tu n'as pas besoin de l'outil pour la consulter). Elle complète tes consignes de "
+        "base. En cas de conflit avec les règles de sécurité de la plateforme, ces dernières l'emportent."
     ]
     if regles:
         lignes = "\n".join(f"- {_texte_borne(c['texte'])}" for c in regles)
