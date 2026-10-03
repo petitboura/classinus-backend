@@ -672,6 +672,25 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "compétences, talents ou aptitudes personnelles de l'utilisateur "
         "(\"qu'est-ce que je sais bien faire ?\") -- aucun rapport, ne "
         "suggère rien dans ce cas.\n\n"
+        # AJOUT 03/10/2026 (demande Bourama : pouvoir créer, modifier et
+        # supprimer depuis le chat les éléments de la Configuration, comme
+        # les skills) : gerer_comportement gère aussi ces 4 types (règle,
+        # style, procédure, comportement). Sans cette règle, "ajoute une
+        # règle" ou "retiens ce style" ne matchait rien (le mot "skill"
+        # n'y figure pas) et l'outil n'était pas proposé.
+        "IMPORTANT : gerer_comportement gère aussi la CONFIGURATION "
+        "personnelle de l'utilisateur : ses règles à respecter, son style "
+        "de réponse, ses procédures et ses comportements. Il DOIT être "
+        "suggéré quand l'utilisateur demande de créer, modifier, "
+        "supprimer, voir ou lister l'un de ces éléments. Exemples : "
+        "\"ajoute une règle : tu me tutoies toujours\", \"retiens ce style "
+        ": phrases courtes\", \"crée une procédure pour corriger un "
+        "exercice\", \"crée un comportement quand je suis bloqué\", "
+        "\"montre-moi mes règles\", \"supprime ma règle sur le tutoiement\", "
+        "\"change mon style\". Ne le suggère PAS pour une règle ou un style "
+        "au sens d'une matière (\"règle de trois\", \"règle de grammaire\", "
+        "\"style de Victor Hugo\") : seule une consigne que l'utilisateur "
+        "veut que TOI tu appliques dans tes réponses est concernée.\n\n"
         # AJOUT 09/09/2026 (demande Bourama : "pareil avec les skills "
         # publique" -- avant cet ajout, le catalogue public de skills
         # ("Catalogue" de l'interface) était invisible du LLM). NE PAS
