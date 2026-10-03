@@ -24,6 +24,7 @@ qui joue ce role pour les actions systeme.
 """
 
 import asyncio
+import functools
 import logging
 import os
 
@@ -38,6 +39,42 @@ def _user_id_ou_erreur(ctx: Context) -> tuple[str | None, str | None]:
     if not user_id:
         return None, "Erreur : impossible d'identifier l'utilisateur."
     return user_id, None
+
+
+# Une seule action PC a la fois par etudiant (03/10/2026, demande Bourama :
+# "Classinus n'arrive pas a cliquer souvent"). Dans les logs de test, le
+# modele envoyait parfois deux clics identiques en meme temps : le second
+# etait refuse avec une erreur peu claire ("Un clic de Clovis est deja en
+# cours") et le modele recommencait en boucle. Maintenant la seconde action
+# recoit tout de suite une consigne precise : attendre le resultat de la
+# premiere (qui contient deja l'ecran a jour), puis agir.
+MESSAGE_ACTION_PC_EN_COURS = (
+    "Action NON exécutée : une autre action sur le PC est encore en cours. Fais UNE SEULE action "
+    "à la fois : attends son résultat (il contient déjà l'état de l'écran qui suit), puis décide "
+    "de la suite à partir de ce résultat. Ne répète pas la même action."
+)
+
+_verrous_actions_pc: dict[str, asyncio.Lock] = {}
+
+
+def une_action_pc_a_la_fois(fonction):
+    """Refuse proprement une action PC lancee pendant qu'une autre du meme etudiant n'est pas finie."""
+
+    @functools.wraps(fonction)
+    async def enveloppe(*args, **kwargs):
+        ctx = kwargs.get("ctx")
+        if ctx is None:
+            ctx = next((a for a in args if isinstance(a, Context)), None)
+        user_id, erreur = _user_id_ou_erreur(ctx) if ctx is not None else (None, "pas de contexte")
+        if erreur or not user_id:
+            return await fonction(*args, **kwargs)
+        verrou = _verrous_actions_pc.setdefault(str(user_id), asyncio.Lock())
+        if verrou.locked():
+            return MESSAGE_ACTION_PC_EN_COURS
+        async with verrou:
+            return await fonction(*args, **kwargs)
+
+    return enveloppe
 
 
 MESSAGE_ECHEC_SYSTEME = (
@@ -203,6 +240,7 @@ async def marquer_ecran(
 
 
 @mcp_generation.tool()
+@une_action_pc_a_la_fois
 async def cliquer_ecran(x: int, y: int, ctx: Context) -> str:
     """
     Lot S (27/09/2026). Clique a des coordonnees precises de l'ECRAN
@@ -255,6 +293,7 @@ async def cliquer_ecran(x: int, y: int, ctx: Context) -> str:
 
 
 @mcp_generation.tool()
+@une_action_pc_a_la_fois
 async def taper_clavier(texte: str, ctx: Context) -> str:
     """
     Lot S (27/09/2026). Tape `texte` au clavier, a l'endroit ou se
@@ -292,6 +331,7 @@ async def taper_clavier(texte: str, ctx: Context) -> str:
 
 
 @mcp_generation.tool()
+@une_action_pc_a_la_fois
 async def appuyer_touches(touches: str, ctx: Context) -> str:
     """
     Appuie sur une touche seule ou un raccourci clavier sur le PC de
@@ -335,6 +375,7 @@ async def appuyer_touches(touches: str, ctx: Context) -> str:
 
 
 @mcp_generation.tool()
+@une_action_pc_a_la_fois
 async def ouvrir_application(nom: str, ctx: Context) -> str:
     """
     Lot S (27/09/2026). Lance une application installée sur le PC de

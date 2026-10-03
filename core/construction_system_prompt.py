@@ -74,6 +74,10 @@ def _texte_actions_application(actions):
         "- Au début de chaque message de l'étudiant, quand un bloc \"État actuel de l'écran du PC\" "
         "figure plus bas dans ce prompt, il est déjà à jour : n'appelle pas lire_ecran pour le "
         "refaire, agis directement.\n"
+        "- Fais UNE SEULE action sur le PC à la fois : n'envoie jamais deux clics, ni un clic et une frappe, "
+        "dans le même message. Attends le résultat de l'action (il contient l'écran qui suit), puis décide "
+        "de la suite. Si l'écran ne montre pas l'effet attendu, regarde ce qui a changé avant de recliquer au "
+        "même endroit.\n"
         "- Ne devine jamais des coordonnées : prends-les dans la dernière lecture.\n\n"
         # 20/09/2026, demande Bourama : le modèle croyait que l'étudiant voit tout ce qu'il écrit,
         # alors que l'étudiant ne voit que la bulle affichée à l'instant.
