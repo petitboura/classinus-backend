@@ -13,7 +13,7 @@ def test_consignes_interdisent_le_refus():
     consignes = reglages_gemini_live()["consignes"]
     assert "aucun droit de refuser" in consignes
     assert "je ne peux pas" in consignes  # cité seulement pour être interdit
-    assert "Au moindre doute, transmets" in consignes
+    assert "au moindre doute sur ce que Classinus peut faire" in consignes
 
 
 def test_consignes_decrivent_silence_et_reveil():
