@@ -446,7 +446,12 @@ def _formater_element_lu(element: dict) -> str:
             f", zone : gauche {element.get('gauche')}, haut {element.get('haut')}, "
             f"largeur {element.get('largeur')}, hauteur {element.get('hauteur')}"
         )
-    return f"[{genre}{nom_txt}{suite}, clic possible en ({element.get('x')}, {element.get('y')}){taille}]"
+    # Elements d'un menu / menu contextuel / liste deroulante ouvert au-dessus
+    # de la fenetre (fenetre a part cote Windows, champ "zone" cote Electron).
+    # Ne pas confondre avec "zone : gauche..., haut..." ci-dessus (rectangle de l'element).
+    zone = element.get("zone")
+    zone_txt = f", dans le {zone}" if isinstance(zone, str) and zone else ""
+    return f"[{genre}{nom_txt}{suite}{zone_txt}, clic possible en ({element.get('x')}, {element.get('y')}){taille}]"
 
 
 def _formater_lecture_ecran(resultat: dict) -> str:
@@ -485,6 +490,16 @@ def _formater_lecture_ecran(resultat: dict) -> str:
             lignes.append(f"[Détail technique de l'échec : {str(resultat['erreur_lecture'])[:300]}]")
         return "\n".join(lignes)
 
+    if resultat.get("menu_ouvert"):
+        lignes.append(
+            "Un menu, un menu contextuel ou une liste déroulante est ouvert au-dessus de cette fenêtre : "
+            "ses éléments sont listés en premier, marqués « dans le menu ouvert »."
+        )
+    if resultat.get("texte_long_ignore"):
+        lignes.append(
+            "[Le texte long (document, champ multiligne) n'a pas pu être lu sur cette fenêtre ; "
+            "seule sa structure (boutons, menus, champs courts) l'est. Ne devine pas son contenu.]"
+        )
     lignes.append("Contenu visible (les coordonnées sont en pixels d'écran, utilisables avec cliquer_ecran ; la zone de chaque élément sert à marquer_ecran) :")
     total = sum(len(l) + 1 for l in lignes)
     coupe = bool(resultat.get("coupe"))
@@ -555,8 +570,13 @@ async def lire_ecran(ctx: Context) -> str:
     Classinus, sans la mettre au premier plan. Pour agir dessus, le pont
     restaure son focus avant le clic ou la frappe.
 
+    Apres un clic sur un bouton qui ouvre un menu, un menu contextuel ou
+    une liste deroulante, rappelle lire_ecran : ce menu ouvert apparait
+    en premier dans la lecture, marque « dans le menu ouvert », avec les
+    coordonnees de chacun de ses choix.
+
     Ne lit QUE cette fenetre (pas toutes les autres, pas tout
-    l'ecran). Certaines applications (jeux, bureau a distance) ne rendent
+    l'ecran), plus les menus qu'elle a ouverts. Certaines applications (jeux, bureau a distance) ne rendent
     presque rien lisible : l'outil le dit, dans ce cas ne devine pas.
     """
     user_id, erreur = _user_id_ou_erreur(ctx)
