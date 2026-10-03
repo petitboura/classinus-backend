@@ -14,9 +14,7 @@ import logging
 
 from core.erreurs import MESSAGES_FR
 from core.minuteurs import (
-    DUREE_MAX_SECONDES,
     DUREE_MIN_SECONDES,
-    NB_MAX_MINUTEURS_ACTIFS,
     ErreurMinuteur,
     ajuster_minuteur,
     arreter_minuteur,
@@ -28,12 +26,21 @@ from core.outils_generation_commun import mcp_generation, Context
 
 
 def _duree_lisible(secondes: int) -> str:
-    minutes, reste = divmod(max(0, int(secondes)), 60)
-    if minutes and reste:
-        return f"{minutes} min {reste} s"
+    # Jusqu'aux jours (03/10/2026) : plus aucune limite de duree, un minuteur
+    # peut durer des heures ou des jours.
+    jours, reste = divmod(max(0, int(secondes)), 86400)
+    heures, reste = divmod(reste, 3600)
+    minutes, reste = divmod(reste, 60)
+    morceaux = []
+    if jours:
+        morceaux.append(f"{jours} j")
+    if heures:
+        morceaux.append(f"{heures} h")
     if minutes:
-        return f"{minutes} min"
-    return f"{reste} s"
+        morceaux.append(f"{minutes} min")
+    if reste or not morceaux:
+        morceaux.append(f"{reste} s")
+    return " ".join(morceaux)
 
 
 def _decrire(minuteur: dict) -> str:
@@ -47,12 +54,10 @@ def _decrire(minuteur: dict) -> str:
 def _texte_erreur(e: ErreurMinuteur) -> str:
     if e.code == "MINUTEUR_DUREE_INVALIDE":
         return (
-            f"Erreur : durée invalide. Le minuteur doit durer entre {DUREE_MIN_SECONDES} secondes "
-            f"et {DUREE_MAX_SECONDES // 60} minutes. Pour retirer du temps, ne retire pas plus que "
-            "ce qu'il reste ; pour tout arrêter, utilise l'action \"arreter\"."
+            f"Erreur : durée invalide. Le minuteur doit durer au moins {DUREE_MIN_SECONDES} seconde. "
+            "Pour retirer du temps, ne retire pas plus que ce qu'il reste ; "
+            "pour tout arrêter, utilise l'action \"arreter\"."
         )
-    if e.code == "MINUTEUR_TROP_NOMBREUX":
-        return f"Erreur : {NB_MAX_MINUTEURS_ACTIFS} minuteurs sont déjà en cours, arrête-en un avant d'en lancer un autre."
     return "Erreur : " + MESSAGES_FR.get(e.code, MESSAGES_FR["ERREUR_INCONNUE"])
 
 
@@ -80,21 +85,26 @@ def gerer_minuteur(
     ajuster_minutes: int = 0,
     minuteur_id: str = "",
     action_a_la_fin: str = "",
+    duree_secondes: int = 0,
+    ajuster_secondes: int = 0,
 ) -> str:
     """
-    Minuteur affiché dans le chat de l'étudiant. Il ne bloque rien : il
-    continue pendant que l'étudiant discute ou change de page. Lance-en un
-    de ta propre initiative quand c'est pertinent (révision chronométrée,
-    pause, exercice minuté), sans attendre qu'on te le demande.
+    Minuteur affiché sur tous les écrans de l'étudiant (pastille ou carte).
+    Il ne bloque rien : il continue pendant que l'étudiant discute ou change
+    de page. Lance-en un de ta propre initiative quand c'est pertinent
+    (révision chronométrée, pause, exercice minuté), sans attendre qu'on te
+    le demande. Aucune limite de durée ni de nombre de minuteurs.
 
     `action` :
-    - "lancer" : `duree_minutes` obligatoire (entier, 1 à 720), `titre`
-      court optionnel, `action_a_la_fin` = ce que tu feras quand il
-      sonnera (ex : proposer un quiz de 5 questions). Déduis-le de la
-      conversation ; si ce n'est pas clair, demande-le à l'étudiant avant
-      de lancer.
-    - "modifier" : `ajuster_minutes` (positif pour ajouter, négatif pour
-      retirer) et/ou `titre`.
+    - "lancer" : durée obligatoire, en `duree_minutes` et/ou en
+      `duree_secondes` (entiers, elles s'additionnent : 90 minutes = 90 en
+      `duree_minutes` ; 30 secondes = 30 en `duree_secondes`), au moins 1
+      seconde au total. `titre` court optionnel, `action_a_la_fin` = ce que
+      tu feras quand il sonnera (ex : proposer un quiz de 5 questions).
+      Déduis-le de la conversation ; si ce n'est pas clair, demande-le à
+      l'étudiant avant de lancer.
+    - "modifier" : `ajuster_minutes` et/ou `ajuster_secondes` (positif pour
+      ajouter, négatif pour retirer) et/ou `titre`.
     - "arreter" : arrête le minuteur.
     - "lister" : liste les minuteurs en cours.
 
@@ -112,11 +122,14 @@ def gerer_minuteur(
 
     try:
         if action == "lancer":
-            if not isinstance(duree_minutes, int) or isinstance(duree_minutes, bool) or duree_minutes < 1:
-                return "Erreur : `duree_minutes` doit être un entier supérieur ou égal à 1."
+            if any(not isinstance(v, int) or isinstance(v, bool) or v < 0 for v in (duree_minutes, duree_secondes)):
+                return "Erreur : `duree_minutes` et `duree_secondes` doivent être des entiers positifs."
+            total_secondes = duree_minutes * 60 + duree_secondes
+            if total_secondes < DUREE_MIN_SECONDES:
+                return "Erreur : indique la durée avec `duree_minutes` et/ou `duree_secondes` (au moins 1 seconde)."
             ligne = creer_minuteur(
                 user_id,
-                duree_minutes * 60,
+                total_secondes,
                 titre=titre,
                 action_fin=action_a_la_fin,
                 lance_par="clovis",
@@ -124,18 +137,21 @@ def gerer_minuteur(
             )
             minuteur = serialiser(ligne)
             return (
-                f"Minuteur lancé : {_decrire(minuteur)}. Il est affiché dans le chat de l'étudiant et ne "
+                f"Minuteur lancé : {_decrire(minuteur)}. Il est affiché sur l'écran de l'étudiant et ne "
                 "bloque rien. Ne dis pas qu'il est terminé : l'appli t'enverra un message automatique à la fin."
             )
 
         if action == "modifier":
-            if not ajuster_minutes and not titre:
-                return "Erreur : indique `ajuster_minutes` et/ou `titre`."
+            if any(not isinstance(v, int) or isinstance(v, bool) for v in (ajuster_minutes, ajuster_secondes)):
+                return "Erreur : `ajuster_minutes` et `ajuster_secondes` doivent être des entiers."
+            delta_secondes = ajuster_minutes * 60 + ajuster_secondes
+            if not delta_secondes and not titre:
+                return "Erreur : indique `ajuster_minutes` et/ou `ajuster_secondes` et/ou `titre`."
             id_cible, erreur = _resoudre_id(user_id, minuteur_id)
             if erreur:
                 return erreur
             ligne = ajuster_minuteur(
-                user_id, id_cible, ajuster_secondes=ajuster_minutes * 60, titre=titre if titre else None
+                user_id, id_cible, ajuster_secondes=delta_secondes, titre=titre if titre else None
             )
             return f"Minuteur modifié : {_decrire(serialiser(ligne))}."
 
