@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends
 
 from api.auth import get_secret, utilisateur_courant
 from core.erreurs import erreur_api
-from core.gemini_live_config import reglages_gemini_live
+from core.gemini_live_config import reglages_gemini_live, version_api_gemini_live
 from google import genai
 
 router = APIRouter(prefix="/api/gemini-live", tags=["gemini-live"])
@@ -24,8 +24,7 @@ def creer_token_gemini_live(utilisateur=Depends(utilisateur_courant)):
     if not api_key:
         raise erreur_api(503, "Le service vocal Gemini n est pas configuré.", "GEMINI_LIVE_NON_CONFIGURE")
     try:
-        # Même création de jeton que l'exemple officiel Google pour Gemini 3.8 Live
-        # (version v1beta, aucune restriction sur le jeton).
+        # Le jeton et le WebSocket doivent utiliser la même version d'API.
         client = genai.Client(api_key=api_key)
         maintenant = datetime.now(timezone.utc)
         token = client.auth_tokens.create(
@@ -33,7 +32,7 @@ def creer_token_gemini_live(utilisateur=Depends(utilisateur_courant)):
                 "uses": 1,
                 "expire_time": maintenant + timedelta(minutes=30),
                 "new_session_expire_time": maintenant + timedelta(minutes=1),
-                "http_options": {"api_version": "v1beta"},
+                "http_options": {"api_version": version_api_gemini_live(reglages["url"])},
             }
         )
     except Exception as e:

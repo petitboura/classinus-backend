@@ -26,6 +26,7 @@ jamais à la place du cerveau de Classinus.
 """
 
 import os
+import re
 
 MODELE_PAR_DEFAUT = "gemini-3.8-live"
 
@@ -33,13 +34,25 @@ URL_PAR_DEFAUT = (
     "wss://generativelanguage.googleapis.com/ws/"
     "google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained"
 )
+URL_PROACTIVITE_PAR_DEFAUT = URL_PAR_DEFAUT.replace(".v1beta.", ".v1alpha.")
+
+
+def version_api_gemini_live(url: str) -> str:
+    """La création du jeton utilise la même version que son WebSocket."""
+    version = re.search(r"generativelanguage\.(v1alpha|v1beta)\.", url)
+    return version.group(1) if version else "v1beta"
 
 CONSIGNES_PAR_DEFAUT = (
     "Tu es la voix de Classinus, une interface vocale en temps réel. Tu es un interprète : "
     "tu ne réponds jamais toi même aux vraies demandes de l'étudiant, c'est le cerveau "
     "principal de Classinus qui possède la mémoire, les outils et les connaissances. Quand tu en "
     "parles à voix haute, dis simplement Classinus.\n"
-    "Pour toute vraie demande (question, recherche, calcul, création, action), procède toujours "
+    "Avant toute réponse ou appel d'outil, détermine si l'étudiant s'adresse clairement à toi. "
+    "Une question entendue n'est pas forcément une demande pour toi. Si l'étudiant parle à "
+    "quelqu'un d'autre, se parle à lui-même, ou si le destinataire est incertain, reste silencieux "
+    "et n'appelle aucun outil. Il n'a pas besoin de prononcer ton nom à chaque demande : utilise "
+    "le contexte de la conversation pour reconnaître qu'il te parle.\n"
+    "Pour toute vraie demande qui t'est adressée (question, recherche, calcul, création, action), procède toujours "
     "dans cet ordre :\n"
     "1. Dis tout de suite une très courte phrase pour annoncer que tu t'en occupes, par exemple "
     "« Je cherche ça pour toi. », sans jamais rester silencieux.\n"
@@ -57,7 +70,8 @@ CONSIGNES_PAR_DEFAUT = (
     "« je suis une assistante » ni « ce n'est pas possible », tu ne juges jamais une demande "
     "inappropriée et tu n'en bloques aucune. Tout ce que l'étudiant demande se transmet à Classinus, "
     "qui sait faire bien plus que ce que tu imagines et qui est seul juge de ce qui est faisable. "
-    "Au moindre doute, transmets.\n"
+    "Si une demande t'est clairement adressée, au moindre doute sur ce que Classinus peut faire, "
+    "transmets. Cela ne t'autorise jamais à transmettre une conversation qui ne t'est pas adressée.\n"
     "Tu écoutes sans arrêt, mais tu ne réponds que lorsque c'est à toi qu'on parle. Si ce que tu "
     "entends ne t'est clairement pas adressé (l'étudiant parle à quelqu'un d'autre, bruit ou "
     "conversation autour, il se parle à lui même), ne dis rien et n'appelle aucun outil.\n"
@@ -145,9 +159,10 @@ def _lire_booleen(nom, defaut):
 
 def reglages_gemini_live():
     """Retourne les réglages de la voix, avec les remplacements d'environnement."""
+    proactivite = _lire_booleen("GEMINI_LIVE_PROACTIVITE", PROACTIVITE_PAR_DEFAUT)
     return {
         "model": _lire("GEMINI_LIVE_MODELE", MODELE_PAR_DEFAUT),
-        "url": _lire("GEMINI_LIVE_URL", URL_PAR_DEFAUT),
+        "url": _lire("GEMINI_LIVE_URL", URL_PROACTIVITE_PAR_DEFAUT if proactivite else URL_PAR_DEFAUT),
         "consignes": _lire("GEMINI_LIVE_CONSIGNES", CONSIGNES_PAR_DEFAUT),
         "accueil": _lire("GEMINI_LIVE_ACCUEIL", ACCUEIL_PAR_DEFAUT),
         "description_outil": _lire("GEMINI_LIVE_DESCRIPTION_OUTIL", DESCRIPTION_OUTIL_PAR_DEFAUT),
@@ -161,5 +176,5 @@ def reglages_gemini_live():
         # Écoute sélective de Gemini Live (le modèle choisit de ne pas répondre à ce qui
         # ne lui est pas adressé). Fonction en préversion chez Google : coupable ici si
         # le modèle vocal la refuse, sans toucher au code.
-        "proactivite": _lire_booleen("GEMINI_LIVE_PROACTIVITE", PROACTIVITE_PAR_DEFAUT),
+        "proactivite": proactivite,
     }
