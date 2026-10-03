@@ -19,6 +19,7 @@ from comportements_etudiants import (
 #   from codes_partage import lister_programmes_recus_legers
 from codes_partage import lister_comportements_recus
 from core.mode_actif_conversation import rattachement_actif_pour_prompt
+from core.configuration_etudiant import separer_regles_et_styles, separer_config_retenue
 from core.persona_pedagogique_conversation import obtenir_persona_pedagogique
 from core.mode_source_conversation import obtenir_mode_source
 from core.guide_conversation import obtenir_guide_actif
@@ -549,6 +550,10 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # core/registre_outils.py::consulter_skills_chapitres_matiere) même si
     # c'est ce petit routeur qui décide de le déclencher, pas le grand LLM.
     comportements_etudiant = []
+    # 02/10/2026, demande Bourama : Règles et Styles activés (donnés d'office),
+    # Procédures et Comportements retenus (donnés en entier), voir
+    # core/configuration_etudiant.py.
+    configuration_etudiant = None
     notions_programme_pertinentes = []
     signalements_pertinents = []
     code_id_actif = None
@@ -665,9 +670,12 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             [c for c in comportements_etudiant_bruts if c.get("actif", True)]
             + comportements_recus
         )
+        regles_actives, styles_actifs, tous_comportements = separer_regles_et_styles(tous_comportements)
         candidats_niveau1, candidats_chapitre = separer_comportements_par_niveau(tous_comportements)
         retenus_niveau1 = choisir_comportements_pertinents(message_utilisateur, candidats_niveau1)
+        config_retenue, retenus_niveau1 = separer_config_retenue(retenus_niveau1)
         comportements_etudiant = list(retenus_niveau1)
+        configuration_etudiant = {"regles": regles_actives, "styles": styles_actifs, "retenus": config_retenue}
 
         matieres_retenues = {
             c["lien_id"] for c in retenus_niveau1
@@ -907,7 +915,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id)
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force_contexte_seul)
             outil_force_verifie_optimiste = [o["function"]["name"] for o in outils_mcp] if outil_force_contexte_seul else None
-            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur)
+            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant)
             return outils_mcp, table_routage, system_final, catalogue_complet, table_routage_complet
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -1026,7 +1034,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id)
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force)
             outil_force_verifie = [o["function"]["name"] for o in outils_mcp] if outil_force else outil_force
-        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur)
+        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant)
 
         # PERF (10/08) : second (et dernier) point de vérification --
         # couvre tous les chemins qui ne passent PAS par le premier

@@ -10,6 +10,7 @@ from profils_agents import INSTRUCTIONS_FORMATS_AFFICHAGE, INSTRUCTIONS_ARBITRAG
 from guide_conversation import obtenir_sections_guide
 from core.canal_agent_applicatif import obtenir_etat_editeur
 from historique_reponses_qcm import formater_reponses_qcm
+from core.configuration_etudiant import construire_bloc_configuration
 
 
 def _texte_actions_application(actions):
@@ -135,7 +136,7 @@ def _texte_editeur(etat):
         "- Les boutons de l'éditeur (Exécuter, Ouvrir, Enregistrer, Vers le chat, plein écran) sont dans la liste des éléments à l'écran.\n"
     )
 
-def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None, reponses_qcm_recentes=None, etat_editeur=None):
+def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None, reponses_qcm_recentes=None, etat_editeur=None, configuration_etudiant=None):
     # Restauré le 14/08 (voir commentaire des constantes plus haut) : la
     # page Notion de l'agent (get_system_prompt) ne doit plus contenir QUE
     # la personnalité/le comportement propre à l'agent -- les 3 blocs fixes
@@ -230,6 +231,11 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
             "(action=\"consulter\") avec son id pour lire son contenu complet AVANT de répondre "
             "-- ne devine jamais son contenu à partir de la description seule."
         )
+
+    # 02/10/2026, demande Bourama : Règles et Styles activés donnés d'office,
+    # Procédures et Comportements retenus donnés en entier, voir
+    # core/configuration_etudiant.py.
+    system_final += construire_bloc_configuration(configuration_etudiant)
 
     # Mode pédagogique (jonction items 1+8+9 des specs indépendantes
     # ScholarFlow AI, volet étudiant, 14/09/2026, demande Bourama).
@@ -528,6 +534,7 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     logging.info(
         f"Prompt système construit -> base_notion:{len(system_final or '')} caractères, "
         f"comportements_etudiant:{'oui' if comportements_etudiant else 'NON'}, "
+        f"configuration_etudiant:{'oui' if construire_bloc_configuration(configuration_etudiant) else 'NON'}, "
         f"programmes_etudiant:{len(mes_programmes)}, "
         f"signalements_pertinents:{len(signalements_pertinents)}, "
         f"longueur_reponse:{longueur_reponse}, "
