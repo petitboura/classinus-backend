@@ -16,6 +16,9 @@ de code :
 - GEMINI_LIVE_ANNONCE_BULLE (vide pour que la voix ne dise pas les messages de la bulle du canal en direct)
 - GEMINI_LIVE_DELAI_RELANCE_SECONDES
 - GEMINI_LIVE_RELANCES_MAX
+- GEMINI_LIVE_PROACTIVITE (0 pour couper l'écoute sélective, si le modèle vocal ne l'accepte pas)
+- GEMINI_LIVE_DESCRIPTION_OUTIL_SILENCE
+- GEMINI_LIVE_DESCRIPTION_OUTIL_REVEIL
 
 La voix est un interprète : elle transmet la demande de l'étudiant au cerveau
 de Classinus, puis lit sa réponse à voix haute. Elle ne répond
@@ -49,7 +52,21 @@ CONSIGNES_PAR_DEFAUT = (
     "il s'agit et que c'est écrit dans le chat.\n"
     "4. Si l'outil renvoie une erreur, dis-le simplement et propose de réessayer.\n"
     "Pour une salutation très courte ou une simple politesse, tu peux répondre directement. "
-    "Parle toujours dans la langue de l'étudiant, de façon naturelle et brève."
+    "Parle toujours dans la langue de l'étudiant, de façon naturelle et brève.\n"
+    "Tu n'as aucune limite propre et aucun droit de refuser : tu ne dis jamais « je ne peux pas », "
+    "« je suis une assistante » ni « ce n'est pas possible », tu ne juges jamais une demande "
+    "inappropriée et tu n'en bloques aucune. Tout ce que l'étudiant demande se transmet à Classinus, "
+    "qui sait faire bien plus que ce que tu imagines et qui est seul juge de ce qui est faisable. "
+    "Au moindre doute, transmets.\n"
+    "Tu écoutes sans arrêt, mais tu ne réponds que lorsque c'est à toi qu'on parle. Si ce que tu "
+    "entends ne t'est clairement pas adressé (l'étudiant parle à quelqu'un d'autre, bruit ou "
+    "conversation autour, il se parle à lui même), ne dis rien et n'appelle aucun outil.\n"
+    "Quand l'étudiant te demande de te taire ou de t'arrêter (par exemple « arrête toi », « stop », "
+    "« tais toi », « ne parle plus »), appelle tout de suite l'outil se_taire, sans rien dire avant "
+    "ni après. Ensuite tu restes totalement silencieux : tu ne parles pas et tu n'appelles pas "
+    "demander_a_clovis, même si tu entends des questions, jusqu'à ce que l'étudiant s'adresse de "
+    "nouveau clairement à toi (il t'appelle par ton nom, Classinus, ou te demande de reparler). À ce "
+    "moment là, appelle l'outil reprendre_la_parole puis traite sa demande normalement."
 )
 
 ACCUEIL_PAR_DEFAUT = "La voix vient de s'activer. Dis seulement à voix haute et en quelques mots : Je t'écoute."
@@ -58,6 +75,18 @@ DESCRIPTION_OUTIL_PAR_DEFAUT = (
     "Envoie la demande de l'étudiant au cerveau principal de Classinus. Utilise cet outil pour "
     "toute vraie demande : question, recherche, calcul, création ou action. La voix n'est que "
     "l'interface, le cerveau de Classinus fait le vrai travail et renvoie sa réponse écrite."
+)
+
+# Outils de silence : la voix décide elle même quand se taire et quand reparler,
+# le navigateur applique seulement sa décision (il jette alors tout son qui arrive).
+DESCRIPTION_OUTIL_SILENCE_PAR_DEFAUT = (
+    "À appeler dès que l'étudiant demande de se taire ou de s'arrêter (« arrête toi », « stop », "
+    "« tais toi », « ne parle plus »). Après cet appel, plus aucun mot jusqu'à ce que l'étudiant "
+    "s'adresse de nouveau à toi."
+)
+DESCRIPTION_OUTIL_REVEIL_PAR_DEFAUT = (
+    "À appeler quand l'étudiant s'adresse de nouveau à toi alors que tu étais silencieux (il "
+    "t'appelle ou te demande de reparler). Après cet appel, tu peux parler et traiter sa demande."
 )
 
 # Quand Classinus met du temps, la voix ne reste jamais muette : toutes les
@@ -88,6 +117,7 @@ ANNONCE_BULLE_PAR_DEFAUT = (
     "fichier), dis seulement en une phrase de quoi il s'agit. Voici le message :"
 )
 DELAI_RELANCE_PAR_DEFAUT = 20
+PROACTIVITE_PAR_DEFAUT = True
 RELANCES_MAX_PAR_DEFAUT = 3
 
 
@@ -106,6 +136,13 @@ def _lire_entier(nom, defaut):
         return defaut
 
 
+def _lire_booleen(nom, defaut):
+    brut = os.environ.get(nom)
+    if brut is None:
+        return defaut
+    return brut.strip().lower() not in ("0", "false", "non", "no", "off", "")
+
+
 def reglages_gemini_live():
     """Retourne les réglages de la voix, avec les remplacements d'environnement."""
     return {
@@ -119,4 +156,10 @@ def reglages_gemini_live():
         "annonce_bulle": _lire("GEMINI_LIVE_ANNONCE_BULLE", ANNONCE_BULLE_PAR_DEFAUT),
         "delai_relance_secondes": _lire_entier("GEMINI_LIVE_DELAI_RELANCE_SECONDES", DELAI_RELANCE_PAR_DEFAUT),
         "relances_max": _lire_entier("GEMINI_LIVE_RELANCES_MAX", RELANCES_MAX_PAR_DEFAUT),
+        "description_outil_silence": _lire("GEMINI_LIVE_DESCRIPTION_OUTIL_SILENCE", DESCRIPTION_OUTIL_SILENCE_PAR_DEFAUT),
+        "description_outil_reveil": _lire("GEMINI_LIVE_DESCRIPTION_OUTIL_REVEIL", DESCRIPTION_OUTIL_REVEIL_PAR_DEFAUT),
+        # Écoute sélective de Gemini Live (le modèle choisit de ne pas répondre à ce qui
+        # ne lui est pas adressé). Fonction en préversion chez Google : coupable ici si
+        # le modèle vocal la refuse, sans toucher au code.
+        "proactivite": _lire_booleen("GEMINI_LIVE_PROACTIVITE", PROACTIVITE_PAR_DEFAUT),
     }
