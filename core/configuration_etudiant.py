@@ -109,3 +109,47 @@ def construire_bloc_configuration(configuration: dict | None) -> str:
             "correspondent vraiment à ce que l'utilisateur demande) :\n" + "\n".join(blocs)
         )
     return "\n\n" + "\n\n".join(parties)
+
+
+# 03/10/2026, demande Bourama : l'IA peut maintenant créer et modifier ces
+# éléments depuis le chat, comme les skills. Le texte enregistré doit avoir
+# exactement le format que l'écran assemble et relit (lib/formatsConfiguration.ts
+# côté frontend), sinon la carte s'afficherait de travers.
+MARQUEUR_CAS = "Dans tel cas :"
+MARQUEUR_REACTION = "Comporte-toi ainsi :"
+
+
+def _sans_numero(ligne: str) -> str:
+    i = 0
+    while i < len(ligne) and ligne[i].isdigit():
+        i += 1
+    if i > 0 and i < len(ligne) and ligne[i] in ".)":
+        return ligne[i + 1 :].strip()
+    return ligne
+
+
+def assembler_texte_configuration(categorie: str, texte: str = "", cas: str = "", reaction: str = "") -> tuple[str | None, str | None]:
+    """(texte à enregistrer, message d'erreur). Un seul des deux est renseigné.
+
+    - regle et style : `texte` tel quel.
+    - procedure : `texte` = une étape par ligne (numéros éventuels retirés,
+      puis renumérotées 1., 2., ...).
+    - comportement : `cas` et `reaction`, assemblés avec les deux marqueurs."""
+    if categorie not in LIBELLES_CATEGORIES:
+        valides = ", ".join(LIBELLES_CATEGORIES)
+        return None, f"Type inconnu '{categorie}'. Types valides : {valides}."
+    if categorie == "comportement":
+        cas, reaction = (cas or "").strip(), (reaction or "").strip()
+        if not cas or not reaction:
+            return None, "Pour un comportement, il faut `cas` (dans quelle situation) ET `reaction` (comment réagir)."
+        return f"{MARQUEUR_CAS} {cas}\n{MARQUEUR_REACTION} {reaction}", None
+    texte = (texte or "").strip()
+    if not texte:
+        return None, "Le texte est vide."
+    if categorie == "procedure":
+        etapes = [_sans_numero(ligne.strip()) for ligne in texte.splitlines() if ligne.strip()]
+        etapes = [e for e in etapes if e]
+        if not etapes:
+            return None, "Une procédure a besoin d'au moins une étape (une par ligne)."
+        return "\n".join(f"{i + 1}. {e}" for i, e in enumerate(etapes)), None
+    return texte, None
