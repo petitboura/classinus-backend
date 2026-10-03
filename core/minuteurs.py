@@ -29,12 +29,15 @@ from datetime import datetime, timedelta, timezone
 
 from api.auth import supabase
 
-# Garde-fous LARGES, pas des limites produit tranchees avec Bourama
-# (a valider avec lui). Regroupes ici pour qu'ils soient faciles a
-# changer sans toucher au reste du code.
-DUREE_MIN_SECONDES = 10
-DUREE_MAX_SECONDES = 12 * 3600
-NB_MAX_MINUTEURS_ACTIFS = 5
+# 03/10/2026, demande Bourama : plus aucune limite de produit sur la duree
+# (avant : 10 s a 12 h) ni sur le nombre de minuteurs en meme temps (avant :
+# 5), que ce soit l'etudiant ou Clovis qui le lance. Seule regle restante :
+# une duree d'au moins une seconde. DUREE_MAX_SECONDES n'est PAS une limite
+# de produit mais le plafond technique de la colonne `duree_secondes`
+# (entier 32 bits, soit environ 68 ans) : au dela, la base refuserait
+# l'ecriture.
+DUREE_MIN_SECONDES = 1
+DUREE_MAX_SECONDES = 2_147_483_647
 LONGUEUR_MAX_TITRE = 80
 LONGUEUR_MAX_ACTION_FIN = 500
 
@@ -150,8 +153,6 @@ def creer_minuteur(
         or not (DUREE_MIN_SECONDES <= duree_secondes <= DUREE_MAX_SECONDES)
     ):
         raise ErreurMinuteur("MINUTEUR_DUREE_INVALIDE")
-    if len(lister_minuteurs_actifs(user_id)) >= NB_MAX_MINUTEURS_ACTIFS:
-        raise ErreurMinuteur("MINUTEUR_TROP_NOMBREUX")
 
     # Un identifiant de conversation mal forme est ignore plutot que de
     # faire echouer tout le lancement : le minuteur reste utile sans.
