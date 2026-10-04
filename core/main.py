@@ -11,6 +11,7 @@ from comportements_etudiants import (
     choisir_comportements_pertinents,
     separer_comportements_par_niveau,
     lister_comportements_chapitres_pour_matiere,
+    retirer_elements_destinataires_seuls,
 )
 # Fonctionnalité "Programme" désactivée et isolée le 29/08/2026 (demande
 # Bourama) -- voir _desactive_programme/LISEZ_MOI_NE_JAMAIS_REUTILISER.md.
@@ -674,8 +675,10 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 agent_id, user_id, code_id_actif, notion_ids_pertinentes
             )
 
+        # 04/10/2026, demande Bourama : un element lie a un code et marque
+        # "destinataires seulement" ne s'applique pas a son proprietaire.
         tous_comportements = (
-            [c for c in comportements_etudiant_bruts if c.get("actif", True)]
+            retirer_elements_destinataires_seuls([c for c in comportements_etudiant_bruts if c.get("actif", True)])
             + comportements_recus
         )
         regles_actives, styles_actifs, tous_comportements = separer_regles_et_styles(tous_comportements)

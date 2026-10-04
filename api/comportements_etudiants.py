@@ -58,6 +58,8 @@ from core.comportements_etudiants import (
     obtenir_comportement_pour_consultation,
     modifier_skill_comportement,
     activer_desactiver_comportement,
+    definir_portee_comportement,
+    lister_ids_lies_a_un_code,
     publier_comportement_public,
     lister_comportements_publics,
     activer_comportement_public,
@@ -95,6 +97,12 @@ class Comportement(BaseModel):
     # Règle/Comportement/Style) -- voir CATEGORIES_CONFIGURATION,
     # core/comportements_etudiants.py.
     categorie: str | None = None
+    # 04/10/2026, demande Bourama : "deux" (propriétaire et receveurs du
+    # code) ou "destinataires" (receveurs seulement). Sans effet tant que
+    # l'élément n'est lié à aucun code (lie_a_code false) : il s'applique
+    # alors toujours à son propriétaire.
+    portee: str = "deux"
+    lie_a_code: bool = False
 
 
 class ComportementPayload(BaseModel):
@@ -174,9 +182,14 @@ def lire_mes_comportements(agent_id: str, categorie: str | None = None, utilisat
     classique (categorie NULL en base uniquement)."""
     tous = [_avec_libelle(c) for c in lister_comportements(agent_id, utilisateur.id)]
     if categorie is None:
-        return [c for c in tous if not c.get("categorie")]
-    _verifier_categorie(categorie)
-    return [c for c in tous if c.get("categorie") == categorie]
+        retenus = [c for c in tous if not c.get("categorie")]
+    else:
+        _verifier_categorie(categorie)
+        retenus = [c for c in tous if c.get("categorie") == categorie]
+    # 04/10/2026 : lie_a_code lu en direct (jamais dans le cache de la liste,
+    # une liaison change sans passer par lui), une requête groupée.
+    lies = lister_ids_lies_a_un_code(retenus)
+    return [{**c, "lie_a_code": c["id"] in lies} for c in retenus]
 
 
 @router.get("/par-lien/{lien_type}/{lien_id}", response_model=list[Comportement])
@@ -333,6 +346,28 @@ def activer_desactiver_mon_comportement(
     if not resultat:
         raise erreur_api(404, "COMPORTEMENT_INTROUVABLE")
     return _avec_libelle(resultat)
+
+
+class PorteePayload(BaseModel):
+    portee: str
+
+
+@router.patch("/{comportement_id}/portee", response_model=Comportement)
+def definir_ma_portee_comportement(
+    agent_id: str, comportement_id: str, payload: PorteePayload, utilisateur=Depends(utilisateur_courant)
+):
+    """04/10/2026, demande Bourama : pour un élément lié à un code, choisir
+    s'il s'applique à moi ET aux receveurs ("deux") ou aux receveurs seulement
+    ("destinataires"). Refusé tant que l'élément n'est lié à aucun code."""
+    try:
+        resultat = definir_portee_comportement(agent_id, utilisateur.id, comportement_id, payload.portee)
+    except ValueError as e:
+        if str(e) == "NON_LIE_A_UN_CODE":
+            raise erreur_api(400, "NON_LIE_A_UN_CODE")
+        raise erreur_api(400, "PORTEE_INVALIDE")
+    if not resultat:
+        raise erreur_api(404, "COMPORTEMENT_INTROUVABLE")
+    return {**_avec_libelle(resultat), "lie_a_code": True}
 
 
 @router.post("/{comportement_id}/publier", status_code=201)

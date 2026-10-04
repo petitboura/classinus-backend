@@ -231,6 +231,30 @@ def lister_mes_codes(proprietaire_id: str) -> list[dict]:
     return codes
 
 
+def ids_comportements_lies_a_un_code(comportement_ids: list[str]) -> set[str]:
+    """Parmi comportement_ids, ceux qui sont lies a AU MOINS UN code de
+    partage (04/10/2026, demande Bourama : la portee 'destinataires
+    seulement' n'a de sens que pour un element lie a un code). Une seule
+    requete groupee, jamais une par element. Erreur Supabase -> ensemble
+    vide (l'appelant traite alors les elements comme non lies, donc
+    appliques a leur proprietaire : le choix le plus sur, rien ne
+    disparait par accident)."""
+    ids = [i for i in dict.fromkeys(comportement_ids or []) if i]
+    if not ids:
+        return set()
+    try:
+        res = (
+            supabase.table("codes_partage_comportements")
+            .select("comportement_id")
+            .in_("comportement_id", ids)
+            .execute()
+        )
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (elements lies a un code {ids}) : {e}")
+        return set()
+    return {l["comportement_id"] for l in (res.data or [])}
+
+
 def _remplacer_comportements_du_code(code_id: str, proprietaire_id: str, comportement_ids: list[str]) -> None:
     """Remplace entièrement l'ensemble des comportements attachés à ce
     code par comportement_ids (vide -> plus aucun). Vérifie que chaque id
@@ -253,6 +277,13 @@ def _remplacer_comportements_du_code(code_id: str, proprietaire_id: str, comport
         ids_valides = {l["id"] for l in (valides.data or [])} if valides else set()
         comportement_ids = [i for i in comportement_ids if i in ids_valides]
 
+    # 04/10/2026 : un element qui n'etait lie a AUCUN code et qui le devient
+    # repart sur 'deux' (nous deux), jamais sur une valeur 'destinataires'
+    # restee d'une ancienne liaison : sinon il disparaitrait chez son
+    # proprietaire des la premiere liaison, sans qu'il l'ait choisi.
+    deja_lies = ids_comportements_lies_a_un_code(comportement_ids)
+    nouveaux_sans_lien = [i for i in comportement_ids if i not in deja_lies]
+
     try:
         supabase.table("codes_partage_comportements").delete().eq("code_id", code_id).execute()
         if comportement_ids:
@@ -261,6 +292,11 @@ def _remplacer_comportements_du_code(code_id: str, proprietaire_id: str, comport
             ).execute()
     except Exception as e:
         logging.error(f"ERREUR SUPABASE (liaison comportements <-> code {code_id}) : {e}")
+    if nouveaux_sans_lien:
+        try:
+            supabase.table("comportements_etudiants").update({"portee": "deux"}).in_("id", nouveaux_sans_lien).execute()
+        except Exception as e:
+            logging.error(f"ERREUR SUPABASE (remise portee deux {nouveaux_sans_lien}) : {e}")
     _invalider_cache_recus_pour_code(code_id)
 
 
