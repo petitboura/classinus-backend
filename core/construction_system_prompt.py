@@ -10,6 +10,7 @@ from profils_agents import INSTRUCTIONS_FORMATS_AFFICHAGE, INSTRUCTIONS_ARBITRAG
 from guide_conversation import obtenir_sections_guide
 from core.canal_agent_applicatif import obtenir_etat_editeur
 from historique_reponses_qcm import formater_reponses_qcm
+from core.memoire_eleve import construire_bloc_sommaire
 
 
 def _texte_actions_application(actions):
@@ -149,7 +150,7 @@ def _texte_editeur(etat):
         "- Les boutons de l'éditeur (Exécuter, Ouvrir, Enregistrer, Vers le chat, plein écran) sont dans la liste des éléments à l'écran.\n"
     )
 
-def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None, reponses_qcm_recentes=None, etat_editeur=None):
+def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None, reponses_qcm_recentes=None, etat_editeur=None, sommaire_memoire=None):
     # Restauré le 14/08 (voir commentaire des constantes plus haut) : la
     # page Notion de l'agent (get_system_prompt) ne doit plus contenir QUE
     # la personnalité/le comportement propre à l'agent -- les 3 blocs fixes
@@ -244,6 +245,11 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
             "(action=\"consulter\") avec son id pour lire son contenu complet AVANT de répondre "
             "-- ne devine jamais son contenu à partir de la description seule."
         )
+
+    # Sommaire de la mémoire de l'élève donné d'office (demande Bourama, 04/10/2026).
+    # Lu une seule fois dans chat() (core/main.py), reçu ici en paramètre. Vide pour un
+    # visiteur sans compte ou si la lecture a échoué.
+    system_final += construire_bloc_sommaire(sommaire_memoire) if user_id else ""
 
     # Mode pédagogique (jonction items 1+8+9 des specs indépendantes
     # ScholarFlow AI, volet étudiant, 14/09/2026, demande Bourama).
