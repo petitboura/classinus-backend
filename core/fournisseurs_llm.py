@@ -219,6 +219,17 @@ def _stream_gpt(modele_id, system_prompt, messages):
 # core/boucle_agent.py:_effort_reflexion).
 DEEPSEEK_REASONING_EFFORT = "low"
 
+# Valeurs que la personne peut choisir dans le reglage "Effort" (04/10/2026,
+# demande Bourama). Toute autre valeur recue du frontend est ignoree et
+# remplacee par DEEPSEEK_REASONING_EFFORT (jamais fait confiance au client).
+EFFORTS_REFLEXION_DEEPSEEK = ("none", "low", "high", "max")
+
+
+def normaliser_effort_reflexion(effort):
+    """Effort valide pour DeepSeek, ou None si absent/invalide (l'appelant
+    retombe alors sur DEEPSEEK_REASONING_EFFORT)."""
+    return effort if effort in EFFORTS_REFLEXION_DEEPSEEK else None
+
 
 # Consigne propre a DeepSeek (04/10/2026, demande Bourama) : sa reflexion
 # est maintenant affichee a l'ecran, elle doit donc etre dans la langue de
@@ -238,7 +249,7 @@ def ajouter_consigne_langue_reflexion(system_prompt):
     return (base + "\n\n" + CONSIGNE_LANGUE_REFLEXION) if base else CONSIGNE_LANGUE_REFLEXION
 
 
-def _stream_deepseek(modele_id, system_prompt, messages):
+def _stream_deepseek(modele_id, system_prompt, messages, effort=None):
     # DeepSeek : API compatible OpenAI, seule la base_url change (voir
     # docstring du module -- deepseek-v4-flash / deepseek-v4-pro).
     from openai import OpenAI
@@ -249,7 +260,7 @@ def _stream_deepseek(modele_id, system_prompt, messages):
         model=modele_id,
         messages=messages_openai,
         stream=True,
-        reasoning_effort=DEEPSEEK_REASONING_EFFORT,
+        reasoning_effort=normaliser_effort_reflexion(effort) or DEEPSEEK_REASONING_EFFORT,
     )
     for morceau in flux:
         if not morceau.choices:
@@ -297,7 +308,7 @@ _STREAMERS_PAR_DISTRIBUTEUR = {
 }
 
 
-def generer_reponse_premium(modele_id, system_prompt, messages):
+def generer_reponse_premium(modele_id, system_prompt, messages, effort=None):
     """
     Generateur de morceaux de reponse (str) pour un modele premium deja
     valide par modele_id_est_autorise(). `messages` : liste de
@@ -317,4 +328,9 @@ def generer_reponse_premium(modele_id, system_prompt, messages):
     if distributeur is None:
         raise ValueError(f"modele_id inconnu : {modele_id}")
     streamer = _STREAMERS_PAR_DISTRIBUTEUR[distributeur]
+    if distributeur == "deepseek":
+        # Seul DeepSeek a un reglage d'effort aujourd'hui (les autres
+        # fournisseurs n'en recoivent pas, leur flux ne change pas).
+        yield from streamer(modele_id, system_prompt, messages, effort=effort)
+        return
     yield from streamer(modele_id, system_prompt, messages)

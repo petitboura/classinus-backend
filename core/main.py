@@ -146,7 +146,7 @@ def _client_pour_reprise(modele):
     return Groq(api_key=get_secret("GROQ_API_KEY"), max_retries=0)
 
 
-def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None):
+def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None, effort_reflexion=None):
     """
     Generateur d'evenements. Chaque element produit est un dictionnaire :
     - {"type": "statut", "texte": "..."}         -> un outil MCP est en cours d'utilisation (ou, depuis le 11/09/2026, Gemini en train de lire une image/video jointe)
@@ -1406,7 +1406,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         ]
         reponse_accumulee = []
         try:
-            for morceau in generer_reponse_premium(modele_force, system_final, messages_premium):
+            for morceau in generer_reponse_premium(modele_force, system_final, messages_premium, effort=effort_reflexion):
                 if isinstance(morceau, dict):
                     # Reflexion du modele (DeepSeek) : affichee a l'ecran
                     # mais jamais sauvegardee comme partie de la reponse.
@@ -1477,7 +1477,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             try:
                 yield from _capturer_reponse(
                     _agent_groq(client_deepseek, messages_agent, outils_mcp, table_routage, agent_nom=agent_nom,
-                                modele=DEEPSEEK_PRIMARY, conversation_id=conversation_id,
+                                modele=DEEPSEEK_PRIMARY, reasoning_effort=effort_reflexion, conversation_id=conversation_id,
                                 catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
                                 user_id=user_id),
                     reponse_accumulee,

@@ -10,7 +10,7 @@ from mcp_tools import parametres_outils
 from core.canal_agent_applicatif import retirer_messages_etudiant
 from core.plafond_outils_tour import plafond_tour
 from constantes_agent import GROQ_PRIMARY, MODELES_AVEC_REASONING_EFFORT, DELAI_MAX_PAR_APPEL
-from fournisseurs_llm import CONSIGNE_LANGUE_REFLEXION, DEEPSEEK_REASONING_EFFORT, ajouter_consigne_langue_reflexion
+from fournisseurs_llm import CONSIGNE_LANGUE_REFLEXION, DEEPSEEK_REASONING_EFFORT, ajouter_consigne_langue_reflexion, normaliser_effort_reflexion
 from execution_outils import _AttenteConfirmation, _traiter_appels
 from routage_outils import (
     _ecrire_outils_retenus,
@@ -129,11 +129,10 @@ def _detecter_appel_repete(historique_appels, nouveaux_appels, tolerance):
 def _effort_reflexion(modele, reasoning_effort):
     """Effort de reflexion a envoyer. Un modele DeepSeek sans effort explicite
     recoit DEEPSEEK_REASONING_EFFORT (sinon l'API reflechit au niveau eleve
-    par defaut, tres lent). Couvre aussi les reprises apres confirmation,
-    dont l'etat sauvegarde ne contient pas cet effort. Tout autre modele :
-    valeur inchangee."""
-    if not reasoning_effort and str(modele or "").startswith("deepseek"):
-        return DEEPSEEK_REASONING_EFFORT
+    par defaut, tres lent). Un effort explicite est revalide (none, low, high,
+    max), sinon retombe sur le defaut. Tout autre modele : valeur inchangee."""
+    if str(modele or "").startswith("deepseek"):
+        return normaliser_effort_reflexion(reasoning_effort) or DEEPSEEK_REASONING_EFFORT
     return reasoning_effort
 
 
