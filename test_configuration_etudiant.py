@@ -111,3 +111,20 @@ def test_assembler_type_inconnu():
 
     texte, erreur = asm("skill", "x")
     assert texte is None and "Types valides" in erreur
+
+
+def test_element_recu_via_un_code_suit_le_meme_chemin():
+    # Un élément reçu (id "recu:...") avec son type et son texte est traité
+    # comme un élément de l'utilisateur : règle et style d'office.
+    recus = [
+        {"id": "recu:1", "categorie": "regle", "texte": "Tutoie toujours l'élève", "nom": "", "description": ""},
+        {"id": "recu:2", "categorie": "style", "texte": "Phrases courtes", "nom": "", "description": ""},
+        {"id": "recu:3", "nom": "Skill classique", "description": "(reçu de X) ..."},
+    ]
+    regles, styles, autres = separer_regles_et_styles(recus)
+    assert [c["id"] for c in regles] == ["recu:1"]
+    assert [c["id"] for c in styles] == ["recu:2"]
+    assert [c["id"] for c in autres] == ["recu:3"]
+    bloc = construire_bloc_configuration({"regles": regles, "styles": styles})
+    assert "Tutoie toujours l'élève" in bloc and "Phrases courtes" in bloc
+    assert "ceux d'un code qu'il a activé" in bloc

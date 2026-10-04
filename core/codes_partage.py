@@ -988,21 +988,34 @@ def lister_comportements_recus(receveur_id: str, rattachement_id: str | None = N
     try:
         lignes = (
             supabase.table("comportements_etudiants")
-            .select("id, nom, description")
+            .select("id, nom, description, texte, categorie, actif")
             .in_("id", list(par_comportement.keys()))
             .execute()
         )
     except Exception as e:
         logging.error(f"ERREUR SUPABASE (descriptions comportements reçus {list(par_comportement.keys())}) : {e}")
         return []
-    resultat = [
-        {
+    resultat = []
+    for l in lignes.data or []:
+        if l.get("categorie") and l.get("actif") is False:
+            # Élément de Configuration désactivé par son propriétaire : jamais envoyé.
+            continue
+        entree = {
             "id": f"recu:{l['id']}",
             "nom": l.get("nom") or "",
             "description": f"(reçu de {par_comportement.get(l['id'], 'un autre utilisateur')}) {l.get('description') or ''}".strip(),
         }
-        for l in (lignes.data or [])
-    ]
+        # 03/10/2026, demande Bourama : un élément de Configuration (règle,
+        # style, procédure, comportement) lié à un code doit se comporter
+        # comme ceux de l'utilisateur quand il active ce code : règles et
+        # styles donnés d'office, procédures et comportements donnés en
+        # entier quand ils sont retenus (voir core/configuration_etudiant.py).
+        # Pour cela il faut le type et le texte. Un skill classique reste
+        # inchangé : jamais de texte ici, il se lit à la demande.
+        if l.get("categorie"):
+            entree["categorie"] = l["categorie"]
+            entree["texte"] = l.get("texte") or ""
+        resultat.append(entree)
     if not ignorer_cache:
         _cache_comportements_recus[cle] = {"valeur": resultat, "expire_a": maintenant + _DUREE_CACHE_SECONDES}
     return resultat

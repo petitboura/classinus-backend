@@ -900,6 +900,9 @@ def activer_desactiver_comportement(agent_id: str, etudiant_id: str, comportemen
         return None
     ligne = res.data[0]
     _invalider_cache_comportements(agent_id, etudiant_id)
+    # 03/10/2026 : un élément de Configuration lié à un code est lu par ceux
+    # qui l'ont activé, son état actif doit donc compter tout de suite chez eux.
+    _invalider_cache_recus_pour_comportement(comportement_id)
     return {
         "id": ligne["id"],
         "texte": ligne["texte"],
