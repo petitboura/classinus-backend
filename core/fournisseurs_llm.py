@@ -222,9 +222,20 @@ def _stream_deepseek(modele_id, system_prompt, messages):
         stream=True,
     )
     for morceau in flux:
-        delta = morceau.choices[0].delta.content if morceau.choices else None
-        if delta:
-            yield delta
+        if not morceau.choices:
+            continue
+        delta = morceau.choices[0].delta
+        # DeepSeek envoie sa reflexion dans delta.reasoning_content (champ
+        # separe de delta.content, reflexion d'abord, voir
+        # api-docs.deepseek.com/api/create-chat-completion). On la remonte
+        # sous forme d'evenement (dict) pour que main.py l'affiche, au lieu
+        # de la jeter : sans ca l'utilisateur ne voit rien pendant toute
+        # la reflexion.
+        reflexion = getattr(delta, "reasoning_content", None)
+        if reflexion:
+            yield {"type": "raisonnement", "texte": reflexion}
+        if delta.content:
+            yield delta.content
 
 
 def _stream_gemini(modele_id, system_prompt, messages):
@@ -258,13 +269,19 @@ _STREAMERS_PAR_DISTRIBUTEUR = {
 
 def generer_reponse_premium(modele_id, system_prompt, messages):
     """
-    Generateur de texte (morceaux de reponse, pas d'evenements structures
-    -- voir LIMITE CONNUE en tete de fichier) pour un modele premium deja
+    Generateur de morceaux de reponse (str) pour un modele premium deja
     valide par modele_id_est_autorise(). `messages` : liste de
     {"role": "user"|"assistant", "content": "..."}, format deja utilise
     cote main.py pour l'historique. Leve l'exception du SDK sous-jacent
     telle quelle si l'appel echoue -- a l'appelant (main.py) de decider
     du repli (ex: retomber sur la cascade Groq).
+
+    Depuis le correctif de la reflexion DeepSeek : un morceau peut aussi
+    etre un dict {"type": "raisonnement", "texte": "..."} (reflexion du
+    modele, pas la reponse). Aujourd'hui seul DeepSeek en emet. L'appelant
+    doit le transmettre tel quel a l'ecran et NE PAS l'ajouter a la
+    reponse sauvegardee. Pas d'autres evenements structures (voir LIMITE
+    CONNUE en tete de fichier : pas d'outils).
     """
     distributeur = distributeur_pour_modele_id(modele_id)
     if distributeur is None:
