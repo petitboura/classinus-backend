@@ -19,6 +19,9 @@ de code :
 - GEMINI_LIVE_PROACTIVITE (0 pour couper l'écoute sélective, si le modèle vocal ne l'accepte pas)
 - GEMINI_LIVE_DESCRIPTION_OUTIL_SILENCE
 - GEMINI_LIVE_DESCRIPTION_OUTIL_REVEIL
+- GEMINI_LIVE_ANNONCE_REPRISE (consigne qui précède la suite d'une lecture interrompue)
+- GEMINI_LIVE_DELAI_REPRISE_MS (silence de l'étudiant, en millisecondes, avant de reprendre la lecture)
+- GEMINI_LIVE_SEUIL_VOIX_MICRO (niveau du micro, entre 0 et 1, à partir duquel l'étudiant est considéré comme en train de parler)
 
 La voix est un interprète : elle transmet la demande de l'étudiant au cerveau
 de Classinus, puis lit sa réponse à voix haute. Elle ne répond
@@ -76,11 +79,18 @@ CONSIGNES_PAR_DEFAUT = (
     "entends ne t'est clairement pas adressé (l'étudiant parle à quelqu'un d'autre, bruit ou "
     "conversation autour, il se parle à lui même), ne dis rien et n'appelle aucun outil.\n"
     "Quand l'étudiant te demande de te taire ou de t'arrêter (par exemple « arrête toi », « stop », "
-    "« tais toi », « ne parle plus »), appelle tout de suite l'outil se_taire, sans rien dire avant "
+    "« tais toi », « ne parle plus », « c'est bon »), appelle tout de suite l'outil se_taire, sans rien dire avant "
     "ni après. Ensuite tu restes totalement silencieux : tu ne parles pas et tu n'appelles pas "
     "demander_a_clovis, même si tu entends des questions, jusqu'à ce que l'étudiant s'adresse de "
     "nouveau clairement à toi (il t'appelle par ton nom, Classinus, ou te demande de reparler). À ce "
-    "moment là, appelle l'outil reprendre_la_parole puis traite sa demande normalement."
+    "moment là, appelle l'outil reprendre_la_parole puis traite sa demande normalement.\n"
+    "Quand tu es en train de lire quelque chose à voix haute et que l'étudiant te coupe la parole, "
+    "tu t'arrêtes tout de suite. S'il parle à quelqu'un d'autre ou s'il ne s'adresse pas "
+    "clairement à toi, ne dis rien et n'appelle aucun outil : ta lecture reprendra toute seule là "
+    "où elle s'est arrêtée, tu ne la reprends jamais de toi même. S'il te fait une nouvelle "
+    "demande, traite-la normalement, la lecture interrompue est alors abandonnée. S'il te dit "
+    "« continue », « reprends » ou « vas-y », appelle l'outil reprendre_la_parole, sans rien dire "
+    "avant ni après."
 )
 
 ACCUEIL_PAR_DEFAUT = "La voix vient de s'activer. Dis seulement à voix haute et en quelques mots : Je t'écoute."
@@ -95,12 +105,14 @@ DESCRIPTION_OUTIL_PAR_DEFAUT = (
 # le navigateur applique seulement sa décision (il jette alors tout son qui arrive).
 DESCRIPTION_OUTIL_SILENCE_PAR_DEFAUT = (
     "À appeler dès que l'étudiant demande de se taire ou de s'arrêter (« arrête toi », « stop », "
-    "« tais toi », « ne parle plus »). Après cet appel, plus aucun mot jusqu'à ce que l'étudiant "
-    "s'adresse de nouveau à toi."
+    "« tais toi », « ne parle plus », « c'est bon »). Après cet appel, la lecture en cours est "
+    "abandonnée et plus aucun mot jusqu'à ce que l'étudiant s'adresse de nouveau à toi."
 )
 DESCRIPTION_OUTIL_REVEIL_PAR_DEFAUT = (
     "À appeler quand l'étudiant s'adresse de nouveau à toi alors que tu étais silencieux (il "
-    "t'appelle ou te demande de reparler). Après cet appel, tu peux parler et traiter sa demande."
+    "t'appelle ou te demande de reparler), ou quand il te demande de continuer ta lecture (« continue », "
+    "« reprends », « vas-y »). Si une lecture a été interrompue, elle reprend toute seule après cet "
+    "appel et tu ne dis rien. Sinon, tu peux parler et traiter sa demande."
 )
 
 # Quand Classinus met du temps, la voix ne reste jamais muette : toutes les
@@ -130,6 +142,19 @@ ANNONCE_BULLE_PAR_DEFAUT = (
     "Pour ce qui ne peut pas se lire à voix haute (code, tableau, lien, image, carte, "
     "fichier), dis seulement en une phrase de quoi il s'agit. Voici le message :"
 )
+# Quand l'étudiant coupe la voix en pleine lecture sans lui parler (il parle à quelqu'un
+# d'autre), la lecture reprend toute seule là où elle s'est arrêtée, une fois qu'il s'est
+# tu. Ce message précède la suite du texte envoyée à la voix.
+ANNONCE_REPRISE_PAR_DEFAUT = (
+    "Tu avais été coupé en pleine lecture. N'appelle pas l'outil. Reprends exactement là où tu "
+    "t'étais arrêté, sans introduction, sans rien répéter de ce qui a déjà été dit et sans rien "
+    "ajouter. Pour ce qui ne peut pas se lire à voix haute (code, tableau, lien, image, carte, "
+    "fichier), dis seulement en une phrase de quoi il s'agit. Voici la suite du texte à lire :"
+)
+# Silence de l'étudiant (en millisecondes) avant que la lecture interrompue reprenne.
+DELAI_REPRISE_MS_PAR_DEFAUT = 1800
+# Niveau du micro (entre 0 et 1) à partir duquel l'étudiant est considéré comme en train de parler.
+SEUIL_VOIX_MICRO_PAR_DEFAUT = 0.08
 DELAI_RELANCE_PAR_DEFAUT = 20
 PROACTIVITE_PAR_DEFAUT = True
 RELANCES_MAX_PAR_DEFAUT = 3
@@ -146,6 +171,16 @@ def _lire_entier(nom, defaut):
         return defaut
     try:
         return max(0, int(brut))
+    except ValueError:
+        return defaut
+
+
+def _lire_decimal(nom, defaut):
+    brut = os.environ.get(nom)
+    if brut is None:
+        return defaut
+    try:
+        return max(0.0, float(brut.replace(",", ".")))
     except ValueError:
         return defaut
 
@@ -173,6 +208,9 @@ def reglages_gemini_live():
         "relances_max": _lire_entier("GEMINI_LIVE_RELANCES_MAX", RELANCES_MAX_PAR_DEFAUT),
         "description_outil_silence": _lire("GEMINI_LIVE_DESCRIPTION_OUTIL_SILENCE", DESCRIPTION_OUTIL_SILENCE_PAR_DEFAUT),
         "description_outil_reveil": _lire("GEMINI_LIVE_DESCRIPTION_OUTIL_REVEIL", DESCRIPTION_OUTIL_REVEIL_PAR_DEFAUT),
+        "annonce_reprise": _lire("GEMINI_LIVE_ANNONCE_REPRISE", ANNONCE_REPRISE_PAR_DEFAUT),
+        "delai_reprise_ms": _lire_entier("GEMINI_LIVE_DELAI_REPRISE_MS", DELAI_REPRISE_MS_PAR_DEFAUT),
+        "seuil_voix_micro": _lire_decimal("GEMINI_LIVE_SEUIL_VOIX_MICRO", SEUIL_VOIX_MICRO_PAR_DEFAUT),
         # Écoute sélective de Gemini Live (le modèle choisit de ne pas répondre à ce qui
         # ne lui est pas adressé). Fonction en préversion chez Google : coupable ici si
         # le modèle vocal la refuse, sans toucher au code.
