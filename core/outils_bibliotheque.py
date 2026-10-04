@@ -72,7 +72,6 @@ from core.outils_generation_commun import (
 # depuis `ctx` (authentifié), jamais demandé au modèle.
 
 
-@mcp_generation.tool()
 def _phrase_autres_origines(autres: dict) -> str:
     """
     Phrase ajoutée au résultat de "chercher" quand des fichiers générés par
@@ -92,6 +91,7 @@ def _phrase_autres_origines(autres: dict) -> str:
     )
 
 
+@mcp_generation.tool()
 def gerer_document_bibliotheque(
     action: str,
     ctx: Context,
