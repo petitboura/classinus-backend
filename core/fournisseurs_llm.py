@@ -210,12 +210,31 @@ def _stream_gpt(modele_id, system_prompt, messages):
             yield delta
 
 
+# Consigne propre a DeepSeek (04/10/2026, demande Bourama) : sa reflexion
+# est maintenant affichee a l'ecran, elle doit donc etre dans la langue de
+# la personne. Pas de langue en dur : on lui dit de suivre la langue du
+# dernier message de l'utilisateur. Ajoutee UNIQUEMENT pour DeepSeek (jamais
+# au prompt commun, qui sert aussi a Groq/Claude/GPT/Gemini).
+CONSIGNE_LANGUE_REFLEXION = (
+    "Ton raisonnement interne (la reflexion avant ta reponse) doit etre ecrit "
+    "dans la meme langue que le dernier message de l'utilisateur, "
+    "pas dans une autre langue par defaut."
+)
+
+
+def ajouter_consigne_langue_reflexion(system_prompt):
+    """Texte du prompt systeme + la consigne de langue de reflexion."""
+    base = system_prompt or ""
+    return (base + "\n\n" + CONSIGNE_LANGUE_REFLEXION) if base else CONSIGNE_LANGUE_REFLEXION
+
+
 def _stream_deepseek(modele_id, system_prompt, messages):
     # DeepSeek : API compatible OpenAI, seule la base_url change (voir
     # docstring du module -- deepseek-v4-flash / deepseek-v4-pro).
     from openai import OpenAI
     client = OpenAI(api_key=get_secret("DEEPSEEK_API_KEY"), base_url="https://api.deepseek.com")
-    messages_openai = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + messages
+    system_deepseek = ajouter_consigne_langue_reflexion(system_prompt)
+    messages_openai = [{"role": "system", "content": system_deepseek}] + messages
     flux = client.chat.completions.create(
         model=modele_id,
         messages=messages_openai,

@@ -10,6 +10,7 @@ from mcp_tools import parametres_outils
 from core.canal_agent_applicatif import retirer_messages_etudiant
 from core.plafond_outils_tour import plafond_tour
 from constantes_agent import GROQ_PRIMARY, MODELES_AVEC_REASONING_EFFORT, DELAI_MAX_PAR_APPEL
+from fournisseurs_llm import CONSIGNE_LANGUE_REFLEXION, ajouter_consigne_langue_reflexion
 from execution_outils import _AttenteConfirmation, _traiter_appels
 from routage_outils import (
     _ecrire_outils_retenus,
@@ -125,6 +126,22 @@ def _detecter_appel_repete(historique_appels, nouveaux_appels, tolerance):
     return None
 
 
+def _messages_pour_api(messages_agent, modele):
+    """Messages a envoyer a l'API. Pour DeepSeek uniquement, ajoute la
+    consigne de langue de reflexion au message systeme, dans une COPIE :
+    messages_agent est partage et mute tout au long de la cascade
+    (DeepSeek, puis Groq en repli), la consigne ne doit donc jamais y
+    rester ni fuiter vers les autres modeles."""
+    if not str(modele or "").startswith("deepseek"):
+        return messages_agent
+    copie = list(messages_agent)
+    for i, m in enumerate(copie):
+        if isinstance(m, dict) and m.get("role") == "system":
+            copie[i] = {**m, "content": ajouter_consigne_langue_reflexion(m.get("content"))}
+            return copie
+    return [{"role": "system", "content": CONSIGNE_LANGUE_REFLEXION}] + copie
+
+
 def _lire_raisonnement(delta):
     """Fragment de raisonnement d'un delta de streaming. Groq l'expose dans
     `reasoning`, DeepSeek dans `reasoning_content` (meme principe, nom de
@@ -143,7 +160,7 @@ def _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, 
     """
     completion = client_groq.chat.completions.create(
         model=modele,
-        messages=messages_agent,
+        messages=_messages_pour_api(messages_agent, modele),
         max_completion_tokens=None,
         tools=outils_mcp if outils_mcp else None,
         stream=True,
@@ -338,7 +355,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
 
         completion = client_groq.chat.completions.create(
             model=modele,
-            messages=messages_agent,
+            messages=_messages_pour_api(messages_agent, modele),
             max_completion_tokens=reserve_tokens,
             tools=outils_mcp if outils_mcp else None,
             stream=True,
