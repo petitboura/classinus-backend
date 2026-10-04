@@ -20,6 +20,7 @@ from comportements_etudiants import (
 from codes_partage import lister_comportements_recus
 from core.mode_actif_conversation import rattachement_actif_pour_prompt
 from core.configuration_etudiant import separer_regles_et_styles, separer_config_retenue
+from core.memoire_eleve import obtenir_sommaire as obtenir_sommaire_memoire
 from core.persona_pedagogique_conversation import obtenir_persona_pedagogique
 from core.mode_source_conversation import obtenir_mode_source
 from core.guide_conversation import obtenir_guide_actif
@@ -554,6 +555,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # Procédures et Comportements retenus (donnés en entier), voir
     # core/configuration_etudiant.py.
     configuration_etudiant = None
+    # Sommaire de la mémoire de l'élève, donné d'office au modèle à chaque
+    # message (demande Bourama, 04/10/2026). None pour un visiteur sans compte.
+    sommaire_memoire = None
     notions_programme_pertinentes = []
     signalements_pertinents = []
     code_id_actif = None
@@ -622,11 +626,15 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # autres, lance dans le meme lot parallele que persona_pedagogique
             # et guide_actif juste au-dessus.
             f_mode_source = executor.submit(obtenir_mode_source, conversation_id, user_id) if conversation_id else None
+            # Sommaire de la mémoire : indépendant des autres lectures, lancé dans le même lot
+            # parallèle pour ne rien ajouter au temps d'attente.
+            f_sommaire_memoire = executor.submit(obtenir_sommaire_memoire, user_id)
             rattachement_id_actif = f_rattachement_actif.result() if f_rattachement_actif else None
             comportements_etudiant_bruts = f_comportements_etudiant.result()
             persona_pedagogique = f_persona_pedagogique.result() if f_persona_pedagogique else None
             guide_actif = f_guide_actif.result() if f_guide_actif else {"actif": False, "sous_mode": "textuel"}
             mode_source = f_mode_source.result() if f_mode_source else None
+            sommaire_memoire = f_sommaire_memoire.result()
             # Agent applicatif : la liste des elements de l'ecran n'est lue
             # (et donc injectee dans le prompt) que lorsque le canal en
             # direct est actif pour ce tour (decision Bourama, 30/09/2026 :
@@ -915,7 +923,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id)
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force_contexte_seul)
             outil_force_verifie_optimiste = [o["function"]["name"] for o in outils_mcp] if outil_force_contexte_seul else None
-            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant)
+            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire)
             return outils_mcp, table_routage, system_final, catalogue_complet, table_routage_complet
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -1034,7 +1042,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id)
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force)
             outil_force_verifie = [o["function"]["name"] for o in outils_mcp] if outil_force else outil_force
-        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant)
+        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire)
 
         # PERF (10/08) : second (et dernier) point de vérification --
         # couvre tous les chemins qui ne passent PAS par le premier

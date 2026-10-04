@@ -28,6 +28,7 @@ from core.outils_generation_commun import mcp_generation, Context
 from core.memoire_eleve import (
     CATEGORIES_MEMOIRE_ELEVE,
     obtenir_sommaire as _obtenir_sommaire,
+    formater_sommaire as _formater_sommaire,
     lire_categorie as _lire_categorie,
     ecrire_categorie as _ecrire_categorie,
 )
@@ -67,14 +68,7 @@ def memoire_sommaire(ctx: Context) -> str:
         logging.error(f"ERREUR outil memoire_sommaire : {e}")
         return "Erreur : impossible de consulter la mémoire, réessaie."
 
-    textes = []
-    for l in lignes:
-        chemin = l["categorie"] if not l["sous_categorie"] else f"{l['categorie']}.{l['sous_categorie']}"
-        if l["description"] is None:
-            textes.append(f"{chemin}: (vide)")
-        else:
-            textes.append(f"{chemin}: {l['description']} (maj: {l['updated_at']})")
-    return "\n".join(textes)
+    return _formater_sommaire(lignes)
 
 
 @mcp_generation.tool()
