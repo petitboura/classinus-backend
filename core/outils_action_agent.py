@@ -16,6 +16,7 @@ import asyncio
 from core.canal_agent_applicatif import (
     pousser_texte_clovis as _pousser_texte_clovis,
     demander_ouverture_canal as _demander_ouverture_canal,
+    demander_fermeture_canal as _demander_fermeture_canal,
     demander_execution_action as _demander_execution_action,
     demander_clic_generique as _demander_clic_generique,
     demander_pointage_action as _demander_pointage_action,
@@ -423,6 +424,66 @@ async def ouvrir_canal_en_direct(ctx: Context) -> str:
         "Le canal en direct s'ouvre. Termine ta reponse par une seule phrase courte qui l'annonce "
         "(sans bloc question) : la suite de la demo demarre automatiquement."
     )
+
+
+@mcp_generation.tool()
+async def activer_canal_en_direct(ctx: Context) -> str:
+    """
+    Active le canal en direct (curseur qui bouge et clique dans l'application,
+    bulle de dialogue) depuis le chat normal. Demande Bourama du 02/10/2026 :
+    tu peux l'activer toi-meme.
+
+    A appeler quand l'etudiant te demande d'activer ou d'ouvrir le canal en
+    direct, ou quand sa demande exige que tu montres ou cliques quelque chose
+    dans l'application et que tu n'as pas les outils de clic. Ne l'appelle pas
+    si le canal est deja actif.
+
+    Apres l'appel, les outils de clic n'existent que pour le tour suivant :
+    termine ta reponse par UNE phrase courte qui annonce que le canal est
+    active et invite l'etudiant a dire ce qu'il veut que tu fasses.
+    """
+    user_id = ctx.request_context.request.query_params.get("user_id")
+    if not user_id:
+        return "Erreur : impossible d'identifier l'utilisateur."
+    conversation_id = ctx.request_context.request.query_params.get("conversation_id") or None
+
+    atteintes = await _demander_ouverture_canal(user_id, conversation_id)
+    if atteintes == 0:
+        return (
+            "Le canal en direct n'a pas pu s'activer pour le moment. "
+            "Dis-le simplement a l'etudiant, sans expliquer pourquoi."
+        )
+    return (
+        "Le canal en direct s'active. Termine ta reponse par une seule phrase courte qui l'annonce "
+        "et propose a l'etudiant de te dire ce que tu dois faire."
+    )
+
+
+@mcp_generation.tool()
+async def desactiver_canal_en_direct(ctx: Context) -> str:
+    """
+    Desactive le canal en direct (le curseur et la bulle disparaissent). Demande
+    Bourama du 02/10/2026 : tu peux le desactiver toi-meme.
+
+    A appeler quand l'etudiant te demande de desactiver, fermer ou arreter le
+    canal en direct. Ne l'appelle pas de ta propre initiative. Fais d'abord tout
+    ce que l'etudiant t'a demande avec les outils de clic : apres cet appel, ils
+    ne sont plus disponibles.
+
+    Apres l'appel, termine ta reponse par UNE phrase courte qui annonce que le
+    canal est desactive.
+    """
+    user_id = ctx.request_context.request.query_params.get("user_id")
+    if not user_id:
+        return "Erreur : impossible d'identifier l'utilisateur."
+
+    atteintes = await _demander_fermeture_canal(user_id)
+    if atteintes == 0:
+        return (
+            "Le canal en direct n'a pas pu etre desactive pour le moment. "
+            "Dis-le simplement a l'etudiant, sans expliquer pourquoi."
+        )
+    return "Le canal en direct est desactive. Termine ta reponse par une seule phrase courte qui l'annonce."
 
 
 # Editeur de code (28/09/2026, demande Bourama) : l'IA lit, montre et ecrit

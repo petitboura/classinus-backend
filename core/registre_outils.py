@@ -673,6 +673,9 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # Demo (20/09/2026) : ouverture du canal en direct depuis le chat
     # normal, meme rappel de cache 24h.
     "ouvrir_canal_en_direct": {"label": "Ouverture du canal en direct", "icone": "Radio", "onglet": None},
+    # 02/10/2026 (demande Bourama) : Clovis active et desactive le canal depuis le chat.
+    "activer_canal_en_direct": {"label": "Activation du canal en direct", "icone": "Radio", "onglet": None},
+    "desactiver_canal_en_direct": {"label": "Désactivation du canal en direct", "icone": "Radio", "onglet": None},
 
     # --- Outils sans entrée jusqu'au 24/09/2026 (audit de l'affichage des
     # outils, demande Bourama : repérer les icônes génériques) --- ces 10
@@ -847,6 +850,7 @@ CATEGORIES_OUTILS = {
         "executer_clic_generique", "montrer_element_application", "ecrire_dans_champ",
         "lire_editeur", "montrer_dans_editeur", "ecrire_dans_editeur",
         "lire_page",
+        "desactiver_canal_en_direct",
     ],
     "github": ["gerer_depot_github"],
     "google_drive": [
