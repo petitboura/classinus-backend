@@ -83,6 +83,59 @@ def obtenir_sommaire(user_id: str) -> list[dict]:
     return lignes
 
 
+def formater_sommaire(lignes: list[dict]) -> str:
+    """
+    Texte du sommaire, une ligne par catégorie ou sous-catégorie :
+    "chemin: description (maj: date)" ou "chemin: (vide)". Format unique,
+    partagé par l'outil memoire_sommaire et par l'envoi automatique du
+    sommaire au chat et à la voix, pour que le modèle voie toujours la
+    même chose.
+    """
+    textes = []
+    for l in lignes:
+        chemin = l["categorie"] if not l["sous_categorie"] else f"{l['categorie']}.{l['sous_categorie']}"
+        if l["description"] is None:
+            textes.append(f"{chemin}: (vide)")
+        else:
+            textes.append(f"{chemin}: {l['description']} (maj: {l['updated_at']})")
+    return "\n".join(textes)
+
+
+def construire_bloc_sommaire(lignes: list[dict] | None, pour_voix: bool = False) -> str:
+    """
+    Bloc de prompt donné d'office au modèle : le sommaire de la mémoire de
+    l'élève, déjà lu. Chaîne vide si on n'a pas pu le lire. Le contenu
+    détaillé n'est jamais inclus ici, seulement les titres et résumés.
+
+    pour_voix=False : texte du chat, qui peut appeler memoire_lire.
+    pour_voix=True : texte de la voix Gemini Live, qui n'a aucun outil
+    mémoire et ne fait que transmettre les demandes à Classinus.
+    """
+    if not lignes:
+        return ""
+    if pour_voix:
+        intro = (
+            "\n\nSOMMAIRE DE LA MÉMOIRE DE L'ÉTUDIANT (déjà lu). Une ligne par sujet : titre, résumé, "
+            "date de dernière mise à jour. Voici comment t'en servir :\n"
+            "1. Appelle l'étudiant par son prénom, tel qu'il apparaît dans le sommaire, souvent et "
+            "naturellement, sans en faire trop.\n"
+            "2. Si le sommaire indique comment l'étudiant appelle Classinus (un surnom), ce surnom est "
+            "aussi ton nom : quand l'étudiant le prononce, c'est à toi qu'il s'adresse, exactement comme "
+            "s'il disait Classinus.\n"
+            "3. Respecte ses préférences d'expression indiquées dans le sommaire (ton, genre grammatical "
+            "avec lequel tu parles de toi).\n"
+            "4. Ne lis jamais le sommaire à voix haute et n'annonce jamais que tu consultes sa mémoire. "
+            "Pour toute vraie demande, tu passes toujours par Classinus comme d'habitude.\n"
+        )
+    else:
+        intro = (
+            "\n\nSOMMAIRE DE LA MÉMOIRE DE CET ÉLÈVE (déjà lu, tu n'as pas besoin de l'outil "
+            "memoire_sommaire pour le consulter). Une ligne par sujet : titre, résumé, date de "
+            "dernière mise à jour. Ce sont seulement des résumés, pas le détail :\n"
+        )
+    return intro + formater_sommaire(lignes)
+
+
 def lire_categorie(user_id: str, categorie: str, sous_categorie: str | None = None) -> dict | None:
     """
     Contenu complet d'UNE seule ligne (categorie/sous_categorie) pour cet
