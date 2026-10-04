@@ -125,6 +125,13 @@ def _detecter_appel_repete(historique_appels, nouveaux_appels, tolerance):
     return None
 
 
+def _lire_raisonnement(delta):
+    """Fragment de raisonnement d'un delta de streaming. Groq l'expose dans
+    `reasoning`, DeepSeek dans `reasoning_content` (meme principe, nom de
+    champ different) -- un seul des deux est present selon le fournisseur."""
+    return getattr(delta, "reasoning", None) or getattr(delta, "reasoning_content", None)
+
+
 def _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, kwargs_reasoning, timeout):
     """
     Force une reponse texte finale a partir de messages_agent tel quel
@@ -147,7 +154,7 @@ def _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, 
     etat_raisonnement = _nouvel_etat_filtre_raisonnement()
     for chunk in completion:
         delta = chunk.choices[0].delta
-        raisonnement = getattr(delta, "reasoning", None)
+        raisonnement = _lire_raisonnement(delta)
         if raisonnement:
             for evenement in _traiter_fragment_raisonnement(etat_raisonnement, raisonnement, messages_agent):
                 yield evenement
@@ -376,7 +383,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
 
             delta = chunk.choices[0].delta
 
-            raisonnement = getattr(delta, "reasoning", None)
+            raisonnement = _lire_raisonnement(delta)
             if raisonnement:
                 for evenement in _traiter_fragment_raisonnement(etat_raisonnement, raisonnement, messages_agent):
                     yield evenement

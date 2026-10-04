@@ -157,7 +157,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
       modele separement). Generalise a tout outil, present ou futur (26/07) : distinct du
       raisonnement libre du modele, qui lui peut paraphraser/melanger ce contenu avec
       d'autres reflexions dans son propre texte -- voir OutilResultatBulle.tsx cote frontend.
-    - {"type": "raisonnement", "texte": "..."}   -> fragment de raisonnement interne du modele, avant la reponse finale (modeles de MODELES_AVEC_REASONING_EFFORT uniquement)
+    - {"type": "raisonnement", "texte": "..."}   -> fragment de raisonnement interne du modele, avant la reponse finale (modeles de MODELES_AVEC_REASONING_EFFORT, plus DeepSeek via delta.reasoning_content)
     - {"type": "sources", "sources": [{"titre": "...", "url": "..."}]} -> resultats d'une
       recherche web (Tavily) utilisee pour repondre. Peut etre emis plusieurs fois dans le
       meme echange (plusieurs recherches) -- l'appelant accumule/fusionne, ne remplace pas.
@@ -1407,6 +1407,11 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         reponse_accumulee = []
         try:
             for morceau in generer_reponse_premium(modele_force, system_final, messages_premium):
+                if isinstance(morceau, dict):
+                    # Reflexion du modele (DeepSeek) : affichee a l'ecran
+                    # mais jamais sauvegardee comme partie de la reponse.
+                    yield morceau
+                    continue
                 reponse_accumulee.append(morceau)
                 yield {"type": "reponse", "texte": morceau}
             logging.info(f"Réponse via MODELE PREMIUM : {modele_force}")
