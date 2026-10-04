@@ -33,11 +33,17 @@ def ctx_pour(conversation_id):
     return SimpleNamespace(request_context=SimpleNamespace(request=SimpleNamespace(query_params=parametres)))
 
 
+# Valeur du drapeau "automatique" envoyee a l'application PC a chaque lecture.
+drapeaux_automatique = []
+
+
 def installer_faux_transport(lecture=LECTURE, reponses_actions=None):
     appels = []
 
     async def demander(user_id, action, parametres, on_statut=None):
         appels.append(action)
+        if action == "lire_ecran":
+            drapeaux_automatique.append(parametres.get("automatique"))
         if action == "lire_ecran":
             return lecture
         return (reponses_actions or {}).get(action, {"ok": True})
@@ -106,6 +112,28 @@ async def verifier():
     appels = installer_faux_transport()
     await outils.taper_clavier("x", ctx_pour("conv-F"))
     assert appels == ["taper_clavier", "lire_ecran"], appels
+
+    # 7 bis. Une lecture decidee par le serveur est marquee automatique (l'application PC
+    # ne l'affiche pas), celle que l'IA demande elle-meme ne l'est jamais.
+    lecture_ecran_continue._lectures_faites.clear()
+    drapeaux_automatique.clear()
+    installer_faux_transport()
+    await outils.cliquer_ecran(10, 20, ctx_pour("conv-G"))
+    assert drapeaux_automatique == [True], drapeaux_automatique
+    drapeaux_automatique.clear()
+    installer_faux_transport()
+    await outils.cliquer_ecran(10, 20, ctx_pour("conv-G"))
+    assert drapeaux_automatique == [True], drapeaux_automatique
+    drapeaux_automatique.clear()
+    installer_faux_transport()
+    await outils.lire_ecran(ctx_pour("conv-G"))
+    assert drapeaux_automatique == [False], drapeaux_automatique
+    drapeaux_automatique.clear()
+    installer_faux_transport()
+    ctx_auto = ctx_pour("conv-G")
+    ctx_auto.request_context.request.query_params["automatique"] = "1"
+    await outils.lire_ecran(ctx_auto)
+    assert drapeaux_automatique == [True], drapeaux_automatique
 
     # 8. Separation lire_ecran / lire_page : aucun renvoi de l'un vers l'autre.
     classinus_seul = dict(LECTURE, fenetre_classinus=True)

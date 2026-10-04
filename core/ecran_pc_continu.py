@@ -35,7 +35,13 @@ def bloc_etat_ecran_pc(user_id, conversation_id, table_routage) -> str:
         if not a_deja_lu(user_id, conversation_id):
             return ""
         from core.mcp_tools import appeler_outil
-        texte = appeler_outil("lire_ecran", {}, table_routage)
+        # Lecture decidee par le serveur : signalee dans l'URL (l'IA ne peut pas
+        # la modifier) pour que l'application PC ne l'affiche pas comme une
+        # action de l'IA.
+        route = table_routage["lire_ecran"]
+        separateur = "&" if "?" in route["url"] else "?"
+        table_auto = {**table_routage, "lire_ecran": {**route, "url": f"{route['url']}{separateur}automatique=1"}}
+        texte = appeler_outil("lire_ecran", {}, table_auto)
     except Exception as e:
         logging.error(f"Lecture automatique de l'ecran PC impossible : {e}", exc_info=True)
         return ""

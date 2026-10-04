@@ -118,7 +118,7 @@ async def _lecture_prealable_si_necessaire(user_id: str, conversation_id: str | 
     """
     if lecture_ecran_continue.a_deja_lu(user_id, conversation_id):
         return None
-    texte, ok = await _lire_ecran_pour_modele(user_id)
+    texte, ok = await _lire_ecran_pour_modele(user_id, automatique=True)
     if not ok:
         return "Action NON exécutée : la lecture préalable de l'écran n'a pas abouti. " + texte
     lecture_ecran_continue.marquer_lu(user_id, conversation_id)
@@ -132,7 +132,7 @@ async def _relire_apres_action(user_id: str, message_action: str, delai_secondes
     l'action. L'IA voit ainsi l'etat reel qui suit, sans avoir a relire.
     """
     await asyncio.sleep(delai_secondes)
-    texte, ok = await _lire_ecran_pour_modele(user_id)
+    texte, ok = await _lire_ecran_pour_modele(user_id, automatique=True)
     if not ok:
         return (
             message_action + "\n\nLa lecture automatique de l'écran après cette action n'a pas abouti. "
@@ -518,17 +518,22 @@ def _formater_lecture_ecran(resultat: dict) -> str:
     return "\n".join(lignes)
 
 
-async def _lire_ecran_pour_modele(user_id: str) -> tuple[str, bool]:
+async def _lire_ecran_pour_modele(user_id: str, automatique: bool = False) -> tuple[str, bool]:
     """
     Lit la fenetre externe au premier plan du PC (via le pont Electron) et
     renvoie (texte pour le modele, lecture_reussie). Utilisee par lire_ecran,
     par le verrou de premiere lecture et par la relecture apres action : une
     seule facon de lire l'ecran, a un seul endroit.
+
+    automatique=True : lecture decidee par le serveur (avant un tour, apres une
+    action, verrou de premiere lecture), pas par l'IA. L'application PC ne
+    l'affiche alors ni dans le journal ni dans la bulle.
     """
     resultat = await _demander_action_systeme(
         user_id,
         "lire_ecran",
         {
+            "automatique": automatique,
             "nb_max_elements": NB_MAX_ELEMENTS_LECTURE_ECRAN,
             "nb_max_fenetres": NB_MAX_FENETRES_LECTURE_ECRAN,
             "longueur_max_nom": LONGUEUR_MAX_NOM_LECTURE_ECRAN,
@@ -583,7 +588,11 @@ async def lire_ecran(ctx: Context) -> str:
     if erreur:
         return erreur
 
-    texte, ok = await _lire_ecran_pour_modele(user_id)
+    # Lecture automatique : demandee par le serveur avant le tour (voir
+    # core/ecran_pc_continu.py), jamais par l'IA. Le parametre vient de l'URL
+    # du serveur, que l'IA ne peut pas modifier.
+    automatique = ctx.request_context.request.query_params.get("automatique") == "1"
+    texte, ok = await _lire_ecran_pour_modele(user_id, automatique=automatique)
     if ok:
         lecture_ecran_continue.marquer_lu(user_id, _conversation_id(ctx))
     return texte
