@@ -10,7 +10,7 @@ from mcp_tools import parametres_outils
 from core.canal_agent_applicatif import retirer_messages_etudiant
 from core.plafond_outils_tour import plafond_tour
 from constantes_agent import GROQ_PRIMARY, MODELES_AVEC_REASONING_EFFORT, DELAI_MAX_PAR_APPEL
-from fournisseurs_llm import CONSIGNE_LANGUE_REFLEXION, ajouter_consigne_langue_reflexion
+from fournisseurs_llm import CONSIGNE_LANGUE_REFLEXION, DEEPSEEK_REASONING_EFFORT, ajouter_consigne_langue_reflexion
 from execution_outils import _AttenteConfirmation, _traiter_appels
 from routage_outils import (
     _ecrire_outils_retenus,
@@ -124,6 +124,17 @@ def _detecter_appel_repete(historique_appels, nouveaux_appels, tolerance):
         if compteur >= tolerance:
             return appel
     return None
+
+
+def _effort_reflexion(modele, reasoning_effort):
+    """Effort de reflexion a envoyer. Un modele DeepSeek sans effort explicite
+    recoit DEEPSEEK_REASONING_EFFORT (sinon l'API reflechit au niveau eleve
+    par defaut, tres lent). Couvre aussi les reprises apres confirmation,
+    dont l'etat sauvegarde ne contient pas cet effort. Tout autre modele :
+    valeur inchangee."""
+    if not reasoning_effort and str(modele or "").startswith("deepseek"):
+        return DEEPSEEK_REASONING_EFFORT
+    return reasoning_effort
 
 
 def _messages_pour_api(messages_agent, modele):
@@ -253,6 +264,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
     # messages que l'etudiant envoie pendant que Clovis travaille (voir
     # core/canal_agent_applicatif.py). None (chemins de reprise) : aucune
     # lecture, ces messages sont alors renvoyes au frontend en fin de tour.
+    reasoning_effort = _effort_reflexion(modele, reasoning_effort)
     kwargs_reasoning = {"reasoning_effort": reasoning_effort} if reasoning_effort else {}
     # Compteur de sources partagé sur tout le tour (26/08, citations
     # inline bibliotheque) -- une seule boîte, passée aux deux appels de

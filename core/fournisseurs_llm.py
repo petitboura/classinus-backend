@@ -210,6 +210,16 @@ def _stream_gpt(modele_id, system_prompt, messages):
             yield delta
 
 
+# Effort de reflexion de DeepSeek (04/10/2026, demande Bourama : le rendre
+# rapide). Valeurs de l'API DeepSeek V4 : "none" (reflexion desactivee, donc
+# plus rien a afficher), "low" (le minimum qui reflechit encore), "high"
+# (defaut de l'API quand rien n'est envoye), "max". Source :
+# api-docs.deepseek.com/api/create-chat-completion. Un seul endroit a
+# modifier pour tout DeepSeek (chemin premium ET cascade, voir
+# core/boucle_agent.py:_effort_reflexion).
+DEEPSEEK_REASONING_EFFORT = "low"
+
+
 # Consigne propre a DeepSeek (04/10/2026, demande Bourama) : sa reflexion
 # est maintenant affichee a l'ecran, elle doit donc etre dans la langue de
 # la personne. Pas de langue en dur : on lui dit de suivre la langue du
@@ -239,6 +249,7 @@ def _stream_deepseek(modele_id, system_prompt, messages):
         model=modele_id,
         messages=messages_openai,
         stream=True,
+        reasoning_effort=DEEPSEEK_REASONING_EFFORT,
     )
     for morceau in flux:
         if not morceau.choices:
