@@ -9,8 +9,8 @@ d'etre touches.
 Deux modes d'authentification sont supportes, car les serveurs MCP ne
 s'authentifient pas tous pareil :
 - pas de cle du tout (ex: Wolfram)          -> url_builder seul
-- cle glissee dans l'URL (ex: Tavily)       -> url_builder seul
-- cle envoyee en header HTTP (si besoin un jour) -> url_builder + headers_builder
+- cle envoyee en header HTTP (ex: Tavily)  -> url_builder + headers_builder
+  (jamais de cle dans une URL : elle finit en clair dans les logs)
 
 Chaque *_builder est une fonction qui recoit (get_secret, user_id, agent_id)
 et retourne soit une URL (str), soit des headers (dict), soit None. Les
@@ -74,7 +74,17 @@ def _url_github(get_secret, user_id, agent_id, conversation_id=None):
 
 
 def _url_tavily(get_secret, user_id, agent_id, conversation_id=None):
-    return f"https://mcp.tavily.com/mcp/?tavilyApiKey={get_secret('TAVILY_API_KEY')}"
+    # 04/10/2026, demande Bourama : la cle n'est plus dans l'URL (elle
+    # apparaissait en clair dans les logs Railway a chaque requete). Elle
+    # passe maintenant par l'en-tete Authorization, voir _headers_tavily.
+    return "https://mcp.tavily.com/mcp/"
+
+
+def _headers_tavily(get_secret, user_id, agent_id):
+    cle = get_secret("TAVILY_API_KEY")
+    if not cle:
+        return None
+    return {"Authorization": f"Bearer {cle}"}
 
 
 def _url_wolfram(get_secret, user_id, agent_id, conversation_id=None):
@@ -143,6 +153,7 @@ SERVEURS_MCP = [
     {
         "nom": "tavily",
         "url_builder": _url_tavily,
+        "headers_builder": _headers_tavily,
         # Réactivé 2026-07-23 (demande de Bourama) -- la plomberie
         # existait déjà (builder d'URL ci-dessus, libellés de statut
         # tavily_search/tavily_extract/... dans core/main.py, option
