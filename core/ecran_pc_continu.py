@@ -82,5 +82,7 @@ def bloc_etat_ecran_pc(user_id, conversation_id, table_routage) -> str:
     return (
         "\n\n## État actuel de l'écran du PC (lu automatiquement à l'instant)\n"
         "Cette lecture est à jour pour ce message de l'étudiant. N'appelle pas lire_ecran "
-        "pour la refaire : agis directement à partir de ce qui suit.\n\n" + texte
+        "pour la refaire : agis directement à partir de ce qui suit. Elle ne montre que la "
+        "fenêtre au premier plan : pour voir la barre des tâches ou le bureau, appelle "
+        "lire_ecran avec zone=\"barre_des_taches\" ou zone=\"bureau\".\n\n" + texte
     )

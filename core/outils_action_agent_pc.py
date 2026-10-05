@@ -451,7 +451,10 @@ def _formater_element_lu(element: dict) -> str:
     # de la fenetre (fenetre a part cote Windows, champ "zone" cote Electron).
     # Ne pas confondre avec "zone : gauche..., haut..." ci-dessus (rectangle de l'element).
     zone = element.get("zone")
-    zone_txt = f", dans le {zone}" if isinstance(zone, str) and zone else ""
+    if isinstance(zone, str) and zone:
+        zone_txt = f", dans {'la' if zone.startswith('barre') else 'le'} {zone}"
+    else:
+        zone_txt = ""
     return f"[{genre}{nom_txt}{suite}{zone_txt}, clic possible en ({element.get('x')}, {element.get('y')}){taille}]"
 
 
@@ -465,11 +468,19 @@ def _formater_lecture_ecran(resultat: dict) -> str:
     application = resultat.get("application")
     fenetres = [f for f in (resultat.get("fenetres_ouvertes") or []) if isinstance(f, str) and f]
 
+    zone_lue = resultat.get("zone_lue")
     lignes = []
+    if zone_lue == "barre_des_taches":
+        lignes.append(
+            "Barre des tâches de Windows (bouton Démarrer, applications épinglées ou ouvertes, "
+            "zone de notification, heure)."
+        )
+    elif zone_lue == "bureau":
+        lignes.append("Bureau de Windows (icônes et raccourcis posés sur le bureau).")
     if titre:
         appli_txt = f" ({application})" if application else ""
         lignes.append(f"Fenêtre au premier plan : « {titre} »{appli_txt}")
-    else:
+    elif zone_lue not in ("barre_des_taches", "bureau"):
         lignes.append("Aucune fenêtre au premier plan n'a été trouvée.")
     if fenetres:
         lignes.append("Autres fenêtres ouvertes : " + ", ".join(f"« {f} »" for f in fenetres))
@@ -482,11 +493,18 @@ def _formater_lecture_ecran(resultat: dict) -> str:
 
     elements = [e for e in (resultat.get("elements") or []) if isinstance(e, dict)]
     if resultat.get("mode") != "uia" or not elements:
-        lignes.append(
-            "Le contenu de cette fenêtre n'a pas pu être lu (l'application ne le rend pas lisible). "
-            "Tu peux seulement t'appuyer sur son titre. Ne devine jamais ce qu'elle contient ni "
-            "l'endroit où cliquer."
-        )
+        if zone_lue in ("barre_des_taches", "bureau"):
+            lieu = "la barre des tâches" if zone_lue == "barre_des_taches" else "le bureau"
+            lignes.append(
+                f"Rien n'a pu être lu dans {lieu} (vide, masqué ou non lisible). "
+                "Ne devine jamais ce qu'il contient ni l'endroit où cliquer."
+            )
+        else:
+            lignes.append(
+                "Le contenu de cette fenêtre n'a pas pu être lu (l'application ne le rend pas lisible). "
+                "Tu peux seulement t'appuyer sur son titre. Ne devine jamais ce qu'elle contient ni "
+                "l'endroit où cliquer."
+            )
         if resultat.get("erreur_lecture"):
             lignes.append(f"[Détail technique de l'échec : {str(resultat['erreur_lecture'])[:300]}]")
         return "\n".join(lignes)
@@ -519,7 +537,12 @@ def _formater_lecture_ecran(resultat: dict) -> str:
     return "\n".join(lignes)
 
 
-async def _lire_ecran_pour_modele(user_id: str, automatique: bool = False) -> tuple[str, bool]:
+# Ce que lire_ecran peut lire (04/10/2026, demande Bourama : le bureau et la barre du bas
+# avec le MEME outil, pas un autre). "fenetre" : la fenetre au premier plan (par defaut).
+ZONES_LECTURE_ECRAN = ("fenetre", "barre_des_taches", "bureau")
+
+
+async def _lire_ecran_pour_modele(user_id: str, automatique: bool = False, zone: str = "fenetre") -> tuple[str, bool]:
     """
     Lit la fenetre externe au premier plan du PC (via le pont Electron) et
     renvoie (texte pour le modele, lecture_reussie). Utilisee par lire_ecran,
@@ -536,6 +559,7 @@ async def _lire_ecran_pour_modele(user_id: str, automatique: bool = False) -> tu
         "lire_ecran",
         {
             "automatique": automatique,
+            "zone": zone,
             "nb_max_elements": NB_MAX_ELEMENTS_LECTURE_ECRAN,
             "nb_max_fenetres": NB_MAX_FENETRES_LECTURE_ECRAN,
             "longueur_max_nom": LONGUEUR_MAX_NOM_LECTURE_ECRAN,
@@ -557,7 +581,7 @@ async def _lire_ecran_pour_modele(user_id: str, automatique: bool = False) -> tu
 
 
 @mcp_generation.tool()
-async def lire_ecran(ctx: Context) -> str:
+async def lire_ecran(ctx: Context, zone: str = "fenetre") -> str:
     """
     Lot S (27/09/2026), reecrit au Lot V (28/09/2026, decision Bourama :
     aucune image, seulement du texte). Lit UNIQUEMENT ce qu'il y a dans les
@@ -583,8 +607,17 @@ async def lire_ecran(ctx: Context) -> str:
     en premier dans la lecture, marque « dans le menu ouvert », avec les
     coordonnees de chacun de ses choix.
 
-    Ne lit QUE cette fenetre (pas toutes les autres, pas tout
-    l'ecran), plus les menus qu'elle a ouverts. Certaines applications (jeux, bureau a distance) ne rendent
+    Par defaut ne lit QUE cette fenetre (pas toutes les autres, pas tout
+    l'ecran), plus les menus qu'elle a ouverts.
+
+    Le parametre zone (meme outil, rien d'autre a appeler) permet de lire
+    ailleurs : zone="barre_des_taches" lit la barre du bas de Windows
+    (bouton Demarrer, applications epinglees ou ouvertes, zone de
+    notification, heure) ; zone="bureau" lit les icones et raccourcis du
+    bureau. Leurs elements ont des coordonnees utilisables avec
+    cliquer_ecran, comme ceux d'une fenetre. Quand il n'y a plus aucune
+    fenetre ouverte ou que l'etudiant est sur le bureau, la lecture normale
+    lit deja le bureau toute seule. Laisse zone vide dans tous les autres cas. Certaines applications (jeux, bureau a distance) ne rendent
     presque rien lisible : l'outil le dit, dans ce cas ne devine pas.
     """
     user_id, erreur = _user_id_ou_erreur(ctx)
@@ -595,7 +628,13 @@ async def lire_ecran(ctx: Context) -> str:
     # core/ecran_pc_continu.py), jamais par l'IA. Le parametre vient de l'URL
     # du serveur, que l'IA ne peut pas modifier.
     automatique = ctx.request_context.request.query_params.get("automatique") == "1"
-    texte, ok = await _lire_ecran_pour_modele(user_id, automatique=automatique)
+    zone = (zone or "fenetre").strip()
+    if zone not in ZONES_LECTURE_ECRAN:
+        return (
+            f"Zone « {zone} » inconnue. Valeurs possibles : \"fenetre\" (par défaut), "
+            "\"barre_des_taches\" ou \"bureau\"."
+        )
+    texte, ok = await _lire_ecran_pour_modele(user_id, automatique=automatique, zone=zone)
     if ok:
         lecture_ecran_continue.marquer_lu(user_id, _conversation_id(ctx))
     return texte
