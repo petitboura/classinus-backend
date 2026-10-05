@@ -24,7 +24,7 @@ from core.mode_source_conversation import obtenir_mode_source
 from core.guide_conversation import obtenir_guide_actif
 from core.plafond_outils_tour import definir_plafond_tour, PLAFOND_OUTILS_GUIDE_VISUEL
 from core.canal_agent_applicatif import obtenir_actions_disponibles
-from core.ecran_pc_continu import bloc_etat_ecran_pc
+from core.ecran_pc_continu import bloc_etat_ecran_pc_anticipe, lancer_lecture_anticipee
 from core.zip_chat import iterer_statuts as _iterer_statuts_zip, obtenir_etat as _obtenir_etat_zip, construire_digest_zip as _construire_digest_zip
 from avancement_notions_ia import notions_pertinentes_pour_eleve, resoudre_code_actif_eleve
 from signalements import signalements_pertinents_pour_injection
@@ -780,6 +780,10 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     if canal_en_direct:
         outils_forces_contexte += CATEGORIES_OUTILS.get("agent_applicatif", []) + ["dire_a_l_etudiant"]
 
+    # Lecture de l'ecran PC lancee en parallele de la preparation du tour (04/10/2026) :
+    # voir core/ecran_pc_continu.py. Remplie par _tache_prompt_optimiste, reprise plus bas.
+    lecture_ecran_anticipee = []
+
     # Activation par Clovis (02/10/2026, demande Bourama : "il faut que Classinus,
     # dans le chat, puisse activer le canal en direct") : tant que le canal est
     # inactif, l'outil qui l'active est propose. La demo garde son propre outil
@@ -919,6 +923,8 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # demander_outils au lieu d'etre redemande.
             outil_force_contexte_seul = _fusionner_outils(None, outils_forces_contexte + outils_retenus_precedents)
             catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id)
+            if canal_en_direct and user_id:
+                lecture_ecran_anticipee.append(lancer_lecture_anticipee(user_id, conversation_id, table_routage_complet))
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force_contexte_seul)
             outil_force_verifie_optimiste = [o["function"]["name"] for o in outils_mcp] if outil_force_contexte_seul else None
             system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur)
@@ -1094,7 +1100,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # Canal en direct sur PC (03/10/2026, demande Bourama) : etat de l'ecran
     # a jour lu avant le tour, voir core/ecran_pc_continu.py.
     if canal_en_direct and user_id and system_final:
-        system_final += bloc_etat_ecran_pc(user_id, conversation_id, table_routage)
+        system_final += bloc_etat_ecran_pc_anticipe(
+            lecture_ecran_anticipee[0] if lecture_ecran_anticipee else None, user_id, conversation_id, table_routage
+        )
 
     if localisation and localisation.get("latitude") is not None and localisation.get("longitude") is not None:
         # Contexte "système/environnement" (2026-07-20) : position GPS

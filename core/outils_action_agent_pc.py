@@ -27,6 +27,7 @@ import asyncio
 import functools
 import logging
 import os
+import time
 
 from core import lecture_ecran_continue
 from core.canal_agent_applicatif import demander_action_systeme as _demander_action_systeme
@@ -143,7 +144,7 @@ async def _relire_apres_action(user_id: str, message_action: str, delai_secondes
 
 @mcp_generation.tool()
 async def pointer_ecran(x: int, y: int, ctx: Context) -> str:
-    """Montre un endroit de l'écran avec le curseur dessiné de Clovis uniquement.
+    """Montre un endroit de l'écran avec le curseur dessiné de Classinus uniquement.
 
     Ne clique pas, ne déplace jamais le pointeur Windows de l'étudiant et
     ne change pas le focus. x/y sont les coordonnées en pixels physiques
@@ -162,7 +163,7 @@ async def pointer_ecran(x: int, y: int, ctx: Context) -> str:
     if not isinstance(resultat, dict) or resultat.get("succes") is not True:
         logging.warning("Pointage écran : %s", resultat.get("erreur", "réponse sans succès") if isinstance(resultat, dict) else "réponse invalide")
         return f"Erreur : {resultat.get('erreur', 'pointage non effectué') if isinstance(resultat, dict) else 'pointage non effectué'}"
-    return f"Curseur de Clovis positionné à ({x}, {y}), sans déplacer le pointeur Windows."
+    return f"Curseur de Classinus positionné à ({x}, {y}), sans déplacer le pointeur Windows."
 
 
 FORMES_MARQUE_ECRAN = ("entourer", "souligner", "surligner")
@@ -183,7 +184,7 @@ async def marquer_ecran(
     duree_secondes: int = DUREE_DEFAUT_MARQUE_SECONDES,
     delai_secondes: int = 0,
 ) -> str:
-    """Dessine une marque de Clovis par-dessus l'écran du PC pour montrer un endroit.
+    """Dessine une marque de Classinus par-dessus l'écran du PC pour montrer un endroit.
 
     forme : "entourer" (cercle autour), "souligner" (trait dessous) ou
     "surligner" (fond jaune). gauche, haut, largeur, hauteur : la zone de
@@ -249,7 +250,7 @@ async def cliquer_ecran(x: int, y: int, ctx: Context) -> str:
     core/outils_action_agent.py). x et y sont les pixels physiques
     d'écran renvoyés par lire_ecran.
 
-    Clovis pointe avec son curseur dessiné puis clique par accessibilité
+    Classinus pointe avec son curseur dessiné puis clique par accessibilité
     Windows, sans déplacer le pointeur de l'étudiant. Si le contrôle ne
     le permet pas, l'application annonce « Je vais utiliser ton curseur
     maintenant », puis utilise la vraie souris et remet le pointeur à
@@ -286,7 +287,7 @@ async def cliquer_ecran(x: int, y: int, ctx: Context) -> str:
     if resultat.get("curseur_reel_utilise") is True:
         message = f"Clic effectué à ({x}, {y}) avec le pointeur de l'étudiant, après l'annonce automatique et sans demande de validation."
     elif resultat.get("curseur_reel_utilise") is False:
-        message = f"Clic effectué à ({x}, {y}) avec le curseur de Clovis, sans déplacer le pointeur Windows."
+        message = f"Clic effectué à ({x}, {y}) avec le curseur de Classinus, sans déplacer le pointeur Windows."
     else:
         message = f"Clic effectué à l'écran, position ({x}, {y})."
     return await _relire_apres_action(user_id, message, DELAI_APRES_CLIC_SECONDES)
@@ -529,6 +530,7 @@ async def _lire_ecran_pour_modele(user_id: str, automatique: bool = False) -> tu
     action, verrou de premiere lecture), pas par l'IA. L'application PC ne
     l'affiche alors ni dans le journal ni dans la bulle.
     """
+    debut_lecture = time.monotonic()
     resultat = await _demander_action_systeme(
         user_id,
         "lire_ecran",
@@ -542,6 +544,7 @@ async def _lire_ecran_pour_modele(user_id: str, automatique: bool = False) -> tu
             "delai_max_ms": DELAI_MAX_LECTURE_ECRAN_MS,
         },
     )
+    logging.info(f"Lecture de l'ecran PC (automatique={automatique}) : {time.monotonic() - debut_lecture:.1f} s")
     if resultat is None:
         return MESSAGE_ECHEC_SYSTEME, False
     if not isinstance(resultat, dict):
