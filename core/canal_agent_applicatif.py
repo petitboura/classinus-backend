@@ -460,7 +460,7 @@ async def demander_action_systeme(
 
     type_action attendus pour l'instant (a etendre au meme endroit si
     de nouveaux types sont ajoutes cote Electron) : "cliquer_ecran"
-    ({x, y}), "taper_clavier" ({texte}), "appuyer_touches" ({touches}), "ouvrir_application" ({nom}),
+    ({x, y}), "taper_clavier" ({texte}), "ouvrir_application" ({nom}),
     "lire_ecran" ({nb_max_elements, nb_max_fenetres, longueur_max_nom,
     longueur_max_valeur, profondeur_max, delai_max_ms}, voir
     core/outils_action_agent_pc.py).

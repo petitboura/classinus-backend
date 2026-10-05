@@ -24,8 +24,10 @@ qui joue ce role pour les actions systeme.
 """
 
 import asyncio
+import functools
 import logging
 import os
+import time
 
 from core import lecture_ecran_continue
 from core.canal_agent_applicatif import demander_action_systeme as _demander_action_systeme
@@ -38,6 +40,42 @@ def _user_id_ou_erreur(ctx: Context) -> tuple[str | None, str | None]:
     if not user_id:
         return None, "Erreur : impossible d'identifier l'utilisateur."
     return user_id, None
+
+
+# Une seule action PC a la fois par etudiant (03/10/2026, demande Bourama :
+# "Classinus n'arrive pas a cliquer souvent"). Dans les logs de test, le
+# modele envoyait parfois deux clics identiques en meme temps : le second
+# etait refuse avec une erreur peu claire ("Un clic de Clovis est deja en
+# cours") et le modele recommencait en boucle. Maintenant la seconde action
+# recoit tout de suite une consigne precise : attendre le resultat de la
+# premiere (qui contient deja l'ecran a jour), puis agir.
+MESSAGE_ACTION_PC_EN_COURS = (
+    "Action NON exécutée : une autre action sur le PC est encore en cours. Fais UNE SEULE action "
+    "à la fois : attends son résultat (il contient déjà l'état de l'écran qui suit), puis décide "
+    "de la suite à partir de ce résultat. Ne répète pas la même action."
+)
+
+_verrous_actions_pc: dict[str, asyncio.Lock] = {}
+
+
+def une_action_pc_a_la_fois(fonction):
+    """Refuse proprement une action PC lancee pendant qu'une autre du meme etudiant n'est pas finie."""
+
+    @functools.wraps(fonction)
+    async def enveloppe(*args, **kwargs):
+        ctx = kwargs.get("ctx")
+        if ctx is None:
+            ctx = next((a for a in args if isinstance(a, Context)), None)
+        user_id, erreur = _user_id_ou_erreur(ctx) if ctx is not None else (None, "pas de contexte")
+        if erreur or not user_id:
+            return await fonction(*args, **kwargs)
+        verrou = _verrous_actions_pc.setdefault(str(user_id), asyncio.Lock())
+        if verrou.locked():
+            return MESSAGE_ACTION_PC_EN_COURS
+        async with verrou:
+            return await fonction(*args, **kwargs)
+
+    return enveloppe
 
 
 MESSAGE_ECHEC_SYSTEME = (
@@ -81,7 +119,7 @@ async def _lecture_prealable_si_necessaire(user_id: str, conversation_id: str | 
     """
     if lecture_ecran_continue.a_deja_lu(user_id, conversation_id):
         return None
-    texte, ok = await _lire_ecran_pour_modele(user_id)
+    texte, ok = await _lire_ecran_pour_modele(user_id, automatique=True)
     if not ok:
         return "Action NON exécutée : la lecture préalable de l'écran n'a pas abouti. " + texte
     lecture_ecran_continue.marquer_lu(user_id, conversation_id)
@@ -95,7 +133,7 @@ async def _relire_apres_action(user_id: str, message_action: str, delai_secondes
     l'action. L'IA voit ainsi l'etat reel qui suit, sans avoir a relire.
     """
     await asyncio.sleep(delai_secondes)
-    texte, ok = await _lire_ecran_pour_modele(user_id)
+    texte, ok = await _lire_ecran_pour_modele(user_id, automatique=True)
     if not ok:
         return (
             message_action + "\n\nLa lecture automatique de l'écran après cette action n'a pas abouti. "
@@ -106,7 +144,7 @@ async def _relire_apres_action(user_id: str, message_action: str, delai_secondes
 
 @mcp_generation.tool()
 async def pointer_ecran(x: int, y: int, ctx: Context) -> str:
-    """Montre un endroit de l'écran avec le curseur dessiné de Clovis uniquement.
+    """Montre un endroit de l'écran avec le curseur dessiné de Classinus uniquement.
 
     Ne clique pas, ne déplace jamais le pointeur Windows de l'étudiant et
     ne change pas le focus. x/y sont les coordonnées en pixels physiques
@@ -125,7 +163,7 @@ async def pointer_ecran(x: int, y: int, ctx: Context) -> str:
     if not isinstance(resultat, dict) or resultat.get("succes") is not True:
         logging.warning("Pointage écran : %s", resultat.get("erreur", "réponse sans succès") if isinstance(resultat, dict) else "réponse invalide")
         return f"Erreur : {resultat.get('erreur', 'pointage non effectué') if isinstance(resultat, dict) else 'pointage non effectué'}"
-    return f"Curseur de Clovis positionné à ({x}, {y}), sans déplacer le pointeur Windows."
+    return f"Curseur de Classinus positionné à ({x}, {y}), sans déplacer le pointeur Windows."
 
 
 FORMES_MARQUE_ECRAN = ("entourer", "souligner", "surligner")
@@ -146,7 +184,7 @@ async def marquer_ecran(
     duree_secondes: int = DUREE_DEFAUT_MARQUE_SECONDES,
     delai_secondes: int = 0,
 ) -> str:
-    """Dessine une marque de Clovis par-dessus l'écran du PC pour montrer un endroit.
+    """Dessine une marque de Classinus par-dessus l'écran du PC pour montrer un endroit.
 
     forme : "entourer" (cercle autour), "souligner" (trait dessous) ou
     "surligner" (fond jaune). gauche, haut, largeur, hauteur : la zone de
@@ -203,6 +241,7 @@ async def marquer_ecran(
 
 
 @mcp_generation.tool()
+@une_action_pc_a_la_fois
 async def cliquer_ecran(x: int, y: int, ctx: Context) -> str:
     """
     Lot S (27/09/2026). Clique a des coordonnees precises de l'ECRAN
@@ -211,7 +250,7 @@ async def cliquer_ecran(x: int, y: int, ctx: Context) -> str:
     core/outils_action_agent.py). x et y sont les pixels physiques
     d'écran renvoyés par lire_ecran.
 
-    Clovis pointe avec son curseur dessiné puis clique par accessibilité
+    Classinus pointe avec son curseur dessiné puis clique par accessibilité
     Windows, sans déplacer le pointeur de l'étudiant. Si le contrôle ne
     le permet pas, l'application annonce « Je vais utiliser ton curseur
     maintenant », puis utilise la vraie souris et remet le pointeur à
@@ -248,13 +287,14 @@ async def cliquer_ecran(x: int, y: int, ctx: Context) -> str:
     if resultat.get("curseur_reel_utilise") is True:
         message = f"Clic effectué à ({x}, {y}) avec le pointeur de l'étudiant, après l'annonce automatique et sans demande de validation."
     elif resultat.get("curseur_reel_utilise") is False:
-        message = f"Clic effectué à ({x}, {y}) avec le curseur de Clovis, sans déplacer le pointeur Windows."
+        message = f"Clic effectué à ({x}, {y}) avec le curseur de Classinus, sans déplacer le pointeur Windows."
     else:
         message = f"Clic effectué à l'écran, position ({x}, {y})."
     return await _relire_apres_action(user_id, message, DELAI_APRES_CLIC_SECONDES)
 
 
 @mcp_generation.tool()
+@une_action_pc_a_la_fois
 async def taper_clavier(texte: str, ctx: Context) -> str:
     """
     Lot S (27/09/2026). Tape `texte` au clavier, a l'endroit ou se
@@ -292,30 +332,26 @@ async def taper_clavier(texte: str, ctx: Context) -> str:
 
 
 @mcp_generation.tool()
+@une_action_pc_a_la_fois
 async def appuyer_touches(touches: str, ctx: Context) -> str:
     """
-    Canal en direct PC (30/09/2026, decision Bourama : Clovis controle le
-    clavier comme un utilisateur). Appuie sur des touches seules ou des
-    raccourcis clavier, sur le PC de l'etudiant, dans la fenetre deja au
-    premier plan. Pour ECRIRE du texte, utilise taper_clavier.
+    Appuie sur une touche seule ou un raccourci clavier sur le PC de
+    l'etudiant, dans la fenetre deja au premier plan : comme un utilisateur
+    (Entree, Echap, Tab, Ctrl+C, Alt+Tab, Win+D...). Pour ecrire du texte,
+    utilise taper_clavier.
 
-    `touches` : une combinaison avec "+" (les touches sont tenues ensemble),
-    ou plusieurs combinaisons separees par des espaces (faites a la suite).
-    Exemples : "ctrl+c", "ctrl+shift+esc", "alt+tab", "win+d", "enter",
-    "esc", "f5", "ctrl+a ctrl+c", "tab tab enter".
-    Modificateurs : ctrl, shift, alt, altgr, win. Touches : a-z, 0-9, f1-f24,
-    enter, esc, tab, space, backspace, delete, insert, home, end, pageup,
-    pagedown, up, down, left, right, et la ponctuation - = , . / ; ' [ ] \\ `.
-    Une touche non reconnue est refusee : n'invente jamais un nom.
+    touches : une combinaison avec des "+" ("ctrl+c", "alt+tab", "enter"),
+    ou plusieurs combinaisons a la suite separees par des espaces
+    ("ctrl+a ctrl+c"). Maximum 10 combinaisons de 5 touches. Une touche
+    inconnue est refusee, jamais devinee. Les touches sont toujours
+    relachees apres l'appui.
 
-    Comme un vrai utilisateur : tout raccourci est permis. Chaque raccourci
-    est annonce a l'etudiant dans son journal avant d'etre execute. Tant que
-    tu n'as pas lu l'ecran dans cette conversation, rien n'est presse et
-    l'ecran t'est renvoye. Ensuite, le resultat contient deja l'etat de
-    l'ecran qui suit : inutile d'appeler lire_ecran apres.
+    Tant que tu n'as pas lu l'ecran dans cette conversation, rien n'est
+    presse et l'ecran t'est renvoye. Ensuite, le resultat contient deja
+    l'etat de l'ecran qui suit : inutile d'appeler lire_ecran apres.
 
-    Aucune confirmation etudiant (meme regle que le reste du canal en direct
-    depuis le 19/09/2026).
+    Aucune confirmation etudiant pour ce lot (meme regle que le reste du
+    canal en direct depuis le 19/09/2026).
     """
     user_id, erreur = _user_id_ou_erreur(ctx)
     if erreur:
@@ -327,22 +363,20 @@ async def appuyer_touches(touches: str, ctx: Context) -> str:
     if bloque is not None:
         return bloque
 
-    resultat = await _demander_action_systeme(user_id, "appuyer_touches", {"touches": touches})
+    resultat = await _demander_action_systeme(user_id, "appuyer_touches", {"touches": touches.strip()})
     if resultat is None:
         return MESSAGE_ECHEC_SYSTEME
     if isinstance(resultat, dict) and resultat.get("erreur"):
         return f"Erreur : {resultat['erreur']}"
     if not isinstance(resultat, dict) or resultat.get("ok") is not True:
         return "Erreur : l'appui sur les touches n'a pas été confirmé."
-    faites = resultat.get("combinaisons")
-    if isinstance(faites, list) and faites:
-        message = "Touches pressées : " + ", ".join(str(f) for f in faites) + "."
-    else:
-        message = "Touches pressées avec succès."
-    return await _relire_apres_action(user_id, message, DELAI_APRES_CLAVIER_SECONDES)
+    combinaisons = resultat.get("combinaisons")
+    libelle = ", ".join(c for c in combinaisons if isinstance(c, str)) if isinstance(combinaisons, list) else touches.strip()
+    return await _relire_apres_action(user_id, f"Touches pressées : {libelle}.", DELAI_APRES_CLAVIER_SECONDES)
 
 
 @mcp_generation.tool()
+@une_action_pc_a_la_fois
 async def ouvrir_application(nom: str, ctx: Context) -> str:
     """
     Lot S (27/09/2026). Lance une application installée sur le PC de
@@ -417,7 +451,10 @@ def _formater_element_lu(element: dict) -> str:
     # de la fenetre (fenetre a part cote Windows, champ "zone" cote Electron).
     # Ne pas confondre avec "zone : gauche..., haut..." ci-dessus (rectangle de l'element).
     zone = element.get("zone")
-    zone_txt = f", dans le {zone}" if isinstance(zone, str) and zone else ""
+    if isinstance(zone, str) and zone:
+        zone_txt = f", dans {'la' if zone.startswith('barre') else 'le'} {zone}"
+    else:
+        zone_txt = ""
     return f"[{genre}{nom_txt}{suite}{zone_txt}, clic possible en ({element.get('x')}, {element.get('y')}){taille}]"
 
 
@@ -431,11 +468,19 @@ def _formater_lecture_ecran(resultat: dict) -> str:
     application = resultat.get("application")
     fenetres = [f for f in (resultat.get("fenetres_ouvertes") or []) if isinstance(f, str) and f]
 
+    zone_lue = resultat.get("zone_lue")
     lignes = []
+    if zone_lue == "barre_des_taches":
+        lignes.append(
+            "Barre des tâches de Windows (bouton Démarrer, applications épinglées ou ouvertes, "
+            "zone de notification, heure)."
+        )
+    elif zone_lue == "bureau":
+        lignes.append("Bureau de Windows (icônes et raccourcis posés sur le bureau).")
     if titre:
         appli_txt = f" ({application})" if application else ""
         lignes.append(f"Fenêtre au premier plan : « {titre} »{appli_txt}")
-    else:
+    elif zone_lue not in ("barre_des_taches", "bureau"):
         lignes.append("Aucune fenêtre au premier plan n'a été trouvée.")
     if fenetres:
         lignes.append("Autres fenêtres ouvertes : " + ", ".join(f"« {f} »" for f in fenetres))
@@ -448,11 +493,18 @@ def _formater_lecture_ecran(resultat: dict) -> str:
 
     elements = [e for e in (resultat.get("elements") or []) if isinstance(e, dict)]
     if resultat.get("mode") != "uia" or not elements:
-        lignes.append(
-            "Le contenu de cette fenêtre n'a pas pu être lu (l'application ne le rend pas lisible). "
-            "Tu peux seulement t'appuyer sur son titre. Ne devine jamais ce qu'elle contient ni "
-            "l'endroit où cliquer."
-        )
+        if zone_lue in ("barre_des_taches", "bureau"):
+            lieu = "la barre des tâches" if zone_lue == "barre_des_taches" else "le bureau"
+            lignes.append(
+                f"Rien n'a pu être lu dans {lieu} (vide, masqué ou non lisible). "
+                "Ne devine jamais ce qu'il contient ni l'endroit où cliquer."
+            )
+        else:
+            lignes.append(
+                "Le contenu de cette fenêtre n'a pas pu être lu (l'application ne le rend pas lisible). "
+                "Tu peux seulement t'appuyer sur son titre. Ne devine jamais ce qu'elle contient ni "
+                "l'endroit où cliquer."
+            )
         if resultat.get("erreur_lecture"):
             lignes.append(f"[Détail technique de l'échec : {str(resultat['erreur_lecture'])[:300]}]")
         return "\n".join(lignes)
@@ -485,17 +537,29 @@ def _formater_lecture_ecran(resultat: dict) -> str:
     return "\n".join(lignes)
 
 
-async def _lire_ecran_pour_modele(user_id: str) -> tuple[str, bool]:
+# Ce que lire_ecran peut lire (04/10/2026, demande Bourama : le bureau et la barre du bas
+# avec le MEME outil, pas un autre). "fenetre" : la fenetre au premier plan (par defaut).
+ZONES_LECTURE_ECRAN = ("fenetre", "barre_des_taches", "bureau")
+
+
+async def _lire_ecran_pour_modele(user_id: str, automatique: bool = False, zone: str = "fenetre") -> tuple[str, bool]:
     """
     Lit la fenetre externe au premier plan du PC (via le pont Electron) et
     renvoie (texte pour le modele, lecture_reussie). Utilisee par lire_ecran,
     par le verrou de premiere lecture et par la relecture apres action : une
     seule facon de lire l'ecran, a un seul endroit.
+
+    automatique=True : lecture decidee par le serveur (avant un tour, apres une
+    action, verrou de premiere lecture), pas par l'IA. L'application PC ne
+    l'affiche alors ni dans le journal ni dans la bulle.
     """
+    debut_lecture = time.monotonic()
     resultat = await _demander_action_systeme(
         user_id,
         "lire_ecran",
         {
+            "automatique": automatique,
+            "zone": zone,
             "nb_max_elements": NB_MAX_ELEMENTS_LECTURE_ECRAN,
             "nb_max_fenetres": NB_MAX_FENETRES_LECTURE_ECRAN,
             "longueur_max_nom": LONGUEUR_MAX_NOM_LECTURE_ECRAN,
@@ -504,6 +568,7 @@ async def _lire_ecran_pour_modele(user_id: str) -> tuple[str, bool]:
             "delai_max_ms": DELAI_MAX_LECTURE_ECRAN_MS,
         },
     )
+    logging.info(f"Lecture de l'ecran PC (automatique={automatique}) : {time.monotonic() - debut_lecture:.1f} s")
     if resultat is None:
         return MESSAGE_ECHEC_SYSTEME, False
     if not isinstance(resultat, dict):
@@ -516,7 +581,7 @@ async def _lire_ecran_pour_modele(user_id: str) -> tuple[str, bool]:
 
 
 @mcp_generation.tool()
-async def lire_ecran(ctx: Context) -> str:
+async def lire_ecran(ctx: Context, zone: str = "fenetre") -> str:
     """
     Lot S (27/09/2026), reecrit au Lot V (28/09/2026, decision Bourama :
     aucune image, seulement du texte). Lit UNIQUEMENT ce qu'il y a dans les
@@ -537,19 +602,39 @@ async def lire_ecran(ctx: Context) -> str:
     Classinus, sans la mettre au premier plan. Pour agir dessus, le pont
     restaure son focus avant le clic ou la frappe.
 
-    Quand un clic ouvre un menu, un menu contextuel ou une liste deroulante,
-    la lecture renvoyee avec ce clic le montre en premier, marque « dans le
-    menu ouvert », avec les coordonnees de chacun de ses choix.
+    Apres un clic sur un bouton qui ouvre un menu, un menu contextuel ou
+    une liste deroulante, rappelle lire_ecran : ce menu ouvert apparait
+    en premier dans la lecture, marque « dans le menu ouvert », avec les
+    coordonnees de chacun de ses choix.
 
-    Ne lit QUE cette fenetre (pas toutes les autres, pas tout
-    l'ecran), plus les menus qu'elle a ouverts. Certaines applications (jeux, bureau a distance) ne rendent
+    Par defaut ne lit QUE cette fenetre (pas toutes les autres, pas tout
+    l'ecran), plus les menus qu'elle a ouverts.
+
+    Le parametre zone (meme outil, rien d'autre a appeler) permet de lire
+    ailleurs : zone="barre_des_taches" lit la barre du bas de Windows
+    (bouton Demarrer, applications epinglees ou ouvertes, zone de
+    notification, heure) ; zone="bureau" lit les icones et raccourcis du
+    bureau. Leurs elements ont des coordonnees utilisables avec
+    cliquer_ecran, comme ceux d'une fenetre. Quand il n'y a plus aucune
+    fenetre ouverte ou que l'etudiant est sur le bureau, la lecture normale
+    lit deja le bureau toute seule. Laisse zone vide dans tous les autres cas. Certaines applications (jeux, bureau a distance) ne rendent
     presque rien lisible : l'outil le dit, dans ce cas ne devine pas.
     """
     user_id, erreur = _user_id_ou_erreur(ctx)
     if erreur:
         return erreur
 
-    texte, ok = await _lire_ecran_pour_modele(user_id)
+    # Lecture automatique : demandee par le serveur avant le tour (voir
+    # core/ecran_pc_continu.py), jamais par l'IA. Le parametre vient de l'URL
+    # du serveur, que l'IA ne peut pas modifier.
+    automatique = ctx.request_context.request.query_params.get("automatique") == "1"
+    zone = (zone or "fenetre").strip()
+    if zone not in ZONES_LECTURE_ECRAN:
+        return (
+            f"Zone « {zone} » inconnue. Valeurs possibles : \"fenetre\" (par défaut), "
+            "\"barre_des_taches\" ou \"bureau\"."
+        )
+    texte, ok = await _lire_ecran_pour_modele(user_id, automatique=automatique, zone=zone)
     if ok:
         lecture_ecran_continue.marquer_lu(user_id, _conversation_id(ctx))
     return texte
