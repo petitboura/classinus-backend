@@ -42,6 +42,7 @@ from groq import Groq
 from supabase import create_client, ClientOptions
 from client_http_supabase import nouveau_client_http_supabase
 from codes_partage import invalider_cache_recus_pour_comportement as _invalider_cache_recus_pour_comportement
+from codes_partage import ids_comportements_lies_a_un_code
 
 # Cache court (11/09/2026, demande Bourama : "pas à chaque message si ça
 # peut être évité") : "Mes comportements" ne change que quand l'étudiant
@@ -122,12 +123,53 @@ def _appliquer_nom_affichage(skill_md: str, nom: str) -> str:
     return f"---\n{chr(10).join(lignes)}\n---\n\n{corps.strip()}\n"
 
 
+def _appliquer_description_manuelle(skill_md: str, description: str) -> str:
+    """29/09/2026, demande Bourama, onglet "Configuration" de Bureau :
+    champ optionnel "quand l'utiliser" -- si l'utilisateur le remplit,
+    SA phrase devient la description (celle que l'IA lit pour décider
+    quand appliquer ce skill), au lieu de la description générée
+    automatiquement. Même patron que _appliquer_nom_affichage
+    ci-dessus : remplace la ligne `description:` du frontmatter, ou
+    l'ajoute si absente."""
+    correspondance = _RE_FRONTMATTER.match(skill_md)
+    if not correspondance:
+        return skill_md
+    entete, corps = correspondance.group(1), correspondance.group(2)
+    lignes = entete.splitlines()
+    remplace = False
+    for i, ligne in enumerate(lignes):
+        if ligne.strip().lower().startswith("description:"):
+            lignes[i] = f"description: {description}"
+            remplace = True
+            break
+    if not remplace:
+        lignes.append(f"description: {description}")
+    return f"---\n{chr(10).join(lignes)}\n---\n\n{corps.strip()}\n"
+
+
+def _longueur_description_cible(texte: str) -> int:
+    """28/09/2026, demande Bourama ("le skill généré doit être
+    proportionnel à celui du texte écrit, surtout pour les règles qui
+    sont généralement courtes") : avant, la description générée visait
+    TOUJOURS jusqu'à 500 caractères, peu importe la longueur du texte
+    d'origine -- une règle d'une ligne se retrouvait avec une description
+    artificiellement gonflée. Ici, la cible suit la longueur du texte lui
+    même, avec un plancher pour rester lisible. 01/10/2026, demande
+    Bourama ("ne pas imposer de limite, la dernière fois ça coupait les
+    skills") : le plafond de 500 caractères est retiré, la cible suit
+    simplement la longueur du texte sans jamais en couper une partie.
+    S'applique à TOUS les comportements (skills classiques ET les 4
+    catégories de Configuration), pas seulement les nouvelles."""
+    return max(40, round(len(texte) * 0.6))
+
+
 def _skill_repli(texte: str) -> dict:
     """Skill minimal construit sans appel LLM -- fail-safe utilisé
     SEULEMENT si _generer_skill échoue, pour ne jamais bloquer la
     création/modification d'un comportement (une description imparfaite
     vaut mieux qu'un enregistrement qui échoue)."""
-    description = texte if len(texte) <= 120 else texte[:117] + "..."
+    cible = _longueur_description_cible(texte)
+    description = texte if len(texte) <= cible else texte[: max(cible - 3, 1)] + "..."
     nom = texte if len(texte) <= 60 else texte[:57] + "..."
     skill_md = f"---\nname: {_slugifier(description)}\ndescription: {description}\n---\n\n{texte}\n"
     return {"nom": nom, "description": description, "skill_md": skill_md}
@@ -161,6 +203,7 @@ def _generer_skill(texte: str) -> dict:
     l'étudiant). Utilisé seulement si l'étudiant n'a pas choisi son propre
     nom (voir ajouter_comportement/modifier_comportement).
     """
+    cible = _longueur_description_cible(texte)
     try:
         client = Groq(api_key=get_secret("GROQ_API_KEY"), max_retries=0, timeout=20.0)
         completion = client.chat.completions.create(
@@ -176,12 +219,22 @@ def _generer_skill(texte: str) -> dict:
                     "caractères), `description` (UNE phrase à la troisième "
                     "personne, qui dit CE QUE fait ce comportement ET QUAND "
                     "l'appliquer, avec des mots concrets qui déclenchent son usage, "
-                    "max 500 caractères) et `nom_affichage` (un nom court et soigné, "
+                    f"environ {cible} caractères -- PROPORTIONNELLE à la longueur du "
+                    "texte source ci-dessous : si le texte source est court, la "
+                    "description doit rester courte, ne jamais l'allonger "
+                    "artificiellement) et `nom_affichage` (un nom court et soigné, "
                     "2 à 5 mots, avec accents/majuscules/espaces normaux, pensé pour "
                     "être LU par l'étudiant dans une liste -- pas un slug technique, "
                     "max 40 caractères), suivi d'un corps en Markdown qui détaille "
                     "l'instruction de façon claire et directe, à la deuxième "
-                    "personne, comme des consignes que l'assistant doit suivre. Ne "
+                    "personne, comme des consignes que l'assistant doit suivre. Le "
+                    "corps doit être PROPORTIONNEL à l'instruction de l'étudiant, du "
+                    "même ordre de grandeur : une instruction courte (une règle d'une "
+                    "ligne par exemple) donne un corps court, sans sections, sans "
+                    "exemples inventés et sans rien ajouter qui n'est pas dans le "
+                    "texte ; une instruction longue donne un corps plus développé. "
+                    "Garde tout ce que l'étudiant a écrit, ne retire et ne résume "
+                    "aucune partie, et ne coupe jamais le texte. Ne "
                     "réponds QUE avec le contenu du fichier, rien d'autre autour, "
                     "en commençant directement par ---.\n\n"
                     f"Instruction de l'étudiant :\n{texte}"
@@ -249,7 +302,7 @@ def lister_comportements(agent_id: str, etudiant_id: str) -> list[dict]:
     try:
         res = (
             supabase.table("comportements_etudiants")
-            .select("id, texte, description, nom, lien_type, lien_id, actif, depuis_audit")
+            .select("id, texte, description, nom, lien_type, lien_id, actif, depuis_audit, categorie, portee")
             .eq("agent_id", agent_id)
             .eq("etudiant_id", etudiant_id)
             .order("created_at")
@@ -320,6 +373,8 @@ def lister_comportements(agent_id: str, etudiant_id: str) -> list[dict]:
                 "depuis_public": ligne["id"] in ids_depuis_public,
                 "matiere_id": matiere_id,
                 "matiere_nom": matiere_nom,
+                "categorie": ligne.get("categorie"),
+                "portee": ligne.get("portee") or "deux",
             }
         )
     _cache_comportements[cle] = {"valeur": resultat, "expire_a": maintenant + _DUREE_CACHE_SECONDES}
@@ -542,6 +597,9 @@ def choisir_comportements_pertinents(message_utilisateur: str, comportements: li
         return []
 
 
+CATEGORIES_CONFIGURATION = ("procedure", "regle", "comportement", "style")
+
+
 def ajouter_comportement(
     agent_id: str,
     etudiant_id: str,
@@ -549,6 +607,8 @@ def ajouter_comportement(
     nom: str | None = None,
     lien_type: str | None = None,
     lien_id: str | None = None,
+    categorie: str | None = None,
+    quand_utiliser: str | None = None,
 ) -> dict:
     """
     lien_type/lien_id (16/08/2026, demande Bourama) : rattache
@@ -565,20 +625,49 @@ def ajouter_comportement(
     l'étudiant. Vide/absent -> mode "auto" : on prend le nom_affichage
     généré par _generer_skill (même appel LLM que le skill, aucun coût
     supplémentaire).
+
+    categorie (28/09/2026, demande Bourama, onglet "Configuration" de
+    Bureau) : None -> skill classique inchangé ("Mes skills"). Une des 4
+    valeurs de CATEGORIES_CONFIGURATION -> skill créé depuis l'un des 4
+    onglets séparés (Procédure/Règle/Comportement/Style), chacun avec son
+    propre bouton "+", jamais choisie par l'utilisateur au moment de la
+    création (le lieu de création la détermine). L'appelant est
+    responsable de valider cette valeur AVANT d'appeler cette fonction
+    (voir api/comportements_etudiants.py) -- la contrainte SQL
+    comportements_etudiants_categorie_valide est le filet de sécurité
+    final. 03/10/2026, demande Bourama : l'IA peut maintenant créer ces
+    entrées depuis le chat (outil gerer_comportement, paramètre
+    `categorie`, voir core/outils_comportements_connaissance.py), ce qui
+    remplace la règle du 28/09 qui la réservait à un humain via un bouton.
+
+    quand_utiliser (29/09/2026, demande Bourama, même chantier) : champ
+    optionnel, seulement proposé à l'écran pour les 4 catégories de
+    Configuration ("cette fois un champ optionnel quand l'utiliser").
+    Rempli -> devient directement la description (ce que l'IA lit pour
+    savoir quand appliquer ce skill), à la place de la description
+    générée automatiquement. Vide/absent -> comportement inchangé,
+    description auto-générée par _generer_skill (proportionnelle à la
+    longueur du texte, voir _longueur_description_cible).
     """
     texte = texte.strip()
     nom = (nom or "").strip()
+    quand_utiliser = (quand_utiliser or "").strip()
     skill = _generer_skill(texte)
     nom_final = nom or skill["nom"]
+    description_finale = quand_utiliser or skill["description"]
+    skill_md = _appliquer_nom_affichage(skill["skill_md"], nom_final)
+    if quand_utiliser:
+        skill_md = _appliquer_description_manuelle(skill_md, quand_utiliser)
     ligne_a_inserer = {
         "agent_id": agent_id,
         "etudiant_id": etudiant_id,
         "texte": texte,
-        "description": skill["description"],
-        "skill_md": _appliquer_nom_affichage(skill["skill_md"], nom_final),
+        "description": description_finale,
+        "skill_md": skill_md,
         "nom": nom_final,
         "lien_type": lien_type,
         "lien_id": lien_id,
+        "categorie": categorie,
     }
     res = supabase.table("comportements_etudiants").insert(ligne_a_inserer).execute()
     ligne = res.data[0]
@@ -591,6 +680,7 @@ def ajouter_comportement(
         "lien_type": ligne.get("lien_type"),
         "lien_id": ligne.get("lien_id"),
         "actif": ligne.get("actif", True),
+        "categorie": ligne.get("categorie"),
     }
 
 
@@ -653,7 +743,7 @@ def importer_comportement_depuis_skill_md(
 
 
 def modifier_comportement(
-    agent_id: str, etudiant_id: str, comportement_id: str, texte: str, nom: str | None = None
+    agent_id: str, etudiant_id: str, comportement_id: str, texte: str, nom: str | None = None, quand_utiliser: str | None = None
 ) -> dict | None:
     """Modifie le texte -- ne touche jamais lien_type/lien_id (pas
     demandé ici : modifier le TEXTE d'un comportement lié ne doit pas
@@ -666,17 +756,30 @@ def modifier_comportement(
     auto régénéré avec le nouveau skill ; rempli -> gardé tel quel.
     L'appelant doit donc renvoyer le nom manuel actuel s'il veut le
     préserver lors d'une modification du texte seul (voir
-    api/comportements_etudiants.py)."""
+    api/comportements_etudiants.py).
+
+    quand_utiliser (29/09/2026) : même règle qu'à la création (voir
+    ajouter_comportement) -- rempli -> devient la description ; vide ->
+    description régénérée automatiquement à partir du nouveau texte.
+    Même remarque, l'appelant doit renvoyer la valeur actuelle du champ
+    s'il veut la préserver lors d'une modification du texte seul.
+    Ne touche jamais `categorie` (fixée à la création, jamais
+    modifiable -- voir CATEGORIES_CONFIGURATION)."""
     texte = texte.strip()
     nom = (nom or "").strip()
+    quand_utiliser = (quand_utiliser or "").strip()
     skill = _generer_skill(texte)
     nom_final = nom or skill["nom"]
+    description_finale = quand_utiliser or skill["description"]
+    skill_md = _appliquer_nom_affichage(skill["skill_md"], nom_final)
+    if quand_utiliser:
+        skill_md = _appliquer_description_manuelle(skill_md, quand_utiliser)
     res = (
         supabase.table("comportements_etudiants")
         .update({
             "texte": texte,
-            "description": skill["description"],
-            "skill_md": _appliquer_nom_affichage(skill["skill_md"], nom_final),
+            "description": description_finale,
+            "skill_md": skill_md,
             "nom": nom_final,
         })
         .eq("id", comportement_id)
@@ -697,6 +800,7 @@ def modifier_comportement(
         "lien_type": ligne.get("lien_type"),
         "lien_id": ligne.get("lien_id"),
         "actif": ligne.get("actif", True),
+        "categorie": ligne.get("categorie"),
     }
 
 
@@ -798,6 +902,9 @@ def activer_desactiver_comportement(agent_id: str, etudiant_id: str, comportemen
         return None
     ligne = res.data[0]
     _invalider_cache_comportements(agent_id, etudiant_id)
+    # 03/10/2026 : un élément de Configuration lié à un code est lu par ceux
+    # qui l'ont activé, son état actif doit donc compter tout de suite chez eux.
+    _invalider_cache_recus_pour_comportement(comportement_id)
     return {
         "id": ligne["id"],
         "texte": ligne["texte"],
@@ -806,6 +913,78 @@ def activer_desactiver_comportement(agent_id: str, etudiant_id: str, comportemen
         "lien_type": ligne.get("lien_type"),
         "lien_id": ligne.get("lien_id"),
         "actif": ligne.get("actif", True),
+    }
+
+
+# 04/10/2026, demande Bourama : un element lie a un code s'applique soit a
+# son proprietaire ET aux receveurs ('deux', defaut), soit aux receveurs
+# seulement ('destinataires'). Un element NON lie a un code s'applique
+# toujours a son proprietaire : la valeur 'destinataires' est alors ignoree.
+PORTEES_VALIDES = ("deux", "destinataires")
+
+
+def retirer_elements_destinataires_seuls(comportements: list[dict]) -> list[dict]:
+    """Retire de `comportements` (forme de lister_comportements) ceux qui ne
+    doivent PAS s'appliquer a leur proprietaire : portee 'destinataires' ET
+    lie a au moins un code. Une requete groupee, faite seulement s'il y a
+    au moins un element 'destinataires' (cas rare : aucune requete en plus
+    pour la plupart des messages)."""
+    candidats = [c["id"] for c in comportements if c.get("portee") == "destinataires"]
+    if not candidats:
+        return comportements
+    lies = ids_comportements_lies_a_un_code(candidats)
+    if not lies:
+        return comportements
+    return [c for c in comportements if c["id"] not in lies]
+
+
+def lister_ids_lies_a_un_code(comportements: list[dict]) -> set[str]:
+    """Ids, parmi `comportements`, lies a au moins un code (pour que
+    l'ecran sache s'il doit proposer le choix du destinataire)."""
+    return ids_comportements_lies_a_un_code([c["id"] for c in comportements])
+
+
+def definir_portee_comportement(agent_id: str, etudiant_id: str, comportement_id: str, portee: str) -> dict | None:
+    """Change la portee d'un element de son proprietaire. None si l'element
+    n'existe pas chez lui. ValueError si la valeur est inconnue, ou si
+    l'element n'est lie a aucun code (le choix n'existe alors pas : il
+    s'applique a son proprietaire, point)."""
+    if portee not in PORTEES_VALIDES:
+        raise ValueError("PORTEE_INVALIDE")
+    if comportement_id not in ids_comportements_lies_a_un_code([comportement_id]):
+        existant = (
+            supabase.table("comportements_etudiants")
+            .select("id")
+            .eq("id", comportement_id)
+            .eq("agent_id", agent_id)
+            .eq("etudiant_id", etudiant_id)
+            .execute()
+        )
+        if not existant.data:
+            return None
+        raise ValueError("NON_LIE_A_UN_CODE")
+    res = (
+        supabase.table("comportements_etudiants")
+        .update({"portee": portee})
+        .eq("id", comportement_id)
+        .eq("agent_id", agent_id)
+        .eq("etudiant_id", etudiant_id)
+        .execute()
+    )
+    if not res.data:
+        return None
+    ligne = res.data[0]
+    _invalider_cache_comportements(agent_id, etudiant_id)
+    return {
+        "id": ligne["id"],
+        "texte": ligne["texte"],
+        "description": ligne.get("description") or "",
+        "nom": ligne.get("nom") or "",
+        "lien_type": ligne.get("lien_type"),
+        "lien_id": ligne.get("lien_id"),
+        "actif": ligne.get("actif", True),
+        "categorie": ligne.get("categorie"),
+        "portee": ligne.get("portee") or "deux",
     }
 
 

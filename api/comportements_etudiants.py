@@ -46,6 +46,7 @@ def libelle_emplacement(lien_type: str | None, lien_id: str | None) -> str | Non
 def proprietaire_lien_comportement(lien_type: str | None, lien_id: str | None) -> str | None:
     return None
 from core.comportements_etudiants import (
+    CATEGORIES_CONFIGURATION,
     lister_comportements,
     lister_comportements_par_lien,
     ajouter_comportement,
@@ -57,6 +58,8 @@ from core.comportements_etudiants import (
     obtenir_comportement_pour_consultation,
     modifier_skill_comportement,
     activer_desactiver_comportement,
+    definir_portee_comportement,
+    lister_ids_lies_a_un_code,
     publier_comportement_public,
     lister_comportements_publics,
     activer_comportement_public,
@@ -88,6 +91,18 @@ class Comportement(BaseModel):
     # autre, ou pas de lien).
     matiere_id: str | None = None
     matiere_nom: str | None = None
+    # 28/09/2026, demande Bourama, onglet "Configuration" de Bureau :
+    # None = skill classique ("Mes skills"), inchangé. Sinon une des 4
+    # catégories créées depuis leur propre onglet séparé (Procédure/
+    # Règle/Comportement/Style) -- voir CATEGORIES_CONFIGURATION,
+    # core/comportements_etudiants.py.
+    categorie: str | None = None
+    # 04/10/2026, demande Bourama : "deux" (propriétaire et receveurs du
+    # code) ou "destinataires" (receveurs seulement). Sans effet tant que
+    # l'élément n'est lié à aucun code (lie_a_code false) : il s'applique
+    # alors toujours à son propriétaire.
+    portee: str = "deux"
+    lie_a_code: bool = False
 
 
 class ComportementPayload(BaseModel):
@@ -103,6 +118,20 @@ class ComportementPayload(BaseModel):
     # jamais fait confiance au lien_id fourni tel quel.
     lien_type: str | None = None
     lien_id: str | None = None
+    # 28/09/2026, demande Bourama : renseigné UNIQUEMENT par le bouton "+"
+    # propre à chacun des 4 onglets de Configuration -- jamais un choix
+    # proposé à l'utilisateur au moment de créer, le lieu de création la
+    # détermine. Vide/absent -> skill classique, comportement inchangé.
+    # Validé ci-dessous (_verifier_categorie) avant d'atteindre
+    # ajouter_comportement -- une valeur invalide est refusée avec 400,
+    # jamais silencieusement ignorée.
+    categorie: str | None = None
+    # 29/09/2026, demande Bourama : champ "quand l'utiliser", seulement
+    # affiché à l'écran pour les 4 catégories de Configuration. Rempli ->
+    # devient la description directement (voir
+    # _appliquer_description_manuelle). Vide/absent -> description
+    # générée automatiquement, comportement inchangé.
+    quand_utiliser: str | None = None
 
 
 class AttacherPayload(BaseModel):
@@ -122,6 +151,15 @@ def _verifier_lien(lien_type: str | None, lien_id: str | None, utilisateur_id: s
         raise erreur_api(404, "EMPLACEMENT_INTROUVABLE")
 
 
+def _verifier_categorie(categorie: str | None) -> None:
+    """28/09/2026, demande Bourama : même filet que côté base (contrainte
+    SQL comportements_etudiants_categorie_valide), mais renvoyé en erreur
+    claire au frontend plutôt que de laisser Supabase renvoyer une erreur
+    SQL brute."""
+    if categorie is not None and categorie not in CATEGORIES_CONFIGURATION:
+        raise erreur_api(400, "CATEGORIE_INVALIDE")
+
+
 def _avec_libelle(ligne: dict) -> dict:
     """Ajoute lien_libelle (20/08, pour affichage direct dans "Mes
     comportements" sans que le frontend ait à refaire un appel par
@@ -132,8 +170,26 @@ def _avec_libelle(ligne: dict) -> dict:
 
 
 @router.get("", response_model=list[Comportement])
-def lire_mes_comportements(agent_id: str, utilisateur=Depends(utilisateur_courant)):
-    return [_avec_libelle(c) for c in lister_comportements(agent_id, utilisateur.id)]
+def lire_mes_comportements(agent_id: str, categorie: str | None = None, utilisateur=Depends(utilisateur_courant)):
+    """28/09/2026, demande Bourama : `categorie` optionnel, pour que
+    chacun des 4 onglets de Configuration (Procédure/Règle/Comportement/
+    Style) ne lise que SA propre liste, jamais mélangée avec "Mes
+    skills". Filtré ici plutôt que dans lister_comportements pour ne pas
+    toucher au cache existant (clé (agent_id, etudiant_id) uniquement,
+    liste complète) -- le volume par utilisateur reste faible, filtrer
+    en mémoire après coup ne coûte rien de notable.
+    `categorie` absent/None -> comportement inchangé, "Mes skills"
+    classique (categorie NULL en base uniquement)."""
+    tous = [_avec_libelle(c) for c in lister_comportements(agent_id, utilisateur.id)]
+    if categorie is None:
+        retenus = [c for c in tous if not c.get("categorie")]
+    else:
+        _verifier_categorie(categorie)
+        retenus = [c for c in tous if c.get("categorie") == categorie]
+    # 04/10/2026 : lie_a_code lu en direct (jamais dans le cache de la liste,
+    # une liaison change sans passer par lui), une requête groupée.
+    lies = lister_ids_lies_a_un_code(retenus)
+    return [{**c, "lie_a_code": c["id"] in lies} for c in retenus]
 
 
 @router.get("/par-lien/{lien_type}/{lien_id}", response_model=list[Comportement])
@@ -151,9 +207,17 @@ def ajouter_mon_comportement(agent_id: str, payload: ComportementPayload, utilis
     if not payload.texte.strip():
         raise erreur_api(400, "TEXTE_REQUIS")
     _verifier_lien(payload.lien_type, payload.lien_id, utilisateur.id)
+    _verifier_categorie(payload.categorie)
     return _avec_libelle(
         ajouter_comportement(
-            agent_id, utilisateur.id, payload.texte, nom=payload.nom, lien_type=payload.lien_type, lien_id=payload.lien_id
+            agent_id,
+            utilisateur.id,
+            payload.texte,
+            nom=payload.nom,
+            lien_type=payload.lien_type,
+            lien_id=payload.lien_id,
+            categorie=payload.categorie,
+            quand_utiliser=payload.quand_utiliser,
         )
     )
 
@@ -184,7 +248,9 @@ async def importer_mon_comportement(
 def modifier_mon_comportement(agent_id: str, comportement_id: str, payload: ComportementPayload, utilisateur=Depends(utilisateur_courant)):
     if not payload.texte.strip():
         raise erreur_api(400, "TEXTE_REQUIS")
-    resultat = modifier_comportement(agent_id, utilisateur.id, comportement_id, payload.texte, nom=payload.nom)
+    resultat = modifier_comportement(
+        agent_id, utilisateur.id, comportement_id, payload.texte, nom=payload.nom, quand_utiliser=payload.quand_utiliser
+    )
     if not resultat:
         raise erreur_api(404, "COMPORTEMENT_INTROUVABLE")
     return _avec_libelle(resultat)
@@ -280,6 +346,28 @@ def activer_desactiver_mon_comportement(
     if not resultat:
         raise erreur_api(404, "COMPORTEMENT_INTROUVABLE")
     return _avec_libelle(resultat)
+
+
+class PorteePayload(BaseModel):
+    portee: str
+
+
+@router.patch("/{comportement_id}/portee", response_model=Comportement)
+def definir_ma_portee_comportement(
+    agent_id: str, comportement_id: str, payload: PorteePayload, utilisateur=Depends(utilisateur_courant)
+):
+    """04/10/2026, demande Bourama : pour un élément lié à un code, choisir
+    s'il s'applique à moi ET aux receveurs ("deux") ou aux receveurs seulement
+    ("destinataires"). Refusé tant que l'élément n'est lié à aucun code."""
+    try:
+        resultat = definir_portee_comportement(agent_id, utilisateur.id, comportement_id, payload.portee)
+    except ValueError as e:
+        if str(e) == "NON_LIE_A_UN_CODE":
+            raise erreur_api(400, "NON_LIE_A_UN_CODE")
+        raise erreur_api(400, "PORTEE_INVALIDE")
+    if not resultat:
+        raise erreur_api(404, "COMPORTEMENT_INTROUVABLE")
+    return {**_avec_libelle(resultat), "lie_a_code": True}
 
 
 @router.post("/{comportement_id}/publier", status_code=201)

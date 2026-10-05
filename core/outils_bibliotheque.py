@@ -19,7 +19,7 @@ from core.bibliotheque_fichiers import (
 )
 from core.bibliotheque_rag import (
     chercher_bibliotheque as _chercher_bibliotheque,
-    chercher_bibliotheque_combinee as _chercher_bibliotheque_combinee,
+    chercher_bibliotheque_par_etapes as _chercher_bibliotheque_par_etapes,
     chercher_bibliotheque_publique as _chercher_bibliotheque_publique,
     lire_document_bibliotheque_en_entier as _lire_document_bibliotheque_en_entier,
     indexer_texte_bibliotheque as _indexer_texte_bibliotheque,
@@ -72,6 +72,25 @@ from core.outils_generation_commun import (
 # depuis `ctx` (authentifié), jamais demandé au modèle.
 
 
+def _phrase_autres_origines(autres: dict) -> str:
+    """
+    Phrase ajoutée au résultat de "chercher" quand des fichiers générés par
+    l'IA ou envoyés en conversation correspondent aussi, sans avoir été
+    inclus (recherche par étapes, voir chercher_bibliotheque_par_etapes).
+    """
+    morceaux = []
+    if autres.get("genere"):
+        morceaux.append(f"{autres['genere']} fichier(s) que tu as généré(s) (origine='genere')")
+    if autres.get("envoye"):
+        morceaux.append(f"{autres['envoye']} fichier(s) envoyé(s) dans une conversation (origine='envoye')")
+    if not morceaux:
+        return ""
+    return (
+        "(Correspondent aussi, non inclus ci-dessus : " + " et ".join(morceaux)
+        + ". Rappelle 'chercher' avec l'origine indiquée seulement si les documents trouvés ne suffisent pas.)"
+    )
+
+
 @mcp_generation.tool()
 def gerer_document_bibliotheque(
     action: str,
@@ -99,6 +118,7 @@ def gerer_document_bibliotheque(
     classe: str = "",
     specialite: str = "",
     nombre: int = 0,
+    origine: str = "",
 ) -> str:
     """
     Gère la bibliothèque personnelle de CET utilisateur, et permet aussi de
@@ -148,6 +168,26 @@ def gerer_document_bibliotheque(
       "pdf"/"image"/"audio"/"vidéo" -- à ne remplir QUE si l'étudiant
       mentionne clairement un type), `nom_dossier` (optionnel -- à ne
       remplir QUE si l'étudiant mentionne clairement un dossier).
+      ORDRE DE RECHERCHE (29/09/2026, demande Bourama : tu génères trop
+      de documents au lieu de retrouver ceux qui existent déjà) : par
+      défaut cette action cherche d'abord les documents PERSONNELS de
+      l'étudiant, puis les documents PARTAGÉS (code prof, copiés depuis
+      le catalogue public), et laisse de côté les fichiers que TU as
+      générés et ceux envoyés dans une conversation. Avant de générer un
+      nouveau document ou fichier, cherche TOUJOURS d'abord ce qui existe
+      : "chercher", puis "trouver_catalogue_public" si rien, puis
+      "chercher" avec `origine` = "genere" (fichiers que tu as déjà
+      générés) ou "envoye" (fichiers envoyés dans une conversation) si
+      toujours rien. Ne génère un nouveau fichier qu'après ces
+      recherches, sauf si l'étudiant demande explicitement d'en créer un
+      nouveau. Paramètre `origine` (optionnel) : "perso", "partage",
+      "genere", "envoye" ou "tout". À remplir DIRECTEMENT dès que
+      l'étudiant parle d'un fichier qu'il a envoyé ("le PDF que je t'ai
+      envoyé" -> "envoye") ou que tu as généré ("le résumé que tu m'as
+      fait" -> "genere"), et "tout" s'il demande de chercher partout.
+      Si le résultat signale que des fichiers générés ou envoyés
+      correspondent aussi, rappelle "chercher" avec l'`origine`
+      indiquée seulement si les documents trouvés ne suffisent pas.
     - "trouver_catalogue_public" : LOCALISE un document dans le
       CATALOGUE PUBLIC (section "Bibliothèque publique", ouvert à tout
       le monde). Renvoie
@@ -282,14 +322,17 @@ def gerer_document_bibliotheque(
             rattachement_id_actif = mode_actif.get("rattachement_id") if mode_actif else None
         profs_autorises = _profs_autorises_recherche_bibliotheque(user_id, rattachement_id_actif)
         try:
-            resultats = _chercher_bibliotheque_combinee(
+            recherche = _chercher_bibliotheque_par_etapes(
                 question, user_id=user_id, type_fichier=type_fichier, nom_dossier=nom_dossier,
-                profs_autorises=profs_autorises,
+                profs_autorises=profs_autorises, origine=origine,
             )
         except Exception:
             return "Erreur : la recherche dans la bibliothèque a échoué, réessaie."
+        resultats = recherche["resultats"]
+        indice_autres = _phrase_autres_origines(recherche["autres"])
         if not resultats:
-            return "Rien de pertinent trouvé dans la bibliothèque pour cette question."
+            base = "Rien de pertinent trouvé dans la bibliothèque pour cette question."
+            return f"{base} {indice_autres}".strip()
         blocs = []
         for r in resultats:
             bloc = r["contenu"]
@@ -297,6 +340,8 @@ def gerer_document_bibliotheque(
             if source:
                 bloc += f"\n{source}"
             blocs.append(bloc)
+        if indice_autres:
+            blocs.append(indice_autres)
         return "\n\n---\n\n".join(blocs)
 
     if action == "chercher_publique":

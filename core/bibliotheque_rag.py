@@ -480,6 +480,110 @@ def chercher_bibliotheque_combinee(
     return resultats[:match_count]
 
 
+# Catégories d'origine d'un fichier de la bibliothèque personnelle, dans
+# l'ordre où la recherche les consulte (29/09/2026, demande Bourama : l'IA
+# générait trop de documents au lieu de retrouver ceux qui existent déjà,
+# et les fichiers qu'elle avait elle-même générés noyaient les vrais
+# documents de l'utilisateur dans les résultats).
+#   perso   : documents ajoutés par l'utilisateur lui-même
+#   partage : documents reçus par un code prof, ou copiés depuis le catalogue public
+#   genere  : documents générés par l'IA
+#   envoye  : fichiers envoyés dans une conversation
+CATEGORIES_ORIGINE_PAR_DEFAUT = ("perso", "partage")
+CATEGORIES_ORIGINE_VALIDES = ("perso", "partage", "genere", "envoye")
+
+
+def _categorie_origine(origine: str | None, uploade_par: str | None, user_id: str) -> str:
+    if origine == "ia_generee":
+        return "genere"
+    if origine == "chat":
+        return "envoye"
+    if origine in ("code_partage", "publique") or (uploade_par and uploade_par != user_id):
+        return "partage"
+    return "perso"
+
+
+def _categories_demandees(origine: str) -> tuple[str, ...]:
+    """
+    Traduit le paramètre `origine` de l'outil en liste de catégories.
+    Vide = comportement par défaut (perso puis partage, sans les fichiers
+    générés ni envoyés en conversation). "tout" = les quatre. Une valeur
+    inconnue retombe sur le défaut plutôt que de renvoyer une erreur au
+    modèle.
+    """
+    o = (origine or "").strip().lower()
+    if o == "tout":
+        return CATEGORIES_ORIGINE_VALIDES
+    if o in CATEGORIES_ORIGINE_VALIDES:
+        return (o,)
+    return CATEGORIES_ORIGINE_PAR_DEFAUT
+
+
+def chercher_bibliotheque_par_etapes(
+    question: str,
+    user_id: str,
+    type_fichier: str = "",
+    nom_dossier: str = "",
+    match_count: int = 8,
+    profs_autorises: list[str] | None = None,
+    origine: str = "",
+) -> dict:
+    """
+    Recherche combinée (voir chercher_bibliotheque_combinee) SÉPARÉE par
+    origine de fichier (29/09/2026, demande Bourama).
+
+    Par défaut seuls les documents personnels puis les documents partagés
+    sont renvoyés, dans cet ordre. Les fichiers générés par l'IA et ceux
+    envoyés en conversation ne sont cherchés que si `origine` le demande
+    ("genere", "envoye" ou "tout"), c'est-à-dire quand l'utilisateur parle
+    explicitement d'un fichier qu'il a envoyé ou que l'IA a généré, ou
+    après que le reste n'a rien donné.
+
+    Comme la recherche sous-jacente ne sait pas filtrer par origine, elle
+    est lancée avec une limite plus large puis classée ici, pour qu'une
+    série de fichiers générés très pertinents ne prenne pas la place des
+    documents de l'utilisateur.
+
+    Renvoie {"resultats": [...], "autres": {"genere": n, "envoye": m}} :
+    `autres` compte les correspondances trouvées dans les catégories NON
+    demandées, pour que l'outil puisse le dire au modèle.
+    """
+    categories = _categories_demandees(origine)
+    candidats = chercher_bibliotheque_combinee(
+        question, user_id=user_id, type_fichier=type_fichier, nom_dossier=nom_dossier,
+        match_count=min(max(match_count * 4, 20), 40), profs_autorises=profs_autorises,
+    )
+    if not candidats:
+        return {"resultats": [], "autres": {}}
+
+    ids = [r["fichier_id"] for r in candidats if r.get("fichier_id")]
+    infos: dict[str, dict] = {}
+    if ids:
+        try:
+            lignes = (
+                supabase.table("fichiers_uploades").select("id,origine,uploade_par").in_("id", ids).execute().data or []
+            )
+            infos = {l["id"]: l for l in lignes}
+        except Exception as e:
+            logging.error(f"ERREUR lecture origine des fichiers (chercher_bibliotheque_par_etapes) : {e}")
+
+    par_categorie: dict[str, list[dict]] = {c: [] for c in CATEGORIES_ORIGINE_VALIDES}
+    for r in candidats:
+        info = infos.get(r.get("fichier_id")) or {}
+        cat = _categorie_origine(info.get("origine"), info.get("uploade_par"), user_id)
+        r["categorie_origine"] = cat
+        par_categorie[cat].append(r)
+
+    resultats: list[dict] = []
+    for cat in CATEGORIES_ORIGINE_VALIDES:  # perso, partage, genere, envoye : l'ordre de consultation
+        if cat in categories:
+            resultats.extend(par_categorie[cat])
+    autres = {
+        c: len(par_categorie[c]) for c in ("genere", "envoye") if c not in categories and par_categorie[c]
+    }
+    return {"resultats": resultats[:match_count], "autres": autres}
+
+
 def chercher_bibliotheque_publique(question: str, fichier_ids: list[str], match_count: int = 5) -> list:
     """
     Recherche sémantique à travers un ENSEMBLE de fichiers précis, pas un

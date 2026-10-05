@@ -11,6 +11,7 @@ from comportements_etudiants import (
     choisir_comportements_pertinents,
     separer_comportements_par_niveau,
     lister_comportements_chapitres_pour_matiere,
+    retirer_elements_destinataires_seuls,
 )
 # Fonctionnalité "Programme" désactivée et isolée le 29/08/2026 (demande
 # Bourama) -- voir _desactive_programme/LISEZ_MOI_NE_JAMAIS_REUTILISER.md.
@@ -19,6 +20,7 @@ from comportements_etudiants import (
 #   from codes_partage import lister_programmes_recus_legers
 from codes_partage import lister_comportements_recus
 from core.mode_actif_conversation import rattachement_actif_pour_prompt
+from core.configuration_etudiant import separer_regles_et_styles, separer_config_retenue
 from core.memoire_eleve import obtenir_sommaire as obtenir_sommaire_memoire
 from core.persona_pedagogique_conversation import obtenir_persona_pedagogique
 from core.mode_source_conversation import obtenir_mode_source
@@ -145,7 +147,7 @@ def _client_pour_reprise(modele):
     return Groq(api_key=get_secret("GROQ_API_KEY"), max_retries=0)
 
 
-def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None):
+def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None, effort_reflexion=None):
     """
     Generateur d'evenements. Chaque element produit est un dictionnaire :
     - {"type": "statut", "texte": "..."}         -> un outil MCP est en cours d'utilisation (ou, depuis le 11/09/2026, Gemini en train de lire une image/video jointe)
@@ -156,7 +158,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
       modele separement). Generalise a tout outil, present ou futur (26/07) : distinct du
       raisonnement libre du modele, qui lui peut paraphraser/melanger ce contenu avec
       d'autres reflexions dans son propre texte -- voir OutilResultatBulle.tsx cote frontend.
-    - {"type": "raisonnement", "texte": "..."}   -> fragment de raisonnement interne du modele, avant la reponse finale (modeles de MODELES_AVEC_REASONING_EFFORT uniquement)
+    - {"type": "raisonnement", "texte": "..."}   -> fragment de raisonnement interne du modele, avant la reponse finale (modeles de MODELES_AVEC_REASONING_EFFORT, plus DeepSeek via delta.reasoning_content)
     - {"type": "sources", "sources": [{"titre": "...", "url": "..."}]} -> resultats d'une
       recherche web (Tavily) utilisee pour repondre. Peut etre emis plusieurs fois dans le
       meme echange (plusieurs recherches) -- l'appelant accumule/fusionne, ne remplace pas.
@@ -550,6 +552,10 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # core/registre_outils.py::consulter_skills_chapitres_matiere) même si
     # c'est ce petit routeur qui décide de le déclencher, pas le grand LLM.
     comportements_etudiant = []
+    # 02/10/2026, demande Bourama : Règles et Styles activés (donnés d'office),
+    # Procédures et Comportements retenus (donnés en entier), voir
+    # core/configuration_etudiant.py.
+    configuration_etudiant = None
     # Sommaire de la mémoire de l'élève, donné d'office au modèle à chaque
     # message (demande Bourama, 04/10/2026). None pour un visiteur sans compte.
     sommaire_memoire = None
@@ -630,14 +636,13 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             guide_actif = f_guide_actif.result() if f_guide_actif else {"actif": False, "sous_mode": "textuel"}
             mode_source = f_mode_source.result() if f_mode_source else None
             sommaire_memoire = f_sommaire_memoire.result()
-            # Agent applicatif : l'etat courant des elements interactifs de
-            # l'ecran reste visible par le modele a CHAQUE tour, comme avant
-            # le mode "canal en direct". Le flag canal_en_direct controle
-            # l'activation des outils d'action (clic, ecriture, etc.), pas la
-            # lecture de l'ecran. Cela evite de faire disparaitre les boutons
-            # et l'etat general de l'application du prompt du chat normal.
-            # Simple lecture en memoire, pas besoin du lot parallele.
-            actions_ecran = obtenir_actions_disponibles(user_id)
+            # Agent applicatif : la liste des elements de l'ecran n'est lue
+            # (et donc injectee dans le prompt) que lorsque le canal en
+            # direct est actif pour ce tour (decision Bourama, 30/09/2026 :
+            # canal desactive, le modele ne voit pas l'ecran et le prompt ne
+            # paie pas cette liste). Simple lecture en memoire, pas besoin du
+            # lot parallele.
+            actions_ecran = obtenir_actions_disponibles(user_id) if canal_en_direct else None
 
         # rattachement_id_actif (voir core/mode_actif_conversation.py) vaut :
         # - None si conversation_id est absent ou si aucun mode actif n'a
@@ -670,13 +675,18 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 agent_id, user_id, code_id_actif, notion_ids_pertinentes
             )
 
+        # 04/10/2026, demande Bourama : un element lie a un code et marque
+        # "destinataires seulement" ne s'applique pas a son proprietaire.
         tous_comportements = (
-            [c for c in comportements_etudiant_bruts if c.get("actif", True)]
+            retirer_elements_destinataires_seuls([c for c in comportements_etudiant_bruts if c.get("actif", True)])
             + comportements_recus
         )
+        regles_actives, styles_actifs, tous_comportements = separer_regles_et_styles(tous_comportements)
         candidats_niveau1, candidats_chapitre = separer_comportements_par_niveau(tous_comportements)
         retenus_niveau1 = choisir_comportements_pertinents(message_utilisateur, candidats_niveau1)
+        config_retenue, retenus_niveau1 = separer_config_retenue(retenus_niveau1)
         comportements_etudiant = list(retenus_niveau1)
+        configuration_etudiant = {"regles": regles_actives, "styles": styles_actifs, "retenus": config_retenue}
 
         matieres_retenues = {
             c["lien_id"] for c in retenus_niveau1
@@ -788,6 +798,19 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     if canal_en_direct:
         outils_forces_contexte += CATEGORIES_OUTILS.get("agent_applicatif", []) + ["dire_a_l_etudiant"]
 
+    # Activation par Clovis (02/10/2026, demande Bourama : "il faut que Classinus,
+    # dans le chat, puisse activer le canal en direct") : tant que le canal est
+    # inactif, l'outil qui l'active est propose. La demo garde son propre outil
+    # (ouvrir_canal_en_direct, plus bas) et sa suite automatique. La
+    # desactivation est dans la categorie agent_applicatif, donc proposee des
+    # que le canal est actif.
+    if (
+        agent_id == "clovis"
+        and not canal_en_direct
+        and not (isinstance(guide_actif, dict) and guide_actif.get("actif") and guide_actif.get("sous_mode") == "demo")
+    ):
+        outils_forces_contexte.append("activer_canal_en_direct")
+
     # Demo (20/09/2026, decision Bourama : la demo tourne dans le chat
     # normal et n'ouvre le canal qu'au moment de le demontrer) : tant que
     # le canal n'est pas ouvert, la demo a besoin de l'outil qui l'ouvre.
@@ -824,6 +847,13 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # est réellement construit (sans passer par ce bouton) : le prompt
     # optimiste et la branche outil_force directe, plus bas.
     outils_retenus_precedents = _lire_outils_retenus(conversation_id)
+    # Canal en direct désactivé (30/09/2026, demande Bourama : c'est fini) :
+    # les outils d'action sur l'application, de lecture de page, d'éditeur et
+    # de bulle ne restent jamais proposés, même retenus d'un tour précédent
+    # où le canal était actif.
+    if not canal_en_direct:
+        outils_agent_applicatif = set(CATEGORIES_OUTILS.get("agent_applicatif", [])) | {"dire_a_l_etudiant"}
+        outils_retenus_precedents = [o for o in (outils_retenus_precedents or []) if o not in outils_agent_applicatif]
 
     def _fusionner_outils(liste_base, extra):
         """Union ordonnée sans doublons, jamais liste vide (None si rien)."""
@@ -909,7 +939,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id)
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force_contexte_seul)
             outil_force_verifie_optimiste = [o["function"]["name"] for o in outils_mcp] if outil_force_contexte_seul else None
-            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, sommaire_memoire)
+            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire)
             return outils_mcp, table_routage, system_final, catalogue_complet, table_routage_complet
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -1028,7 +1058,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id)
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force)
             outil_force_verifie = [o["function"]["name"] for o in outils_mcp] if outil_force else outil_force
-        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, sommaire_memoire)
+        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire)
 
         # PERF (10/08) : second (et dernier) point de vérification --
         # couvre tous les chemins qui ne passent PAS par le premier
@@ -1392,7 +1422,12 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         ]
         reponse_accumulee = []
         try:
-            for morceau in generer_reponse_premium(modele_force, system_final, messages_premium):
+            for morceau in generer_reponse_premium(modele_force, system_final, messages_premium, effort=effort_reflexion):
+                if isinstance(morceau, dict):
+                    # Reflexion du modele (DeepSeek) : affichee a l'ecran
+                    # mais jamais sauvegardee comme partie de la reponse.
+                    yield morceau
+                    continue
                 reponse_accumulee.append(morceau)
                 yield {"type": "reponse", "texte": morceau}
             logging.info(f"Réponse via MODELE PREMIUM : {modele_force}")
@@ -1458,7 +1493,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             try:
                 yield from _capturer_reponse(
                     _agent_groq(client_deepseek, messages_agent, outils_mcp, table_routage, agent_nom=agent_nom,
-                                modele=DEEPSEEK_PRIMARY, conversation_id=conversation_id,
+                                modele=DEEPSEEK_PRIMARY, reasoning_effort=effort_reflexion, conversation_id=conversation_id,
                                 catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
                                 user_id=user_id),
                     reponse_accumulee,

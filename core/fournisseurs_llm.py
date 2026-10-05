@@ -210,21 +210,73 @@ def _stream_gpt(modele_id, system_prompt, messages):
             yield delta
 
 
-def _stream_deepseek(modele_id, system_prompt, messages):
+# Effort de reflexion de DeepSeek (04/10/2026, demande Bourama : le rendre
+# rapide). Valeurs de l'API DeepSeek V4 : "none" (reflexion desactivee, donc
+# plus rien a afficher), "low" (le minimum qui reflechit encore), "high"
+# (defaut de l'API quand rien n'est envoye), "max". Source :
+# api-docs.deepseek.com/api/create-chat-completion. Un seul endroit a
+# modifier pour tout DeepSeek (chemin premium ET cascade, voir
+# core/boucle_agent.py:_effort_reflexion).
+DEEPSEEK_REASONING_EFFORT = "low"
+
+# Valeurs que la personne peut choisir dans le reglage "Effort" (04/10/2026,
+# demande Bourama). Toute autre valeur recue du frontend est ignoree et
+# remplacee par DEEPSEEK_REASONING_EFFORT (jamais fait confiance au client).
+EFFORTS_REFLEXION_DEEPSEEK = ("none", "low", "high", "max")
+
+
+def normaliser_effort_reflexion(effort):
+    """Effort valide pour DeepSeek, ou None si absent/invalide (l'appelant
+    retombe alors sur DEEPSEEK_REASONING_EFFORT)."""
+    return effort if effort in EFFORTS_REFLEXION_DEEPSEEK else None
+
+
+# Consigne propre a DeepSeek (04/10/2026, demande Bourama) : sa reflexion
+# est maintenant affichee a l'ecran, elle doit donc etre dans la langue de
+# la personne. Pas de langue en dur : on lui dit de suivre la langue du
+# dernier message de l'utilisateur. Ajoutee UNIQUEMENT pour DeepSeek (jamais
+# au prompt commun, qui sert aussi a Groq/Claude/GPT/Gemini).
+CONSIGNE_LANGUE_REFLEXION = (
+    "Ton raisonnement interne (la reflexion avant ta reponse) doit etre ecrit "
+    "dans la meme langue que le dernier message de l'utilisateur, "
+    "pas dans une autre langue par defaut."
+)
+
+
+def ajouter_consigne_langue_reflexion(system_prompt):
+    """Texte du prompt systeme + la consigne de langue de reflexion."""
+    base = system_prompt or ""
+    return (base + "\n\n" + CONSIGNE_LANGUE_REFLEXION) if base else CONSIGNE_LANGUE_REFLEXION
+
+
+def _stream_deepseek(modele_id, system_prompt, messages, effort=None):
     # DeepSeek : API compatible OpenAI, seule la base_url change (voir
     # docstring du module -- deepseek-v4-flash / deepseek-v4-pro).
     from openai import OpenAI
     client = OpenAI(api_key=get_secret("DEEPSEEK_API_KEY"), base_url="https://api.deepseek.com")
-    messages_openai = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + messages
+    system_deepseek = ajouter_consigne_langue_reflexion(system_prompt)
+    messages_openai = [{"role": "system", "content": system_deepseek}] + messages
     flux = client.chat.completions.create(
         model=modele_id,
         messages=messages_openai,
         stream=True,
+        reasoning_effort=normaliser_effort_reflexion(effort) or DEEPSEEK_REASONING_EFFORT,
     )
     for morceau in flux:
-        delta = morceau.choices[0].delta.content if morceau.choices else None
-        if delta:
-            yield delta
+        if not morceau.choices:
+            continue
+        delta = morceau.choices[0].delta
+        # DeepSeek envoie sa reflexion dans delta.reasoning_content (champ
+        # separe de delta.content, reflexion d'abord, voir
+        # api-docs.deepseek.com/api/create-chat-completion). On la remonte
+        # sous forme d'evenement (dict) pour que main.py l'affiche, au lieu
+        # de la jeter : sans ca l'utilisateur ne voit rien pendant toute
+        # la reflexion.
+        reflexion = getattr(delta, "reasoning_content", None)
+        if reflexion:
+            yield {"type": "raisonnement", "texte": reflexion}
+        if delta.content:
+            yield delta.content
 
 
 def _stream_gemini(modele_id, system_prompt, messages):
@@ -256,18 +308,29 @@ _STREAMERS_PAR_DISTRIBUTEUR = {
 }
 
 
-def generer_reponse_premium(modele_id, system_prompt, messages):
+def generer_reponse_premium(modele_id, system_prompt, messages, effort=None):
     """
-    Generateur de texte (morceaux de reponse, pas d'evenements structures
-    -- voir LIMITE CONNUE en tete de fichier) pour un modele premium deja
+    Generateur de morceaux de reponse (str) pour un modele premium deja
     valide par modele_id_est_autorise(). `messages` : liste de
     {"role": "user"|"assistant", "content": "..."}, format deja utilise
     cote main.py pour l'historique. Leve l'exception du SDK sous-jacent
     telle quelle si l'appel echoue -- a l'appelant (main.py) de decider
     du repli (ex: retomber sur la cascade Groq).
+
+    Depuis le correctif de la reflexion DeepSeek : un morceau peut aussi
+    etre un dict {"type": "raisonnement", "texte": "..."} (reflexion du
+    modele, pas la reponse). Aujourd'hui seul DeepSeek en emet. L'appelant
+    doit le transmettre tel quel a l'ecran et NE PAS l'ajouter a la
+    reponse sauvegardee. Pas d'autres evenements structures (voir LIMITE
+    CONNUE en tete de fichier : pas d'outils).
     """
     distributeur = distributeur_pour_modele_id(modele_id)
     if distributeur is None:
         raise ValueError(f"modele_id inconnu : {modele_id}")
     streamer = _STREAMERS_PAR_DISTRIBUTEUR[distributeur]
+    if distributeur == "deepseek":
+        # Seul DeepSeek a un reglage d'effort aujourd'hui (les autres
+        # fournisseurs n'en recoivent pas, leur flux ne change pas).
+        yield from streamer(modele_id, system_prompt, messages, effort=effort)
+        return
     yield from streamer(modele_id, system_prompt, messages)

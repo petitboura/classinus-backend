@@ -12,17 +12,21 @@ de code :
 - GEMINI_LIVE_ACCUEIL (vide pour supprimer la phrase d'accueil)
 - GEMINI_LIVE_DESCRIPTION_OUTIL
 - GEMINI_LIVE_RELANCE_ATTENTE (vide pour supprimer les nouvelles pendant l'attente)
+- GEMINI_LIVE_ANNONCE_REPONSE (vide pour que la voix ne dise rien d'une réponse à un message tapé)
+- GEMINI_LIVE_ANNONCE_BULLE (vide pour que la voix ne dise pas les messages de la bulle du canal en direct)
 - GEMINI_LIVE_DELAI_RELANCE_SECONDES
 - GEMINI_LIVE_RELANCES_MAX
 - GEMINI_LIVE_PROACTIVITE (0 pour couper l'écoute sélective, si le modèle vocal ne l'accepte pas)
 - GEMINI_LIVE_DESCRIPTION_OUTIL_SILENCE
 - GEMINI_LIVE_DESCRIPTION_OUTIL_REVEIL
+- GEMINI_LIVE_DESCRIPTION_OUTIL_PLEIN_ECRAN
+- GEMINI_LIVE_DESCRIPTION_OUTIL_MINI
 - GEMINI_LIVE_ANNONCE_REPRISE (consigne qui précède la suite d'une lecture interrompue)
 - GEMINI_LIVE_DELAI_REPRISE_MS (silence de l'étudiant, en millisecondes, avant de reprendre la lecture)
 - GEMINI_LIVE_SEUIL_VOIX_MICRO (niveau du micro, entre 0 et 1, à partir duquel l'étudiant est considéré comme en train de parler)
 
 La voix est un interprète : elle transmet la demande de l'étudiant au cerveau
-de Classinus, puis résume son travail à voix haute. Elle ne répond
+de Classinus, puis lit sa réponse à voix haute. Elle ne répond
 jamais à la place du cerveau de Classinus.
 """
 
@@ -60,9 +64,10 @@ CONSIGNES_PAR_DEFAUT = (
     "2. Appelle l'outil demander_a_clovis (c'est le nom technique de la liaison avec le cerveau "
     "de Classinus, ne le prononce jamais) en transmettant fidèlement la demande, avec les mots de "
     "l'étudiant.\n"
-    "3. Quand le cerveau de Classinus a répondu, ne lis pas sa réponse en entier. Dis seulement l'essentiel en une "
-    "ou deux phrases, puis précise que le détail est écrit dans le chat et demande à l'étudiant "
-    "s'il veut le voir.\n"
+    "3. Quand le cerveau de Classinus a répondu, lis sa réponse à voix haute en entier, "
+    "naturellement, sans la résumer ni rien ajouter. Pour ce qui ne peut pas se lire à voix "
+    "haute (code, tableau, lien, image, carte, fichier), dis seulement en une phrase de quoi "
+    "il s'agit et que c'est écrit dans le chat.\n"
     "4. Si l'outil renvoie une erreur, dis-le simplement et propose de réessayer.\n"
     "Pour une salutation très courte ou une simple politesse, tu peux répondre directement. "
     "Parle toujours dans la langue de l'étudiant, de façon naturelle et brève.\n"
@@ -87,7 +92,13 @@ CONSIGNES_PAR_DEFAUT = (
     "où elle s'est arrêtée, tu ne la reprends jamais de toi même. S'il te fait une nouvelle "
     "demande, traite-la normalement, la lecture interrompue est alors abandonnée. S'il te dit "
     "« continue », « reprends » ou « vas-y », appelle l'outil reprendre_la_parole, sans rien dire "
-    "avant ni après."
+    "avant ni après.\n"
+    "Ton onde peut s'afficher en plein écran ou réduite en une petite bulle. Quand l'étudiant te demande "
+    "de passer en plein écran (par exemple « mets-toi en plein écran », « agrandis-toi »), appelle l'outil "
+    "passer_en_plein_ecran. Quand il te demande de te réduire (par exemple « mets-toi en mini », "
+    "« réduis-toi », « fais-toi petit »), appelle l'outil passer_en_mini. Ces deux outils ne se transmettent "
+    "jamais à Classinus : n'appelle pas demander_a_clovis pour ça. Dis simplement en quelques mots que c'est fait, "
+    "sauf si l'outil t'indique que ce n'est pas possible, auquel cas tu le dis."
 )
 
 ACCUEIL_PAR_DEFAUT = "La voix vient de s'activer. Dis seulement à voix haute et en quelques mots : Je t'écoute."
@@ -112,6 +123,18 @@ DESCRIPTION_OUTIL_REVEIL_PAR_DEFAUT = (
     "appel et tu ne dis rien. Sinon, tu peux parler et traiter sa demande."
 )
 
+# Outils d'affichage de la voix : la voix décide, le navigateur applique seulement
+# (l'onde passe en plein écran ou en bulle). Rien n'est envoyé à Classinus.
+DESCRIPTION_OUTIL_PLEIN_ECRAN_PAR_DEFAUT = (
+    "À appeler quand l'étudiant demande de passer en plein écran ou d'agrandir ton onde. "
+    "L'onde s'affiche alors en plein écran. Si le résultat indique que ce n'est pas possible, "
+    "dis-le simplement à l'étudiant."
+)
+DESCRIPTION_OUTIL_MINI_PAR_DEFAUT = (
+    "À appeler quand l'étudiant demande de te mettre en mini ou de réduire ton onde. "
+    "L'onde se réduit alors en une petite bulle."
+)
+
 # Quand Classinus met du temps, la voix ne reste jamais muette : toutes les
 # DELAI_RELANCE_PAR_DEFAUT secondes (au plus RELANCES_MAX_PAR_DEFAUT fois, et
 # jamais pendant qu'elle parle déjà), ce message lui rappelle de donner un mot
@@ -119,6 +142,25 @@ DESCRIPTION_OUTIL_REVEIL_PAR_DEFAUT = (
 RELANCE_ATTENTE_PAR_DEFAUT = (
     "Classinus travaille encore sur la demande de l'étudiant. Dis une très courte phrase pour le "
     "faire patienter, sans répéter ce que tu as déjà dit et sans rappeler l'outil."
+)
+# Quand l'étudiant tape un message dans le chat alors que la voix est active,
+# la réponse écrite de Classinus s'affiche dans le chat et la voix la lit en
+# entier. Ce message précède le texte de la réponse envoyé à la voix.
+ANNONCE_REPONSE_PAR_DEFAUT = (
+    "Classinus vient de répondre par écrit à un message que l'étudiant a tapé dans le chat. "
+    "N'appelle pas l'outil. Lis sa réponse à voix haute en entier, naturellement, sans la "
+    "résumer ni rien ajouter. Pour ce qui ne peut pas se lire à voix haute (code, tableau, "
+    "lien, image, carte, fichier), dis seulement en une phrase de quoi il s'agit et que c'est "
+    "écrit dans le chat. Voici la réponse de Classinus :"
+)
+# Canal en direct : quand la voix est allumée, tout ce que Classinus dit dans sa
+# bulle (ses commentaires et ses réponses) est lu à voix haute. Ce message
+# précède chaque texte de la bulle envoyé à la voix.
+ANNONCE_BULLE_PAR_DEFAUT = (
+    "Classinus vient d'afficher ce message dans sa bulle à l'écran. N'appelle pas l'outil. "
+    "Dis ce message à voix haute, naturellement et en entier, sans rien ajouter ni résumer. "
+    "Pour ce qui ne peut pas se lire à voix haute (code, tableau, lien, image, carte, "
+    "fichier), dis seulement en une phrase de quoi il s'agit. Voici le message :"
 )
 # Quand l'étudiant coupe la voix en pleine lecture sans lui parler (il parle à quelqu'un
 # d'autre), la lecture reprend toute seule là où elle s'est arrêtée, une fois qu'il s'est
@@ -180,10 +222,14 @@ def reglages_gemini_live():
         "accueil": _lire("GEMINI_LIVE_ACCUEIL", ACCUEIL_PAR_DEFAUT),
         "description_outil": _lire("GEMINI_LIVE_DESCRIPTION_OUTIL", DESCRIPTION_OUTIL_PAR_DEFAUT),
         "relance_attente": _lire("GEMINI_LIVE_RELANCE_ATTENTE", RELANCE_ATTENTE_PAR_DEFAUT),
+        "annonce_reponse": _lire("GEMINI_LIVE_ANNONCE_REPONSE", ANNONCE_REPONSE_PAR_DEFAUT),
+        "annonce_bulle": _lire("GEMINI_LIVE_ANNONCE_BULLE", ANNONCE_BULLE_PAR_DEFAUT),
         "delai_relance_secondes": _lire_entier("GEMINI_LIVE_DELAI_RELANCE_SECONDES", DELAI_RELANCE_PAR_DEFAUT),
         "relances_max": _lire_entier("GEMINI_LIVE_RELANCES_MAX", RELANCES_MAX_PAR_DEFAUT),
         "description_outil_silence": _lire("GEMINI_LIVE_DESCRIPTION_OUTIL_SILENCE", DESCRIPTION_OUTIL_SILENCE_PAR_DEFAUT),
         "description_outil_reveil": _lire("GEMINI_LIVE_DESCRIPTION_OUTIL_REVEIL", DESCRIPTION_OUTIL_REVEIL_PAR_DEFAUT),
+        "description_outil_plein_ecran": _lire("GEMINI_LIVE_DESCRIPTION_OUTIL_PLEIN_ECRAN", DESCRIPTION_OUTIL_PLEIN_ECRAN_PAR_DEFAUT),
+        "description_outil_mini": _lire("GEMINI_LIVE_DESCRIPTION_OUTIL_MINI", DESCRIPTION_OUTIL_MINI_PAR_DEFAUT),
         "annonce_reprise": _lire("GEMINI_LIVE_ANNONCE_REPRISE", ANNONCE_REPRISE_PAR_DEFAUT),
         "delai_reprise_ms": _lire_entier("GEMINI_LIVE_DELAI_REPRISE_MS", DELAI_REPRISE_MS_PAR_DEFAUT),
         "seuil_voix_micro": _lire_decimal("GEMINI_LIVE_SEUIL_VOIX_MICRO", SEUIL_VOIX_MICRO_PAR_DEFAUT),

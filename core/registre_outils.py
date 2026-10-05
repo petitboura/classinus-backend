@@ -9,8 +9,8 @@ d'etre touches.
 Deux modes d'authentification sont supportes, car les serveurs MCP ne
 s'authentifient pas tous pareil :
 - pas de cle du tout (ex: Wolfram)          -> url_builder seul
-- cle glissee dans l'URL (ex: Tavily)       -> url_builder seul
-- cle envoyee en header HTTP (si besoin un jour) -> url_builder + headers_builder
+- cle envoyee en header HTTP (ex: Tavily)  -> url_builder + headers_builder
+  (jamais de cle dans une URL : elle finit en clair dans les logs)
 
 Chaque *_builder est une fonction qui recoit (get_secret, user_id, agent_id)
 et retourne soit une URL (str), soit des headers (dict), soit None. Les
@@ -74,7 +74,17 @@ def _url_github(get_secret, user_id, agent_id, conversation_id=None):
 
 
 def _url_tavily(get_secret, user_id, agent_id, conversation_id=None):
-    return f"https://mcp.tavily.com/mcp/?tavilyApiKey={get_secret('TAVILY_API_KEY')}"
+    # 04/10/2026, demande Bourama : la cle n'est plus dans l'URL (elle
+    # apparaissait en clair dans les logs Railway a chaque requete). Elle
+    # passe maintenant par l'en-tete Authorization, voir _headers_tavily.
+    return "https://mcp.tavily.com/mcp/"
+
+
+def _headers_tavily(get_secret, user_id, agent_id):
+    cle = get_secret("TAVILY_API_KEY")
+    if not cle:
+        return None
+    return {"Authorization": f"Bearer {cle}"}
 
 
 def _url_wolfram(get_secret, user_id, agent_id, conversation_id=None):
@@ -143,6 +153,7 @@ SERVEURS_MCP = [
     {
         "nom": "tavily",
         "url_builder": _url_tavily,
+        "headers_builder": _headers_tavily,
         # Réactivé 2026-07-23 (demande de Bourama) -- la plomberie
         # existait déjà (builder d'URL ci-dessus, libellés de statut
         # tavily_search/tavily_extract/... dans core/main.py, option
@@ -336,6 +347,11 @@ OUTILS_SENSIBLES = {
 # "generer" / "rechercher" / "action_app" / "utilitaires".
 # `appli` (optionnel) : regroupe sous un connecteur externe ("github" ou
 # "notion") dans l'onglet "action_app" -- absent pour tout le reste.
+# 05/10/2026 (demande Bourama) : libellés des 12 outils à actions raccourcis, car le chat
+# affiche "Verbe (libellé)" et passait à la ligne sur téléphone. Garder ces libellés courts
+# (environ 18 caractères maximum) pour tout nouvel outil à actions.
+# 05/10/2026 (demande Bourama) : libellés des outils sans action raccourcis aussi (28 caractères
+# au plus), pour éviter les retours à la ligne du chat sur téléphone.
 REGISTRE_AFFICHAGE_OUTILS = {
     # --- Génération ---
     "generer_document": {"label": "Génération d'un PDF/texte", "icone": "FileText", "onglet": "generer"},
@@ -351,10 +367,10 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "lancer_generation_video": {"label": "Génération d'une vidéo", "icone": "Video", "onglet": "generer"},
     "lancer_generation_3d": {"label": "Génération d'un modèle 3D", "icone": "Box", "onglet": "generer"},
     "envoyer_pour_signature": {"label": "Envoi pour signature", "icone": "FileSignature", "onglet": "generer"},
-    "consulter_statut_generation": {"label": "Vérification du statut d'une génération", "icone": "RefreshCw", "onglet": "generer"},
+    "consulter_statut_generation": {"label": "Statut d'une génération", "icone": "RefreshCw", "onglet": "generer"},
     "deployer_site": {"label": "Déploiement d'un site", "icone": "Rocket", "onglet": "generer"},
     "exporter_donnees": {"label": "Export de données", "icone": "FileOutput", "onglet": "generer"},
-    "calculer_symbolique": {"label": "Calcul symbolique (résoudre, dériver, intégrer)", "icone": "Divide", "onglet": "generer"},
+    "calculer_symbolique": {"label": "Calcul symbolique", "icone": "Divide", "onglet": "generer"},
     # Ajouté 10/09/2026 (demande Bourama) : Wolfram n'avait aucune entrée
     # ici, donc aucun libellé français pour la recherche interne d'outils
     # (voir core/boucle_agent.py). "WolframLanguageEvaluator" est le nom
@@ -363,7 +379,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # supposition. Ce serveur peut exposer d'autres outils non vérifiés ici
     # (WolframLanguageContext, TestReport...) : à ajouter au besoin si l'un
     # d'eux s'avère utilisé.
-    "WolframLanguageEvaluator": {"label": "Calcul et données du monde réel (Wolfram)", "icone": "Calculator", "onglet": "generer"},
+    "WolframLanguageEvaluator": {"label": "Calcul Wolfram", "icone": "Calculator", "onglet": "generer"},
 
     # --- Recherche ---
     "tavily_search": {"label": "Recherche web", "icone": "Search", "onglet": "rechercher"},
@@ -388,12 +404,12 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # désormais, même onglet "rechercher" que l'ancien consulter_bibliotheque
     # (seule action manuellement cliquable, les autres restent onglet=None
     # en pratique côté modèle -- pas besoin de doublon d'entrée pour ça).
-    "gerer_document_bibliotheque": {"label": "Bibliothèque personnelle", "icone": "Library", "onglet": "rechercher"},
+    "gerer_document_bibliotheque": {"label": "Ma bibliothèque", "icone": "Library", "onglet": "rechercher"},
     # Ajouté 14/09/2026 (demande Bourama) : outil séparé pour les
     # pièces jointes de conversation (origine="chat"), pas cliquable
     # manuellement (onglet=None), même logique que les autres outils
     # consolidés par action.
-    "gerer_fichier_conversation": {"label": "Fichiers de la conversation", "icone": "Paperclip", "onglet": None},
+    "gerer_fichier_conversation": {"label": "Fichiers du chat", "icone": "Paperclip", "onglet": None},
     # Composites "nom_outil:action" (28/08, bug remonté par Bourama :
     # l'entrée générique ci-dessus s'affichait pour TOUTES les actions
     # de cet outil, y compris chercher_publique/trouver_catalogue_public/
@@ -409,30 +425,30 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "gerer_document_bibliotheque:trouver_catalogue_public": {"label": "Catalogue public", "icone": "Library", "onglet": None},
     "gerer_document_bibliotheque:lire_catalogue_public": {"label": "Catalogue public", "icone": "Library", "onglet": None},
     "gerer_document_bibliotheque:lister_catalogue_public": {"label": "Catalogue public", "icone": "Library", "onglet": None},
-    "gerer_base_connaissance": {"label": "Base de connaissances de Classinus", "icone": "BookMarked", "onglet": "rechercher"},
+    "gerer_base_connaissance": {"label": "Aide Classinus", "icone": "BookMarked", "onglet": "rechercher"},
 
     # --- Action dans l'app : GitHub ---
     "gerer_depot_github": {"label": "Dépôt GitHub", "icone": "Github", "onglet": "action_app", "appli": "github"},
 
     # --- Action dans l'app : Notion ---
     "notion-search": {"label": "Recherche dans Notion", "icone": "notion-logo", "onglet": "action_app", "appli": "notion"},
-    "notion-fetch": {"label": "Ouverture d'une page/base Notion", "icone": "FileSearch", "onglet": "action_app", "appli": "notion"},
-    "notion-query-data-sources": {"label": "Interrogation d'une base Notion (SQL)", "icone": "Table2", "onglet": "action_app", "appli": "notion"},
+    "notion-fetch": {"label": "Ouvrir une page Notion", "icone": "FileSearch", "onglet": "action_app", "appli": "notion"},
+    "notion-query-data-sources": {"label": "Base Notion (SQL)", "icone": "Table2", "onglet": "action_app", "appli": "notion"},
     "notion-query-database-view": {"label": "Interrogation d'une vue Notion", "icone": "LayoutGrid", "onglet": "action_app", "appli": "notion"},
-    "notion-query-meeting-notes": {"label": "Recherche dans les notes de réunion Notion", "icone": "StickyNote", "onglet": "action_app", "appli": "notion"},
-    "notion-get-comments": {"label": "Lecture des commentaires Notion", "icone": "MessagesSquare", "onglet": "action_app", "appli": "notion"},
-    "notion-get-async-task": {"label": "Suivi d'une tâche Notion en cours", "icone": "Clock", "onglet": "action_app", "appli": "notion"},
+    "notion-query-meeting-notes": {"label": "Notes de réunion Notion", "icone": "StickyNote", "onglet": "action_app", "appli": "notion"},
+    "notion-get-comments": {"label": "Commentaires Notion", "icone": "MessagesSquare", "onglet": "action_app", "appli": "notion"},
+    "notion-get-async-task": {"label": "Tâche Notion en cours", "icone": "Clock", "onglet": "action_app", "appli": "notion"},
     "notion-get-teams": {"label": "Liste des équipes Notion", "icone": "Users", "onglet": "action_app", "appli": "notion"},
     "notion-get-users": {"label": "Liste des utilisateurs Notion", "icone": "UserCog", "onglet": "action_app", "appli": "notion"},
-    "notion-download-attachment": {"label": "Téléchargement d'une pièce jointe Notion", "icone": "Download", "onglet": "action_app", "appli": "notion"},
+    "notion-download-attachment": {"label": "Pièce jointe Notion", "icone": "Download", "onglet": "action_app", "appli": "notion"},
     "notion-create-pages": {"label": "Création d'une page Notion", "icone": "FilePlus", "onglet": "action_app", "appli": "notion"},
     "notion-update-page": {"label": "Modification d'une page Notion", "icone": "Edit3", "onglet": "action_app", "appli": "notion"},
     "notion-move-pages": {"label": "Déplacement d'une page Notion", "icone": "Move", "onglet": "action_app", "appli": "notion"},
     "notion-duplicate-page": {"label": "Duplication d'une page Notion", "icone": "Copy", "onglet": "action_app", "appli": "notion"},
     "notion-create-database": {"label": "Création d'une base Notion", "icone": "Database", "onglet": "action_app", "appli": "notion"},
-    "notion-update-data-source": {"label": "Modification du schéma d'une base Notion", "icone": "Settings2", "onglet": "action_app", "appli": "notion"},
+    "notion-update-data-source": {"label": "Schéma d'une base Notion", "icone": "Settings2", "onglet": "action_app", "appli": "notion"},
     "notion-create-comment": {"label": "Commentaire dans Notion", "icone": "MessageSquare", "onglet": "action_app", "appli": "notion"},
-    "notion-create-attachment": {"label": "Ajout d'une pièce jointe Notion", "icone": "Paperclip", "onglet": "action_app", "appli": "notion"},
+    "notion-create-attachment": {"label": "Joindre un fichier Notion", "icone": "Paperclip", "onglet": "action_app", "appli": "notion"},
     "notion-create-view": {"label": "Création d'une vue Notion", "icone": "PanelsTopLeft", "onglet": "action_app", "appli": "notion"},
     "notion-update-view": {"label": "Modification d'une vue Notion", "icone": "SlidersHorizontal", "onglet": "action_app", "appli": "notion"},
 
@@ -450,30 +466,30 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # (classgpt-frontend/package.json), pas de repli Wrench attendu.
     "notion-ai-search": {"label": "Recherche IA dans Notion", "icone": "Sparkles", "onglet": "action_app", "appli": "notion"},
     "notion-search-agents": {"label": "Recherche d'agents Notion", "icone": "Users", "onglet": "action_app", "appli": "notion"},
-    "notion-search-sessions": {"label": "Recherche de sessions d'agent Notion", "icone": "Search", "onglet": "action_app", "appli": "notion"},
+    "notion-search-sessions": {"label": "Recherche de sessions Notion", "icone": "Search", "onglet": "action_app", "appli": "notion"},
     "notion-search-skills": {"label": "Recherche de skills Notion", "icone": "ScrollText", "onglet": "action_app", "appli": "notion"},
-    "notion-query-multiple-data-sources": {"label": "Interrogation de plusieurs bases Notion", "icone": "Layers", "onglet": "action_app", "appli": "notion"},
-    "notion-query-sessions": {"label": "Liste des sessions d'agent Notion", "icone": "ListChecks", "onglet": "action_app", "appli": "notion"},
-    "notion-read-session-event": {"label": "Lecture d'un évènement de session Notion", "icone": "FileText", "onglet": "action_app", "appli": "notion"},
-    "notion-list-favorite-pages": {"label": "Liste des pages favorites Notion", "icone": "Star", "onglet": "action_app", "appli": "notion"},
+    "notion-query-multiple-data-sources": {"label": "Plusieurs bases Notion", "icone": "Layers", "onglet": "action_app", "appli": "notion"},
+    "notion-query-sessions": {"label": "Sessions Notion", "icone": "ListChecks", "onglet": "action_app", "appli": "notion"},
+    "notion-read-session-event": {"label": "Évènement de session Notion", "icone": "FileText", "onglet": "action_app", "appli": "notion"},
+    "notion-list-favorite-pages": {"label": "Pages favorites Notion", "icone": "Star", "onglet": "action_app", "appli": "notion"},
     "notion-list-private-pages": {"label": "Liste des pages privées Notion", "icone": "Lock", "onglet": "action_app", "appli": "notion"},
-    "notion-list-recent-pages": {"label": "Liste des pages Notion récentes", "icone": "Clock", "onglet": "action_app", "appli": "notion"},
-    "notion-list-session-events": {"label": "Historique d'une session d'agent Notion", "icone": "History", "onglet": "action_app", "appli": "notion"},
-    "notion-list-shared-pages": {"label": "Liste des pages partagées Notion", "icone": "Share2", "onglet": "action_app", "appli": "notion"},
-    "notion-get-session-status": {"label": "Statut d'une session d'agent Notion", "icone": "Activity", "onglet": "action_app", "appli": "notion"},
-    "notion-get-tool-access": {"label": "Vérification des droits d'accès Notion", "icone": "ShieldCheck", "onglet": "action_app", "appli": "notion"},
-    "notion-check-mcp-next-steps": {"label": "Vérification des étapes suivantes Notion", "icone": "ArrowRight", "onglet": "action_app", "appli": "notion"},
-    "notion-download-skill": {"label": "Téléchargement d'un skill Notion", "icone": "Download", "onglet": "action_app", "appli": "notion"},
-    "notion-show-advanced-analysis-next-steps": {"label": "Étapes suivantes d'analyse avancée Notion", "icone": "ArrowRight", "onglet": "action_app", "appli": "notion"},
+    "notion-list-recent-pages": {"label": "Pages Notion récentes", "icone": "Clock", "onglet": "action_app", "appli": "notion"},
+    "notion-list-session-events": {"label": "Historique de session Notion", "icone": "History", "onglet": "action_app", "appli": "notion"},
+    "notion-list-shared-pages": {"label": "Pages partagées Notion", "icone": "Share2", "onglet": "action_app", "appli": "notion"},
+    "notion-get-session-status": {"label": "Statut de session Notion", "icone": "Activity", "onglet": "action_app", "appli": "notion"},
+    "notion-get-tool-access": {"label": "Droits d'accès Notion", "icone": "ShieldCheck", "onglet": "action_app", "appli": "notion"},
+    "notion-check-mcp-next-steps": {"label": "Étapes suivantes Notion", "icone": "ArrowRight", "onglet": "action_app", "appli": "notion"},
+    "notion-download-skill": {"label": "Télécharger un skill Notion", "icone": "Download", "onglet": "action_app", "appli": "notion"},
+    "notion-show-advanced-analysis-next-steps": {"label": "Analyse avancée Notion", "icone": "ArrowRight", "onglet": "action_app", "appli": "notion"},
     # --- Écriture/action (marqués sensibles, voir OUTILS_SENSIBLES plus haut) ---
     "notion-create-folder": {"label": "Création d'un dossier Notion", "icone": "FolderPlus", "onglet": "action_app", "appli": "notion"},
-    "notion-update-folder": {"label": "Modification d'un dossier Notion", "icone": "FolderCog", "onglet": "action_app", "appli": "notion"},
+    "notion-update-folder": {"label": "Modifier un dossier Notion", "icone": "FolderCog", "onglet": "action_app", "appli": "notion"},
     "notion-create-file-upload": {"label": "Envoi d'un fichier dans Notion", "icone": "UploadCloud", "onglet": "action_app", "appli": "notion"},
-    "notion-convert-page-to-skill": {"label": "Conversion d'une page Notion en skill", "icone": "Wand2", "onglet": "action_app", "appli": "notion"},
+    "notion-convert-page-to-skill": {"label": "Page Notion en skill", "icone": "Wand2", "onglet": "action_app", "appli": "notion"},
     "notion-upload-skill": {"label": "Import d'un skill dans Notion", "icone": "Upload", "onglet": "action_app", "appli": "notion"},
-    "notion-spawn-session": {"label": "Lancement d'une session d'agent Notion", "icone": "PlayCircle", "onglet": "action_app", "appli": "notion"},
-    "notion-send-message-to-session": {"label": "Envoi d'un message à une session d'agent Notion", "icone": "MessageSquare", "onglet": "action_app", "appli": "notion"},
-    "notion-stop-session": {"label": "Arrêt d'une session d'agent Notion", "icone": "StopCircle", "onglet": "action_app", "appli": "notion"},
+    "notion-spawn-session": {"label": "Lancer une session Notion", "icone": "PlayCircle", "onglet": "action_app", "appli": "notion"},
+    "notion-send-message-to-session": {"label": "Message à une session Notion", "icone": "MessageSquare", "onglet": "action_app", "appli": "notion"},
+    "notion-stop-session": {"label": "Arrêt de session Notion", "icone": "StopCircle", "onglet": "action_app", "appli": "notion"},
 
     # --- Action dans l'app : Google Drive ---
     # Noms d'outils NON VÉRIFIÉS en conditions réelles, voir le
@@ -482,7 +498,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # reste invisible, rien d'autre ne casse.
     "search_files": {"label": "Recherche d'un fichier Drive", "icone": "FolderSearch", "onglet": "action_app", "appli": "google_drive"},
     "read_file_content": {"label": "Lecture d'un fichier Drive", "icone": "FileText", "onglet": "action_app", "appli": "google_drive"},
-    "download_file_content": {"label": "Téléchargement d'un fichier Drive", "icone": "Download", "onglet": "action_app", "appli": "google_drive"},
+    "download_file_content": {"label": "Téléchargement Drive", "icone": "Download", "onglet": "action_app", "appli": "google_drive"},
     "list_recent_files": {"label": "Fichiers Drive récents", "icone": "Clock", "onglet": "action_app", "appli": "google_drive"},
     "get_file_metadata": {"label": "Infos d'un fichier Drive", "icone": "Info", "onglet": "action_app", "appli": "google_drive"},
     "create_file": {"label": "Création d'un fichier Drive", "icone": "FilePlus", "onglet": "action_app", "appli": "google_drive"},
@@ -548,10 +564,10 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # disponible=true) et dans agents_actions_locales (agent clovis) pour
     # etre reellement visible, comme les 6 autres.
     "ui_localisation": {"label": "Joindre ma position", "icone": "MapPin", "onglet": "utilitaires"},
-    "ui_formule": {"label": "Insérer une formule / réaction chimique", "icone": "Sigma", "onglet": "utilitaires"},
-    "ui_editeur_maths": {"label": "Éditeur maths live (texte + formules)", "icone": "Calculator", "onglet": "utilitaires"},
+    "ui_formule": {"label": "Formule ou réaction chimique", "icone": "Sigma", "onglet": "utilitaires"},
+    "ui_editeur_maths": {"label": "Éditeur maths live", "icone": "Calculator", "onglet": "utilitaires"},
     "ui_recherche": {"label": "Forcer une recherche web", "icone": "Search", "onglet": "utilitaires"},
-    "ui_dessin": {"label": "Dessiner (géométrie, graphe, croquis)", "icone": "PenLine", "onglet": "utilitaires"},
+    "ui_dessin": {"label": "Dessin et croquis", "icone": "PenLine", "onglet": "utilitaires"},
     "ui_mode_vocal": {"label": "Mode vocal", "icone": "AudioLines", "onglet": "utilitaires"},
     "ui_photo": {"label": "Prendre une photo", "icone": "Camera", "onglet": "utilitaires"},
 
@@ -570,13 +586,13 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # le 26/08 en un seul outil gerer_dossier_bibliotheque, ex 5 outils
     # séparés) : onglet=None (autonomie du modèle, pas des boutons cliqués
     # par l'utilisateur).
-    "gerer_dossier_bibliotheque": {"label": "Dossiers de la bibliothèque", "icone": "FolderTree", "onglet": None},
+    "gerer_dossier_bibliotheque": {"label": "Mes dossiers", "icone": "FolderTree", "onglet": None},
 
     # --- Historique (porté le 17/08 depuis serveur_mcp_espace.py) ---
     # Même onglet=None : section "Historique" à part entière de "Mon
     # espace", pas un bouton du menu Outils du chat.
-    "lister_conversations_historique": {"label": "Liste des conversations passées", "icone": "History", "onglet": None},
-    "lire_conversation_historique": {"label": "Lecture d'une conversation passée", "icone": "MessageSquareText", "onglet": None},
+    "lister_conversations_historique": {"label": "Conversations passées", "icone": "History", "onglet": None},
+    "lire_conversation_historique": {"label": "Lire une conversation", "icone": "MessageSquareText", "onglet": None},
 
     # --- Programme adaptatif (interne) ---
     # Bloc entier retiré le 29/08/2026 (demande Bourama) : ces outils
@@ -584,9 +600,9 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # voir _desactive_programme/LISEZ_MOI_NE_JAMAIS_REUTILISER.md). NE
     # JAMAIS réintroduire ces entrées sans reconstruire la fonctionnalité
     # à neuf.
-    "consulter_matiere_active": {"label": "Consultation de la matière active", "icone": "BookOpen", "onglet": None},
-    "annuler_derniere_modification": {"label": "Annulation de la dernière modification", "icone": "Undo2", "onglet": None},
-    "gerer_comportement": {"label": "Skills personnels", "icone": "ScrollText", "onglet": None},
+    "consulter_matiere_active": {"label": "Matière active", "icone": "BookOpen", "onglet": None},
+    "annuler_derniere_modification": {"label": "Annuler la modification", "icone": "Undo2", "onglet": None},
+    "gerer_comportement": {"label": "Mes skills", "icone": "ScrollText", "onglet": None},
     # Routage en deux niveaux (22/08/2026, demande Bourama) : jamais un
     # outil que le grand LLM appelle lui-même (pas de tool MCP réel), c'est
     # le petit routeur "à la skill" (core/main.py) qui déclenche ça en
@@ -594,13 +610,13 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # résultat d'outil normal dans le fil de conversation (voir
     # OutilResultatBulle.tsx), d'où cette entrée dans ce registre bien qu'il
     # n'existe aucun outil MCP de ce nom.
-    "consulter_skills_chapitres_matiere": {"label": "Consultation des skills des chapitres", "icone": "ScrollText", "onglet": None},
+    "consulter_skills_chapitres_matiere": {"label": "Skills des chapitres", "icone": "ScrollText", "onglet": None},
 
     # --- Confiance pédagogique : avancement des notions (Partie 3,
     # 06/09/2026) --- onglet=None, même logique que les blocs
     # "Programme adaptatif"/"Bibliothèque" plus haut : outils que le
     # modèle appelle lui-même en autonomie, jamais des boutons cliqués.
-    "gerer_avancement_notions": {"label": "Avancement du programme", "icone": "ListChecks", "onglet": None},
+    "gerer_avancement_notions": {"label": "Programme", "icone": "ListChecks", "onglet": None},
     "consulter_avancement_notion": {"label": "Consultation de l'avancement", "icone": "BookOpen", "onglet": None},
 
     # --- Vérification "mode cours" (12/09/2026) --- outil unique qui
@@ -630,8 +646,8 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # onglet=None, même logique que les blocs "Programme adaptatif"/
     # "Bibliothèque" plus haut : outils que le modèle appelle lui-même en
     # autonomie pendant la conversation, jamais des boutons cliqués.
-    "gerer_dossier_telephone": {"label": "Dossiers du téléphone", "icone": "FolderPen", "onglet": None},
-    "explorer_dossier": {"label": "Exploration du dossier en direct", "icone": "FolderOpen", "onglet": None},
+    "gerer_dossier_telephone": {"label": "Mon téléphone", "icone": "FolderPen", "onglet": None},
+    "explorer_dossier": {"label": "Dossier en direct", "icone": "FolderOpen", "onglet": None},
 
     # --- Outil interne demander_outils (etape 5, chantier "demander_outils",
     # 06/09/2026, decision explicite de Bourama) --- onglet=None, meme
@@ -654,34 +670,28 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # (cache 24h connu, voir plan-agent-applicatif-clovis.md section 2).
     "executer_action_application": {"label": "Action dans l'application", "icone": "MousePointerClick", "onglet": None},
     # 20/09/2026 (demande Bourama) : minuteurs du chat, appeles par le modele, jamais cliquables a la main (onglet None).
-    "gerer_minuteur": {"label": "Gestion d'un minuteur", "icone": "Timer", "onglet": None},
+    "gerer_minuteur": {"label": "Minuteur", "icone": "Timer", "onglet": None},
     # Chantier F : filet de securite generique, meme rappel de cache 24h.
-    "executer_clic_generique": {"label": "Clic générique dans l'application", "icone": "MousePointer2", "onglet": None},
+    "executer_clic_generique": {"label": "Clic dans l'application", "icone": "MousePointer2", "onglet": None},
     # Chantier G : mode guidage, meme rappel de cache 24h.
-    "montrer_element_application": {"label": "Pointer un élément de l'application", "icone": "Crosshair", "onglet": None},
+    "montrer_element_application": {"label": "Pointer un élément", "icone": "Crosshair", "onglet": None},
     # Ecriture dans les champs (20/09/2026, demande Bourama), meme rappel de cache 24h.
     "ecrire_dans_champ": {"label": "Écriture dans un champ", "icone": "PenLine", "onglet": None},
     # Lot U : lecture de la page Classinus, dans le canal applicatif existant.
     "lire_page": {"label": "Lecture de la page", "icone": "Eye", "onglet": None},
     # Editeur de code (28/09/2026, demande Bourama), meme rappel de cache 24h.
     "lire_editeur": {"label": "Lecture de l'éditeur de code", "icone": "FileCode", "onglet": None},
-    "montrer_dans_editeur": {"label": "Montrer des lignes dans l'éditeur", "icone": "Crosshair", "onglet": None},
-    "ecrire_dans_editeur": {"label": "Écriture dans l'éditeur de code", "icone": "PenLine", "onglet": None},
-    # Lot S (canal en direct sur PC, 27/09/2026) : actions sur le systeme du PC via l'appli Electron,
-    # appelees par le modele, jamais cliquables a la main (onglet None), meme rappel de cache 24h.
-    "cliquer_ecran": {"label": "Clic à l'écran", "icone": "MousePointer2", "onglet": None},
-    "pointer_ecran": {"label": "Pointage à l'écran", "icone": "Crosshair", "onglet": None},
-    "marquer_ecran": {"label": "Marque à l'écran", "icone": "Highlighter", "onglet": None},
-    "taper_clavier": {"label": "Saisie au clavier", "icone": "Keyboard", "onglet": None},
-    "appuyer_touches": {"label": "Raccourci clavier", "icone": "Keyboard", "onglet": None},
-    "ouvrir_application": {"label": "Ouverture d'une application", "icone": "AppWindow", "onglet": None},
-    "lire_ecran": {"label": "Lecture de l'écran", "icone": "Eye", "onglet": None},
+    "montrer_dans_editeur": {"label": "Montrer dans l'éditeur", "icone": "Crosshair", "onglet": None},
+    "ecrire_dans_editeur": {"label": "Écrire dans l'éditeur", "icone": "PenLine", "onglet": None},
     # Chantier P (canal en direct, 19/09/2026) : commentaire libre pendant
     # une action, meme rappel de cache 24h.
     "dire_a_l_etudiant": {"label": "Message en direct à l'étudiant", "icone": "MessageCircle", "onglet": None},
     # Demo (20/09/2026) : ouverture du canal en direct depuis le chat
     # normal, meme rappel de cache 24h.
     "ouvrir_canal_en_direct": {"label": "Ouverture du canal en direct", "icone": "Radio", "onglet": None},
+    # 02/10/2026 (demande Bourama) : Clovis active et desactive le canal depuis le chat.
+    "activer_canal_en_direct": {"label": "Activation du canal en direct", "icone": "Radio", "onglet": None},
+    "desactiver_canal_en_direct": {"label": "Couper le canal en direct", "icone": "Radio", "onglet": None},
 
     # --- Outils sans entrée jusqu'au 24/09/2026 (audit de l'affichage des
     # outils, demande Bourama : repérer les icônes génériques) --- ces 10
@@ -690,16 +700,16 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # leur nom technique brut. onglet=None comme les autres outils que le
     # modèle appelle en autonomie. Chaque icône est nouvelle dans ce
     # registre (jamais une icône déjà utilisée ailleurs ici).
-    "gerer_entree_catalogue_public": {"label": "Publications du catalogue public", "icone": "LibraryBig", "onglet": None},
-    "gerer_dossier_catalogue_public": {"label": "Dossiers du catalogue public", "icone": "FolderSymlink", "onglet": None},
+    "gerer_entree_catalogue_public": {"label": "Catalogue public", "icone": "LibraryBig", "onglet": None},
+    "gerer_dossier_catalogue_public": {"label": "Dossiers publics", "icone": "FolderSymlink", "onglet": None},
     "gerer_comportement_public": {"label": "Skills publics", "icone": "Puzzle", "onglet": None},
     "basculer_etoile_catalogue_public": {"label": "Étoile du catalogue public", "icone": "Bookmark", "onglet": None},
-    "gerer_session_concentration": {"label": "Session de concentration", "icone": "Focus", "onglet": None},
+    "gerer_session_concentration": {"label": "Concentration", "icone": "Focus", "onglet": None},
     "lire_temps_ecran": {"label": "Lecture du temps d'écran", "icone": "Smartphone", "onglet": None},
     "planifier_rappel": {"label": "Planification d'un rappel", "icone": "BellRing", "onglet": None},
     "consulter_signalement": {"label": "Consultation d'un signalement", "icone": "Flag", "onglet": None},
     "enregistrer_note_signalement": {"label": "Note sur un signalement", "icone": "NotebookPen", "onglet": None},
-    "rattacher_signalement_notion": {"label": "Rattachement d'un signalement à une notion", "icone": "Link", "onglet": None},
+    "rattacher_signalement_notion": {"label": "Rattacher un signalement", "icone": "Link", "onglet": None},
 }
 
 # --- Verbes des actions (24/09/2026, demande Bourama : regroupement des
@@ -856,7 +866,7 @@ CATEGORIES_OUTILS = {
         "executer_clic_generique", "montrer_element_application", "ecrire_dans_champ",
         "lire_editeur", "montrer_dans_editeur", "ecrire_dans_editeur",
         "lire_page",
-        "pointer_ecran", "marquer_ecran", "cliquer_ecran", "taper_clavier", "appuyer_touches", "ouvrir_application", "lire_ecran",
+        "desactiver_canal_en_direct",
     ],
     "github": ["gerer_depot_github"],
     "google_drive": [
