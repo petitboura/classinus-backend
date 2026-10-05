@@ -42,6 +42,7 @@ from groq import Groq
 from supabase import create_client, ClientOptions
 from client_http_supabase import nouveau_client_http_supabase
 from codes_partage import invalider_cache_recus_pour_comportement as _invalider_cache_recus_pour_comportement
+from codes_partage import ids_comportements_lies_a_un_code
 
 # Cache court (11/09/2026, demande Bourama : "pas à chaque message si ça
 # peut être évité") : "Mes comportements" ne change que quand l'étudiant
@@ -301,7 +302,7 @@ def lister_comportements(agent_id: str, etudiant_id: str) -> list[dict]:
     try:
         res = (
             supabase.table("comportements_etudiants")
-            .select("id, texte, description, nom, lien_type, lien_id, actif, depuis_audit, categorie")
+            .select("id, texte, description, nom, lien_type, lien_id, actif, depuis_audit, categorie, portee")
             .eq("agent_id", agent_id)
             .eq("etudiant_id", etudiant_id)
             .order("created_at")
@@ -373,6 +374,7 @@ def lister_comportements(agent_id: str, etudiant_id: str) -> list[dict]:
                 "matiere_id": matiere_id,
                 "matiere_nom": matiere_nom,
                 "categorie": ligne.get("categorie"),
+                "portee": ligne.get("portee") or "deux",
             }
         )
     _cache_comportements[cle] = {"valeur": resultat, "expire_a": maintenant + _DUREE_CACHE_SECONDES}
@@ -633,10 +635,10 @@ def ajouter_comportement(
     responsable de valider cette valeur AVANT d'appeler cette fonction
     (voir api/comportements_etudiants.py) -- la contrainte SQL
     comportements_etudiants_categorie_valide est le filet de sécurité
-    final. IMPORTANT : ce paramètre n'est volontairement PAS exposé par
-    l'outil MCP gerer_comportement (core/outils_comportements_connaissance.py)
-    -- l'IA ne doit jamais pouvoir créer elle même une entrée catégorisée,
-    seulement un humain via un bouton dans l'appli.
+    final. 03/10/2026, demande Bourama : l'IA peut maintenant créer ces
+    entrées depuis le chat (outil gerer_comportement, paramètre
+    `categorie`, voir core/outils_comportements_connaissance.py), ce qui
+    remplace la règle du 28/09 qui la réservait à un humain via un bouton.
 
     quand_utiliser (29/09/2026, demande Bourama, même chantier) : champ
     optionnel, seulement proposé à l'écran pour les 4 catégories de
@@ -900,6 +902,9 @@ def activer_desactiver_comportement(agent_id: str, etudiant_id: str, comportemen
         return None
     ligne = res.data[0]
     _invalider_cache_comportements(agent_id, etudiant_id)
+    # 03/10/2026 : un élément de Configuration lié à un code est lu par ceux
+    # qui l'ont activé, son état actif doit donc compter tout de suite chez eux.
+    _invalider_cache_recus_pour_comportement(comportement_id)
     return {
         "id": ligne["id"],
         "texte": ligne["texte"],
@@ -908,6 +913,78 @@ def activer_desactiver_comportement(agent_id: str, etudiant_id: str, comportemen
         "lien_type": ligne.get("lien_type"),
         "lien_id": ligne.get("lien_id"),
         "actif": ligne.get("actif", True),
+    }
+
+
+# 04/10/2026, demande Bourama : un element lie a un code s'applique soit a
+# son proprietaire ET aux receveurs ('deux', defaut), soit aux receveurs
+# seulement ('destinataires'). Un element NON lie a un code s'applique
+# toujours a son proprietaire : la valeur 'destinataires' est alors ignoree.
+PORTEES_VALIDES = ("deux", "destinataires")
+
+
+def retirer_elements_destinataires_seuls(comportements: list[dict]) -> list[dict]:
+    """Retire de `comportements` (forme de lister_comportements) ceux qui ne
+    doivent PAS s'appliquer a leur proprietaire : portee 'destinataires' ET
+    lie a au moins un code. Une requete groupee, faite seulement s'il y a
+    au moins un element 'destinataires' (cas rare : aucune requete en plus
+    pour la plupart des messages)."""
+    candidats = [c["id"] for c in comportements if c.get("portee") == "destinataires"]
+    if not candidats:
+        return comportements
+    lies = ids_comportements_lies_a_un_code(candidats)
+    if not lies:
+        return comportements
+    return [c for c in comportements if c["id"] not in lies]
+
+
+def lister_ids_lies_a_un_code(comportements: list[dict]) -> set[str]:
+    """Ids, parmi `comportements`, lies a au moins un code (pour que
+    l'ecran sache s'il doit proposer le choix du destinataire)."""
+    return ids_comportements_lies_a_un_code([c["id"] for c in comportements])
+
+
+def definir_portee_comportement(agent_id: str, etudiant_id: str, comportement_id: str, portee: str) -> dict | None:
+    """Change la portee d'un element de son proprietaire. None si l'element
+    n'existe pas chez lui. ValueError si la valeur est inconnue, ou si
+    l'element n'est lie a aucun code (le choix n'existe alors pas : il
+    s'applique a son proprietaire, point)."""
+    if portee not in PORTEES_VALIDES:
+        raise ValueError("PORTEE_INVALIDE")
+    if comportement_id not in ids_comportements_lies_a_un_code([comportement_id]):
+        existant = (
+            supabase.table("comportements_etudiants")
+            .select("id")
+            .eq("id", comportement_id)
+            .eq("agent_id", agent_id)
+            .eq("etudiant_id", etudiant_id)
+            .execute()
+        )
+        if not existant.data:
+            return None
+        raise ValueError("NON_LIE_A_UN_CODE")
+    res = (
+        supabase.table("comportements_etudiants")
+        .update({"portee": portee})
+        .eq("id", comportement_id)
+        .eq("agent_id", agent_id)
+        .eq("etudiant_id", etudiant_id)
+        .execute()
+    )
+    if not res.data:
+        return None
+    ligne = res.data[0]
+    _invalider_cache_comportements(agent_id, etudiant_id)
+    return {
+        "id": ligne["id"],
+        "texte": ligne["texte"],
+        "description": ligne.get("description") or "",
+        "nom": ligne.get("nom") or "",
+        "lien_type": ligne.get("lien_type"),
+        "lien_id": ligne.get("lien_id"),
+        "actif": ligne.get("actif", True),
+        "categorie": ligne.get("categorie"),
+        "portee": ligne.get("portee") or "deux",
     }
 
 

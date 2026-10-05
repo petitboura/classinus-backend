@@ -23,6 +23,7 @@ from core.canal_temps_reel import (
     connecter,
     deconnecter,
     est_erreur_canal,
+    fermer_websocket_sans_erreur,
     poser_question_appareil,
     recevoir_reponse,
 )

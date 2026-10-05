@@ -10,6 +10,7 @@ from mcp_tools import parametres_outils
 from core.canal_agent_applicatif import retirer_messages_etudiant
 from core.plafond_outils_tour import plafond_tour
 from constantes_agent import GROQ_PRIMARY, MODELES_AVEC_REASONING_EFFORT, DELAI_MAX_PAR_APPEL
+from fournisseurs_llm import CONSIGNE_LANGUE_REFLEXION, DEEPSEEK_REASONING_EFFORT, ajouter_consigne_langue_reflexion, normaliser_effort_reflexion
 from execution_outils import _AttenteConfirmation, _traiter_appels
 from routage_outils import (
     _ecrire_outils_retenus,
@@ -125,6 +126,39 @@ def _detecter_appel_repete(historique_appels, nouveaux_appels, tolerance):
     return None
 
 
+def _effort_reflexion(modele, reasoning_effort):
+    """Effort de reflexion a envoyer. Un modele DeepSeek sans effort explicite
+    recoit DEEPSEEK_REASONING_EFFORT (sinon l'API reflechit au niveau eleve
+    par defaut, tres lent). Un effort explicite est revalide (none, low, high,
+    max), sinon retombe sur le defaut. Tout autre modele : valeur inchangee."""
+    if str(modele or "").startswith("deepseek"):
+        return normaliser_effort_reflexion(reasoning_effort) or DEEPSEEK_REASONING_EFFORT
+    return reasoning_effort
+
+
+def _messages_pour_api(messages_agent, modele):
+    """Messages a envoyer a l'API. Pour DeepSeek uniquement, ajoute la
+    consigne de langue de reflexion au message systeme, dans une COPIE :
+    messages_agent est partage et mute tout au long de la cascade
+    (DeepSeek, puis Groq en repli), la consigne ne doit donc jamais y
+    rester ni fuiter vers les autres modeles."""
+    if not str(modele or "").startswith("deepseek"):
+        return messages_agent
+    copie = list(messages_agent)
+    for i, m in enumerate(copie):
+        if isinstance(m, dict) and m.get("role") == "system":
+            copie[i] = {**m, "content": ajouter_consigne_langue_reflexion(m.get("content"))}
+            return copie
+    return [{"role": "system", "content": CONSIGNE_LANGUE_REFLEXION}] + copie
+
+
+def _lire_raisonnement(delta):
+    """Fragment de raisonnement d'un delta de streaming. Groq l'expose dans
+    `reasoning`, DeepSeek dans `reasoning_content` (meme principe, nom de
+    champ different) -- un seul des deux est present selon le fournisseur."""
+    return getattr(delta, "reasoning", None) or getattr(delta, "reasoning_content", None)
+
+
 def _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, kwargs_reasoning, timeout):
     """
     Force une reponse texte finale a partir de messages_agent tel quel
@@ -136,7 +170,7 @@ def _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, 
     """
     completion = client_groq.chat.completions.create(
         model=modele,
-        messages=messages_agent,
+        messages=_messages_pour_api(messages_agent, modele),
         max_completion_tokens=None,
         tools=outils_mcp if outils_mcp else None,
         stream=True,
@@ -147,7 +181,7 @@ def _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, 
     etat_raisonnement = _nouvel_etat_filtre_raisonnement()
     for chunk in completion:
         delta = chunk.choices[0].delta
-        raisonnement = getattr(delta, "reasoning", None)
+        raisonnement = _lire_raisonnement(delta)
         if raisonnement:
             for evenement in _traiter_fragment_raisonnement(etat_raisonnement, raisonnement, messages_agent):
                 yield evenement
@@ -229,6 +263,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
     # messages que l'etudiant envoie pendant que Clovis travaille (voir
     # core/canal_agent_applicatif.py). None (chemins de reprise) : aucune
     # lecture, ces messages sont alors renvoyes au frontend en fin de tour.
+    reasoning_effort = _effort_reflexion(modele, reasoning_effort)
     kwargs_reasoning = {"reasoning_effort": reasoning_effort} if reasoning_effort else {}
     # Compteur de sources partagé sur tout le tour (26/08, citations
     # inline bibliotheque) -- une seule boîte, passée aux deux appels de
@@ -331,7 +366,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
 
         completion = client_groq.chat.completions.create(
             model=modele,
-            messages=messages_agent,
+            messages=_messages_pour_api(messages_agent, modele),
             max_completion_tokens=reserve_tokens,
             tools=outils_mcp if outils_mcp else None,
             stream=True,
@@ -376,7 +411,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
 
             delta = chunk.choices[0].delta
 
-            raisonnement = getattr(delta, "reasoning", None)
+            raisonnement = _lire_raisonnement(delta)
             if raisonnement:
                 for evenement in _traiter_fragment_raisonnement(etat_raisonnement, raisonnement, messages_agent):
                     yield evenement

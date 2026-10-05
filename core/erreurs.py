@@ -251,6 +251,8 @@ MESSAGES_FR: dict[str, str] = {
     "ANNONCE_VIDE": "L'annonce ne peut pas être vide.",
     "TEXTE_REQUIS": "Le texte ne peut pas être vide.",
     "COMPORTEMENT_INTROUVABLE": "Comportement introuvable.",
+    "NON_LIE_A_UN_CODE": "Cet élément n'est lié à aucun code : il s'applique à vous.",
+    "PORTEE_INVALIDE": "Choix de destinataire inconnu.",
     "FRONTMATTER_INVALIDE": "Le skill doit commencer par --- et contenir un bloc d'en-tête valide.",
     "FRONTMATTER_INCOMPLET": "Le skill doit avoir une description et un corps de texte, tous les deux non vides.",
     # 22/08, chantier signalements (bibliothèque publique + documents
@@ -284,7 +286,6 @@ MESSAGES_FR: dict[str, str] = {
     # 20/09/2026, minuteurs dans le chat -- voir core/minuteurs.py. A
     # garder synchronise avec lib/erreurs.ts cote clovis-frontend.
     "MINUTEUR_DUREE_INVALIDE": "Cette durée de minuteur n'est pas valide.",
-    "MINUTEUR_TROP_NOMBREUX": "Trop de minuteurs sont en cours en même temps, arrête en un d'abord.",
     "MINUTEUR_INTROUVABLE": "Ce minuteur est introuvable.",
     "MINUTEUR_DEJA_TERMINE": "Ce minuteur est déjà terminé ou arrêté.",
     "MINUTEUR_ECHEC": "Impossible de mettre à jour ce minuteur pour le moment.",
