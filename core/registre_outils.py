@@ -347,6 +347,9 @@ OUTILS_SENSIBLES = {
 # "generer" / "rechercher" / "action_app" / "utilitaires".
 # `appli` (optionnel) : regroupe sous un connecteur externe ("github" ou
 # "notion") dans l'onglet "action_app" -- absent pour tout le reste.
+# 05/10/2026 (demande Bourama) : libellés des 12 outils à actions raccourcis, car le chat
+# affiche "Verbe (libellé)" et passait à la ligne sur téléphone. Garder ces libellés courts
+# (environ 18 caractères maximum) pour tout nouvel outil à actions.
 REGISTRE_AFFICHAGE_OUTILS = {
     # --- Génération ---
     "generer_document": {"label": "Génération d'un PDF/texte", "icone": "FileText", "onglet": "generer"},
@@ -399,12 +402,12 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # désormais, même onglet "rechercher" que l'ancien consulter_bibliotheque
     # (seule action manuellement cliquable, les autres restent onglet=None
     # en pratique côté modèle -- pas besoin de doublon d'entrée pour ça).
-    "gerer_document_bibliotheque": {"label": "Bibliothèque personnelle", "icone": "Library", "onglet": "rechercher"},
+    "gerer_document_bibliotheque": {"label": "Ma bibliothèque", "icone": "Library", "onglet": "rechercher"},
     # Ajouté 14/09/2026 (demande Bourama) : outil séparé pour les
     # pièces jointes de conversation (origine="chat"), pas cliquable
     # manuellement (onglet=None), même logique que les autres outils
     # consolidés par action.
-    "gerer_fichier_conversation": {"label": "Fichiers de la conversation", "icone": "Paperclip", "onglet": None},
+    "gerer_fichier_conversation": {"label": "Fichiers du chat", "icone": "Paperclip", "onglet": None},
     # Composites "nom_outil:action" (28/08, bug remonté par Bourama :
     # l'entrée générique ci-dessus s'affichait pour TOUTES les actions
     # de cet outil, y compris chercher_publique/trouver_catalogue_public/
@@ -420,7 +423,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "gerer_document_bibliotheque:trouver_catalogue_public": {"label": "Catalogue public", "icone": "Library", "onglet": None},
     "gerer_document_bibliotheque:lire_catalogue_public": {"label": "Catalogue public", "icone": "Library", "onglet": None},
     "gerer_document_bibliotheque:lister_catalogue_public": {"label": "Catalogue public", "icone": "Library", "onglet": None},
-    "gerer_base_connaissance": {"label": "Base de connaissances de Classinus", "icone": "BookMarked", "onglet": "rechercher"},
+    "gerer_base_connaissance": {"label": "Aide Classinus", "icone": "BookMarked", "onglet": "rechercher"},
 
     # --- Action dans l'app : GitHub ---
     "gerer_depot_github": {"label": "Dépôt GitHub", "icone": "Github", "onglet": "action_app", "appli": "github"},
@@ -581,7 +584,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # le 26/08 en un seul outil gerer_dossier_bibliotheque, ex 5 outils
     # séparés) : onglet=None (autonomie du modèle, pas des boutons cliqués
     # par l'utilisateur).
-    "gerer_dossier_bibliotheque": {"label": "Dossiers de la bibliothèque", "icone": "FolderTree", "onglet": None},
+    "gerer_dossier_bibliotheque": {"label": "Mes dossiers", "icone": "FolderTree", "onglet": None},
 
     # --- Historique (porté le 17/08 depuis serveur_mcp_espace.py) ---
     # Même onglet=None : section "Historique" à part entière de "Mon
@@ -597,7 +600,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # à neuf.
     "consulter_matiere_active": {"label": "Consultation de la matière active", "icone": "BookOpen", "onglet": None},
     "annuler_derniere_modification": {"label": "Annulation de la dernière modification", "icone": "Undo2", "onglet": None},
-    "gerer_comportement": {"label": "Skills personnels", "icone": "ScrollText", "onglet": None},
+    "gerer_comportement": {"label": "Mes skills", "icone": "ScrollText", "onglet": None},
     # Routage en deux niveaux (22/08/2026, demande Bourama) : jamais un
     # outil que le grand LLM appelle lui-même (pas de tool MCP réel), c'est
     # le petit routeur "à la skill" (core/main.py) qui déclenche ça en
@@ -611,7 +614,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # 06/09/2026) --- onglet=None, même logique que les blocs
     # "Programme adaptatif"/"Bibliothèque" plus haut : outils que le
     # modèle appelle lui-même en autonomie, jamais des boutons cliqués.
-    "gerer_avancement_notions": {"label": "Avancement du programme", "icone": "ListChecks", "onglet": None},
+    "gerer_avancement_notions": {"label": "Programme", "icone": "ListChecks", "onglet": None},
     "consulter_avancement_notion": {"label": "Consultation de l'avancement", "icone": "BookOpen", "onglet": None},
 
     # --- Vérification "mode cours" (12/09/2026) --- outil unique qui
@@ -641,8 +644,8 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # onglet=None, même logique que les blocs "Programme adaptatif"/
     # "Bibliothèque" plus haut : outils que le modèle appelle lui-même en
     # autonomie pendant la conversation, jamais des boutons cliqués.
-    "gerer_dossier_telephone": {"label": "Dossiers du téléphone", "icone": "FolderPen", "onglet": None},
-    "explorer_dossier": {"label": "Exploration du dossier en direct", "icone": "FolderOpen", "onglet": None},
+    "gerer_dossier_telephone": {"label": "Mon téléphone", "icone": "FolderPen", "onglet": None},
+    "explorer_dossier": {"label": "Dossier en direct", "icone": "FolderOpen", "onglet": None},
 
     # --- Outil interne demander_outils (etape 5, chantier "demander_outils",
     # 06/09/2026, decision explicite de Bourama) --- onglet=None, meme
@@ -665,7 +668,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # (cache 24h connu, voir plan-agent-applicatif-clovis.md section 2).
     "executer_action_application": {"label": "Action dans l'application", "icone": "MousePointerClick", "onglet": None},
     # 20/09/2026 (demande Bourama) : minuteurs du chat, appeles par le modele, jamais cliquables a la main (onglet None).
-    "gerer_minuteur": {"label": "Gestion d'un minuteur", "icone": "Timer", "onglet": None},
+    "gerer_minuteur": {"label": "Minuteur", "icone": "Timer", "onglet": None},
     # Chantier F : filet de securite generique, meme rappel de cache 24h.
     "executer_clic_generique": {"label": "Clic générique dans l'application", "icone": "MousePointer2", "onglet": None},
     # Chantier G : mode guidage, meme rappel de cache 24h.
@@ -695,11 +698,11 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # leur nom technique brut. onglet=None comme les autres outils que le
     # modèle appelle en autonomie. Chaque icône est nouvelle dans ce
     # registre (jamais une icône déjà utilisée ailleurs ici).
-    "gerer_entree_catalogue_public": {"label": "Publications du catalogue public", "icone": "LibraryBig", "onglet": None},
-    "gerer_dossier_catalogue_public": {"label": "Dossiers du catalogue public", "icone": "FolderSymlink", "onglet": None},
+    "gerer_entree_catalogue_public": {"label": "Catalogue public", "icone": "LibraryBig", "onglet": None},
+    "gerer_dossier_catalogue_public": {"label": "Dossiers publics", "icone": "FolderSymlink", "onglet": None},
     "gerer_comportement_public": {"label": "Skills publics", "icone": "Puzzle", "onglet": None},
     "basculer_etoile_catalogue_public": {"label": "Étoile du catalogue public", "icone": "Bookmark", "onglet": None},
-    "gerer_session_concentration": {"label": "Session de concentration", "icone": "Focus", "onglet": None},
+    "gerer_session_concentration": {"label": "Concentration", "icone": "Focus", "onglet": None},
     "lire_temps_ecran": {"label": "Lecture du temps d'écran", "icone": "Smartphone", "onglet": None},
     "planifier_rappel": {"label": "Planification d'un rappel", "icone": "BellRing", "onglet": None},
     "consulter_signalement": {"label": "Consultation d'un signalement", "icone": "Flag", "onglet": None},
