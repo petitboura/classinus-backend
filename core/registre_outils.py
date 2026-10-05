@@ -688,6 +688,15 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "dire_a_l_etudiant": {"label": "Message en direct à l'étudiant", "icone": "MessageCircle", "onglet": None},
     # Demo (20/09/2026) : ouverture du canal en direct depuis le chat
     # normal, meme rappel de cache 24h.
+    # Lot S (canal en direct sur PC, 27/09/2026) : actions sur le systeme du PC via l'appli Electron,
+    # appelees par le modele, jamais cliquables a la main (onglet None), meme rappel de cache 24h.
+    "cliquer_ecran": {"label": "Clic à l'écran", "icone": "MousePointer2", "onglet": None},
+    "pointer_ecran": {"label": "Pointage à l'écran", "icone": "Crosshair", "onglet": None},
+    "marquer_ecran": {"label": "Marque à l'écran", "icone": "Highlighter", "onglet": None},
+    "taper_clavier": {"label": "Saisie au clavier", "icone": "Keyboard", "onglet": None},
+    "appuyer_touches": {"label": "Raccourci clavier", "icone": "Keyboard", "onglet": None},
+    "ouvrir_application": {"label": "Ouverture d'une application", "icone": "AppWindow", "onglet": None},
+    "lire_ecran": {"label": "Lecture de l'écran", "icone": "Eye", "onglet": None},
     "ouvrir_canal_en_direct": {"label": "Ouverture du canal en direct", "icone": "Radio", "onglet": None},
     # 02/10/2026 (demande Bourama) : Clovis active et desactive le canal depuis le chat.
     "activer_canal_en_direct": {"label": "Activation du canal en direct", "icone": "Radio", "onglet": None},
@@ -866,6 +875,7 @@ CATEGORIES_OUTILS = {
         "executer_clic_generique", "montrer_element_application", "ecrire_dans_champ",
         "lire_editeur", "montrer_dans_editeur", "ecrire_dans_editeur",
         "lire_page",
+        "pointer_ecran", "marquer_ecran", "cliquer_ecran", "taper_clavier", "appuyer_touches", "ouvrir_application", "lire_ecran",
         "desactiver_canal_en_direct",
     ],
     "github": ["gerer_depot_github"],
