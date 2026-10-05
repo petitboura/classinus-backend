@@ -19,6 +19,8 @@ de code :
 - GEMINI_LIVE_PROACTIVITE (0 pour couper l'écoute sélective, si le modèle vocal ne l'accepte pas)
 - GEMINI_LIVE_DESCRIPTION_OUTIL_SILENCE
 - GEMINI_LIVE_DESCRIPTION_OUTIL_REVEIL
+- GEMINI_LIVE_DESCRIPTION_OUTIL_PLEIN_ECRAN
+- GEMINI_LIVE_DESCRIPTION_OUTIL_MINI
 - GEMINI_LIVE_ANNONCE_REPRISE (consigne qui précède la suite d'une lecture interrompue)
 - GEMINI_LIVE_DELAI_REPRISE_MS (silence de l'étudiant, en millisecondes, avant de reprendre la lecture)
 - GEMINI_LIVE_SEUIL_VOIX_MICRO (niveau du micro, entre 0 et 1, à partir duquel l'étudiant est considéré comme en train de parler)
@@ -90,7 +92,13 @@ CONSIGNES_PAR_DEFAUT = (
     "où elle s'est arrêtée, tu ne la reprends jamais de toi même. S'il te fait une nouvelle "
     "demande, traite-la normalement, la lecture interrompue est alors abandonnée. S'il te dit "
     "« continue », « reprends » ou « vas-y », appelle l'outil reprendre_la_parole, sans rien dire "
-    "avant ni après."
+    "avant ni après.\n"
+    "Ton onde peut s'afficher en plein écran ou réduite en une petite bulle. Quand l'étudiant te demande "
+    "de passer en plein écran (par exemple « mets-toi en plein écran », « agrandis-toi »), appelle l'outil "
+    "passer_en_plein_ecran. Quand il te demande de te réduire (par exemple « mets-toi en mini », "
+    "« réduis-toi », « fais-toi petit »), appelle l'outil passer_en_mini. Ces deux outils ne se transmettent "
+    "jamais à Classinus : n'appelle pas demander_a_clovis pour ça. Dis simplement en quelques mots que c'est fait, "
+    "sauf si l'outil t'indique que ce n'est pas possible, auquel cas tu le dis."
 )
 
 ACCUEIL_PAR_DEFAUT = "La voix vient de s'activer. Dis seulement à voix haute et en quelques mots : Je t'écoute."
@@ -113,6 +121,18 @@ DESCRIPTION_OUTIL_REVEIL_PAR_DEFAUT = (
     "t'appelle ou te demande de reparler), ou quand il te demande de continuer ta lecture (« continue », "
     "« reprends », « vas-y »). Si une lecture a été interrompue, elle reprend toute seule après cet "
     "appel et tu ne dis rien. Sinon, tu peux parler et traiter sa demande."
+)
+
+# Outils d'affichage de la voix : la voix décide, le navigateur applique seulement
+# (l'onde passe en plein écran ou en bulle). Rien n'est envoyé à Classinus.
+DESCRIPTION_OUTIL_PLEIN_ECRAN_PAR_DEFAUT = (
+    "À appeler quand l'étudiant demande de passer en plein écran ou d'agrandir ton onde. "
+    "L'onde s'affiche alors en plein écran. Si le résultat indique que ce n'est pas possible, "
+    "dis-le simplement à l'étudiant."
+)
+DESCRIPTION_OUTIL_MINI_PAR_DEFAUT = (
+    "À appeler quand l'étudiant demande de te mettre en mini ou de réduire ton onde. "
+    "L'onde se réduit alors en une petite bulle."
 )
 
 # Quand Classinus met du temps, la voix ne reste jamais muette : toutes les
@@ -208,6 +228,8 @@ def reglages_gemini_live():
         "relances_max": _lire_entier("GEMINI_LIVE_RELANCES_MAX", RELANCES_MAX_PAR_DEFAUT),
         "description_outil_silence": _lire("GEMINI_LIVE_DESCRIPTION_OUTIL_SILENCE", DESCRIPTION_OUTIL_SILENCE_PAR_DEFAUT),
         "description_outil_reveil": _lire("GEMINI_LIVE_DESCRIPTION_OUTIL_REVEIL", DESCRIPTION_OUTIL_REVEIL_PAR_DEFAUT),
+        "description_outil_plein_ecran": _lire("GEMINI_LIVE_DESCRIPTION_OUTIL_PLEIN_ECRAN", DESCRIPTION_OUTIL_PLEIN_ECRAN_PAR_DEFAUT),
+        "description_outil_mini": _lire("GEMINI_LIVE_DESCRIPTION_OUTIL_MINI", DESCRIPTION_OUTIL_MINI_PAR_DEFAUT),
         "annonce_reprise": _lire("GEMINI_LIVE_ANNONCE_REPRISE", ANNONCE_REPRISE_PAR_DEFAUT),
         "delai_reprise_ms": _lire_entier("GEMINI_LIVE_DELAI_REPRISE_MS", DELAI_REPRISE_MS_PAR_DEFAUT),
         "seuil_voix_micro": _lire_decimal("GEMINI_LIVE_SEUIL_VOIX_MICRO", SEUIL_VOIX_MICRO_PAR_DEFAUT),

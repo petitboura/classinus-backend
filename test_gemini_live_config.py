@@ -29,6 +29,14 @@ def test_descriptions_des_outils_de_silence_presentes():
     assert reglages["description_outil_reveil"].strip()
 
 
+def test_outils_plein_ecran_et_mini_decrits_et_presents():
+    reglages = reglages_gemini_live()
+    assert "passer_en_plein_ecran" in reglages["consignes"]
+    assert "passer_en_mini" in reglages["consignes"]
+    assert reglages["description_outil_plein_ecran"].strip()
+    assert reglages["description_outil_mini"].strip()
+
+
 def test_proactivite_active_par_defaut_et_coupable_par_variable():
     ancien = os.environ.pop("GEMINI_LIVE_PROACTIVITE", None)
     try:
