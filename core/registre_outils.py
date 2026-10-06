@@ -397,6 +397,8 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # lucide-react (0.383.0) -- repli automatique sur Wrench sinon, voir
     # resoudreIcone (clovis-frontend/lib/outils.ts).
     "rechercher_image": {"label": "Recherche d'image", "icone": "Images", "onglet": "rechercher"},
+    # Ajouté 06/10 : recherche de vidéos YouTube (cartes de vidéos dans le chat).
+    "rechercher_video": {"label": "Recherche de vidéo", "icone": "Video", "onglet": "rechercher"},
     # gerer_document_bibliotheque (consolidé le 26/08, ex 12 outils
     # séparés -- consulter_bibliotheque, consulter_bibliotheque_publique,
     # lister/ajouter/supprimer/classer/déclasser/ranger/retirer/lire_entier,
@@ -824,7 +826,7 @@ CATEGORIES_OUTILS = {
     # generer_image, qui lui reste dans generation_documents).
     "recherche_web": [
         "tavily_search", "tavily_extract", "tavily_crawl", "tavily_map",
-        "tavily_research", "rechercher_image",
+        "tavily_research", "rechercher_image", "rechercher_video",
     ],
     "bibliotheque": [
         "gerer_document_bibliotheque", "gerer_dossier_bibliotheque",

@@ -244,6 +244,49 @@ def _images_depuis_json_generique(resultat_brut):
     return images
 
 
+def _videos_depuis_json_generique(resultat_brut):
+    """
+    Meme principe que _images_depuis_json_generique juste au-dessus, pour
+    les cartes de vidéos (evenement SSE "videos") : tout outil qui renvoie
+    un JSON de la forme {"videos": [{"titre", "url", "miniature", "chaine",
+    "duree"}, ...]} voit ses cartes affichees automatiquement. Couvre
+    rechercher_video (voir core/outils_generation_media.py).
+
+    Cle "videos" distincte de "results" et de "images" : les detecteurs
+    tournent sur CHAQUE resultat d'outil, un outil ne doit jamais se
+    retrouver affiche deux fois.
+
+    Best-effort : jamais d'exception qui remonte, des cartes sont un bonus,
+    jamais un prerequis pour repondre.
+    """
+    try:
+        donnees = json.loads(resultat_brut)
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+    resultats = donnees.get("videos") if isinstance(donnees, dict) else None
+    if not isinstance(resultats, list):
+        return []
+
+    videos = []
+    for r in resultats:
+        if isinstance(r, dict) and r.get("url"):
+            videos.append({
+                "titre": r.get("titre") or r["url"],
+                "url": r["url"],
+                "miniature": r.get("miniature"),
+                "chaine": r.get("chaine"),
+                "duree": r.get("duree"),
+                "id_video": r.get("id_video"),
+            })
+    return videos
+
+
+def _extraire_videos(appel, resultat_brut):
+    """Cartes de vidéos d'un appel d'outil pour l'evenement SSE "videos"."""
+    return _videos_depuis_json_generique(resultat_brut)
+
+
 def _extraire_images(appel, resultat_brut):
     """
     Construit la galerie ({"titre", "url", "miniature", "credit"}) d'un
@@ -513,7 +556,12 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                 # et s'affichait deux fois (galerie + chip "Fichier
                 # genere").
                 images = _extraire_images(appel, resultat)
-                urls_deja_sourcees = {s["url"] for s in sources} | {i["url"] for i in images}
+                videos = _extraire_videos(appel, resultat)
+                urls_deja_sourcees = (
+                    {s["url"] for s in sources}
+                    | {i["url"] for i in images}
+                    | {v["url"] for v in videos}
+                )
                 fichiers_generes = [
                     f for f in _extraire_fichiers_generes(resultat)
                     if f["url"] not in urls_deja_sourcees
@@ -561,6 +609,16 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                         f"{contenu_pour_modele}\n\n[{len(images)} image(s) trouvée(s) "
                         f"et déjà affichée(s) à l'utilisateur dans une galerie -- ne "
                         f"recopie AUCUNE de ces URLs dans ta réponse, décris-les "
+                        f"juste brièvement en texte si besoin.]"
+                    )
+                # Cartes de vidéos (06/10) : meme logique que la galerie
+                # d'images, le modele ne doit pas recopier les liens.
+                if videos:
+                    yield {"type": "videos", "videos": videos}
+                    contenu_pour_modele = (
+                        f"{contenu_pour_modele}\n\n[{len(videos)} vidéo(s) trouvée(s) "
+                        f"et déjà affichée(s) à l'utilisateur sous forme de cartes : ne "
+                        f"recopie AUCUN de ces liens dans ta réponse, présente-les "
                         f"juste brièvement en texte si besoin.]"
                     )
                 messages_agent.append({

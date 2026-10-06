@@ -164,6 +164,8 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
       meme echange (plusieurs recherches) -- l'appelant accumule/fusionne, ne remplace pas.
     - {"type": "images", "images": [{"titre": "...", "url": "...", "miniature": "...", "credit": "..."}]}
       -> (01/09) resultats d'une recherche d'image (rechercher_image), affiches en galerie
+    - {"type": "videos", "videos": [{"titre": "...", "url": "...", "miniature": "...", "chaine": "...", "duree": "..."}]}
+      -> (06/10) resultats d'une recherche de video YouTube (rechercher_video), affiches en cartes
       cote frontend (GalerieImagesBulle.tsx) plutot qu'en simple lien texte.
     - {"type": "reponse", "texte": "..."}        -> morceau de la reponse finale (streaming)
     - {"type": "fichiers_generes", "nom_outil": "...", "fichiers": [{"url": "...", "nom": "..."}]}
