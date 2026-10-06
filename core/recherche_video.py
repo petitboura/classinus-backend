@@ -6,7 +6,11 @@ recherche pour l'étudiant :
 
 1. Mémoire des recherches déjà faites : une même demande, déjà posée
    récemment, est servie sans rien consommer du quota de YouTube.
-2. Service officiel de YouTube (YouTube Data API v3), clé YOUTUBE_API_KEY.
+2. Service officiel de YouTube (YouTube Data API v3). Clé YOUTUBE_API_KEY,
+   ou à défaut GOOGLE_API_KEY (déjà présente sur Railway) : elle fonctionne
+   seulement si le service YouTube est activé dans le projet Google auquel
+   elle appartient et qu'elle n'est pas limitée à un autre service. Si
+   Google la refuse, on passe par Tavily sans insister (voir plus bas).
    Gratuit, mais plafonné à 10 000 points par jour pour tout le projet
    Google, soit environ 100 recherches (une recherche coûte 100 points,
    la lecture des durées 1 point). Google ne vend pas de quota
@@ -24,11 +28,12 @@ Format de retour : liste de {"titre", "url", "miniature", "chaine",
 (Tavily) ne les fournit pas.
 
 Réglages par variables d'environnement :
-- YOUTUBE_API_KEY : clé du service officiel de YouTube
+- YOUTUBE_API_KEY : clé du service officiel de YouTube (sinon GOOGLE_API_KEY)
 - TAVILY_API_KEY : déjà utilisée ailleurs dans Classinus
 - RECHERCHE_VIDEO_MEMOIRE_SECONDES : durée de mémorisation (86400 par défaut)
 - RECHERCHE_VIDEO_MEMOIRE_TAILLE : nombre de recherches gardées (500 par défaut)
 - RECHERCHE_VIDEO_PAUSE_QUOTA_SECONDES : pause après limite atteinte (3600 par défaut)
+- RECHERCHE_VIDEO_PAUSE_CLE_SECONDES : pause après une clé refusée par Google (600 par défaut)
 
 NON TESTÉ EN CONDITIONS RÉELLES au moment de l'écriture (06/10/2026) : à
 vérifier en production au premier vrai essai.
@@ -107,6 +112,10 @@ class _LimiteYoutubeAtteinte(Exception):
     pass
 
 
+class _CleYoutubeRefusee(Exception):
+    pass
+
+
 def _chercher_via_youtube(requete, nombre, cle):
     reponse = requests.get(
         _URL_YOUTUBE_RECHERCHE,
@@ -120,10 +129,16 @@ def _chercher_via_youtube(requete, nombre, cle):
         },
         timeout=15,
     )
-    if reponse.status_code == 403:
-        raisons = [e.get("reason") for e in (reponse.json().get("error", {}).get("errors") or [])]
+    if reponse.status_code in (400, 403):
+        try:
+            erreur = reponse.json().get("error", {})
+        except ValueError:
+            erreur = {}
+        raisons = [e.get("reason") for e in (erreur.get("errors") or [])]
         if "quotaExceeded" in raisons or "dailyLimitExceeded" in raisons:
             raise _LimiteYoutubeAtteinte()
+        if reponse.status_code == 403 or "keyInvalid" in raisons:
+            raise _CleYoutubeRefusee(f"{reponse.status_code} {raisons} {erreur.get('message')}")
     reponse.raise_for_status()
 
     elements = reponse.json().get("items", [])
@@ -222,7 +237,7 @@ def rechercher_videos(requete, nombre=6):
     if en_memoire is not None:
         return en_memoire
 
-    cle_youtube = os.environ.get("YOUTUBE_API_KEY")
+    cle_youtube = os.environ.get("YOUTUBE_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if cle_youtube and time.time() >= _pause_youtube_jusqu_a:
         try:
             resultats = _chercher_via_youtube(requete, nombre, cle_youtube)
@@ -235,10 +250,17 @@ def rechercher_videos(requete, nombre=6):
             logging.error(
                 f"RECHERCHE VIDEO : limite du jour de YouTube atteinte, passage par Tavily pendant {pause} secondes."
             )
+        except _CleYoutubeRefusee as e:
+            pause = _entier_env("RECHERCHE_VIDEO_PAUSE_CLE_SECONDES", 600)
+            _pause_youtube_jusqu_a = time.time() + pause
+            logging.error(
+                f"RECHERCHE VIDEO : clé refusée par YouTube ({e}). Service YouTube non activé ou clé limitée "
+                f"à un autre service. Passage par Tavily pendant {pause} secondes."
+            )
         except Exception as e:
             logging.error(f"ERREUR RECHERCHE VIDEO (YouTube, requête {requete!r}) : {e}")
     elif not cle_youtube:
-        logging.warning("YOUTUBE_API_KEY manquante : recherche de vidéos tentée directement via Tavily.")
+        logging.warning("Aucune clé YouTube (YOUTUBE_API_KEY ou GOOGLE_API_KEY) : recherche de vidéos tentée via Tavily.")
 
     cle_tavily = os.environ.get("TAVILY_API_KEY")
     if not cle_tavily:
