@@ -29,6 +29,7 @@ from core.generation_3d import (
 )
 from core.generation_images import generer_image as _generer_image, image_generation_disponible
 from core.recherche_image import rechercher_images as _rechercher_images
+from core.recherche_video import rechercher_videos as _rechercher_videos
 
 from core.outils_generation_commun import mcp_generation, Context, _sauvegarder_generation_bibliotheque
 
@@ -297,3 +298,31 @@ def rechercher_image(requete: str) -> str:
     except Exception as e:
         logging.error(f"ERREUR outil recherche image : {e}")
         return "Erreur : la recherche d'image a échoué, réessaie."
+
+
+# Recherche de VIDÉOS YouTube (06/10/2026, demande Bourama). Même principe
+# que rechercher_image juste au-dessus : retour JSON {"videos": [...]},
+# détecté génériquement par _videos_depuis_json_generique
+# (core/execution_outils.py) pour afficher de vraies cartes de vidéos côté
+# frontend. Ne PAS transformer ce retour en texte descriptif : la détection
+# se base sur cette forme précise. Les vidéos ne sont pas enregistrées en
+# bibliothèque (ce sont des liens trouvés, pas un contenu créé).
+@mcp_generation.tool()
+def rechercher_video(requete: str) -> str:
+    """
+    Cherche des vidéos YouTube à partir de mots-clés (cours, tutoriels,
+    explications, conférences...) et les affiche directement à
+    l'utilisateur sous forme de cartes cliquables (miniature, titre,
+    chaîne, durée). À utiliser quand l'utilisateur demande une vidéo, un
+    tuto ou quelque chose à regarder. Renvoie un JSON listant les vidéos
+    trouvées. Ne recopie JAMAIS les URLs de ce résultat dans ta réponse
+    (déjà affichées), présente-les juste brièvement si besoin.
+    """
+    try:
+        videos = _rechercher_videos(requete)
+        if not videos:
+            return "Aucune vidéo trouvée pour cette recherche."
+        return json.dumps({"videos": videos}, ensure_ascii=False)
+    except Exception as e:
+        logging.error(f"ERREUR outil recherche vidéo : {e}")
+        return "Erreur : la recherche de vidéos a échoué, réessaie."
