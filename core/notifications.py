@@ -53,8 +53,39 @@ TYPES_VALIDES = {
     "demande_confirmation_dossier_public", "demande_dossier_public_traitee",
 }
 
+# Texte de la notification "nouvelle_version_disponible". Source unique :
+# le texte est construit ET relu ici, jamais ailleurs. La table
+# notifications n'a pas de colonne "version", le numero de version vit donc
+# dans le contenu. Il sert a deux choses : retirer les notifications d'une
+# Release supprimee (retirer_notifications_nouvelle_version) et permettre
+# a l'appli de ne plus afficher la notification quand elle est deja a
+# jour (champ "version" ajoute a la liste, voir api/notifications.py).
+_CORPS_VERSION_DEBUT = "La version "
+_CORPS_VERSION_FIN = " est prête à être installée."
 
-def creer_notification(user_id: str, type_notif: str, titre: str, contenu: str | None = None, lien: str | None = None) -> dict | None:
+
+def corps_nouvelle_version(version: str) -> str:
+    return f"{_CORPS_VERSION_DEBUT}{version}{_CORPS_VERSION_FIN}"
+
+
+def version_depuis_corps(contenu: str | None) -> str | None:
+    """Relit le numero de version dans le contenu construit par
+    corps_nouvelle_version. Renvoie None si le texte n'a pas ce format
+    (ancienne notification ecrite autrement), jamais d'exception."""
+    if not contenu or not contenu.startswith(_CORPS_VERSION_DEBUT) or not contenu.endswith(_CORPS_VERSION_FIN):
+        return None
+    version = contenu[len(_CORPS_VERSION_DEBUT) : len(contenu) - len(_CORPS_VERSION_FIN)].strip()
+    return version or None
+
+
+def creer_notification(
+    user_id: str,
+    type_notif: str,
+    titre: str,
+    contenu: str | None = None,
+    lien: str | None = None,
+    champs_diffusion: dict | None = None,
+) -> dict | None:
     """
     Insere une notification pour user_id et tente sa diffusion en
     direct. Renvoie la ligne inseree (avec son id), ou None si l'insert
@@ -64,6 +95,12 @@ def creer_notification(user_id: str, type_notif: str, titre: str, contenu: str |
 
     type_notif doit etre l'un des TYPES_VALIDES ci-dessus -- les anciens
     types (follow, comment, ...) ne passent jamais par cette fonction.
+
+    champs_diffusion : champs en plus, ajoutes uniquement au message
+    envoye en direct (jamais ecrits en base). Sert a garder la meme forme
+    que la liste de api/notifications.py quand cette liste calcule un champ
+    en plus (ex: "version"). Vide par defaut, aucun effet pour les autres
+    appelants.
     """
     if type_notif not in TYPES_VALIDES:
         logging.error(f"ERREUR creer_notification : type_notif invalide '{type_notif}' (user={user_id})")
@@ -90,7 +127,7 @@ def creer_notification(user_id: str, type_notif: str, titre: str, contenu: str |
 
     if ligne is not None:
         try:
-            asyncio.create_task(notifier_utilisateur(user_id, ligne))
+            asyncio.create_task(notifier_utilisateur(user_id, {**ligne, **(champs_diffusion or {})}))
         except RuntimeError:
             # Pas de boucle asyncio en cours (ex: script/tache synchrone
             # hors du serveur FastAPI) -- la notification reste en base,
@@ -99,3 +136,28 @@ def creer_notification(user_id: str, type_notif: str, titre: str, contenu: str |
             logging.warning(f"AVERTISSEMENT creer_notification : pas de boucle asyncio pour diffuser en direct (user={user_id})")
 
     return ligne
+
+
+def retirer_notifications_nouvelle_version(version: str) -> int:
+    """
+    Supprime, pour tous les utilisateurs, les notifications
+    "nouvelle_version_disponible" de cette version. Appelee par le webhook
+    GitHub quand une Release est supprimee ou repassee en brouillon : sans
+    ca, la notification restait dans la cloche avec un bouton Telecharger
+    vers une page qui n'existe plus.
+
+    Renvoie le nombre de lignes supprimees (0 si rien, ou si la
+    suppression a echoue : loggue, jamais leve).
+    """
+    try:
+        res = (
+            supabase.table("notifications")
+            .delete()
+            .eq("type", "nouvelle_version_disponible")
+            .eq("contenu", corps_nouvelle_version(version))
+            .execute()
+        )
+        return len(res.data or [])
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (retirer_notifications_nouvelle_version version={version}) : {e}")
+        return 0
