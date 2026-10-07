@@ -194,6 +194,19 @@ MESSAGES_FR: dict[str, str] = {
     "SESSION_EXPIREE": "Ta session a expiré, reconnecte-toi.",
     "REQUETE_INVALIDE": "La requête envoyée est invalide.",
     "ERREUR_INCONNUE": "Une erreur est survenue, réessaie dans un instant.",
+    # 07/10/2026, vidéo d'une animation du chat (core/rendu_animation_travaux.py).
+    # Codes à garder synchronisés avec lib/erreurs.ts côté frontend.
+    "RENDU_VIDEO_FORMAT_INVALIDE": "Ce format de vidéo n'existe pas.",
+    "RENDU_VIDEO_DOCUMENT_INVALIDE": "Cette animation ne peut pas être convertie en vidéo.",
+    "RENDU_VIDEO_DOCUMENT_TROP_LOURD": "Cette animation est trop lourde pour être convertie en vidéo.",
+    "RENDU_VIDEO_DEJA_EN_COURS": "Une vidéo est déjà en cours de création pour toi. Attends qu'elle soit prête.",
+    "RENDU_VIDEO_OCCUPE": "Beaucoup de vidéos sont en cours de création, réessaie dans un instant.",
+    "RENDU_VIDEO_INTROUVABLE": "Cette vidéo est introuvable ou n'est plus disponible.",
+    "RENDU_VIDEO_PAS_PRETE": "Cette vidéo n'est pas encore prête.",
+    "RENDU_VIDEO_ANIMATION_EN_ERREUR": "L'animation contient une erreur, la vidéo ne peut pas être créée.",
+    "RENDU_VIDEO_TROP_LONGUE": "Cette animation est trop longue pour être convertie en vidéo (2 minutes maximum).",
+    "RENDU_VIDEO_INDISPONIBLE": "La création de vidéo n'est pas disponible pour le moment.",
+    "RENDU_VIDEO_ECHEC": "La création de la vidéo a échoué, réessaie.",
     # Contenu dynamique par matière (2026-08-06)
     "MATIERE_ET_SYSTEM_PROMPT_REQUIS": "La matière et le contenu sont obligatoires.",
     "CONTENU_MATIERE_INTROUVABLE": "Contenu introuvable.",

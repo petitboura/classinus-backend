@@ -77,6 +77,8 @@ from api.programme_notions import router as programme_notions_router
 from api.programme_catalogue_public import router as programme_catalogue_public_router  # 22/09/2026
 from api.fichiers_r2 import router as fichiers_r2_router
 from api.apercu_lien import router as apercu_lien_router
+from api.rendu_animation import router as rendu_animation_router  # 07/10/2026
+from core.rendu_animation_travaux import nettoyer_anciens_fichiers
 from core.serveur_mcp_generation import mcp_generation
 from core.notifications_push import traiter_rappels_echus, un_canal_push_disponible
 from core.minuteurs import traiter_minuteurs_a_notifier
@@ -384,6 +386,10 @@ async def _lifespan(app: FastAPI):
     # des clients async (AsyncGroq, etc.) -- valeur à ajuster selon la
     # RAM disponible sur Railway (chaque thread a un coût mémoire).
     to_thread.current_default_thread_limiter().total_tokens = 100
+
+    # Rendu vidéo des animations : retire les fichiers temporaires laissés par
+    # un précédent démarrage (voir core/rendu_animation_travaux.py).
+    nettoyer_anciens_fichiers()
 
     # Requis par FastMCP (stateless_http=True) : le session_manager du
     # serveur MCP de génération (voir core/serveur_mcp_generation.py) a
@@ -819,6 +825,7 @@ app.include_router(programme_notions_router)
 app.include_router(programme_catalogue_public_router)  # 22/09/2026
 app.include_router(fichiers_r2_router)
 app.include_router(apercu_lien_router)
+app.include_router(rendu_animation_router)  # 07/10/2026, vidéo d'une animation du chat
 
 
 @app.get("/health")

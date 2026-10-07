@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libffi-dev \
     shared-mime-info \
     fonts-liberation \
+    fonts-dejavu-core \
     ffmpeg \
     tesseract-ocr \
     tesseract-ocr-fra \
@@ -18,6 +19,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Navigateur sans écran du rendu vidéo des animations (07/10/2026). En production
+# Railway construit avec Railpack, pas avec ce fichier : voir RAILWAY_DEPLOY.md.
+RUN python -m playwright install --with-deps chromium
 
 COPY . .
 

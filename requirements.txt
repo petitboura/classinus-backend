@@ -27,3 +27,4 @@ sympy
 google-auth
 PyJWT[crypto]
 h2
+playwright
