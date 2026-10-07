@@ -24,13 +24,13 @@ def lire_video(url: str, a_partir_de_minute: int = 0) -> str:
     répondre à une question sur la vidéo, la résumer, l'expliquer ou en
     citer un passage. À utiliser dès que tu as besoin du contenu d'une vidéo
     (une vidéo trouvée par rechercher_video ou dont on te donne le lien) :
-    n'utilise PAS tavily_extract ni tavily_research pour une vidéo YouTube,
-    ils ne donnent pas ce qui est dit dedans. Renvoie le texte parlé avec des
-    repères [m:ss]. Une vidéo longue est lue par tranches : si la réponse
+    appelle toujours lire_video EN PREMIER pour une vidéo YouTube. Renvoie le
+    texte parlé avec des repères [m:ss]. Si YouTube bloque la lecture, la
+    réponse te dit de passer par Tavily (tavily_extract puis tavily_research) :
+    fais-le. Une vidéo longue est lue par tranches : si la réponse
     indique de rappeler l'outil, fais-le avec a_partir_de_minute pour lire la
-    suite avant de conclure. Si la vidéo est illisible (pas de sous-titres,
-    privée...), l'outil te le dit : transmets-le clairement à l'étudiant sans
-    rien inventer. Paramètres : url (adresse de la vidéo), a_partir_de_minute
+    suite avant de conclure. Si même Tavily ne donne rien, ou si la vidéo est
+    privée ou supprimée, dis-le clairement à l'étudiant sans rien inventer. Paramètres : url (adresse de la vidéo), a_partir_de_minute
     (0 pour commencer au début).
     """
     try:
