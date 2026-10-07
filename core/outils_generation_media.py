@@ -317,7 +317,9 @@ def rechercher_video(requete: str) -> str:
     Cherche des vidéos YouTube à partir de mots-clés (cours, tutoriels,
     explications, conférences...). À utiliser quand l'utilisateur demande
     une vidéo, un tuto ou quelque chose à regarder. Renvoie un JSON listant
-    les vidéos trouvées (titre, url, chaîne, durée). C'est TOI qui les places
+    les vidéos trouvées (titre, url, chaîne, durée). Pour savoir ce qui est
+    DIT dans une vidéo (résumer, répondre à une question dessus), appelle
+    ensuite lire_video avec son url. C'est TOI qui les places
     dans ta réponse, où tu veux : écris le lien de chaque vidéo en markdown
     [titre](url) avec l'url exacte du résultat, ce qui l'affiche en grande
     carte lisible sur place. Plusieurs liens écrits à la suite, sur des
