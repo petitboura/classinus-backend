@@ -70,7 +70,7 @@ from google.auth.transport.requests import Request as GoogleAuthRequest
 from pywebpush import webpush, WebPushException
 
 from api.auth import supabase
-from core.notifications import creer_notification
+from core.notifications import corps_nouvelle_version, creer_notification
 
 VAPID_CLAIMS_SUB = "mailto:contact@maame.africa"  # à changer par une vraie adresse si besoin
 
@@ -548,7 +548,7 @@ def notifier_nouvelle_version_disponible(version: str, url_telechargement: str |
     part -- voir les logs).
     """
     titre = "Nouvelle version de Classinus disponible"
-    corps = f"La version {version} est prête à être installée."
+    corps = corps_nouvelle_version(version)
     lien = url_telechargement or url_page
 
     try:
@@ -569,7 +569,9 @@ def notifier_nouvelle_version_disponible(version: str, url_telechargement: str |
         if user_id in utilisateurs_notifies_en_app:
             continue
         utilisateurs_notifies_en_app.add(user_id)
-        creer_notification(user_id, "nouvelle_version_disponible", titre, corps, lien=lien)
+        creer_notification(
+            user_id, "nouvelle_version_disponible", titre, corps, lien=lien, champs_diffusion={"version": version}
+        )
 
     if not (_fcm_disponible() or _apns_disponible()):
         logging.warning(

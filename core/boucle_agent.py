@@ -864,6 +864,12 @@ def _capturer_reponse(generateur, accumulateur, meta=None, fichiers_generes_accu
             meta["outils"][-1]["images"] = event["images"]
             if meta.get("segments") and meta["segments"][-1]["type"] == "outil":
                 meta["segments"][-1]["images"] = event["images"]
+        elif meta is not None and event["type"] == "videos" and meta.get("outils"):
+            # Même principe que "images" juste au-dessus : les cartes de
+            # vidéos doivent survivre à la réouverture d'une conversation.
+            meta["outils"][-1]["videos"] = event["videos"]
+            if meta.get("segments") and meta["segments"][-1]["type"] == "outil":
+                meta["segments"][-1]["videos"] = event["videos"]
         if fichiers_generes_accumules is not None and event["type"] == "fichiers_generes":
             fichiers_generes_accumules.extend(event["fichiers"])
         yield event

@@ -120,6 +120,7 @@ api/
   feedback.py                  like/dislike sur les messages assistant
   uploads.py                   upload d'images (avatar, image de vitrine)
   journal.py                   journal d'audit des actions structurelles/sensibles
+  rendu_animation.py           vidéo d'une animation du chat (MP4 en 16:9 ou 9:16), voir la section ci-dessous
 
 migrations/                    schéma SQL, un fichier par changement, daté (39 fichiers)
 scripts/                       scripts ponctuels (ex : génération de clés VAPID)
@@ -162,6 +163,35 @@ s'avèrent utilisés par Clovis.
 - Le "programme d'études adaptatif" (matière/chapitre/examens) est
   **désactivé** depuis fin août 2026, code déplacé dans
   `_desactive_programme/`, jamais à réutiliser sans consigne explicite.
+
+## Vidéo d'une animation du chat (07/10/2026)
+
+Le bouton vidéo du bloc animation (frontend) envoie ici le document HTML du
+lecteur, déjà mis en page pour le format choisi (16:9 ou 9:16). Le serveur
+l'ouvre dans un Chromium sans écran, avance le temps image par image (le
+lecteur redessine toute la scène à partir du temps seul) et ffmpeg assemble
+le MP4. Le navigateur de l'utilisateur ne fait que demander et télécharger,
+donc ça marche aussi sur téléphone.
+
+- Routes : `api/rendu_animation.py` (`/api/rendu-video-animation`, demande,
+  suivi, téléchargement, annulation).
+- File d'attente et suivi : `core/rendu_animation_travaux.py`, en mémoire
+  (une seule réplique sur Railway). Un rendu à la fois, une demande active
+  par personne, vidéo gardée 30 minutes.
+- Rendu : `core/rendu_animation_processus.py`, lancé dans un processus
+  séparé que l'on peut tuer (annulation, délai de 15 minutes). Le navigateur
+  n'a aucun accès au réseau et le processus ne reçoit aucun secret de l'API.
+- Réglages : `core/rendu_animation_constantes.py` (formats, 30 images par
+  seconde, 120 secondes maximum). Variables facultatives
+  `RENDU_ANIMATION_SIMULTANES` et `RENDU_ANIMATION_ATTENTE_MAX`.
+- three.js est servi par une copie locale
+  (`core/ressources_rendu_animation/`), à garder à la même version que le
+  frontend (`construireDocumentAnimation.ts`).
+- Tests : `test_rendu_animation.py`.
+- Déploiement : Railpack n'installe le navigateur de Playwright que si la
+  variable `RAILPACK_PYTHON_PLAYWRIGHT_INSTALL=1` est posée sur le service
+  (voir `RAILWAY_DEPLOY.md`). Sans elle l'API répond que la vidéo est
+  indisponible.
 
 ## Variables d'environnement / secrets nécessaires
 

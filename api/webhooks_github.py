@@ -1,12 +1,13 @@
 """
-Webhook GitHub -- écoute l'événement "release" du dépôt clovis-frontend
+Webhook GitHub -- écoute l'événement "release" du dépôt classinus-frontend
 (où vivent les releases de l'app mobile, voir clovis-mobile.md) pour
-prévenir tous les téléphones qu'une nouvelle version est disponible.
+prévenir tous les téléphones qu'une nouvelle version est disponible, et
+pour retirer la notification quand une release est supprimée.
 Demande Bourama, 05/09/2026 (suite au bug de la page /telecharger qui
 restait bloquée sur l'ancienne version pendant 1h).
 
 À configurer côté GitHub : Settings > Webhooks > Add webhook sur le
-dépôt clovis-frontend, Payload URL = <URL de ce backend>/api/webhooks/
+dépôt classinus-frontend, Payload URL = <URL de ce backend>/api/webhooks/
 github-release, Content type = application/json, secret = la même
 valeur que GITHUB_WEBHOOK_SECRET_RELEASE ci-dessous, événement = juste
 "Releases".
@@ -27,6 +28,7 @@ import os
 
 from fastapi import APIRouter, Request, Response
 
+from core.notifications import retirer_notifications_nouvelle_version
 from core.notifications_push import notifier_nouvelle_version_disponible
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
@@ -65,6 +67,20 @@ async def webhook_github_release(requete: Request):
 
     payload = await requete.json()
     release = payload.get("release") or {}
+
+    # Release supprimee ou depubliee : retire sa notification de toutes les
+    # cloches. Sans ca, elle restait avec un bouton Telecharger vers une
+    # page qui n'existe plus. Le numero de version vient du tag, comme a la
+    # publication, pour retrouver exactement les notifications de cette
+    # Release et pas celles des autres versions.
+    if payload.get("action") in ("deleted", "unpublished"):
+        version_retiree = str(release.get("tag_name", "")).removeprefix("v")
+        if not version_retiree:
+            logging.error("Webhook release GitHub : tag_name absent du payload, retrait ignore.")
+            return Response(status_code=204)
+        retirees = retirer_notifications_nouvelle_version(version_retiree)
+        logging.info(f"Release {version_retiree} retiree : {retirees} notification(s) supprimee(s).")
+        return Response(status_code=204)
 
     # "published" couvre une release normale ET une pré-release qui
     # passe en publié -- on écarte explicitement brouillon/pré-release
