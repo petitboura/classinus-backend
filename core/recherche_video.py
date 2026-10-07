@@ -54,6 +54,17 @@ _URL_TAVILY = "https://api.tavily.com/search"
 
 _REGEX_ID_VIDEO = re.compile(r"(?:youtu\.be/|youtube\.com/watch\?(?:[^#]*&)?v=|youtube\.com/shorts/)([\w-]{11})")
 _REGEX_DUREE_ISO = re.compile(r"^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$")
+_REGEX_CLE_DANS_URL = re.compile(r"([?&]key=)[^&\s'\")]+")
+
+
+def _masquer_cle(texte):
+    """
+    Cache la clé d'API dans un message d'erreur : la bibliothèque requests
+    recopie l'adresse complète (clé comprise) dans ses erreurs, et ces
+    messages finissent dans les journaux. À utiliser pour tout message
+    d'erreur écrit dans les journaux.
+    """
+    return _REGEX_CLE_DANS_URL.sub(r"\1***", str(texte))
 
 _verrou = threading.Lock()
 _memoire = {}  # (requete normalisée, nombre) -> (instant, résultats)
@@ -129,7 +140,7 @@ def _chercher_via_youtube(requete, nombre, cle):
         },
         timeout=15,
     )
-    if reponse.status_code in (400, 403):
+    if reponse.status_code in (400, 401, 403):
         try:
             erreur = reponse.json().get("error", {})
         except ValueError:
@@ -137,7 +148,7 @@ def _chercher_via_youtube(requete, nombre, cle):
         raisons = [e.get("reason") for e in (erreur.get("errors") or [])]
         if "quotaExceeded" in raisons or "dailyLimitExceeded" in raisons:
             raise _LimiteYoutubeAtteinte()
-        if reponse.status_code == 403 or "keyInvalid" in raisons:
+        if reponse.status_code in (401, 403) or "keyInvalid" in raisons:
             raise _CleYoutubeRefusee(f"{reponse.status_code} {raisons} {erreur.get('message')}")
     reponse.raise_for_status()
 
@@ -160,7 +171,7 @@ def _chercher_via_youtube(requete, nombre, cle):
         for v in detail.json().get("items", []):
             durees[v.get("id")] = _formater_duree((v.get("contentDetails") or {}).get("duration"))
     except Exception as e:
-        logging.warning(f"RECHERCHE VIDEO : durées indisponibles ({e}), résultats gardés sans durée.")
+        logging.warning(f"RECHERCHE VIDEO : durées indisponibles ({_masquer_cle(e)}), résultats gardés sans durée.")
 
     resultats = []
     for e in elements:
@@ -254,11 +265,11 @@ def rechercher_videos(requete, nombre=6):
             pause = _entier_env("RECHERCHE_VIDEO_PAUSE_CLE_SECONDES", 600)
             _pause_youtube_jusqu_a = time.time() + pause
             logging.error(
-                f"RECHERCHE VIDEO : clé refusée par YouTube ({e}). Service YouTube non activé ou clé limitée "
+                f"RECHERCHE VIDEO : clé refusée par YouTube ({_masquer_cle(e)}). Service YouTube non activé ou clé limitée "
                 f"à un autre service. Passage par Tavily pendant {pause} secondes."
             )
         except Exception as e:
-            logging.error(f"ERREUR RECHERCHE VIDEO (YouTube, requête {requete!r}) : {e}")
+            logging.error(f"ERREUR RECHERCHE VIDEO (YouTube, requête {requete!r}) : {_masquer_cle(e)}")
     elif not cle_youtube:
         logging.warning("Aucune clé YouTube (YOUTUBE_API_KEY ou GOOGLE_API_KEY) : recherche de vidéos tentée via Tavily.")
 
@@ -270,7 +281,7 @@ def rechercher_videos(requete, nombre=6):
     try:
         resultats = _chercher_via_tavily(requete, nombre, cle_tavily)
     except Exception as e:
-        logging.error(f"ERREUR RECHERCHE VIDEO (Tavily, requête {requete!r}) : {e}")
+        logging.error(f"ERREUR RECHERCHE VIDEO (Tavily, requête {requete!r}) : {_masquer_cle(e)}")
         return []
 
     if resultats:

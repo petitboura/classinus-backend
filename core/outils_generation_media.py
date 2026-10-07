@@ -277,18 +277,23 @@ def generer_image(prompt: str, titre: str, ctx: Context = None) -> str:
 #
 # Format de retour DÉLIBÉRÉMENT différent des autres outils texte :
 # JSON {"images": [...]}, détecté génériquement par
-# _images_depuis_json_generique (core/execution_outils.py) pour afficher
-# une vraie galerie côté frontend (GalerieImagesBulle.tsx) -- voir ce
-# fichier pour le detail. Ne PAS transformer ce retour en texte
-# descriptif : la détection générique se base sur cette forme précise.
+# _images_depuis_json_generique (core/execution_outils.py) pour proposer
+# un filet de sécurité côté frontend (GalerieImagesBulle.tsx) pour les images
+# que le modèle n'a pas placées lui même dans sa réponse. Ne PAS transformer
+# ce retour en texte descriptif : la détection générique se base sur cette forme précise.
 @mcp_generation.tool()
 def rechercher_image(requete: str) -> str:
     """
     Cherche des images déjà existantes sur le web à partir de mots-clés
-    (photos, illustrations, schémas...) et les affiche directement à
-    l'utilisateur dans une galerie. Renvoie un JSON listant les images
-    trouvées -- ne recopie JAMAIS les URLs de ce résultat dans ta
-    réponse (déjà affichées), décris-les juste brièvement si besoin.
+    (photos, illustrations, schémas...). Renvoie un JSON listant les images
+    trouvées (titre, url). C'est TOI qui les places dans ta réponse, où tu
+    veux : écris chaque image en markdown ![titre](url) avec l'url exacte du
+    résultat, au milieu de ton texte. Plusieurs images écrites à la suite,
+    sur des lignes consécutives sans ligne vide entre elles, s'affichent
+    côte à côte dans une rangée que l'utilisateur peut faire défiler ;
+    sépare-les par une ligne vide pour les mettre l'une sous l'autre. Si tu
+    n'en places aucune, elles s'affichent quand même sous ta réponse.
+    N'écris JAMAIS "[Image jointe : ...]" : ce format ne s'affiche pas.
     """
     try:
         images = _rechercher_images(requete)
@@ -303,20 +308,26 @@ def rechercher_image(requete: str) -> str:
 # Recherche de VIDÉOS YouTube (06/10/2026, demande Bourama). Même principe
 # que rechercher_image juste au-dessus : retour JSON {"videos": [...]},
 # détecté génériquement par _videos_depuis_json_generique
-# (core/execution_outils.py) pour afficher de vraies cartes de vidéos côté
-# frontend. Ne PAS transformer ce retour en texte descriptif : la détection
+# (core/execution_outils.py) pour proposer un filet de sécurité côté
+# frontend (cartes sous le message) si le modèle ne place pas les liens. Ne PAS transformer ce retour en texte descriptif : la détection
 # se base sur cette forme précise. Les vidéos ne sont pas enregistrées en
 # bibliothèque (ce sont des liens trouvés, pas un contenu créé).
 @mcp_generation.tool()
 def rechercher_video(requete: str) -> str:
     """
     Cherche des vidéos YouTube à partir de mots-clés (cours, tutoriels,
-    explications, conférences...) et les affiche directement à
-    l'utilisateur sous forme de cartes cliquables (miniature, titre,
-    chaîne, durée). À utiliser quand l'utilisateur demande une vidéo, un
-    tuto ou quelque chose à regarder. Renvoie un JSON listant les vidéos
-    trouvées. Ne recopie JAMAIS les URLs de ce résultat dans ta réponse
-    (déjà affichées), présente-les juste brièvement si besoin.
+    explications, conférences...). À utiliser quand l'utilisateur demande
+    une vidéo, un tuto ou quelque chose à regarder. Renvoie un JSON listant
+    les vidéos trouvées (titre, url, chaîne, durée). Pour savoir ce qui est
+    DIT dans une vidéo (résumer, répondre à une question dessus), appelle
+    ensuite lire_video avec son url. C'est TOI qui les places
+    dans ta réponse, où tu veux : écris le lien de chaque vidéo en markdown
+    [titre](url) avec l'url exacte du résultat, ce qui l'affiche en grande
+    carte lisible sur place. Plusieurs liens écrits à la suite, sur des
+    lignes consécutives sans ligne vide entre elles, s'affichent côte à côte
+    dans une rangée que l'utilisateur peut faire défiler ; sépare-les par
+    une ligne vide pour les mettre l'un sous l'autre. Si tu n'en places
+    aucune, elles s'affichent quand même sous ta réponse.
     """
     try:
         videos = _rechercher_videos(requete)

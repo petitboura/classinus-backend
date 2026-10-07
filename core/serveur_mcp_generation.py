@@ -80,6 +80,7 @@ from core.outils_generation_commun import mcp_generation  # noqa: F401 (ré-expo
 # `mcp_generation` (décorateurs @mcp_generation.tool() exécutés à l'import).
 import core.outils_generation_documents  # noqa: F401
 import core.outils_generation_media  # noqa: F401
+import core.outils_lecture_video  # noqa: F401  # 07/10/2026, lecture du contenu des vidéos YouTube
 import core.outils_bibliotheque  # noqa: F401
 import core.outils_fichiers_conversation  # noqa: F401
 import core.outils_dossiers_catalogue_public  # noqa: F401

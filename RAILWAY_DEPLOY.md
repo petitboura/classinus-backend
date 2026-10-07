@@ -26,6 +26,7 @@ plus).
 | `VERCEL_API_TOKEN` | core/generation_site.py (déploiement de sites générés) |
 | `URL_RETOUR_APP` | connexions/notion.py, connexions/oauth_generique.py, api/agents.py — retour OAuth, doit correspondre à l'URL publique réelle du déploiement API |
 | `RAILPACK_BUILD_APT_PACKAGES` / `RAILPACK_DEPLOY_APT_PACKAGES` | config Railpack native (voir aussi `railpack.json`) |
+| `RAILPACK_PYTHON_PLAYWRIGHT_INSTALL` | à mettre à `1` : installe le navigateur du rendu vidéo des animations (`core/rendu_animation_processus.py`), Railpack ne le fait plus par défaut depuis sa version 0.35 |
 
 ## Variable configurée mais non utilisée par le code (volontaire)
 

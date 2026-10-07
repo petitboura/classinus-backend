@@ -399,6 +399,8 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "rechercher_image": {"label": "Recherche d'image", "icone": "Images", "onglet": "rechercher"},
     # Ajouté 06/10 : recherche de vidéos YouTube (cartes de vidéos dans le chat).
     "rechercher_video": {"label": "Recherche de vidéo", "icone": "Video", "onglet": "rechercher"},
+    # Ajouté 07/10 : lecture de ce qui est dit dans une vidéo YouTube (sous-titres).
+    "lire_video": {"label": "Lecture d'une vidéo", "icone": "FileSearch", "onglet": "rechercher"},
     # gerer_document_bibliotheque (consolidé le 26/08, ex 12 outils
     # séparés -- consulter_bibliotheque, consulter_bibliotheque_publique,
     # lister/ajouter/supprimer/classer/déclasser/ranger/retirer/lire_entier,
@@ -835,7 +837,7 @@ CATEGORIES_OUTILS = {
     # generer_image, qui lui reste dans generation_documents).
     "recherche_web": [
         "tavily_search", "tavily_extract", "tavily_crawl", "tavily_map",
-        "tavily_research", "rechercher_image", "rechercher_video",
+        "tavily_research", "rechercher_image", "rechercher_video", "lire_video",
     ],
     "bibliotheque": [
         "gerer_document_bibliotheque", "gerer_dossier_bibliotheque",
