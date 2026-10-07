@@ -54,6 +54,8 @@ _REGEX_ID_VIDEO = re.compile(
 )
 _REGEX_ID_SEUL = re.compile(r"^[\w-]{11}$")
 _INTERVALLE_REPERE_SECONDES = 60
+# Erreurs où Tavily ne peut rien changer : la vidéo elle même est inaccessible.
+_ERREURS_SANS_ISSUE = ("VideoUnavailable", "VideoUnplayable", "InvalidVideoId", "AgeRestricted")
 _LONGUEUR_DESCRIPTION_MAX = 3000
 
 _verrou = threading.Lock()
@@ -238,12 +240,14 @@ def lire_contenu_video(url_ou_id, a_partir_de_minute=0):
 
     infos = _lire_memoire(id_video)
     raison = None
+    tavily_utile = True
     if infos is None:
         try:
             infos = _recuperer_sous_titres(id_video)
             _ecrire_memoire(id_video, infos)
         except Exception as e:
             raison = _raison_lisible(e)
+            tavily_utile = type(e).__name__ not in _ERREURS_SANS_ISSUE
             logging.error(f"ERREUR LECTURE VIDEO ({id_video}) : {type(e).__name__} {_masquer_cle(str(e))[:200]}")
 
     if infos is not None:
@@ -261,8 +265,18 @@ def lire_contenu_video(url_ou_id, a_partir_de_minute=0):
             "Voici seulement sa fiche, qui ne remplace pas son contenu. "
             f"Titre : {fiche['titre']}. Chaîne : {fiche['chaine']}. Description : {fiche['description']} "
         )
-    message += (
-        "Dis-le clairement à l'étudiant : ne devine ni ne résume ce qui est dit dans la vidéo, "
-        "et propose-lui de coller ici le passage qui l'intéresse."
-    )
+    if tavily_utile:
+        message += (
+            f"NE T'ARRÊTE PAS LÀ : essaie maintenant de lire cette vidéo avec Tavily, sur son adresse "
+            f"https://www.youtube.com/watch?v={id_video} . Si tavily_extract est disponible ce tour-ci, appelle-le "
+            f"d'abord (extract_depth advanced) ; s'il ne donne pas le contenu parlé de la vidéo, ou s'il n'est pas "
+            f"disponible, appelle tavily_research en lui demandant le contenu détaillé de cette vidéo. Si aucun "
+            f"des deux n'est disponible ou ne donne rien d'exploitable, dis-le clairement à l'étudiant : ne devine "
+            f"ni ne résume ce qui est dit dans la vidéo, et propose-lui de coller ici le passage qui l'intéresse."
+        )
+    else:
+        message += (
+            "Dis-le clairement à l'étudiant : ne devine ni ne résume ce qui est dit dans la vidéo, "
+            "et propose-lui de coller ici le passage qui l'intéresse."
+        )
     return message
