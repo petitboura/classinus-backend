@@ -293,6 +293,7 @@ def rechercher_image(requete: str) -> str:
     côte à côte dans une rangée que l'utilisateur peut faire défiler ;
     sépare-les par une ligne vide pour les mettre l'une sous l'autre. Si tu
     n'en places aucune, elles s'affichent quand même sous ta réponse.
+    N'écris JAMAIS "[Image jointe : ...]" : ce format ne s'affiche pas.
     """
     try:
         images = _rechercher_images(requete)
