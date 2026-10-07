@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends
 
 from api.auth import supabase, utilisateur_courant
 from core.erreurs import erreur_api
-from core.notifications import TYPES_VALIDES
+from core.notifications import TYPES_VALIDES, version_depuis_corps
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
@@ -42,7 +42,15 @@ def lister_mes_notifications(utilisateur=Depends(utilisateur_courant)):
             .limit(50)
             .execute()
         )
-        return res.data or []
+        lignes = res.data or []
+        # Pour les notifications de nouvelle version, ajoute le numero de
+        # version (relu dans le texte, la table n'a pas de colonne dediee)
+        # pour que l'appli puisse masquer celles dont la version est deja
+        # installee. Les autres types ne changent pas.
+        for ligne in lignes:
+            if ligne["type"] == "nouvelle_version_disponible":
+                ligne["version"] = version_depuis_corps(ligne.get("contenu"))
+        return lignes
     except Exception as e:
         logging.error(f"ERREUR SUPABASE (lister_mes_notifications user={utilisateur.id}) : {e}")
         raise erreur_api(500, "NOTIFICATIONS_LECTURE_ECHEC")
