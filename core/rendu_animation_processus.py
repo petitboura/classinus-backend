@@ -84,12 +84,28 @@ def est_three(url: str) -> bool:
     return adresse.hostname in HOTES_THREE and adresse.path.endswith("/three.min.js")
 
 
+def diagnostic_memoire() -> str:
+    """Photo de la mémoire du conteneur au moment d'un arrêt de ffmpeg.
+    Sert à savoir si le système a tué ffmpeg faute de mémoire."""
+    morceaux = []
+    for nom, chemin in (
+        ("utilisee", "/sys/fs/cgroup/memory.current"),
+        ("limite", "/sys/fs/cgroup/memory.max"),
+        ("evenements", "/sys/fs/cgroup/memory.events"),
+    ):
+        try:
+            morceaux.append(f"{nom}={Path(chemin).read_text().strip().replace(chr(10), ' ')}")
+        except OSError:
+            morceaux.append(f"{nom}=indisponible")
+    return " ".join(morceaux)
+
+
 def lancer_ffmpeg(sortie: str, fps: int) -> subprocess.Popen:
     return subprocess.Popen(
         [
             "ffmpeg", "-y", "-loglevel", "error",
             "-f", "image2pipe", "-framerate", str(fps), "-vcodec", "mjpeg", "-i", "pipe:0",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+            "-c:v", "libx264", "-preset", "superfast", "-threads", "2", "-crf", "20",
             "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-r", str(fps),
             sortie,
         ],
@@ -185,7 +201,15 @@ def main() -> None:
             echouer("RENDU_VIDEO_ECHEC")
     except BrokenPipeError:
         erreurs_ffmpeg = ffmpeg.stderr.read().decode("utf-8", "replace") if ffmpeg else ""
-        print(f"ffmpeg a fermé son entrée : {erreurs_ffmpeg}", file=sys.stderr)
+        try:
+            code_ffmpeg = ffmpeg.wait(timeout=5) if ffmpeg else None
+        except subprocess.TimeoutExpired:
+            code_ffmpeg = "toujours en cours"
+        # Un code négatif signifie que ffmpeg a été tué par un signal (-9 : tué par le système)
+        print(
+            f"ffmpeg a fermé son entrée : code de sortie {code_ffmpeg}, {diagnostic_memoire()}, {erreurs_ffmpeg}",
+            file=sys.stderr,
+        )
         echouer("RENDU_VIDEO_ECHEC")
     except Exception as e:
         print(f"échec du rendu : {type(e).__name__} : {e}", file=sys.stderr)
