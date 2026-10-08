@@ -310,15 +310,32 @@ async def taper_clavier(texte: str, ctx: Context) -> str:
     l'ecran t'est renvoye. Ensuite, le resultat contient deja l'etat de
     l'ecran qui suit : inutile d'appeler lire_ecran apres.
 
-    Le texte est tape tel quel, touche par touche : ecris du TEXTE BRUT.
-    Les autres applications (Bloc-notes, editeurs de code...) ne comprennent
-    pas le markdown : n'utilise jamais **gras**, *italique*, # titres,
-    listes avec - ou *, ni blocs de code avec des accents graves. Ils
-    s'afficheraient comme de vrais caracteres dans le document. Un retour a
-    la ligne est un vrai appui sur Entree : un editeur de code peut alors
-    ajouter lui-meme une indentation ou refermer les parentheses et les
-    guillemets, donc ne retape pas ce que l'editeur ajoute deja. Apres
-    avoir tape, verifie dans l'ecran renvoye que le resultat est correct.
+    Le texte est tape tel quel, touche par touche, en direct sous les yeux
+    de l'etudiant : ecris du TEXTE BRUT. Les autres applications (Bloc-notes,
+    editeurs de code...) ne comprennent pas le markdown : n'utilise jamais
+    **gras**, *italique*, # titres, listes avec - ou *, ni blocs de code
+    avec des accents graves. Ils s'afficheraient comme de vrais caracteres
+    dans le document.
+
+    Vitesse : ecris tout le code ou tout le texte d'un seul coup dans un
+    seul appel, avec les retours a la ligne dans `texte`. Ne tape jamais
+    ligne par ligne et ne relis pas l'ecran entre deux lignes.
+
+    Adapte-toi a l'editeur ouvert (Bloc-notes, Thonny, VS Code, etc.), tu
+    connais leur comportement. Un editeur de code reproduit tout seul
+    l'indentation de la ligne precedente apres un retour a la ligne (et en
+    ajoute un niveau apres un deux-points ou une accolade), et peut
+    refermer les parentheses, crochets et guillemets. Prepare donc ton
+    texte pour que le resultat final soit correct : ne tape pas les espaces
+    que l'editeur ajoute deja, ne tape que la difference d'indentation, et
+    ne retape pas un caractere fermant deja ajoute. Quand le code revient a
+    un niveau d'indentation plus bas, coupe en plusieurs appels a cet
+    endroit et recule avec appuyer_touches (maj+tab) avant de continuer.
+    Dans un editeur de texte simple comme le Bloc-notes, rien n'est ajoute
+    automatiquement : tape les espaces voulus toi-meme, et n'utilise jamais
+    de raccourci qui ouvre un onglet ou une fenetre (ctrl+n, ctrl+t).
+    Une seule verification a la fin, dans l'ecran renvoye : corrige
+    seulement ce qui est faux.
 
     Aucune confirmation etudiant pour ce lot (meme regle que le reste du
     canal en direct depuis le 19/09/2026).
