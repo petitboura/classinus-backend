@@ -321,21 +321,15 @@ async def taper_clavier(texte: str, ctx: Context) -> str:
     seul appel, avec les retours a la ligne dans `texte`. Ne tape jamais
     ligne par ligne et ne relis pas l'ecran entre deux lignes.
 
-    Adapte-toi a l'editeur ouvert (Bloc-notes, Thonny, VS Code, etc.), tu
-    connais leur comportement. Un editeur de code reproduit tout seul
-    l'indentation de la ligne precedente apres un retour a la ligne (et en
-    ajoute un niveau apres un deux-points ou une accolade), et peut
-    refermer les parentheses, crochets et guillemets. Prepare donc ton
-    texte pour que le resultat final soit correct : ne tape pas les espaces
-    que l'editeur ajoute deja, ne tape que la difference d'indentation, et
-    ne retape pas un caractere fermant deja ajoute. Quand le code revient a
-    un niveau d'indentation plus bas, coupe en plusieurs appels a cet
-    endroit et recule avec appuyer_touches (maj+tab) avant de continuer.
-    Dans un editeur de texte simple comme le Bloc-notes, rien n'est ajoute
-    automatiquement : tape les espaces voulus toi-meme, et n'utilise jamais
-    de raccourci qui ouvre un onglet ou une fenetre (ctrl+n, ctrl+t).
+    Ecris le code normalement, avec son indentation complete (les espaces
+    de debut de ligne tels qu'ils doivent etre dans le fichier final).
+    L'application PC adapte elle-meme la vitesse de frappe et efface
+    l'indentation que certains editeurs ajoutent tout seuls (Thonny,
+    Notepad++) : ne cherche pas a la compenser. N'utilise jamais de
+    raccourci qui ouvre un onglet ou une fenetre (ctrl+n, ctrl+t) pour
+    ecrire.
     Une seule verification a la fin, dans l'ecran renvoye : corrige
-    seulement ce qui est faux.
+    seulement ce qui est faux (lettre manquante, caractere en trop).
 
     Aucune confirmation etudiant pour ce lot (meme regle que le reste du
     canal en direct depuis le 19/09/2026).
