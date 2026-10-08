@@ -310,6 +310,16 @@ async def taper_clavier(texte: str, ctx: Context) -> str:
     l'ecran t'est renvoye. Ensuite, le resultat contient deja l'etat de
     l'ecran qui suit : inutile d'appeler lire_ecran apres.
 
+    Le texte est tape tel quel, touche par touche : ecris du TEXTE BRUT.
+    Les autres applications (Bloc-notes, editeurs de code...) ne comprennent
+    pas le markdown : n'utilise jamais **gras**, *italique*, # titres,
+    listes avec - ou *, ni blocs de code avec des accents graves. Ils
+    s'afficheraient comme de vrais caracteres dans le document. Un retour a
+    la ligne est un vrai appui sur Entree : un editeur de code peut alors
+    ajouter lui-meme une indentation ou refermer les parentheses et les
+    guillemets, donc ne retape pas ce que l'editeur ajoute deja. Apres
+    avoir tape, verifie dans l'ecran renvoye que le resultat est correct.
+
     Aucune confirmation etudiant pour ce lot (meme regle que le reste du
     canal en direct depuis le 19/09/2026).
     """
