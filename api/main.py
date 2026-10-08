@@ -654,12 +654,27 @@ from core.mcp_auth_public import construire_auth_settings
 
 for _chemin_public in ("/mcp/public", "/mcp/espace"):
     _reglages_auth = construire_auth_settings(_chemin_public)
-    app.router.routes.extend(
-        create_protected_resource_routes(
-            resource_url=_reglages_auth.resource_server_url,
-            authorization_servers=[_reglages_auth.issuer_url],
-        )
+    _routes_decouverte = create_protected_resource_routes(
+        resource_url=_reglages_auth.resource_server_url,
+        authorization_servers=[_reglages_auth.issuer_url],
     )
+
+    # CORRECTIF (08/10) : la route de decouverte repondait 500 a chaque
+    # tentative de connexion d'un client MCP externe (logs Railway :
+    # "'CORSMiddleware' object has no attribute '__name__'"), si bien que
+    # Claude ne trouvait jamais le serveur d'autorisation et affichait
+    # "Impossible de s'inscrire". Meme cause que le correctif du 22/09 sur
+    # la route MCP principale : la librairie mcp enveloppe l'endpoint dans
+    # un objet (CORSMiddleware) qui n'a pas de `__name__`, et
+    # SlowAPIMiddleware lit `route.endpoint.__name__` sur toutes les
+    # routes de l'app. Meme solution : lui donner un nom.
+    for _route_decouverte in _routes_decouverte:
+        if not hasattr(_route_decouverte.endpoint, "__name__"):
+            _route_decouverte.endpoint.__name__ = (
+                f"decouverte_oauth_{_chemin_public.strip('/').replace('/', '_')}"
+            )
+
+    app.router.routes.extend(_routes_decouverte)
 
 # Domaines autorisés à appeler cette API. Service isolé pour Clovis
 # uniquement (séparé de djiguigne-backend le 12/08) -- seules les origines
