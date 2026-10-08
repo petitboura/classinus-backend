@@ -62,7 +62,10 @@ core/
                                 monté directement dans l'app
   serveur_mcp_github.py        serveur MCP interne pour le connecteur GitHub
   serveur_mcp_espace.py        serveur MCP PUBLIC "Mon espace" — connecteur externe (Claude, etc.) exposé
-                                à l'utilisateur, authentifié par OAuth 2.1
+                                à l'utilisateur, authentifié par OAuth 2.1 ; s'ajoute dans Claude avec
+                                l'adresse nue du domaine dédié (ex. https://mcp.classinus.com), sans chemin
+  aiguillage_hote_mcp.py       middleware : la racine du domaine dédié du connecteur est traitée comme
+                                le chemin interne /mcp/espace (domaine déduit de URL_RESOURCE_SERVER_PUBLIC)
   serveur_mcp_public.py        serveur MCP PUBLIC de Clovis, destiné à être ajouté comme connecteur
   mcp_auth_public.py           vérification des jetons OAuth pour les serveurs MCP publics
   confirmations_mcp.py         confirmations en attente pour l'outil MCP externe discuter_avec_clovis
@@ -215,7 +218,7 @@ donc ça marche aussi sur téléphone.
 | `FCM_SERVICE_ACCOUNT_JSON_B64` / `FCM_PROJECT_ID` | `core/notifications_push.py`, canal Android — pas encore configurées en prod (TODO explicite) |
 | `APNS_KEY_P8_B64` / `APNS_KEY_ID` / `APNS_TEAM_ID` | `core/notifications_push.py`, canal iOS — pas encore configurées en prod (TODO explicite) |
 | `URL_RETOUR_APP` | `connexions/notion.py`, `connexions/oauth_generique.py`, `api/agents.py` — URL publique du déploiement pour le retour OAuth, à recalculer à chaque changement de domaine |
-| `URL_RESOURCE_SERVER_PUBLIC` | `core/mcp_auth_public.py` (serveur MCP public, retombe sur `RAILWAY_PUBLIC_DOMAIN` si absente) |
+| `URL_RESOURCE_SERVER_PUBLIC` | `core/mcp_auth_public.py`, `core/aiguillage_hote_mcp.py`, `api/main.py` — adresse publique du connecteur MCP, sans chemin et sans slash final (ex. `https://mcp.classinus.com`). Elle sert d'identifiant OAuth du connecteur, définit le domaine dont la racine mène au serveur MCP "espace", et ajoute ce domaine aux hôtes autorisés du transport MCP. Le domaine doit aussi être ajouté au service sur Railway. Absente, retombe sur le domaine de service Railway |
 
 Détail complet, variables obsolètes et checklist Railway : voir
 `RAILWAY_DEPLOY.md`.

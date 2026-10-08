@@ -78,6 +78,7 @@ from supabase import create_client, ClientOptions
 from client_http_supabase import nouveau_client_http_supabase
 
 from core.mcp_auth_public import (
+    CHEMIN_AUTH_MCP_ESPACE,
     VerificateurJetonSupabase,
     construire_auth_settings,
     user_id_depuis_contexte as _user_id_verifie,
@@ -215,7 +216,7 @@ AGENT_ID_ESPACE = "clovis"
 mcp_espace = FastMCP(
     name="espace",
     token_verifier=VerificateurJetonSupabase(),
-    auth=construire_auth_settings("/mcp/espace"),
+    auth=construire_auth_settings(CHEMIN_AUTH_MCP_ESPACE),
 )
 
 # RAPPEL NON NEGOCIABLE (Bourama, 18/08) -- POUR NE PAS OUBLIER :

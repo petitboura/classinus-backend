@@ -599,14 +599,31 @@ def _route_mcp_principale(app_mcp_starlette, chemin_complet):
 # tout le monde par defaut.
 import os
 from mcp.server.transport_security import TransportSecuritySettings
+from core.aiguillage_hote_mcp import AiguillageHoteMcp, hote_depuis_url
+from core.mcp_auth_public import URL_BASE_PUBLIQUE
+
+# Chemin interne du serveur MCP "espace" (celui du connecteur Claude).
+# Le connecteur s'ajoute avec l'adresse nue du domaine dedie (ex.
+# https://mcp.classinus.com) : voir core/aiguillage_hote_mcp.py, qui
+# renvoie la racine de ce domaine vers ce chemin.
+CHEMIN_INTERNE_MCP_ESPACE = "/mcp/espace"
+
+# Domaine dedie du connecteur, deduit de URL_RESOURCE_SERVER_PUBLIC.
+_hote_mcp_public = hote_depuis_url(URL_BASE_PUBLIQUE)
 
 _domaine_public_railway = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
+# Hotes autorises : domaine de service Railway (comme avant) ET domaine
+# dedie du connecteur, sinon la protection anti DNS rebinding rejetterait
+# les requetes arrivant par ce dernier (421 Misdirected Request).
+_hotes_autorises_transport = [
+    hote for hote in (_domaine_public_railway, _hote_mcp_public) if hote
+]
 _reglages_securite_transport = (
     TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
-        allowed_hosts=[_domaine_public_railway],
+        allowed_hosts=_hotes_autorises_transport,
     )
-    if _domaine_public_railway
+    if _hotes_autorises_transport
     else TransportSecuritySettings(enable_dns_rebinding_protection=False)
 )
 
@@ -624,10 +641,10 @@ app.router.routes.append(
     _route_mcp_principale(
         mcp_espace.streamable_http_app(
             stateless_http=True,
-            streamable_http_path="/mcp/espace",
+            streamable_http_path=CHEMIN_INTERNE_MCP_ESPACE,
             transport_security=_reglages_securite_transport,
         ),
-        "/mcp/espace",
+        CHEMIN_INTERNE_MCP_ESPACE,
     )
 )
 
@@ -650,15 +667,16 @@ app.router.routes.append(
 # dupliquee/en dur ici) directement a la racine de l'app FastAPI, la ou
 # Claude va reellement les chercher.
 from mcp.server.auth.routes import create_protected_resource_routes
-from core.mcp_auth_public import construire_auth_settings
+from core.mcp_auth_public import CHEMIN_AUTH_MCP_ESPACE, construire_auth_settings
 
-for _chemin_public in ("/mcp/public", "/mcp/espace"):
+# Le serveur "espace" est annonce a la racine de son domaine dedie (chemin
+# vide), le serveur "public" garde son chemin.
+for _chemin_public in ("/mcp/public", CHEMIN_AUTH_MCP_ESPACE):
     _reglages_auth = construire_auth_settings(_chemin_public)
     _routes_decouverte = create_protected_resource_routes(
         resource_url=_reglages_auth.resource_server_url,
         authorization_servers=[_reglages_auth.issuer_url],
     )
-
     # CORRECTIF (08/10) : la route de decouverte repondait 500 a chaque
     # tentative de connexion d'un client MCP externe (logs Railway :
     # "'CORSMiddleware' object has no attribute '__name__'"), si bien que
@@ -759,6 +777,15 @@ class GZipSaufChat:
 
 
 app.add_middleware(GZipSaufChat)
+
+# Doit rester le DERNIER middleware ajoute (donc le plus externe) : il
+# change le chemin de la requete avant tout le reste, y compris la
+# limitation de debit qui lit le chemin pour choisir la route.
+app.add_middleware(
+    AiguillageHoteMcp,
+    hote_mcp=_hote_mcp_public,
+    chemin_interne=CHEMIN_INTERNE_MCP_ESPACE,
+)
 
 app.include_router(agents_router)
 app.include_router(profiles_router)
