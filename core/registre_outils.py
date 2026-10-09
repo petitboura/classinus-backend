@@ -407,7 +407,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # (la version du frontend), et distincte de toutes les autres du registre.
     "rechercher_document_externe": {"label": "Recherche de document", "icone": "Landmark", "onglet": "rechercher"},
     # Ajouté 09/10 : lecture du texte d'un livre ou PDF Internet Archive (lot 2).
-    "lire_document_internet_archive": {"label": "Lecture d'un document", "icone": "ScrollText", "onglet": "rechercher"},
+    "lire_document_internet_archive": {"label": "Lecture d'un document", "icone": "Glasses", "onglet": "rechercher"},
     # gerer_document_bibliotheque (consolidé le 26/08, ex 12 outils
     # séparés -- consulter_bibliotheque, consulter_bibliotheque_publique,
     # lister/ajouter/supprimer/classer/déclasser/ranger/retirer/lire_entier,
