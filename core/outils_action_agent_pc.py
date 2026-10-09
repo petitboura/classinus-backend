@@ -554,7 +554,7 @@ def _formater_element_lu(element: dict, titre_fenetre: str | None = None) -> str
     # l'ecran en dit (identifiant, aide), jamais par « un certain bouton ».
     if not nom and not element.get("valeur_masquee"):
         details.append("sans nom")
-        for cle, intitule in (("id_auto", "identifiant"), ("aide", "aide")):
+        for cle, intitule in (("classe", "classe Windows"), ("id_auto", "identifiant"), ("aide", "aide")):
             texte = element.get(cle)
             if isinstance(texte, str) and texte:
                 details.append(f"{intitule} : « {texte} »")
