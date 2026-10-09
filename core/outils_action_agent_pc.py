@@ -27,6 +27,7 @@ import asyncio
 import functools
 import logging
 import os
+import re
 import time
 
 from core import lecture_ecran_continue
@@ -497,21 +498,74 @@ async def ouvrir_application(nom: str, ctx: Context) -> str:
 # envoyees avec chaque demande, le processus Electron n'a pas de valeurs a
 # lui (voir electron/src/lectureFenetreWindows.mts). Valeurs de depart, pas
 # des limites produit tranchees avec Bourama : a valider.
-NB_MAX_ELEMENTS_LECTURE_ECRAN = 120
+# Elements sur lesquels on agit (boutons, champs, onglets...) : plafond propre,
+# pour que les textes d'une fenetre dense ne fassent plus disparaitre ses boutons.
+NB_MAX_ELEMENTS_LECTURE_ECRAN = 400
+# Textes et conteneurs (paragraphes, etiquettes, groupes) : plafond a part.
+NB_MAX_TEXTES_LECTURE_ECRAN = 150
 NB_MAX_FENETRES_LECTURE_ECRAN = 15
 LONGUEUR_MAX_NOM_LECTURE_ECRAN = 80
 LONGUEUR_MAX_VALEUR_LECTURE_ECRAN = 400
 PROFONDEUR_MAX_LECTURE_ECRAN = 25
 DELAI_MAX_LECTURE_ECRAN_MS = 6000
-# Taille maximale du texte final rendu au modele (environ 1500 tokens).
-LONGUEUR_MAX_TEXTE_LECTURE_ECRAN = 6000
+# Taille maximale du texte final rendu au modele (environ 4000 tokens). Elle
+# etait de 6000 : une ligne d'element faisant plus de 100 caracteres, la lecture
+# s'arretait apres une quarantaine d'elements et le reste de l'ecran etait
+# perdu pour l'IA. Reglage a valider : chaque point en plus coute des tokens
+# a chaque message du canal en direct.
+LONGUEUR_MAX_TEXTE_LECTURE_ECRAN = 16000
+
+# Un bouton dont le nom ou l'aide parle d'agrandir, de reduire ou de plein ecran.
+MOTS_AGRANDIR_PC = re.compile(
+    r"agrandi|plein\s*[ée]cran|maximi[sz]|enlarge|expand|full\s*-?\s*screen|r[ée]duire|minimi[sz]|restaurer|restore",
+    re.IGNORECASE,
+)
+PANNEAU_BARRE_DE_TITRE = re.compile(r"barre de titre|title\s*bar", re.IGNORECASE)
 
 
-def _formater_element_lu(element: dict) -> str:
+def _article_zone(zone: str) -> str:
+    """Article devant une zone : « la barre des tâches », « la fenêtre flottante... », « le menu ouvert »."""
+    return "la" if zone.startswith(("barre", "fenêtre")) else "le"
+
+
+def _cible_agrandissement(element: dict, titre_fenetre: str | None) -> str:
+    """
+    Ce que fait un bouton agrandir / reduire / plein ecran, dit sans deviner :
+    la fenetre quand le bouton est dans sa barre de titre, sinon le panneau ou
+    la fenetre flottante qui le contient.
+    """
+    zone = element.get("zone")
+    if isinstance(zone, str) and zone.startswith("fenêtre"):
+        return f"agrandit {_article_zone(zone)} {zone}"
+    panneau = element.get("panneau")
+    if isinstance(panneau, str) and panneau and not PANNEAU_BARRE_DE_TITRE.search(panneau):
+        return f"agrandit le panneau « {panneau} »"
+    if titre_fenetre:
+        return f"agrandit la fenêtre « {titre_fenetre} »"
+    return "agrandit la fenêtre qui le contient"
+
+
+def _formater_element_lu(element: dict, titre_fenetre: str | None = None) -> str:
     """Une ligne de texte pour un element lu (voir LectureFenetre cote Electron)."""
     genre = element.get("type") or "élément"
     nom = element.get("nom") or ""
     details = []
+    # Un element sans nom reste dans la liste : l'IA doit le designer par ce que
+    # l'ecran en dit (identifiant, aide), jamais par « un certain bouton ».
+    if not nom and not element.get("valeur_masquee"):
+        details.append("sans nom")
+        for cle, intitule in (("id_auto", "identifiant"), ("aide", "aide")):
+            texte = element.get(cle)
+            if isinstance(texte, str) and texte:
+                details.append(f"{intitule} : « {texte} »")
+    panneau = element.get("panneau")
+    if isinstance(panneau, str) and panneau:
+        details.append(f"dans le panneau « {panneau} »")
+    indices_agrandir = " ".join(
+        str(element.get(cle) or "") for cle in ("nom", "aide", "id_auto")
+    )
+    if MOTS_AGRANDIR_PC.search(indices_agrandir):
+        details.append(_cible_agrandissement(element, titre_fenetre))
     if element.get("valeur_masquee"):
         details.append("valeur masquée")
     elif element.get("valeur"):
@@ -532,7 +586,7 @@ def _formater_element_lu(element: dict) -> str:
     # Ne pas confondre avec "zone : gauche..., haut..." ci-dessus (rectangle de l'element).
     zone = element.get("zone")
     if isinstance(zone, str) and zone:
-        zone_txt = f", dans {'la' if zone.startswith('barre') else 'le'} {zone}"
+        zone_txt = f", dans {_article_zone(zone)} {zone}"
     else:
         zone_txt = ""
     return f"[{genre}{nom_txt}{suite}{zone_txt}, clic possible en ({element.get('x')}, {element.get('y')}){taille}]"
@@ -591,8 +645,9 @@ def _formater_lecture_ecran(resultat: dict) -> str:
 
     if resultat.get("menu_ouvert"):
         lignes.append(
-            "Un menu, un menu contextuel ou une liste déroulante est ouvert au-dessus de cette fenêtre : "
-            "ses éléments sont listés en premier, marqués « dans le menu ouvert »."
+            "Un menu, un menu contextuel, une liste déroulante ou une fenêtre flottante est ouvert au-dessus de "
+            "cette fenêtre : ses éléments sont listés en premier, marqués « dans le menu ouvert » ou « dans la "
+            "fenêtre flottante ». Pour agir derrière, ferme-le d'abord."
         )
     if resultat.get("texte_long_ignore"):
         lignes.append(
@@ -603,7 +658,7 @@ def _formater_lecture_ecran(resultat: dict) -> str:
     total = sum(len(l) + 1 for l in lignes)
     coupe = bool(resultat.get("coupe"))
     for element in elements:
-        ligne = _formater_element_lu(element)
+        ligne = _formater_element_lu(element, titre)
         if total + len(ligne) + 1 > LONGUEUR_MAX_TEXTE_LECTURE_ECRAN:
             coupe = True
             break
@@ -641,6 +696,7 @@ async def _lire_ecran_pour_modele(user_id: str, automatique: bool = False, zone:
             "automatique": automatique,
             "zone": zone,
             "nb_max_elements": NB_MAX_ELEMENTS_LECTURE_ECRAN,
+            "nb_max_textes": NB_MAX_TEXTES_LECTURE_ECRAN,
             "nb_max_fenetres": NB_MAX_FENETRES_LECTURE_ECRAN,
             "longueur_max_nom": LONGUEUR_MAX_NOM_LECTURE_ECRAN,
             "longueur_max_valeur": LONGUEUR_MAX_VALEUR_LECTURE_ECRAN,
