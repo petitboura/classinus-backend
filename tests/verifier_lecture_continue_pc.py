@@ -40,7 +40,7 @@ drapeaux_automatique = []
 def installer_faux_transport(lecture=LECTURE, reponses_actions=None):
     appels = []
 
-    async def demander(user_id, action, parametres, on_statut=None):
+    async def demander(user_id, action, parametres, on_statut=None, delai_abandon_secondes=None):
         appels.append(action)
         if action == "lire_ecran":
             drapeaux_automatique.append(parametres.get("automatique"))

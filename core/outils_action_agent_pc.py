@@ -99,6 +99,40 @@ DELAI_APRES_CLIC_SECONDES = float(os.environ.get("CLASSINUS_PC_DELAI_APRES_CLIC_
 DELAI_APRES_CLAVIER_SECONDES = float(os.environ.get("CLASSINUS_PC_DELAI_APRES_CLAVIER_S", "0.5"))
 DELAI_APRES_OUVERTURE_SECONDES = float(os.environ.get("CLASSINUS_PC_DELAI_APRES_OUVERTURE_S", "2.0"))
 
+# Garde-fou 2 du canal PC (08/10/2026, decision Bourama) : applications protegees.
+# Pour taper au clavier ou ouvrir l'une d'elles, l'etudiant doit autoriser chaque
+# action (bulle Autoriser ou Refuser dans la superposition). Noms de programmes
+# Windows, sans ".exe", en minuscules. Modifiable sans toucher au code avec la
+# variable CLASSINUS_PC_APPLICATIONS_PROTEGEES (liste separee par des virgules).
+# VS Code et les editeurs de code n'y sont pas, volontairement : l'ecriture de code
+# par taper_clavier doit rester fluide. Le plugin Electron n'a aucune valeur propre :
+# la liste et le delai lui sont envoyes avec chaque demande.
+APPLICATIONS_PROTEGEES_PAR_DEFAUT = (
+    "powershell,powershell_ise,pwsh,cmd,windowsterminal,wt,conhost,openconsole,wsl,bash,mintty,"
+    "1password,bitwarden,keepass,keepassxc,enpass,dashlane,"
+    "systemsettings,control,regedit"
+)
+APPLICATIONS_PROTEGEES_PC = [
+    nom.strip().lower()
+    for nom in os.environ.get("CLASSINUS_PC_APPLICATIONS_PROTEGEES", APPLICATIONS_PROTEGEES_PAR_DEFAUT).split(",")
+    if nom.strip()
+]
+DELAI_AUTORISATION_PC_MS = int(os.environ.get("CLASSINUS_PC_DELAI_AUTORISATION_MS", "60000"))
+# Marge laissee a l'action apres la fin de l'attente d'accord, avant l'abandon cote serveur.
+MARGE_ABANDON_APRES_AUTORISATION_SECONDES = 30
+
+
+def _parametres_protection() -> dict:
+    """Ce que le plugin Electron doit savoir pour demander l'accord de l'etudiant."""
+    return {
+        "applications_protegees": list(APPLICATIONS_PROTEGEES_PC),
+        "delai_autorisation_ms": DELAI_AUTORISATION_PC_MS,
+    }
+
+
+def _delai_abandon_avec_autorisation() -> float:
+    return DELAI_AUTORISATION_PC_MS / 1000 + MARGE_ABANDON_APRES_AUTORISATION_SECONDES
+
 MESSAGE_LECTURE_PREALABLE = (
     "Action NON exécutée : tu n'avais pas encore lu l'écran du PC dans cette conversation. "
     "Voici l'écran à cet instant. Choisis maintenant ce que tu fais, en t'appuyant sur ce contenu "
@@ -335,8 +369,10 @@ async def taper_clavier(texte: str, ctx: Context) -> str:
     Une seule verification a la fin, dans l'ecran renvoye : corrige
     seulement ce qui est faux (lettre manquante, caractere en trop).
 
-    Aucune confirmation etudiant pour ce lot (meme regle que le reste du
-    canal en direct depuis le 19/09/2026).
+    Pas de confirmation de l'etudiant pour les applications ordinaires. Pour une
+    application protegee (terminal, PowerShell, gestionnaire de mots de passe,
+    parametres Windows, fenetre Executer), l'etudiant doit autoriser chaque action :
+    s'il refuse ou ne repond pas, l'action n'est PAS faite, ne la retente pas.
     """
     user_id, erreur = _user_id_ou_erreur(ctx)
     if erreur:
@@ -348,7 +384,12 @@ async def taper_clavier(texte: str, ctx: Context) -> str:
     if bloque is not None:
         return bloque
 
-    resultat = await _demander_action_systeme(user_id, "taper_clavier", {"texte": texte})
+    resultat = await _demander_action_systeme(
+        user_id,
+        "taper_clavier",
+        {"texte": texte, **_parametres_protection()},
+        delai_abandon_secondes=_delai_abandon_avec_autorisation(),
+    )
     if resultat is None:
         return MESSAGE_ECHEC_SYSTEME
     if isinstance(resultat, dict) and resultat.get("erreur"):
@@ -375,8 +416,10 @@ async def appuyer_touches(touches: str, ctx: Context) -> str:
     presse et l'ecran t'est renvoye. Ensuite, le resultat contient deja
     l'etat de l'ecran qui suit : inutile d'appeler lire_ecran apres.
 
-    Aucune confirmation etudiant pour ce lot (meme regle que le reste du
-    canal en direct depuis le 19/09/2026).
+    Pas de confirmation de l'etudiant pour les applications ordinaires. Pour une
+    application protegee (terminal, PowerShell, gestionnaire de mots de passe,
+    parametres Windows, fenetre Executer), l'etudiant doit autoriser chaque action :
+    s'il refuse ou ne repond pas, l'action n'est PAS faite, ne la retente pas.
     """
     user_id, erreur = _user_id_ou_erreur(ctx)
     if erreur:
@@ -388,7 +431,12 @@ async def appuyer_touches(touches: str, ctx: Context) -> str:
     if bloque is not None:
         return bloque
 
-    resultat = await _demander_action_systeme(user_id, "appuyer_touches", {"touches": touches.strip()})
+    resultat = await _demander_action_systeme(
+        user_id,
+        "appuyer_touches",
+        {"touches": touches.strip(), **_parametres_protection()},
+        delai_abandon_secondes=_delai_abandon_avec_autorisation(),
+    )
     if resultat is None:
         return MESSAGE_ECHEC_SYSTEME
     if isinstance(resultat, dict) and resultat.get("erreur"):
@@ -415,8 +463,10 @@ async def ouvrir_application(nom: str, ctx: Context) -> str:
     l'etat de l'ecran qui suit (apres un court delai pour laisser la fenetre
     s'ouvrir) : inutile d'appeler lire_ecran apres.
 
-    Aucune confirmation etudiant pour ce lot (meme regle que le reste du
-    canal en direct depuis le 19/09/2026).
+    Pas de confirmation de l'etudiant pour les applications ordinaires. Pour une
+    application protegee (terminal, PowerShell, gestionnaire de mots de passe,
+    parametres Windows, fenetre Executer), l'etudiant doit autoriser chaque action :
+    s'il refuse ou ne repond pas, l'action n'est PAS faite, ne la retente pas.
     """
     user_id, erreur = _user_id_ou_erreur(ctx)
     if erreur:
@@ -428,7 +478,12 @@ async def ouvrir_application(nom: str, ctx: Context) -> str:
     if bloque is not None:
         return bloque
 
-    resultat = await _demander_action_systeme(user_id, "ouvrir_application", {"nom": nom})
+    resultat = await _demander_action_systeme(
+        user_id,
+        "ouvrir_application",
+        {"nom": nom, **_parametres_protection()},
+        delai_abandon_secondes=_delai_abandon_avec_autorisation(),
+    )
     if resultat is None:
         return MESSAGE_ECHEC_SYSTEME
     if isinstance(resultat, dict) and resultat.get("erreur"):

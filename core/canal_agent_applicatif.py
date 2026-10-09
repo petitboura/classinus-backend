@@ -284,7 +284,11 @@ async def _appeler_statut(on_statut, texte: str) -> None:
 
 
 async def _diffuser_et_attendre(
-    user_id: str, message: dict[str, Any], on_statut=None, on_timeout_log: str = ""
+    user_id: str,
+    message: dict[str, Any],
+    on_statut=None,
+    on_timeout_log: str = "",
+    delai_abandon_secondes: float | None = None,
 ) -> Any | None:
     """
     Logique commune a demander_execution_action (chantier C) et
@@ -293,7 +297,15 @@ async def _diffuser_et_attendre(
     attend la premiere reponse valable, avec les memes paliers de statut
     que le reste de ce fichier. Extrait ici pour eviter de dupliquer
     cette logique (identique) entre les deux chantiers.
+
+    delai_abandon_secondes : delai apres lequel on abandonne l'attente
+    (DELAI_ABANDON_SECONDES par defaut). Les actions qui peuvent attendre
+    l'accord de l'etudiant (applications protegees du PC) l'allongent.
     """
+    abandon = max(
+        DELAI_STATUT_2_SECONDES + 1,
+        delai_abandon_secondes if delai_abandon_secondes is not None else DELAI_ABANDON_SECONDES,
+    )
     async with _verrou_connexions:
         connexions = [(cle, ws) for cle, ws in _connexions.items() if cle[0] == user_id]
 
@@ -339,11 +351,11 @@ async def _diffuser_et_attendre(
 
         await _appeler_statut(on_statut, TEXTE_STATUT_2)
         try:
-            return await asyncio.wait_for(asyncio.shield(future), timeout=DELAI_ABANDON_SECONDES - DELAI_STATUT_2_SECONDES)
+            return await asyncio.wait_for(asyncio.shield(future), timeout=abandon - DELAI_STATUT_2_SECONDES)
         except asyncio.TimeoutError:
             logging.warning(
                 f"ABANDON canal agent applicatif (user={user_id}, id={correlation_id}) : "
-                f"pas de reponse apres {DELAI_ABANDON_SECONDES}s. {on_timeout_log}"
+                f"pas de reponse apres {abandon}s. {on_timeout_log}"
             )
             return None
     finally:
@@ -440,7 +452,11 @@ async def demander_ecriture_champ(user_id: str, action_id: str, texte: str, on_s
 
 
 async def demander_action_systeme(
-    user_id: str, type_action: str, parametres: dict, on_statut=None
+    user_id: str,
+    type_action: str,
+    parametres: dict,
+    on_statut=None,
+    delai_abandon_secondes: float | None = None,
 ) -> Any | None:
     """
     Lot S (27/09/2026, chantier "canal en direct sort de l'appli" --
@@ -466,9 +482,10 @@ async def demander_action_systeme(
     core/outils_action_agent_pc.py).
 
     Pas de confirmation etudiant pour ce lot (decision Bourama du
-    27/09/2026, comme le reste du canal depuis le 19/09/2026) -- le
-    point d'ancrage pour l'ajouter plus tard, si demande, est ici,
-    avant l'appel a _diffuser_et_attendre.
+    27/09/2026, comme le reste du canal depuis le 19/09/2026), sauf pour
+    les applications protegees (08/10/2026) : le plugin PontNatif demande
+    alors l'accord de l'etudiant, d'ou delai_abandon_secondes plus long
+    pour taper_clavier, appuyer_touches et ouvrir_application.
     """
     correlation_id = str(uuid.uuid4())
     return await _diffuser_et_attendre(
@@ -476,6 +493,7 @@ async def demander_action_systeme(
         {"id": correlation_id, "action_systeme": type_action, "parametres": parametres},
         on_statut,
         on_timeout_log=f"action_systeme={type_action}",
+        delai_abandon_secondes=delai_abandon_secondes,
     )
 
 
