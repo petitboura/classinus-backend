@@ -45,6 +45,14 @@ def rechercher_document_externe(requete: str, nombre: int = 6) -> str:
     gratuit Internet Archive, et dont Classinus ne peut pas lire le contenu
     (dis le clairement) ; "restreint" veut dire non consultable.
 
+    Deux liens possibles par document. url est la page sur le site d'Internet
+    Archive. url_pdf, quand il est présent, ouvre le PDF directement dans le
+    visionneur de Classinus : l'étudiant reste dans l'appli, c'est le lien à
+    mettre en avant. Donne les deux, chacun en markdown [titre](adresse) avec
+    l'adresse exacte, sans la modifier. Quand il n'y a pas url_pdf, le champ
+    note_pdf dit pourquoi : transmets cette mention à l'étudiant avec des mots
+    simples, sans inventer de lien.
+
     Cet outil trouve et donne le lien, il ne lit pas le contenu du document :
     ne prétends jamais avoir lu un livre que tu as seulement trouvé. Si rien
     n'est trouvé, dis le et propose de reformuler (autre titre, nom de

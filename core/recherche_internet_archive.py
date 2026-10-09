@@ -57,7 +57,7 @@ _LONGUEUR_MAX_REQUETE = 200
 
 _CHAMPS_DEMANDES = [
     "identifier", "title", "creator", "year", "language",
-    "lending___status", "access-restricted-item",
+    "lending___status", "access-restricted-item", "format",
 ]
 
 # Identifiant Internet Archive : lettres, chiffres, point, tiret, tiret bas.
@@ -111,19 +111,50 @@ def _acces(document):
     return "libre"
 
 
+def _a_un_pdf(document):
+    return any("pdf" in v.lower() for v in _en_liste(document.get("format")))
+
+
+def _lien_et_note_pdf(identifiant, acces, brut):
+    """
+    Lien du PDF dans le visionneur de Classinus (relais du lot 3), ou une
+    note qui dit pourquoi il n'y en a pas. Le champ "format" d'Internet
+    Archive liste les types de fichiers du document : sans PDF, pas de lien.
+    """
+    from core.relais_pdf_archive import lien_pdf_visionneur
+
+    if acces == "pret_numerique":
+        return None, "Livre en prêt numérique : pas de PDF à ouvrir dans Classinus, seulement la page d'Internet Archive."
+    if acces == "restreint":
+        return None, "Document non consultable : pas de PDF à ouvrir dans Classinus."
+    if not _a_un_pdf(brut):
+        return None, "Ce document n'a pas de PDF à ouvrir dans Classinus, seulement la page d'Internet Archive."
+    lien = lien_pdf_visionneur(identifiant)
+    if not lien:
+        return None, "Le lien d'ouverture dans Classinus est indisponible pour le moment, donne la page d'Internet Archive."
+    return lien, None
+
+
 def _construire_document(brut):
     identifiant = _texte_ou_none(brut.get("identifier"))
     if not identifiant or not _REGEX_IDENTIFIANT.match(identifiant):
         return None  # un identifiant douteux ne doit jamais devenir un lien
-    return {
+    acces = _acces(brut)
+    url_pdf, note_pdf = _lien_et_note_pdf(identifiant, acces, brut)
+    document = {
         "titre": _texte_ou_none(brut.get("title")) or identifiant,
         "auteur": _texte_ou_none(brut.get("creator"), maximum=3),
         "annee": _texte_ou_none(brut.get("year")),
         "langue": _texte_ou_none(brut.get("language")),
         "identifiant": identifiant,
         "url": _URL_PAGE_DOCUMENT.format(identifiant=identifiant),
-        "acces": _acces(brut),
+        "acces": acces,
     }
+    if url_pdf:
+        document["url_pdf"] = url_pdf
+    else:
+        document["note_pdf"] = note_pdf
+    return document
 
 
 def _interroger(requete_nettoyee, nombre):

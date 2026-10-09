@@ -272,13 +272,9 @@ def _explication_illisible(identifiant, raison):
 
 def _lien_visionneur(identifiant):
     """Lien du PDF dans le visionneur (relais du lot 3), ou None si l'adresse du backend est inconnue."""
-    try:
-        from core.relais_pdf_archive import url_visionneur
-        from core.stockage_r2 import R2_PUBLIC_BASE_URL
+    from core.relais_pdf_archive import lien_pdf_visionneur
 
-        return url_visionneur(identifiant, R2_PUBLIC_BASE_URL) if R2_PUBLIC_BASE_URL else None
-    except Exception:
-        return None
+    return lien_pdf_visionneur(identifiant)
 
 
 def _tranche(identifiant, infos, a_partir_du_caractere):

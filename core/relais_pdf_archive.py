@@ -104,6 +104,16 @@ def url_visionneur(identifiant, base_publique):
     return f"{base}/fichiers/archive/{quote(identifiant, safe='')}.pdf"
 
 
+def lien_pdf_visionneur(identifiant):
+    """Lien du PDF dans le visionneur avec l'adresse publique du backend, ou None si elle est inconnue."""
+    try:
+        from core.stockage_r2 import R2_PUBLIC_BASE_URL
+
+        return url_visionneur(identifiant, R2_PUBLIC_BASE_URL) if R2_PUBLIC_BASE_URL else None
+    except Exception:
+        return None
+
+
 def identifiant_depuis_nom(nom_fichier):
     """'livre_2020.pdf' -> 'livre_2020'. None si le nom n'est pas un lien de ce relais."""
     if not nom_fichier or not nom_fichier.lower().endswith(".pdf"):
