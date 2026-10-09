@@ -688,8 +688,17 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "montrer_element_application": {"label": "Pointer un élément", "icone": "Crosshair", "onglet": None},
     # Ecriture dans les champs (20/09/2026, demande Bourama), meme rappel de cache 24h.
     "ecrire_dans_champ": {"label": "Écriture dans un champ", "icone": "PenLine", "onglet": None},
-    # Lot U : lecture de la page Classinus, dans le canal applicatif existant.
+    # Lot U (28/09/2026) : lecture du texte visible de la page, meme rappel de cache 24h.
     "lire_page": {"label": "Lecture de la page", "icone": "Eye", "onglet": None},
+    # Lot S (canal en direct sur PC, 27/09/2026) : actions sur le systeme du PC via l'appli Electron,
+    # appelees par le modele, jamais cliquables a la main (onglet None), meme rappel de cache 24h.
+    "cliquer_ecran": {"label": "Clic à l'écran", "icone": "MousePointer2", "onglet": None},
+    "pointer_ecran": {"label": "Pointage à l'écran", "icone": "Crosshair", "onglet": None},
+    "marquer_ecran": {"label": "Marque à l'écran", "icone": "Highlighter", "onglet": None},
+    "taper_clavier": {"label": "Saisie au clavier", "icone": "Keyboard", "onglet": None},
+    "appuyer_touches": {"label": "Raccourci clavier", "icone": "Command", "onglet": None},
+    "ouvrir_application": {"label": "Ouverture d'une application", "icone": "AppWindow", "onglet": None},
+    "lire_ecran": {"label": "Lecture de l'écran", "icone": "Eye", "onglet": None},
     # Editeur de code (28/09/2026, demande Bourama), meme rappel de cache 24h.
     "lire_editeur": {"label": "Lecture de l'éditeur de code", "icone": "FileCode", "onglet": None},
     "montrer_dans_editeur": {"label": "Montrer dans l'éditeur", "icone": "Crosshair", "onglet": None},
@@ -881,8 +890,9 @@ CATEGORIES_OUTILS = {
     "agent_applicatif": [
         "executer_action_application",
         "executer_clic_generique", "montrer_element_application", "ecrire_dans_champ",
-        "lire_editeur", "montrer_dans_editeur", "ecrire_dans_editeur",
         "lire_page",
+        "pointer_ecran", "marquer_ecran", "cliquer_ecran", "taper_clavier", "appuyer_touches", "ouvrir_application", "lire_ecran",
+        "lire_editeur", "montrer_dans_editeur", "ecrire_dans_editeur",
         "desactiver_canal_en_direct",
     ],
     "github": ["gerer_depot_github"],
