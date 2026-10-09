@@ -81,8 +81,11 @@ def bloc_etat_ecran_pc(user_id, conversation_id, table_routage) -> str:
         return ""
     return (
         "\n\n## État actuel de l'écran du PC (lu automatiquement à l'instant)\n"
-        "Cette lecture est à jour pour ce message de l'étudiant. N'appelle pas lire_ecran "
-        "pour la refaire : agis directement à partir de ce qui suit. Elle ne montre que la "
+        "Cette lecture est complète et à jour pour ce message de l'étudiant (fenêtre au premier plan et "
+        "menus ouverts), et chaque action que tu fais te renvoie l'écran qui suit. N'appelle pas lire_ecran "
+        "parce que tu penses que l'écran a changé, ni pour la refaire : agis directement à partir de ce qui suit. Elle ne montre que la "
         "fenêtre au premier plan : pour voir la barre des tâches ou le bureau, appelle "
-        "lire_ecran avec zone=\"barre_des_taches\" ou zone=\"bureau\".\n\n" + texte
+        "lire_ecran avec zone=\"barre_des_taches\" ou zone=\"bureau\". Sur le PC, n'appelle lire_page que si "
+        "l'étudiant te demande explicitement de faire quelque chose dans l'application Classinus : jamais de ta "
+        "propre initiative.\n\n" + texte
     )

@@ -622,17 +622,23 @@ async def lire_ecran(ctx: Context, zone: str = "fenetre") -> str:
     C'est la premiere lecture obligatoire avant toute action sur le PC dans
     une conversation : tant qu'elle n'est pas faite, cliquer_ecran,
     taper_clavier, appuyer_touches et ouvrir_application n'executent rien.
-    Une fois faite, chaque action te renvoie elle-meme l'etat de l'ecran qui
-    suit : rappelle lire_ecran seulement pour regarder sans agir.
+    Une fois faite, l'etat complet de l'ecran (fenetre au premier plan et
+    menus ouverts) t'est envoye au debut de chaque message de l'etudiant
+    et apres chaque action : ne rappelle pas cet outil parce que tu penses
+    que l'ecran a change, agis, le resultat de ton action te montre
+    l'ecran qui suit. Ne le rappelle que dans trois cas : aucun etat de
+    l'ecran ne t'est fourni ou la lecture automatique a echoue ; tu dois
+    voir une autre zone que la fenetre au premier plan (zone, plus bas) ;
+    un texte long a ete coupe.
 
     Si Classinus a le focus, lit la premiere fenetre externe derriere
     Classinus, sans la mettre au premier plan. Pour agir dessus, le pont
     restaure son focus avant le clic ou la frappe.
 
-    Apres un clic sur un bouton qui ouvre un menu, un menu contextuel ou
-    une liste deroulante, rappelle lire_ecran : ce menu ouvert apparait
-    en premier dans la lecture, marque « dans le menu ouvert », avec les
-    coordonnees de chacun de ses choix.
+    Quand un clic ouvre un menu, un menu contextuel ou une liste
+    deroulante, ce menu ouvert apparait en premier dans l'etat de l'ecran
+    qui suit, marque « dans le menu ouvert », avec les coordonnees de
+    chacun de ses choix : inutile de rappeler cet outil pour le voir.
 
     Par defaut ne lit QUE cette fenetre (pas toutes les autres, pas tout
     l'ecran), plus les menus qu'elle a ouverts.
