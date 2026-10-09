@@ -406,6 +406,8 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # documents_externes. Icône "Landmark" vérifiée dans lucide-react 0.383.0
     # (la version du frontend), et distincte de toutes les autres du registre.
     "rechercher_document_externe": {"label": "Recherche de document", "icone": "Landmark", "onglet": "rechercher"},
+    # Ajouté 09/10 : lecture du texte d'un livre ou PDF Internet Archive (lot 2).
+    "lire_document_internet_archive": {"label": "Lecture d'un document", "icone": "ScrollText", "onglet": "rechercher"},
     # gerer_document_bibliotheque (consolidé le 26/08, ex 12 outils
     # séparés -- consulter_bibliotheque, consulter_bibliotheque_publique,
     # lister/ajouter/supprimer/classer/déclasser/ranger/retirer/lire_entier,
@@ -849,7 +851,7 @@ CATEGORIES_OUTILS = {
     # catalogue_public, ces outils seraient confondus avec la recherche web ou
     # avec le catalogue interne (le modèle ouvrirait le catalogue public pour
     # un livre qui n'y est pas).
-    "documents_externes": ["rechercher_document_externe"],
+    "documents_externes": ["rechercher_document_externe", "lire_document_internet_archive"],
     "base_connaissance": ["gerer_base_connaissance"],
     "pedagogie": [
         "gerer_avancement_notions", "consulter_avancement_notion",

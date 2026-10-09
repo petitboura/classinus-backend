@@ -82,6 +82,7 @@ import core.outils_generation_documents  # noqa: F401
 import core.outils_generation_media  # noqa: F401
 import core.outils_lecture_video  # noqa: F401  # 07/10/2026, lecture du contenu des vidéos YouTube
 import core.outils_documents_externes  # noqa: F401  # 09/10/2026, recherche de livres et PDF sur Internet Archive
+import core.outils_lecture_document_archive  # noqa: F401  # 09/10/2026, lecture du texte des documents Internet Archive (lot 2)
 import core.outils_bibliotheque  # noqa: F401
 import core.outils_fichiers_conversation  # noqa: F401
 import core.outils_dossiers_catalogue_public  # noqa: F401
