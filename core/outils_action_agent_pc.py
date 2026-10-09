@@ -326,7 +326,10 @@ async def taper_clavier(texte: str, ctx: Context) -> str:
     de debut de ligne tels qu'ils doivent etre dans le fichier final).
     L'application PC adapte elle-meme la vitesse de frappe et efface
     l'indentation que certains editeurs ajoutent tout seuls (Thonny,
-    Notepad++) : ne cherche pas a la compenser. N'utilise jamais de
+    Notepad++) : ne cherche pas a la compenser. N'utilise JAMAIS de tiret
+    long dans le texte tape (le tiret cadratin et le tiret demi-cadratin) :
+    il coupe le texte et ouvre un nouvel onglet dans le Bloc-notes. Ecris
+    un tiret simple (-), une virgule ou deux-points a la place. N'utilise jamais de
     raccourci qui ouvre un onglet ou une fenetre (ctrl+n, ctrl+t) pour
     ecrire.
     Une seule verification a la fin, dans l'ecran renvoye : corrige
