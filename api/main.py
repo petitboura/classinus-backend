@@ -76,6 +76,7 @@ from api.dossiers_designes import router as dossiers_designes_router
 from api.programme_notions import router as programme_notions_router
 from api.programme_catalogue_public import router as programme_catalogue_public_router  # 22/09/2026
 from api.fichiers_r2 import router as fichiers_r2_router
+from api.fichiers_archive import router as fichiers_archive_router  # 09/10/2026, relais des PDF Internet Archive
 from api.apercu_lien import router as apercu_lien_router
 from api.rendu_animation import router as rendu_animation_router  # 07/10/2026
 from core.rendu_animation_travaux import nettoyer_anciens_fichiers
@@ -866,6 +867,7 @@ app.include_router(webhooks_github_router)
 app.include_router(programme_notions_router)
 app.include_router(programme_catalogue_public_router)  # 22/09/2026
 app.include_router(fichiers_r2_router)
+app.include_router(fichiers_archive_router)  # 09/10/2026, relais des PDF Internet Archive
 app.include_router(apercu_lien_router)
 app.include_router(rendu_animation_router)  # 07/10/2026, vidéo d'une animation du chat
 

@@ -53,7 +53,10 @@ async def canal_temps_reel(websocket: WebSocket):
         await fermer_websocket_sans_erreur(websocket, 4401)
         return
     appareil_id = str(message_auth.get("appareil_id") or "")
-    await connecter(utilisateur.id, appareil_id, websocket)
+    await connecter(utilisateur.id, appareil_id, websocket,
+                    actions_systeme_via_renderer=message_auth.get("actions_systeme_via_renderer") is True)
+    logging.info("Canal agent authentifié : %s", "Electron avec relais système" if message_auth.get("actions_systeme_via_renderer") is True
+                 else "pont système natif" if appareil_id.endswith("-systeme") else "application")
 
     try:
         while True:

@@ -33,6 +33,7 @@ from fastapi import WebSocket
 # QUELLE connexion precise a declenche quel changement), meme si
 # l'execution d'action (ce fichier) ne cible jamais un appareil precis.
 _connexions: dict[tuple[str, str], WebSocket] = {}
+_relais_systeme: set[tuple[str, str]] = set()
 _verrou_connexions = asyncio.Lock()
 _verrous_envoi: dict[tuple[str, str], asyncio.Lock] = {}
 
@@ -96,13 +97,17 @@ async def _verrou_envoi_pour(cle: tuple[str, str]) -> asyncio.Lock:
         return verrou
 
 
-async def connecter(user_id: str, appareil_id: str, websocket: WebSocket) -> None:
+async def connecter(user_id: str, appareil_id: str, websocket: WebSocket,
+                    actions_systeme_via_renderer: bool = False) -> None:
     global _boucle_evenements
     _boucle_evenements = asyncio.get_running_loop()
     cle = (user_id, appareil_id)
     async with _verrou_connexions:
         ancienne = _connexions.get(cle)
         _connexions[cle] = websocket
+        _relais_systeme.discard(cle)
+        if actions_systeme_via_renderer:
+            _relais_systeme.add(cle)
     if ancienne is not None and ancienne is not websocket:
         try:
             await ancienne.close()
@@ -115,6 +120,7 @@ async def deconnecter(user_id: str, appareil_id: str, websocket: WebSocket) -> N
     async with _verrou_connexions:
         if _connexions.get(cle) is websocket:
             del _connexions[cle]
+            _relais_systeme.discard(cle)
             _verrous_envoi.pop(cle, None)
             # Chantier D : une connexion fermee n'a plus rien de monte a
             # l'ecran, son etat pousse serait perime -- le retirer plutot
@@ -198,6 +204,7 @@ def obtenir_etat_editeur(user_id: str) -> dict[str, Any] | None:
 # calme apres un changement du DOM avant de repousser (voir
 # lib/canalAgentApplicatif.ts), plus le temps de l'animation.
 DELAI_OBSERVATION_ECRAN_SECONDES = 0.9
+
 # Lot U (lire_page) : taille maximale, en caracteres, du texte lu dans la
 # page de l'etudiant. Valeur de depart, pas une limite produit tranchee
 # avec Bourama (a valider) : environ 2000 tokens. Gardee ICI seulement :
@@ -289,6 +296,14 @@ async def _diffuser_et_attendre(
     """
     async with _verrou_connexions:
         connexions = [(cle, ws) for cle, ws in _connexions.items() if cle[0] == user_id]
+
+        if "action_systeme" in message:
+            # Un seul chemin par PC : le renderer principal appelle le plugin
+            # par IPC. La seconde WS reste compatible avec les anciennes apps.
+            relais = [(cle, ws) for cle, ws in connexions if cle in _relais_systeme]
+            if relais:
+                connexions = relais
+                message = {**message, "via_renderer": True}
 
     if not connexions:
         return None
@@ -422,6 +437,51 @@ async def demander_ecriture_champ(user_id: str, action_id: str, texte: str, on_s
         on_statut,
         on_timeout_log=f"ecriture action={action_id}",
     )
+
+
+async def demander_action_systeme(
+    user_id: str, type_action: str, parametres: dict, on_statut=None
+) -> Any | None:
+    """
+    Lot S (27/09/2026, chantier "canal en direct sort de l'appli" --
+    voir plan-canal-en-direct-pc.md). Meme principe exact que
+    demander_execution_action/demander_ecriture_champ ci-dessus, mais
+    pour une action HORS du DOM de la page Classinus : clic a des
+    coordonnees d'ecran, frappe clavier, ouverture d'application,
+    lecture d'ecran. Diffuse {action_systeme, parametres} a toutes les
+    connexions actives de user_id -- la fenetre principale web/DOM et
+    une eventuelle connexion mobile l'ignorent naturellement puisqu'elles
+    ne reconnaissent pas ce type de message ; seule la connexion Electron
+    dediee au systeme (deuxieme connexion WebSocket ouverte par le
+    processus principal Electron, appareil_id distinct de la fenetre
+    principale -- voir capacitor-dossiers-electron et
+    canal-systeme-electron cote clovis-frontend) sait l'executer
+    reellement.
+
+    type_action attendus pour l'instant (a etendre au meme endroit si
+    de nouveaux types sont ajoutes cote Electron) : "cliquer_ecran"
+    ({x, y}), "taper_clavier" ({texte}), "ouvrir_application" ({nom}),
+    "lire_ecran" ({nb_max_elements, nb_max_fenetres, longueur_max_nom,
+    longueur_max_valeur, profondeur_max, delai_max_ms}, voir
+    core/outils_action_agent_pc.py).
+
+    Pas de confirmation etudiant pour ce lot (decision Bourama du
+    27/09/2026, comme le reste du canal depuis le 19/09/2026) -- le
+    point d'ancrage pour l'ajouter plus tard, si demande, est ici,
+    avant l'appel a _diffuser_et_attendre.
+    """
+    correlation_id = str(uuid.uuid4())
+    return await _diffuser_et_attendre(
+        user_id,
+        {"id": correlation_id, "action_systeme": type_action, "parametres": parametres},
+        on_statut,
+        on_timeout_log=f"action_systeme={type_action}",
+    )
+
+
+async def demander_pointage_ecran(user_id: str, x: int, y: int) -> Any | None:
+    """Même transport PC que lire_ecran ; l'action reste purement visuelle."""
+    return await demander_action_systeme(user_id, "pointer_ecran", {"x": x, "y": y})
 
 
 async def demander_lecture_page(user_id: str, on_statut=None) -> Any | None:

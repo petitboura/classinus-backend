@@ -215,6 +215,12 @@ MESSAGES_FR: dict[str, str] = {
     "RATTACHEMENT_INTROUVABLE": "Rattachement introuvable.",
     "FICHIER_VECTORISATION_ECHEC": "« {nom} » n'a pas pu être vectorisé.",
     "FICHIER_INTROUVABLE": "Fichier introuvable.",
+    # 09/10/2026, relais des PDF Internet Archive (api/fichiers_archive.py).
+    "DOCUMENT_ARCHIVE_INTROUVABLE": "Ce document est introuvable sur Internet Archive.",
+    "DOCUMENT_ARCHIVE_RESTREINT": "Ce document est en prêt numérique : il ne peut pas être ouvert ici. Utilise le lien de sa page Internet Archive.",
+    "DOCUMENT_ARCHIVE_SANS_PDF": "Ce document n'a pas de PDF à ouvrir.",
+    "DOCUMENT_ARCHIVE_TROP_GROS": "Ce PDF est trop gros pour être ouvert ici. Utilise le lien de sa page Internet Archive.",
+    "ARCHIVE_INDISPONIBLE": "Internet Archive ne répond pas pour le moment, réessaie dans un instant.",
     "CE_FICHIER_NE_T_APPARTIENT_PAS": "Ce fichier ne t'appartient pas.",
     "FICHIER_PAS_EN_ECHEC": "Ce fichier n'est pas en échec, rien à réessayer.",
     "ENTREE_INTROUVABLE": "Entrée introuvable.",

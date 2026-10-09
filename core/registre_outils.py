@@ -401,6 +401,13 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "rechercher_video": {"label": "Recherche de vidéo", "icone": "Video", "onglet": "rechercher"},
     # Ajouté 07/10 : lecture de ce qui est dit dans une vidéo YouTube (sous-titres).
     "lire_video": {"label": "Lecture d'une vidéo", "icone": "FileSearch", "onglet": "rechercher"},
+    # Ajouté 09/10/2026 (demande Bourama, lot 1 du chantier Internet Archive) :
+    # recherche d'un livre ou d'un PDF hors de Classinus, catégorie
+    # documents_externes. Icône "Landmark" vérifiée dans lucide-react 0.383.0
+    # (la version du frontend), et distincte de toutes les autres du registre.
+    "rechercher_document_externe": {"label": "Recherche de document", "icone": "Landmark", "onglet": "rechercher"},
+    # Ajouté 09/10 : lecture du texte d'un livre ou PDF Internet Archive (lot 2).
+    "lire_document_internet_archive": {"label": "Lecture d'un document", "icone": "Glasses", "onglet": "rechercher"},
     # gerer_document_bibliotheque (consolidé le 26/08, ex 12 outils
     # séparés -- consulter_bibliotheque, consulter_bibliotheque_publique,
     # lister/ajouter/supprimer/classer/déclasser/ranger/retirer/lire_entier,
@@ -681,8 +688,17 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "montrer_element_application": {"label": "Pointer un élément", "icone": "Crosshair", "onglet": None},
     # Ecriture dans les champs (20/09/2026, demande Bourama), meme rappel de cache 24h.
     "ecrire_dans_champ": {"label": "Écriture dans un champ", "icone": "PenLine", "onglet": None},
-    # Lot U : lecture de la page Classinus, dans le canal applicatif existant.
+    # Lot U (28/09/2026) : lecture du texte visible de la page, meme rappel de cache 24h.
     "lire_page": {"label": "Lecture de la page", "icone": "Eye", "onglet": None},
+    # Lot S (canal en direct sur PC, 27/09/2026) : actions sur le systeme du PC via l'appli Electron,
+    # appelees par le modele, jamais cliquables a la main (onglet None), meme rappel de cache 24h.
+    "cliquer_ecran": {"label": "Clic à l'écran", "icone": "MousePointer2", "onglet": None},
+    "pointer_ecran": {"label": "Pointage à l'écran", "icone": "Crosshair", "onglet": None},
+    "marquer_ecran": {"label": "Marque à l'écran", "icone": "Highlighter", "onglet": None},
+    "taper_clavier": {"label": "Saisie au clavier", "icone": "Keyboard", "onglet": None},
+    "appuyer_touches": {"label": "Raccourci clavier", "icone": "Command", "onglet": None},
+    "ouvrir_application": {"label": "Ouverture d'une application", "icone": "AppWindow", "onglet": None},
+    "lire_ecran": {"label": "Lecture de l'écran", "icone": "Eye", "onglet": None},
     # Editeur de code (28/09/2026, demande Bourama), meme rappel de cache 24h.
     "lire_editeur": {"label": "Lecture de l'éditeur de code", "icone": "FileCode", "onglet": None},
     "montrer_dans_editeur": {"label": "Montrer dans l'éditeur", "icone": "Crosshair", "onglet": None},
@@ -839,6 +855,12 @@ CATEGORIES_OUTILS = {
         "gerer_programme_catalogue_public",  # 22/09/2026
         "ajouter_commentaire_catalogue_public", "supprimer_commentaire_catalogue_public",  # 22/09/2026
     ],
+    # Livres et PDF trouvés HORS de Classinus (Internet Archive), 09/10/2026,
+    # demande Bourama. Catégorie à part : rangés dans recherche_web ou
+    # catalogue_public, ces outils seraient confondus avec la recherche web ou
+    # avec le catalogue interne (le modèle ouvrirait le catalogue public pour
+    # un livre qui n'y est pas).
+    "documents_externes": ["rechercher_document_externe", "lire_document_internet_archive"],
     "base_connaissance": ["gerer_base_connaissance"],
     "pedagogie": [
         "gerer_avancement_notions", "consulter_avancement_notion",
@@ -868,8 +890,9 @@ CATEGORIES_OUTILS = {
     "agent_applicatif": [
         "executer_action_application",
         "executer_clic_generique", "montrer_element_application", "ecrire_dans_champ",
-        "lire_editeur", "montrer_dans_editeur", "ecrire_dans_editeur",
         "lire_page",
+        "pointer_ecran", "marquer_ecran", "cliquer_ecran", "taper_clavier", "appuyer_touches", "ouvrir_application", "lire_ecran",
+        "lire_editeur", "montrer_dans_editeur", "ecrire_dans_editeur",
         "desactiver_canal_en_direct",
     ],
     "github": ["gerer_depot_github"],
@@ -893,7 +916,8 @@ NOMS_CATEGORIES_OUTILS = list(CATEGORIES_OUTILS.keys()) + list(CATEGORIES_OUTILS
 INDEX_CATEGORIES_OUTILS = (
     "Catégories : notion, google_drive, github, generation_documents, "
     "recherche_web (web + recherche d'image), bibliotheque (documents/dossiers "
-    "personnels), catalogue_public, base_connaissance (Classinus lui même), "
+    "personnels), catalogue_public, documents_externes (livres et PDF "
+    "d'Internet Archive, hors de Classinus), base_connaissance (Classinus lui même), "
     "pedagogie (avancement, signalements), comportement (skills), memoire, "
     "telephone_etudiant (mobile, écran, concentration), historique "
     "(conversations passées), agent_applicatif (actions dans l'appli), minuteur (minuteurs dans le chat)."
