@@ -209,6 +209,11 @@ def _charger_document(identifiant):
     taille_texte_max = _entier_env("LECTURE_ARCHIVE_TEXTE_TAILLE_MAX", 40 * 1024 * 1024)
     taille_pdf_max = _entier_env("LECTURE_ARCHIVE_PDF_TAILLE_MAX", 25 * 1024 * 1024)
 
+    fichier_pdf = _choisir_fichier_pdf(fichiers)
+    # Lot 3 : un PDF ouvrable dans le visionneur (relais du backend) s'il
+    # n'est pas plus gros que le plafond du relais.
+    plafond_relais = _entier_env("ARCHIVE_RELAIS_TAILLE_MAX", 500 * 1024 * 1024)
+    pdf_visionneur = bool(fichier_pdf) and (_taille_fichier(fichier_pdf) or 0) <= plafond_relais
     raison_texte = None
     fichier_texte = _choisir_fichier_texte(fichiers)
     if fichier_texte:
@@ -216,7 +221,7 @@ def _charger_document(identifiant):
             octets = _telecharger(identifiant, fichier_texte["name"], taille_texte_max)
             texte = _nettoyer_texte(octets.decode("utf-8", errors="replace"))
             if texte:
-                return {"texte": texte, "titre": str(titre), "origine": "texte"}
+                return {"texte": texte, "titre": str(titre), "origine": "texte", "pdf_visionneur": pdf_visionneur}
             logging.info(f"LECTURE ARCHIVE ({identifiant}) : fichier texte vide, essai du PDF")
         except _DocumentIllisible as e:
             if str(e) == "acces_reserve":
@@ -224,7 +229,6 @@ def _charger_document(identifiant):
             raison_texte = str(e)
             logging.info(f"LECTURE ARCHIVE ({identifiant}) : texte inutilisable ({e}), essai du PDF")
 
-    fichier_pdf = _choisir_fichier_pdf(fichiers)
     if fichier_pdf:
         taille = _taille_fichier(fichier_pdf)
         if taille and taille > taille_pdf_max:
@@ -234,7 +238,7 @@ def _charger_document(identifiant):
 
         texte = _nettoyer_texte(extraire_texte_pdf(octets))
         if texte:
-            return {"texte": texte, "titre": str(titre), "origine": "pdf"}
+            return {"texte": texte, "titre": str(titre), "origine": "pdf", "pdf_visionneur": pdf_visionneur}
 
     raise _DocumentIllisible(raison_texte if raison_texte == "trop_gros" else "aucun_texte")
 
@@ -266,6 +270,17 @@ def _explication_illisible(identifiant, raison):
     return f"{raison} Lien de la page : {page} ."
 
 
+def _lien_visionneur(identifiant):
+    """Lien du PDF dans le visionneur (relais du lot 3), ou None si l'adresse du backend est inconnue."""
+    try:
+        from core.relais_pdf_archive import url_visionneur
+        from core.stockage_r2 import R2_PUBLIC_BASE_URL
+
+        return url_visionneur(identifiant, R2_PUBLIC_BASE_URL) if R2_PUBLIC_BASE_URL else None
+    except Exception:
+        return None
+
+
 def _tranche(identifiant, infos, a_partir_du_caractere):
     texte = infos["texte"]
     total = len(texte)
@@ -292,6 +307,12 @@ def _tranche(identifiant, infos, a_partir_du_caractere):
         )
     else:
         entete += "Cette tranche va jusqu'à la fin du document. "
+    lien_pdf = _lien_visionneur(identifiant) if infos.get("pdf_visionneur") else None
+    if lien_pdf:
+        entete += (
+            f"Si l'étudiant veut ouvrir le PDF, écris son lien en markdown [titre]({lien_pdf}) avec cette "
+            f"adresse exacte, sans la modifier : il s'ouvre dans le visionneur du chat. "
+        )
     entete += (
         "Le texte vient d'une numérisation : il peut contenir des erreurs de lecture. "
         "Base-toi uniquement sur ce texte, sans rien inventer au delà, et donne le lien de la page."
