@@ -401,6 +401,11 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "rechercher_video": {"label": "Recherche de vidéo", "icone": "Video", "onglet": "rechercher"},
     # Ajouté 07/10 : lecture de ce qui est dit dans une vidéo YouTube (sous-titres).
     "lire_video": {"label": "Lecture d'une vidéo", "icone": "FileSearch", "onglet": "rechercher"},
+    # Ajouté 09/10/2026 (demande Bourama, lot 1 du chantier Internet Archive) :
+    # recherche d'un livre ou d'un PDF hors de Classinus, catégorie
+    # documents_externes. Icône "Landmark" vérifiée dans lucide-react 0.383.0
+    # (la version du frontend), et distincte de toutes les autres du registre.
+    "rechercher_document_externe": {"label": "Recherche de document", "icone": "Landmark", "onglet": "rechercher"},
     # gerer_document_bibliotheque (consolidé le 26/08, ex 12 outils
     # séparés -- consulter_bibliotheque, consulter_bibliotheque_publique,
     # lister/ajouter/supprimer/classer/déclasser/ranger/retirer/lire_entier,
@@ -839,6 +844,12 @@ CATEGORIES_OUTILS = {
         "gerer_programme_catalogue_public",  # 22/09/2026
         "ajouter_commentaire_catalogue_public", "supprimer_commentaire_catalogue_public",  # 22/09/2026
     ],
+    # Livres et PDF trouvés HORS de Classinus (Internet Archive), 09/10/2026,
+    # demande Bourama. Catégorie à part : rangés dans recherche_web ou
+    # catalogue_public, ces outils seraient confondus avec la recherche web ou
+    # avec le catalogue interne (le modèle ouvrirait le catalogue public pour
+    # un livre qui n'y est pas).
+    "documents_externes": ["rechercher_document_externe"],
     "base_connaissance": ["gerer_base_connaissance"],
     "pedagogie": [
         "gerer_avancement_notions", "consulter_avancement_notion",
@@ -893,7 +904,8 @@ NOMS_CATEGORIES_OUTILS = list(CATEGORIES_OUTILS.keys()) + list(CATEGORIES_OUTILS
 INDEX_CATEGORIES_OUTILS = (
     "Catégories : notion, google_drive, github, generation_documents, "
     "recherche_web (web + recherche d'image), bibliotheque (documents/dossiers "
-    "personnels), catalogue_public, base_connaissance (Classinus lui même), "
+    "personnels), catalogue_public, documents_externes (livres et PDF "
+    "d'Internet Archive, hors de Classinus), base_connaissance (Classinus lui même), "
     "pedagogie (avancement, signalements), comportement (skills), memoire, "
     "telephone_etudiant (mobile, écran, concentration), historique "
     "(conversations passées), agent_applicatif (actions dans l'appli), minuteur (minuteurs dans le chat)."
