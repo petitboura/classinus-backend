@@ -205,6 +205,7 @@ donc ça marche aussi sur téléphone.
 | `GITHUB_TOKEN` (optionnel) | `core/serveur_mcp_github.py` — sans lui, l'API GitHub non authentifiée est plafonnée à 60 requêtes/heure PAR IP ; un classic token `public_repo` fait passer la limite à 5000/heure |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | `connexions/oauth_generique.py` (connexion OAuth GitHub par agent) |
 | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `DEEPSEEK_API_KEY` | `core/fournisseurs_llm.py` (LLM premium optionnels — absents, seuls Gemini/DeepSeek de secours restent proposés) |
+| `TYPESAFE_API_KEY` (optionnel) | `core/client_jev.py` (Jev, modèle de décision structurée de TypeSafe AI, pour le canal en direct) ; absente, aucun client n'est créé et le canal garde son fonctionnement actuel. Réglages facultatifs : `TYPESAFE_MODEL` (défaut `jev-1.13.0`), `TYPESAFE_BASE_URL`, `TYPESAFE_DELAI_MAX_S`, `TYPESAFE_NB_REESSAIS`, `TYPESAFE_LONGUEUR_MAX_STATE` |
 | `TOGETHER_API_KEY` | `core/generation_images.py` (meilleure fiabilité que le fournisseur par défaut) |
 | `FAL_KEY` | `core/generation_3d.py`, `core/generation_video.py` — absente en prod, ces deux outils sont désactivés (`disponible=false`) |
 | `GOOGLE_TTS_API_KEY` / `AUDIO_TTS_ACTIF` | `core/generation_audio.py` — absentes en prod, `generer_audio` désactivé |
