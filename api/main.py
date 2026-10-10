@@ -771,6 +771,15 @@ class GZipSaufChat:
     flush inutile, à l'encontre du réglage anti-buffering déjà en place
     (X-Accel-Buffering: no, voir api/chat.py). D'où l'exclusion
     explicite plutôt qu'un GZipMiddleware appliqué partout.
+
+    11/10/2026, demande Bourama : /fichiers/ (fichiers stockés, PDF des
+    archives, fichiers relayés de sites externes) est exclu aussi. Ce sont des
+    PDF, images, vidéos et archives, déjà compressés ou presque, et la
+    compression en route change Content-Length (taille compressée) alors que le
+    navigateur reçoit les octets décompressés : le pourcentage de
+    téléchargement ne pouvait plus être calculé, la barre restait en
+    "Préparation" jusqu'à la fin. Elle gênait aussi les requêtes Range des
+    lecteurs audio, vidéo et PDF.
     """
 
     def __init__(self, app):
@@ -778,7 +787,7 @@ class GZipSaufChat:
         self._app_gzip = GZipMiddleware(app, minimum_size=500)
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] == "http" and scope["path"].startswith("/api/chat"):
+        if scope["type"] == "http" and scope["path"].startswith(("/api/chat", "/fichiers/")):
             await self._app_brut(scope, receive, send)
         else:
             await self._app_gzip(scope, receive, send)
