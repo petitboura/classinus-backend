@@ -52,7 +52,7 @@ def _construire_document(brut):
     if analyse.scheme != "https" or not analyse.hostname:
         return None  # jamais de lien inventé ou douteux
     identifiant = texte_ou_none(brut.get("docid")) or analyse.path.strip("/")
-    return {
+    document = {
         "titre": texte_ou_none(brut.get("title_s"), maximum=1) or url,
         "auteur": texte_ou_none(brut.get("authFullName_s"), maximum=3),
         "annee": texte_ou_none(brut.get("producedDateY_i")),
@@ -61,6 +61,12 @@ def _construire_document(brut):
         "url": url,
         "acces": "libre",
     }
+    # Lien direct du fichier principal, pour le lecteur unique
+    # (core/lecture_document_externe.py). Absent si ce n'est pas un lien https.
+    fichier = texte_ou_none(brut.get("fileMain_s"), maximum=1)
+    if fichier and urlparse(fichier).scheme == "https" and urlparse(fichier).hostname:
+        document["url_fichier"] = fichier
+    return document
 
 
 def rechercher_documents(requete, nombre=None):

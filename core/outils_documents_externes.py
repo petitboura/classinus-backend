@@ -136,8 +136,10 @@ rechercher_document_externe.__doc__ = f"""
 
     Cet outil trouve et donne le lien, il ne lit pas le contenu du document.
     Pour lire le texte d'un document Internet Archive, utilise ensuite
-    lire_document_internet_archive. Les documents des autres sources ne
-    peuvent pas être lus pour l'instant : donne seulement leur lien, et ne
+    lire_document_internet_archive. Pour les documents des autres sources,
+    quand le champ url_fichier est présent (lien direct du fichier), utilise
+    ensuite lire_document_externe avec cette adresse exacte. Sans url_fichier,
+    le document ne peut pas être lu : donne seulement le lien de sa page. Ne
     prétends jamais avoir lu un livre que tu as seulement trouvé. Si rien
     n'est trouvé, dis le et propose de reformuler (autre titre, nom de
     l'auteur, autre langue). Paramètres : requete (mots clés de la recherche),

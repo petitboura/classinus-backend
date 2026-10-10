@@ -408,6 +408,8 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "rechercher_document_externe": {"label": "Recherche de document", "icone": "Landmark", "onglet": "rechercher"},
     # Ajouté 09/10 : lecture du texte d'un livre ou PDF Internet Archive (lot 2).
     "lire_document_internet_archive": {"label": "Lecture d'un document", "icone": "Glasses", "onglet": "rechercher"},
+    # Ajouté 10/10 : lecteur unique d'un fichier externe à partir de son lien direct.
+    "lire_document_externe": {"label": "Lecture d'un fichier externe", "icone": "Glasses", "onglet": "rechercher"},
     # gerer_document_bibliotheque (consolidé le 26/08, ex 12 outils
     # séparés -- consulter_bibliotheque, consulter_bibliotheque_publique,
     # lister/ajouter/supprimer/classer/déclasser/ranger/retirer/lire_entier,
@@ -860,7 +862,7 @@ CATEGORIES_OUTILS = {
     # catalogue_public, ces outils seraient confondus avec la recherche web ou
     # avec le catalogue interne (le modèle ouvrirait le catalogue public pour
     # un livre qui n'y est pas).
-    "documents_externes": ["rechercher_document_externe", "lire_document_internet_archive"],
+    "documents_externes": ["rechercher_document_externe", "lire_document_internet_archive", "lire_document_externe"],
     "base_connaissance": ["gerer_base_connaissance"],
     "pedagogie": [
         "gerer_avancement_notions", "consulter_avancement_notion",
