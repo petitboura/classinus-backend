@@ -492,6 +492,14 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
             "l'application elle-même (fonctionnement, bug, fonctionnalité) : dans ce "
             "cas, appelle gerer_base_connaissance directement dès la première "
             "recherche.\n"
+            "LIVRES ET PDF (10/10/2026, demande Bourama) : dès que l'étudiant veut "
+            "trouver un livre, un manuel, un PDF, une thèse ou un article, demande "
+            "d'abord la catégorie documents_externes, par réflexe, avant la recherche "
+            "web. Cette catégorie interroge plusieurs bibliothèques en ligne à la "
+            "fois. Ajoute la recherche web seulement si elle ne donne rien "
+            "d'utilisable (rien trouvé, ou seulement des livres sous prêt ou "
+            "restreints) ou si l'étudiant veut un PDF précis hébergé sur un site. "
+            "Quand tu fais les deux, dis d'où vient chaque lien.\n"
             "</outils>"
         )
 
