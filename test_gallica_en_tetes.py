@@ -65,13 +65,40 @@ def test_refus_403_trace_la_reponse_du_service(monkeypatch, caplog):
     assert "nginx" in trace[0] and "Access denied by security rules" in trace[0] and "\n" not in trace[0]
 
 
+def test_refus_cloudflare_titre_code_et_en_tetes(monkeypatch, caplog):
+    page = (
+        "<!DOCTYPE html><html><head><title>Access denied | gallica.bnf.fr used Cloudflare to restrict access</title>"
+        "<script>var x = 'secret-script';</script><style>.a{color:red}</style></head>"
+        "<body><h1>Error 1020</h1><p>You do not have access to gallica.bnf.fr.</p></body></html>"
+    )
+    entetes = {"Server": "cloudflare", "Content-Type": "text/html", "cf-mitigated": "challenge", "cf-ray": "abc123-CDG"}
+    _installer(monkeypatch, [Reponse(403, page, entetes)] * 2)
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(commun.ErreurRechercheSource):
+            commun.appeler_service("https://x.test", {}, "Gallica")
+    trace = next(m for m in caplog.messages if "refus 403" in m)
+    assert "cf-mitigated='challenge'" in trace and "cf-ray='abc123-CDG'" in trace
+    assert "used Cloudflare to restrict access" in trace and "code erreur='1020'" in trace
+    assert "You do not have access" in trace
+    assert "secret-script" not in trace and "color:red" not in trace and "<" not in trace.split("texte de la page")[1]
+
+
+def test_refus_sans_titre_ni_en_tetes_cloudflare(monkeypatch, caplog):
+    _installer(monkeypatch, [Reponse(403, "Forbidden")] * 2)
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(commun.ErreurRechercheSource):
+            commun.appeler_service("https://x.test", {}, "HAL")
+    trace = next(m for m in caplog.messages if "refus 403" in m)
+    assert "titre=None" in trace and "code erreur=None" in trace and "cf-mitigated=None" in trace
+
+
 def test_trace_coupee_a_300_caracteres(monkeypatch, caplog):
     _installer(monkeypatch, [Reponse(403, "a" * 5000)] * 2)
     with caplog.at_level(logging.ERROR):
         with pytest.raises(commun.ErreurRechercheSource):
             commun.appeler_service("https://x.test", {}, "Gallica")
     trace = next(m for m in caplog.messages if "refus 403" in m)
-    assert len(trace) < 600
+    assert len(trace) < 800
 
 
 def test_panne_5xx_et_succes_sans_trace_de_refus(monkeypatch, caplog):

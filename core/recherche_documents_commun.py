@@ -83,18 +83,30 @@ def nettoyer_requete(requete):
 def _consigner_refus(nom_source, reponse):
     """
     Trace dans les logs ce que le service a répondu quand il refuse la
-    demande (réponse 4xx hors 429) : l'en-tête Server, le type du contenu et
-    le début du texte renvoyé. Ajouté le 10/10/2026 : Gallica répond 403 depuis
+    demande (réponse 4xx hors 429) : l'en-tête Server, le type du contenu, les
+    en-têtes de Cloudflare (cf-mitigated vaut "challenge" quand c'est un défi
+    anti-robot, cf-ray identifie la demande), le titre de la page, un code
+    d'erreur de type 1020 s'il y en a un, et le début du texte visible. Ajouté le 10/10/2026 : Gallica répond 403 depuis
     Railway et le code seul ne dit pas pourquoi (blocage d'adresse, en-tête
     refusé, quota...). Le texte est coupé et mis sur une seule ligne.
     """
     try:
-        debut = " ".join((reponse.text or "").split())[:300]
+        page = reponse.text or ""
+        titre = re.search(r"<title[^>]*>(.*?)</title>", page, re.IGNORECASE | re.DOTALL)
+        titre = " ".join(titre.group(1).split())[:150] if titre else None
+        code = re.search(r"error\s*(?:code:?\s*)?(1\d{3})", page, re.IGNORECASE)
+        # Le texte visible de la page (sans scripts ni balises) : le début du HTML
+        # brut ne montre que des déclarations sans intérêt.
+        visible = re.sub(r"(?is)<(script|style)\b.*?</\1>", " ", page)
+        visible = " ".join(re.sub(r"(?s)<[^>]+>", " ", visible).split())[:300]
         logging.error(
             f"RECHERCHE DOCUMENTS ({nom_source}) : refus {reponse.status_code}, "
             f"Server={reponse.headers.get('Server')!r}, "
             f"Content-Type={reponse.headers.get('Content-Type')!r}, "
-            f"début de la réponse : {debut!r}"
+            f"cf-mitigated={reponse.headers.get('cf-mitigated')!r}, "
+            f"cf-ray={reponse.headers.get('cf-ray')!r}, "
+            f"titre={titre!r}, code erreur={code.group(1) if code else None!r}, "
+            f"texte de la page : {visible!r}"
         )
     except Exception:
         pass
