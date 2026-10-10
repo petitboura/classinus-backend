@@ -409,7 +409,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # Ajouté 09/10 : lecture du texte d'un livre ou PDF Internet Archive (lot 2).
     "lire_document_internet_archive": {"label": "Lecture d'un document", "icone": "Glasses", "onglet": "rechercher"},
     # Ajouté 10/10 : lecteur unique d'un fichier externe à partir de son lien direct.
-    "lire_document_externe": {"label": "Lecture d'un fichier externe", "icone": "Glasses", "onglet": "rechercher"},
+    "lire_document_externe": {"label": "Lecture d'un fichier externe", "icone": "ScanText", "onglet": "rechercher"},
     # gerer_document_bibliotheque (consolidé le 26/08, ex 12 outils
     # séparés -- consulter_bibliotheque, consulter_bibliotheque_publique,
     # lister/ajouter/supprimer/classer/déclasser/ranger/retirer/lire_entier,
