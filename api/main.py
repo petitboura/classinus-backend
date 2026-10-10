@@ -752,6 +752,12 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # 10/10/2026, demande Bourama : le frontend affiche le pourcentage d'un
+    # téléchargement. Sans cette liste, le navigateur masque ces en-têtes aux
+    # appels venant d'un autre domaine (Content-Length illisible, donc pas de
+    # pourcentage). Content-Encoding permet de savoir si la taille annoncée est
+    # celle d'un fichier compressé en route (alors pas de pourcentage trompeur).
+    expose_headers=["Content-Length", "Content-Encoding", "Content-Range", "Content-Disposition", "Accept-Ranges"],
 )
 
 
