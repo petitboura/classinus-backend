@@ -915,11 +915,29 @@ NOMS_CATEGORIES_OUTILS = list(CATEGORIES_OUTILS.keys()) + list(CATEGORIES_OUTILS
 # Texte compact envoye dans la description de demander_outils (voir
 # routage_outils._outil_demander_outils) : les categories evidentes sont
 # nommees seules, les autres ont une parenthese pour lever l'ambiguite.
+
+
+def _sources_documents_externes_pour_index():
+    """
+    Noms des sources de documents externes actives, lus dans leur registre
+    (core/sources_documents_externes.py) au lieu d'etre ecrits ici : ajouter
+    ou desactiver une source change l'index sans toucher ce fichier. Import
+    fait ici et non en haut du fichier : ce module ne contient que des
+    donnees, il ne doit pas tirer les modules de recherche tant qu'on n'en
+    a pas besoin.
+    """
+    from core.sources_documents_externes import noms_sources
+
+    return ", ".join(noms_sources())
+
+
 INDEX_CATEGORIES_OUTILS = (
     "Catégories : notion, google_drive, github, generation_documents, "
-    "recherche_web (web + recherche d'image), bibliotheque (documents/dossiers "
-    "personnels), catalogue_public, documents_externes (livres et PDF "
-    "d'Internet Archive, hors de Classinus), base_connaissance (Classinus lui même), "
+    "recherche_web (web, actualité, images et vidéos ; pas le premier réflexe "
+    "pour trouver un livre ou un PDF), bibliotheque (documents/dossiers "
+    "personnels), catalogue_public, documents_externes (TOUT livre, manuel, PDF, "
+    "thèse ou article à trouver en ligne, hors de Classinus ; sources : "
+    f"{_sources_documents_externes_pour_index()}), base_connaissance (Classinus lui même), "
     "pedagogie (avancement, signalements), comportement (skills), memoire, "
     "telephone_etudiant (mobile, écran, concentration), historique "
     "(conversations passées), agent_applicatif (actions dans l'appli), minuteur (minuteurs dans le chat)."

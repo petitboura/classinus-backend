@@ -117,6 +117,16 @@ rechercher_document_externe.__doc__ = f"""
 
     {_CONSIGNE_SOURCES}
 
+    C'est le premier réflexe dès que l'étudiant veut trouver un livre, un
+    manuel, un PDF, une thèse ou un article : utilise cet outil AVANT la
+    recherche web, pas à sa place. N'ajoute tavily_search qu'en complément,
+    dans deux cas : cet outil ne renvoie rien d'utilisable (aucun résultat,
+    ou seulement des livres sous prêt numérique ou restreints), ou l'étudiant
+    veut un PDF précis hébergé sur un site (une université, un éditeur, un
+    site de cours) ou une information récente (nouvelle édition, où l'acheter)
+    que ces bibliothèques ne donnent pas. Quand tu utilises les deux, dis à
+    l'étudiant d'où vient chaque lien.
+
     Écris le lien de chaque document en markdown [titre](url) avec l'url
     exacte du résultat, sans jamais l'inventer ni la modifier. Indique la
     source du document quand c'est utile. Le champ acces est une indication,
@@ -138,7 +148,10 @@ rechercher_document_externe.__doc__ = f"""
     Pour lire le texte d'un document Internet Archive, utilise ensuite
     lire_document_internet_archive. Pour les documents des autres sources,
     quand le champ url_fichier est présent (lien direct du fichier), utilise
-    ensuite lire_document_externe avec cette adresse exacte. Sans url_fichier,
+    ensuite lire_document_externe avec cette adresse exacte. Le lien
+    url_fichier peut être donné à l'étudiant quel que soit le type du fichier
+    (PDF, image, son, vidéo, livre numérique), même quand
+    lire_document_externe ne sait pas en lire le contenu. Sans url_fichier,
     le document ne peut pas être lu : donne seulement le lien de sa page. Ne
     prétends jamais avoir lu un livre que tu as seulement trouvé. Si rien
     n'est trouvé, dis le et propose de reformuler (autre titre, nom de

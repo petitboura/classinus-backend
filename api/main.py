@@ -752,7 +752,16 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # 10/10/2026, demande Bourama : le frontend affiche le pourcentage d'un
+    # téléchargement. Sans cette liste, le navigateur masque ces en-têtes aux
+    # appels venant d'un autre domaine (Content-Length illisible, donc pas de
+    # pourcentage). Content-Encoding permet de savoir si la taille annoncée est
+    # celle d'un fichier compressé en route (alors pas de pourcentage trompeur).
+    expose_headers=["Content-Length", "Content-Encoding", "Content-Range", "Content-Disposition", "Accept-Ranges"],
 )
+
+
+_CHEMINS_SANS_GZIP = ("/api/chat", "/fichiers/r2/", "/fichiers/externe/", "/fichiers/archive/")
 
 
 class GZipSaufChat:
@@ -765,6 +774,12 @@ class GZipSaufChat:
     flush inutile, à l'encontre du réglage anti-buffering déjà en place
     (X-Accel-Buffering: no, voir api/chat.py). D'où l'exclusion
     explicite plutôt qu'un GZipMiddleware appliqué partout.
+
+    Les routes qui servent des fichiers (/fichiers/r2, /fichiers/externe,
+    /fichiers/archive) sont aussi exclues : Word, Excel, PDF, ZIP et médias
+    sont déjà compressés, les recompresser coûte du processeur sur l'unique
+    processus du backend et fait disparaître la taille totale (en-tête
+    Content-Length), donc le pourcentage de téléchargement affiché dans l'appli.
     """
 
     def __init__(self, app):
@@ -772,7 +787,7 @@ class GZipSaufChat:
         self._app_gzip = GZipMiddleware(app, minimum_size=500)
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] == "http" and scope["path"].startswith("/api/chat"):
+        if scope["type"] == "http" and scope["path"].startswith(_CHEMINS_SANS_GZIP):
             await self._app_brut(scope, receive, send)
         else:
             await self._app_gzip(scope, receive, send)
