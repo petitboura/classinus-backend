@@ -12,8 +12,11 @@ depuis api.classinus.com, l'origine de confiance du site) :
   utilisateur connecte (voir api/fichiers_externes.py). Le relais n'est donc pas
   un proxy ouvert : on ne peut pas lui faire relayer une adresse choisie librement.
 - Le type est verifie sur les premiers octets du fichier (signature), jamais
-  d'apres l'en-tete du site distant. Seuls PDF, Office, images raster et texte brut
-  passent. Jamais HTML, SVG, XML ni script.
+  d'apres l'en-tete du site distant. Passent : documents (PDF, Office, OpenDocument,
+  RTF), livres numeriques (EPUB, MOBI, DjVu), images raster, audio, video, archives
+  et texte brut (10/10/2026, demande Bourama : accepter tous les formats venus des
+  sources externes). Jamais HTML, SVG, XML, script ni programme : ces contenus
+  peuvent executer du code, et le relais les servirait depuis notre propre domaine.
 - Le Content-Type renvoye est impose par nous, avec nosniff et
   Content-Security-Policy sandbox : meme une erreur de tri ne peut pas executer un script.
 - Anti-SSRF refait a chaque redirection (valider_url_externe), redirections
@@ -28,7 +31,9 @@ taille et le refus de tout contenu non liste limitent ce que cela permettrait.
 
 Reglages par variables d'environnement :
 - RELAIS_EXTERNE_SECRET : cle de signature des liens (sinon derivee de SUPABASE_SECRET)
-- RELAIS_EXTERNE_TAILLE_MAX : plafond en octets (100 Mo par defaut)
+- RELAIS_EXTERNE_TAILLE_MAX : plafond en octets (500 Mo par defaut, une video depasse
+  vite 100 Mo ; l'import dans la bibliotheque garde son propre plafond, voir
+  api/bibliotheque_utilisateur.py)
 - RELAIS_EXTERNE_DELAI : delai d'attente du site distant en secondes (30)
 - RELAIS_EXTERNE_DUREE_LIEN : duree de validite d'un lien en secondes (3600)
 - RELAIS_EXTERNE_LIMITE : limite de debit par personne (voir api/fichiers_externes.py)
@@ -58,21 +63,68 @@ EN_TETES_EXPOSES = "Content-Range, Content-Length, Accept-Ranges"
 
 # Type impose par nous, jamais celui du site distant. Cle : type reconnu sur les octets.
 TYPES_AUTORISES = {
+    # Documents
     "pdf": "application/pdf",
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "zip": "application/zip",
+    "odt": "application/vnd.oasis.opendocument.text",
+    "ods": "application/vnd.oasis.opendocument.spreadsheet",
+    "odp": "application/vnd.oasis.opendocument.presentation",
+    "rtf": "application/rtf",
     "ole": "application/octet-stream",
+    "texte": "text/plain; charset=utf-8",
+    # Livres numeriques
+    "epub": "application/epub+zip",
+    "mobi": "application/x-mobipocket-ebook",
+    "djvu": "image/vnd.djvu",
+    # Archives (telechargement)
+    "zip": "application/zip",
+    "7z": "application/x-7z-compressed",
+    "rar": "application/vnd.rar",
+    "gz": "application/gzip",
+    # Images
     "png": "image/png",
     "jpg": "image/jpeg",
     "gif": "image/gif",
     "webp": "image/webp",
-    "texte": "text/plain; charset=utf-8",
+    "bmp": "image/bmp",
+    "tiff": "image/tiff",
+    "avif": "image/avif",
+    "heic": "image/heic",
+    # Audio
+    "mp3": "audio/mpeg",
+    "wav": "audio/wav",
+    "flac": "audio/flac",
+    "ogg": "audio/ogg",
+    "m4a": "audio/mp4",
+    "aac": "audio/aac",
+    "aiff": "audio/aiff",
+    "mid": "audio/midi",
+    # Video
+    "mp4": "video/mp4",
+    "mov": "video/quicktime",
+    "webm": "video/webm",
+    "mkv": "video/x-matroska",
+    "avi": "video/x-msvideo",
+    "ogv": "video/ogg",
+    "3gp": "video/3gpp",
+    "mpeg": "video/mpeg",
+    "flv": "video/x-flv",
+    "asf": "video/x-ms-asf",
 }
-_EXTENSIONS_TEXTE = {"txt", "csv", "md", "json", "tex"}
+
+# Familles de types : sert aux lecteurs qui ne lisent pas le contenu (une image,
+# un son ou une video n'a pas de texte a extraire).
+TYPES_IMAGE = frozenset({"png", "jpg", "gif", "webp", "bmp", "tiff", "avif", "heic"})
+TYPES_AUDIO = frozenset({"mp3", "wav", "flac", "ogg", "m4a", "aac", "aiff", "mid"})
+TYPES_VIDEO = frozenset({"mp4", "mov", "webm", "mkv", "avi", "ogv", "3gp", "mpeg", "flv", "asf"})
+TYPES_MEDIA = TYPES_IMAGE | TYPES_AUDIO | TYPES_VIDEO
+
+_EXTENSIONS_TEXTE = {"txt", "csv", "tsv", "md", "json", "tex", "srt", "vtt", "log"}
 _EXTENSIONS_OFFICE_OLE = {"doc": "ole", "xls": "ole", "ppt": "ole"}
-_EXTENSIONS_ZIP = {"docx", "xlsx", "pptx", "zip"}
+# Formats construits sur un zip : la signature est la meme, l'extension les departage.
+_EXTENSIONS_ZIP = {"docx", "xlsx", "pptx", "zip", "epub", "odt", "ods", "odp"}
 
 
 class ErreurRelais(Exception):
@@ -105,7 +157,7 @@ def _entier_env(nom, defaut):
 
 
 def plafond_octets():
-    return _entier_env("RELAIS_EXTERNE_TAILLE_MAX", 100 * 1024 * 1024)
+    return _entier_env("RELAIS_EXTERNE_TAILLE_MAX", 500 * 1024 * 1024)
 
 
 def duree_lien():
@@ -166,6 +218,7 @@ def type_depuis_octets(debut, nom_ou_url=""):
     """
     extension = (urlparse(nom_ou_url).path.rsplit(".", 1)[-1] if "." in urlparse(nom_ou_url).path else "").lower()
 
+    # Documents et images les plus courants
     if debut.startswith(b"%PDF-"):
         return "pdf"
     if debut.startswith(b"\x89PNG\r\n\x1a\n"):
@@ -174,14 +227,110 @@ def type_depuis_octets(debut, nom_ou_url=""):
         return "jpg"
     if debut.startswith((b"GIF87a", b"GIF89a")):
         return "gif"
-    if debut[:4] == b"RIFF" and debut[8:12] == b"WEBP":
-        return "webp"
     if debut.startswith(b"PK\x03\x04"):
         return extension if extension in _EXTENSIONS_ZIP else "zip"
     if debut.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
         return "ole" if extension in _EXTENSIONS_OFFICE_OLE else None
+
+    # Conteneurs RIFF : image WebP, son WAV, video AVI
+    if debut[:4] == b"RIFF":
+        sous_type = debut[8:12]
+        if sous_type == b"WEBP":
+            return "webp"
+        if sous_type == b"WAVE":
+            return "wav"
+        if sous_type == b"AVI ":
+            return "avi"
+        return None
+
+    # Famille MP4 (video, audio M4A, images AVIF et HEIC) : "ftyp" a l'octet 4
+    if debut[4:8] == b"ftyp":
+        return _type_famille_mp4(debut, extension)
+
+    # Autres videos
+    if debut.startswith(b"\x1a\x45\xdf\xa3"):  # Matroska et WebM
+        return "webm" if extension == "webm" else "mkv"
+    if debut.startswith(b"OggS"):
+        return "ogv" if extension in ("ogv", "ogm") else "ogg"
+    if debut.startswith(b"FLV\x01"):
+        return "flv"
+    if debut.startswith(b"\x30\x26\xb2\x75\x8e\x66\xcf\x11"):  # ASF (WMV, WMA)
+        return "asf"
+    if debut.startswith(b"\x00\x00\x01\xba"):  # MPEG (programme)
+        return "mpeg"
+
+    # Audio
+    if debut.startswith(b"fLaC"):
+        return "flac"
+    if debut.startswith(b"FORM") and debut[8:12] in (b"AIFF", b"AIFC"):
+        return "aiff"
+    if debut.startswith(b"MThd"):
+        return "mid"
+    son = _type_mp3_ou_aac(debut)
+    if son:
+        return son
+
+    # Livres numeriques et documents
+    if debut.startswith(b"AT&TFORM"):
+        return "djvu"
+    if len(debut) >= 68 and debut[60:68] == b"BOOKMOBI":
+        return "mobi"
+    if debut.startswith(b"{\\rtf"):
+        return "rtf"
+
+    # Images supplementaires
+    if debut.startswith((b"II*\x00", b"MM\x00*")):
+        return "tiff"
+    if debut.startswith(b"BM") and len(debut) >= 18 and int.from_bytes(debut[14:18], "little") in _TAILLES_ENTETE_BMP:
+        return "bmp"
+
+    # Archives (telechargement seulement)
+    if debut.startswith(b"7z\xbc\xaf\x27\x1c"):
+        return "7z"
+    if debut.startswith(b"Rar!\x1a\x07"):
+        return "rar"
+    if debut.startswith(b"\x1f\x8b\x08"):
+        return "gz"
+
+    # Texte brut : seulement si l'extension l'annonce ET que le contenu ressemble a du texte
     if extension in _EXTENSIONS_TEXTE:
         return "texte" if _ressemble_a_du_texte_brut(debut) else None
+    return None
+
+
+# Tailles possibles de l'en-tete d'une image BMP (octets 14 a 17) : evite de prendre
+# pour une image un fichier texte qui commence par "BM".
+_TAILLES_ENTETE_BMP = (12, 40, 52, 56, 64, 108, 124)
+
+
+def _type_famille_mp4(debut, extension):
+    """Type d'un fichier de la famille MP4, d'apres la marque de 4 lettres apres "ftyp"."""
+    marque = debut[8:12]
+    if marque in (b"M4A ", b"M4B ", b"M4P "):
+        return "m4a"
+    if marque == b"qt  ":
+        return "mov"
+    if marque in (b"avif", b"avis"):
+        return "avif"
+    if marque in (b"mif1", b"msf1"):
+        return "avif" if extension == "avif" else "heic"
+    if marque in (b"heic", b"heix", b"hevc", b"hevx", b"heim", b"heis"):
+        return "heic"
+    if marque.startswith(b"3g"):
+        return "3gp"
+    return "mp4"
+
+
+def _type_mp3_ou_aac(debut):
+    """"mp3" ou "aac" si le debut ressemble a un son MPEG, sinon None."""
+    if debut.startswith(b"ID3"):
+        return "mp3"
+    if len(debut) >= 2 and debut[0] == 0xFF and (debut[1] & 0xE0) == 0xE0:
+        version = (debut[1] >> 3) & 0x03
+        couche = (debut[1] >> 1) & 0x03
+        if version == 1:  # valeur reservee, pas un vrai son
+            return None
+        return "aac" if couche == 0 else "mp3"
     return None
 
 
@@ -277,19 +426,21 @@ def _debut_de_plage(reponse):
     return int(trouve.group(1)) if trouve else -1
 
 
-def inspecter(url):
+def inspecter(url, plafond=None):
     """
     Verifie un lien externe avant de delivrer un lien de relais : anti-SSRF, plafond
     de taille, et type reconnu sur les premiers octets. Renvoie un dict
     {type, nom, taille}. Lève ErreurRelais.
+    `plafond` : plafond propre a cet appel (en octets) ; sans lui, plafond_octets().
     """
+    plafond = plafond or plafond_octets()
     reponse, finale = _requete_amont(url, "GET", "bytes=0-4095")
     try:
         _verifier_statut(reponse)
         if reponse.status_code == 416:
             raise ErreurRelais(415, "TYPE_FICHIER_NON_AUTORISE")
         total = _taille_totale(reponse)
-        if total > plafond_octets():
+        if total > plafond:
             raise ErreurRelais(413, "FICHIER_EXTERNE_TROP_GROS")
         debut = b""
         for bloc in reponse.iter_content(4096):
@@ -340,8 +491,11 @@ def _nom_sur(nom):
     return propre or "fichier"
 
 
-def ouvrir_fichier_externe(jeton, nom_affiche, methode="GET", plage=None, telechargement=False):
-    """Ouvre le fichier du jeton pour le relayer. Renvoie un RelaisExterne ou lève ErreurRelais."""
+def ouvrir_fichier_externe(jeton, nom_affiche, methode="GET", plage=None, telechargement=False, plafond=None):
+    """
+    Ouvre le fichier du jeton pour le relayer. Renvoie un RelaisExterne ou lève ErreurRelais.
+    `plafond` : plafond propre a cet appel (en octets) ; sans lui, plafond_octets().
+    """
     url, type_reconnu = lire_jeton(jeton)
     if plage and not _REGEX_PLAGE.match(plage.strip()):
         plage = None  # une plage multiple ou mal formee est ignoree, jamais transmise
@@ -349,7 +503,7 @@ def ouvrir_fichier_externe(jeton, nom_affiche, methode="GET", plage=None, telech
     reponse, _ = _requete_amont(url, methode, plage.strip() if plage else None)
     _verifier_statut(reponse)
 
-    plafond = plafond_octets()
+    plafond = plafond or plafond_octets()
     total = _taille_totale(reponse)
     if total > plafond:
         reponse.close()

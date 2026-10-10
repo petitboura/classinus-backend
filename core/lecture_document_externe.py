@@ -32,6 +32,13 @@ Ce qui est propre à ce module :
   réponse le dit. Sans cette limite, un livre scanné de plusieurs centaines de
   pages lancerait autant de reconnaissances à la suite dans un seul appel.
 
+Le relais (core/relais_fichier_externe.py) accepte depuis le 10/10/2026 beaucoup
+plus de formats que ce lecteur (images, sons, vidéos, livres numériques,
+archives) pour les ouvrir dans le visionneur. Ce lecteur ne sait extraire du
+texte que de PDF, Word, Excel, PowerPoint et du texte brut : pour les autres types
+reconnus, il le dit dès les premiers octets (sans télécharger le reste) et
+demande de donner le lien.
+
 Le texte vient d'un site que nous ne contrôlons pas : la réponse rappelle au
 modèle de le traiter comme une donnée, jamais comme une consigne.
 
@@ -61,12 +68,20 @@ import time
 from urllib.parse import urlparse
 
 from core.relais_fichier_externe import (
+    TYPES_AUDIO,
+    TYPES_IMAGE,
+    TYPES_VIDEO,
     ErreurRelais,
     _requete_amont,
     _taille_totale,
     _verifier_statut,
     type_depuis_octets,
 )
+
+# Types dont on sait extraire du texte. Les autres types que le relais accepte
+# (images, sons, videos, livres numeriques, archives) n'ont pas de texte a lire
+# ici : on le dit des les premiers octets, sans telecharger le reste du fichier.
+_TYPES_LISIBLES = frozenset({"pdf", "docx", "xlsx", "pptx", "ole", "texte"})
 
 _TAILLE_BLOC_TELECHARGEMENT = 64 * 1024
 _NOMBRE_PASSAGES_MAX = 6
@@ -131,6 +146,17 @@ def _adresse_valide(texte):
     return texte
 
 
+def _code_type_non_lisible(type_reconnu):
+    """Code expliqué par _explication_illisible pour un type reconnu mais sans texte à lire."""
+    if type_reconnu in TYPES_IMAGE:
+        return "image"
+    if type_reconnu in TYPES_AUDIO:
+        return "audio"
+    if type_reconnu in TYPES_VIDEO:
+        return "video"
+    return "type_non_pris"
+
+
 def _ressemble_a_une_page_web(debut):
     tete = debut[:2048].lstrip(b"\xef\xbb\xbf \t\r\n").lower()
     return tete.startswith((b"<!doctype html", b"<html", b"<head", b"<body")) or b"<html" in tete[:1024]
@@ -159,6 +185,8 @@ def _telecharger(adresse):
             reconnu = type_depuis_octets(debut[:4096], finale) or type_depuis_octets(debut[:4096], adresse)
             if not reconnu:
                 raise _DocumentIllisible("page_web" if _ressemble_a_une_page_web(debut) else "type_non_pris")
+            if reconnu not in _TYPES_LISIBLES:
+                raise _DocumentIllisible(_code_type_non_lisible(reconnu))
             return reconnu
 
         for bloc in reponse.iter_content(_TAILLE_BLOC_TELECHARGEMENT):
@@ -290,6 +318,17 @@ def _explication_illisible(adresse, code):
         "type_non_pris": (
             "Ce fichier n'est pas dans un format que je sais lire (je lis les PDF, Word, Excel, PowerPoint "
             "et les fichiers texte). " + _consigne_lien(adresse)
+        ),
+        "image": (
+            "Ce fichier est une image : je ne peux pas en lire le contenu ici. " + _consigne_lien(adresse)
+        ),
+        "audio": (
+            "Ce fichier est un son : je ne peux pas en écouter ni en lire le contenu ici. "
+            + _consigne_lien(adresse)
+        ),
+        "video": (
+            "Ce fichier est une vidéo : je ne peux pas la regarder ni en lire le contenu ici. "
+            + _consigne_lien(adresse)
         ),
         "trop_gros": (
             "Ce fichier est trop gros pour être lu ici. " + _consigne_lien(adresse)

@@ -217,6 +217,20 @@ async def uploader_document(
 _LIMITE_DEPUIS_URL = os.environ.get("BIBLIOTHEQUE_DEPUIS_URL_LIMITE") or "20/minute"
 _EXTENSION_PAR_TYPE_EXTERNE = {"ole": "doc", "texte": "txt"}
 
+# 10/10/2026 : le relais (core/relais_fichier_externe.py) accepte maintenant tous
+# les formats pour l'apercu (video, audio, EPUB...) et un plafond de 500 Mo. L'import
+# dans la bibliotheque, lui, charge le fichier en memoire puis le vectorise : il garde
+# les types et le plafond d'avant, sans quoi une video de 500 Mo pourrait y entrer.
+_TYPES_IMPORT_DEPUIS_URL = frozenset({"pdf", "docx", "xlsx", "pptx", "ole", "png", "jpg", "gif", "webp", "texte"})
+
+
+def _taille_max_depuis_url():
+    try:
+        valeur = int(os.environ.get("BIBLIOTHEQUE_DEPUIS_URL_TAILLE_MAX", 100 * 1024 * 1024))
+        return valeur if valeur > 0 else 100 * 1024 * 1024
+    except (TypeError, ValueError):
+        return 100 * 1024 * 1024
+
 
 class CorpsFichierExterne(BaseModel):
     url: str
@@ -230,10 +244,12 @@ def _recuperer_fichier_externe(url: str, titre: str | None):
     a chaque redirection, type verifie sur les octets, plafond de taille).
     Renvoie (contenu, nom_de_fichier, type_mime). Leve ErreurRelais.
     """
-    infos = inspecter(url)
+    plafond = _taille_max_depuis_url()
+    infos = inspecter(url, plafond=plafond)
     type_reconnu = infos["type"]
-    if type_reconnu == "zip":
-        # Un zip serait deplie par la bibliotheque, ce n'est pas le cas d'usage ici.
+    if type_reconnu not in _TYPES_IMPORT_DEPUIS_URL:
+        # Hors liste : un zip serait deplie par la bibliotheque, et les videos, sons
+        # et livres numeriques ne sont pas lisibles pour la vectorisation.
         raise ErreurRelais(415, "TYPE_FICHIER_NON_AUTORISE")
     extension = _EXTENSION_PAR_TYPE_EXTERNE.get(type_reconnu, type_reconnu)
 
@@ -242,7 +258,7 @@ def _recuperer_fichier_externe(url: str, titre: str | None):
     if "." not in nom or nom.rsplit(".", 1)[-1].lower() != extension:
         nom = f"{nom}.{extension}"
 
-    relais = ouvrir_fichier_externe(creer_jeton(url, type_reconnu), nom, "GET", None, True)
+    relais = ouvrir_fichier_externe(creer_jeton(url, type_reconnu), nom, "GET", None, True, plafond=plafond)
     try:
         contenu = b"".join(relais.flux)
     finally:

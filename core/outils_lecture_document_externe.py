@@ -44,6 +44,9 @@ def lire_document_externe(url: str, a_partir_du_caractere: int = 0, rechercher: 
     le précise. Donne toujours le lien du fichier dans ta réponse. Si le
     fichier est en accès réservé, trop gros ou illisible, la réponse te le
     dit : dis-le clairement à l'étudiant avec le lien, sans rien inventer.
+    Une image, un son, une vidéo, un livre numérique ou une archive n'ont pas
+    de texte à lire ici : la réponse te le dit, donne alors seulement le lien
+    à l'étudiant, sans rien affirmer sur leur contenu.
     Paramètres : url (lien direct du fichier), a_partir_du_caractere (0 pour
     commencer au début), rechercher (mot ou expression à trouver, vide pour
     lire le texte).
