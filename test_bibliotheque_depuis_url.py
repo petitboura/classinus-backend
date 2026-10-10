@@ -94,6 +94,54 @@ class RecupererFichierExterne(unittest.TestCase):
         self.assertEqual(c.exception.statut, 415)
 
 
+class ImportGardeSesLimitesApresElargissementDuRelais(unittest.TestCase):
+    """Le relais accepte maintenant tous les formats et 500 Mo : l'import dans la bibliotheque, non."""
+
+    MP4 = b"\x00\x00\x00\x20ftypisom" + b"\x00" * 4000
+
+    def test_video_refusee_alors_que_le_relais_l_accepte(self):
+        from core import relais_fichier_externe as rel
+
+        with _site(contenu=self.MP4):
+            self.assertEqual(rel.inspecter("https://exemple.org/clip.mp4")["type"], "mp4")
+            with self.assertRaises(ErreurRelais) as c:
+                biblio._recuperer_fichier_externe("https://exemple.org/clip.mp4", None)
+        self.assertEqual(c.exception.statut, 415)
+
+    def test_epub_et_son_refuses(self):
+        for contenu, adresse in (
+            (b"PK\x03\x04" + b"0" * 4000, "https://exemple.org/livre.epub"),
+            (b"ID3\x04\x00\x00" + b"\x00" * 4000, "https://exemple.org/cours"),
+        ):
+            with self.subTest(adresse=adresse), _site(contenu=contenu):
+                with self.assertRaises(ErreurRelais) as c:
+                    biblio._recuperer_fichier_externe(adresse, None)
+            self.assertEqual(c.exception.statut, 415)
+
+    def test_plafond_de_100_mo_conserve_par_defaut(self):
+        trop_gros = {"Content-Length": str(150 * 1024 * 1024)}
+        with patch.dict(os.environ), _site(entetes=trop_gros):
+            os.environ.pop("BIBLIOTHEQUE_DEPUIS_URL_TAILLE_MAX", None)
+            os.environ.pop("RELAIS_EXTERNE_TAILLE_MAX", None)
+            with self.assertRaises(ErreurRelais) as c:
+                biblio._recuperer_fichier_externe("https://exemple.org/cours.pdf", None)
+        self.assertEqual(c.exception.statut, 413)
+
+    def test_plafond_reglable_par_variable(self):
+        annonce = {"Content-Length": str(150 * 1024 * 1024)}
+        with patch.dict(os.environ, {"BIBLIOTHEQUE_DEPUIS_URL_TAILLE_MAX": str(200 * 1024 * 1024)}), _site(entetes=annonce):
+            with self.assertRaises(ErreurRelais) as c:
+                biblio._recuperer_fichier_externe("https://exemple.org/cours.pdf", None)
+        # Le plafond est passe ; le fichier livre est plus petit que l'annonce : incomplet, pas trop gros.
+        self.assertEqual(c.exception.statut, 502)
+
+    def test_types_acceptes_inchanges(self):
+        self.assertEqual(
+            biblio._TYPES_IMPORT_DEPUIS_URL,
+            frozenset({"pdf", "docx", "xlsx", "pptx", "ole", "png", "jpg", "gif", "webp", "texte"}),
+        )
+
+
 class RouteDepuisUrl(unittest.TestCase):
     def setUp(self):
         from types import SimpleNamespace

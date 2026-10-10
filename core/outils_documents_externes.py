@@ -148,7 +148,10 @@ rechercher_document_externe.__doc__ = f"""
     Pour lire le texte d'un document Internet Archive, utilise ensuite
     lire_document_internet_archive. Pour les documents des autres sources,
     quand le champ url_fichier est présent (lien direct du fichier), utilise
-    ensuite lire_document_externe avec cette adresse exacte. Sans url_fichier,
+    ensuite lire_document_externe avec cette adresse exacte. Le lien
+    url_fichier peut être donné à l'étudiant quel que soit le type du fichier
+    (PDF, image, son, vidéo, livre numérique), même quand
+    lire_document_externe ne sait pas en lire le contenu. Sans url_fichier,
     le document ne peut pas être lu : donne seulement le lien de sa page. Ne
     prétends jamais avoir lu un livre que tu as seulement trouvé. Si rien
     n'est trouvé, dis le et propose de reformuler (autre titre, nom de

@@ -322,3 +322,61 @@ def test_outil_enregistre_dans_le_registre_et_la_categorie():
     assert "lire_document_externe" in reg.CATEGORIES_OUTILS["documents_externes"]
     infos = next(v for nom, v in vars(reg).items() if isinstance(v, dict) and "lire_document_internet_archive" in v)
     assert "lire_document_externe" in infos
+
+
+# Tous les formats (10/10/2026) : ce que le lecteur dit d'un fichier sans texte à lire
+
+class AmontCompte(Amont):
+    """Faux site qui compte les blocs réellement lus."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.blocs_lus = 0
+
+    def iter_content(self, taille):
+        for bloc in super().iter_content(taille):
+            self.blocs_lus += 1
+            yield bloc
+
+
+_MP4 = b"\x00\x00\x00\x20ftypisom" + b"\x00" * 4000
+_MP3 = b"ID3\x04\x00\x00" + b"\x00" * 4000
+_PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 4000
+_EPUB = b"PK\x03\x04" + b"0" * 4000
+
+
+@pytest.mark.parametrize(
+    "octets,adresse,mot",
+    [
+        (_MP4, "https://archive.org/download/x/film.mp4", "vidéo"),
+        (_MP3, "https://archive.org/download/x/cours.mp3", "son"),
+        (_PNG, "https://a.org/schema.png", "image"),
+    ],
+)
+def test_image_son_video_expliques_avec_le_lien(site, octets, adresse, mot):
+    site(Amont(octets))
+    texte = lecteur.lire_document_externe(adresse)
+    assert mot in texte and adresse in texte
+    assert "ne peux pas" in texte
+
+
+def test_epub_dit_format_non_lu_avec_le_lien(site):
+    site(Amont(_EPUB))
+    texte = lecteur.lire_document_externe("https://a.org/livre.epub")
+    assert "format que je sais lire" in texte and "https://a.org/livre.epub" in texte
+
+
+def test_video_non_telechargee_en_entier(site):
+    gros = _MP4 + b"\x00" * (5 * 1024 * 1024)
+    amont = AmontCompte(gros)
+    site(amont)
+    lecteur.lire_document_externe("https://a.org/film.mp4")
+    assert amont.blocs_lus <= 2  # 5 Mo = 80 blocs : seul le début est lu
+    assert amont.ferme
+
+
+def test_textes_video_son_image_sans_tirets_doubles(site):
+    for octets in (_MP4, _MP3, _PNG):
+        lecteur._memoire.clear()
+        site(Amont(octets))
+        assert "--" not in lecteur.lire_document_externe("https://a.org/f")
