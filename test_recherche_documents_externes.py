@@ -66,6 +66,11 @@ def doc(source, n):
 @pytest.fixture(autouse=True)
 def environnement_propre(monkeypatch):
     monkeypatch.delenv("RECHERCHE_DOCUMENTS_MODE", raising=False)
+    # Les tests ci-dessous portent sur les trois premières sources ; les quatre
+    # suivantes (arXiv, Zenodo, OpenAlex, Project Gutenberg) ont leur propre
+    # fichier de tests (test_recherche_sources_supplementaires.py).
+    for cle in ("arxiv", "zenodo", "openalex", "gutenberg"):
+        monkeypatch.delitem(registre.SOURCES, cle, raising=False)
     monkeypatch.setattr(commun.time, "sleep", lambda *_: None)
 
 

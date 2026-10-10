@@ -28,12 +28,13 @@ n'ont besoin d'être touchés : le texte que le modèle lit sur l'outil est
 fabriqué à partir de SOURCES.
 
 Format d'un document renvoyé par une source : {"titre", "auteur", "annee",
-"langue", "identifiant", "url", "acces"}. Ce module ajoute le champ "source"
+"langue", "identifiant", "url", "acces"}. Une source peut ajouter "url_fichier" (lien direct du
+fichier, lu ensuite par lire_document_externe). Ce module ajoute le champ "source"
 (le nom lisible de la source) à chaque document.
 
 Valeurs possibles de "acces" : "libre", "pret_numerique", "restreint"
 (voir core/recherche_internet_archive.py). Seul Internet Archive utilise
-"pret_numerique" et "restreint" ; Gallica et HAL ne renvoient que "libre".
+"pret_numerique" et "restreint" ; toutes les autres sources ne renvoient que "libre".
 """
 
 import logging
@@ -43,9 +44,13 @@ import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 
 from core.recherche_documents_commun import ErreurRechercheSource, borner_nombre
+from core.recherche_arxiv import rechercher_documents as _rechercher_arxiv
 from core.recherche_gallica import rechercher_documents as _rechercher_gallica
+from core.recherche_gutenberg import rechercher_documents as _rechercher_gutenberg
 from core.recherche_hal import rechercher_documents as _rechercher_hal
 from core.recherche_internet_archive import ErreurRechercheArchive, rechercher_documents as _rechercher_archive
+from core.recherche_openalex import rechercher_documents as _rechercher_openalex
+from core.recherche_zenodo import rechercher_documents as _rechercher_zenodo
 
 # Clé = identifiant interne stable de la source. "alias" = façons dont un
 # étudiant (ou le modèle) peut nommer la source ; comparées après
@@ -71,6 +76,34 @@ _TOUTES_LES_SOURCES = {
         "alias": ["hal.science", "archives ouvertes", "archive ouverte", "hal archives ouvertes"],
         "description": "articles de recherche, thèses et rapports en texte complet",
         "rechercher": _rechercher_hal,
+        "erreur": ErreurRechercheSource,
+    },
+    "arxiv": {
+        "nom": "arXiv",
+        "alias": ["arxiv.org", "arxiv org"],
+        "description": "articles scientifiques de maths, physique et informatique, en général en anglais",
+        "rechercher": _rechercher_arxiv,
+        "erreur": ErreurRechercheSource,
+    },
+    "zenodo": {
+        "nom": "Zenodo",
+        "alias": ["zenodo.org", "cern"],
+        "description": "travaux de recherche, thèses, cours et supports pédagogiques déposés en accès libre",
+        "rechercher": _rechercher_zenodo,
+        "erreur": ErreurRechercheSource,
+    },
+    "openalex": {
+        "nom": "OpenAlex",
+        "alias": ["open alex", "openalex.org"],
+        "description": "articles scientifiques de toutes disciplines dont une version est en accès libre",
+        "rechercher": _rechercher_openalex,
+        "erreur": ErreurRechercheSource,
+    },
+    "gutenberg": {
+        "nom": "Project Gutenberg",
+        "alias": ["gutenberg", "gutenberg.org", "projet gutenberg"],
+        "description": "livres du domaine public, surtout de la littérature",
+        "rechercher": _rechercher_gutenberg,
         "erreur": ErreurRechercheSource,
     },
 }
