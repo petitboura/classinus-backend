@@ -207,7 +207,8 @@ async def marquer_ecran_telephone(
     etiquette : un court texte affiché près de la marque (80 caractères au maximum),
     écrit dans la langue de l'étudiant ; vide par défaut. duree_secondes : combien de
     temps la marque reste visible (1 à 60, 8 par défaut) ; elle disparaît ensuite toute
-    seule. L'outil rend la main tout de suite.
+    seule. L'outil rend la main tout de suite. Une seule marque est affichée à la fois :
+    une nouvelle marque remplace celle qui est déjà à l'écran.
 
     Ne sert que sur le téléphone, quand l'étudiant utilise l'application Android. Pour
     le PC, c'est marquer_ecran.
