@@ -53,9 +53,10 @@ MESSAGE_ECHEC_TELEPHONE = (
 # est choisi ici, a un seul endroit.
 MESSAGES_PAR_CODE_ERREUR = {
     "INACTIF": (
-        "La vision de l'écran n'est pas activée sur le téléphone de l'étudiant : rien n'a été lu. "
-        "Dis-le simplement à l'étudiant, sans détail technique, et propose de réessayer quand ce sera "
-        "activé. Ne devine jamais ce qui est affiché."
+        "La vision de l'écran n'est pas activée sur le téléphone de l'étudiant (il a pu refuser "
+        "l'autorisation ou l'arrêter) : rien n'a été lu. Dis-le simplement à l'étudiant, sans détail "
+        "technique, et propose-lui de désactiver puis de réactiver le canal en direct pour la relancer. "
+        "Ne devine jamais ce qui est affiché."
     ),
     "PERMISSION_REFUSEE": (
         "L'étudiant n'a pas autorisé l'affichage par-dessus les autres applications : aucune marque "
