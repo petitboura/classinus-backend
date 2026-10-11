@@ -484,6 +484,35 @@ async def demander_pointage_ecran(user_id: str, x: int, y: int) -> Any | None:
     return await demander_action_systeme(user_id, "pointer_ecran", {"x": x, "y": y})
 
 
+async def demander_action_ecran_telephone(
+    user_id: str, type_action: str, parametres: dict, on_statut=None
+) -> Any | None:
+    """
+    Vision ecran Android, lot 3 (11/10/2026). Meme principe que
+    demander_action_systeme, mais pour le telephone : diffuse
+    {action_ecran_telephone, parametres} a toutes les connexions actives de
+    user_id, et la premiere connexion Android qui a la vision de l'ecran
+    active repond (voir traiterDemandeEcranTelephone dans
+    lib/canalAgentApplicatif.ts). Les autres connexions repondent "ignore".
+
+    La cle du message est volontairement differente de "action_systeme" :
+    le relais du pont Electron (_relais_systeme, voir _diffuser_et_attendre)
+    ne se declenche donc jamais pour le telephone, et rien du canal PC ne
+    change.
+
+    type_action attendus : "lire_texte" (aucun parametre) et "marquer"
+    ({forme, x, y, largeur, hauteur, etiquette, duree_secondes}, voir
+    core/outils_action_agent_telephone.py).
+    """
+    correlation_id = str(uuid.uuid4())
+    return await _diffuser_et_attendre(
+        user_id,
+        {"id": correlation_id, "action_ecran_telephone": type_action, "parametres": parametres},
+        on_statut,
+        on_timeout_log=f"action_ecran_telephone={type_action}",
+    )
+
+
 async def demander_lecture_page(user_id: str, on_statut=None) -> Any | None:
     """
     Lot U (28/09/2026, decision Bourama : Clovis ne voyait que les elements

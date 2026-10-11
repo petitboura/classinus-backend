@@ -102,6 +102,7 @@ import core.outils_verification_code_actif  # noqa: F401
 import core.outils_reponses_qcm  # noqa: F401
 import core.outils_action_agent  # noqa: F401
 import core.outils_action_agent_pc  # noqa: F401  # 27/09/2026, Lot S, actions systeme PC (canal en direct)
+import core.outils_action_agent_telephone  # noqa: F401  # 11/10/2026, vision ecran Android lot 3, lecture et marque sur le telephone
 import core.outils_minuteurs  # noqa: F401
 import core.outils_changement_mode  # noqa: F401  # 25/09/2026, changement de mode par Clovis lui-même
 import core.outils_rappel_resultats  # noqa: F401  # 27/09/2026, rappeler un resultat d'outil archive au lieu de le reexecuter

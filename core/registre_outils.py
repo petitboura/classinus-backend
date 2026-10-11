@@ -701,6 +701,9 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "appuyer_touches": {"label": "Raccourci clavier", "icone": "Command", "onglet": None},
     "ouvrir_application": {"label": "Ouverture d'une application", "icone": "AppWindow", "onglet": None},
     "lire_ecran": {"label": "Lecture de l'écran", "icone": "Eye", "onglet": None},
+    # Vision ecran Android lot 3 (11/10/2026) : lecture et marque sur le telephone, meme rappel de cache 24h.
+    "lire_ecran_telephone": {"label": "Lecture de l'écran du téléphone", "icone": "Eye", "onglet": None},
+    "marquer_ecran_telephone": {"label": "Marque sur l'écran du téléphone", "icone": "Highlighter", "onglet": None},
     # Editeur de code (28/09/2026, demande Bourama), meme rappel de cache 24h.
     "lire_editeur": {"label": "Lecture de l'éditeur de code", "icone": "FileCode", "onglet": None},
     "montrer_dans_editeur": {"label": "Montrer dans l'éditeur", "icone": "Crosshair", "onglet": None},
@@ -894,6 +897,7 @@ CATEGORIES_OUTILS = {
         "executer_clic_generique", "montrer_element_application", "ecrire_dans_champ",
         "lire_page",
         "pointer_ecran", "marquer_ecran", "cliquer_ecran", "taper_clavier", "appuyer_touches", "ouvrir_application", "lire_ecran",
+        "lire_ecran_telephone", "marquer_ecran_telephone",
         "lire_editeur", "montrer_dans_editeur", "ecrire_dans_editeur",
         "desactiver_canal_en_direct",
     ],
