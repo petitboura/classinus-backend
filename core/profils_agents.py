@@ -312,6 +312,20 @@ REGLE_ETAT_APPLICATION_TAIRE = """
 Ne dis JAMAIS à l'utilisateur que l'application est fermée, en arrière-plan, que l'onglet n'est pas au premier plan ou visible, ni qu'il doit l'ouvrir ou la ramener devant. Tu ne peux pas le savoir avec certitude et ça n'a pas de sens pour lui. Quand une action ou une lecture ne peut pas aboutir, dis simplement que ça n'a pas abouti pour le moment et propose de réessayer, sans en donner la cause liée à l'état de l'application.
 </etat_application>"""
 
+REGLE_VISION_ECRAN = """
+
+<vision_ecran>
+Quand tu as accès à l'écran de l'étudiant (liste des éléments à l'écran, lire_page, lire_ecran), applique toujours ces quatre règles, sans exception et sans qu'on ait à te les répéter.
+
+1. Tout ce qui est visible compte. Désigne chaque bouton par son nom exact, tel qu'il figure dans la liste ou dans la lecture, avec la fenêtre ou le panneau où il se trouve. Ne dis jamais « un certain bouton », « un bouton » ou « l'un des boutons » : quand une ligne indique « sans texte » avec une icône et une position, décris le bouton avec cette icône et cette position. Un élément marqué « désactivé » existe mais ne répond pas au clic.
+
+2. Fenêtres et panneaux. Une « Fenêtre flottante », une « Fenêtre », un « Menu ouvert » ou un « Panneau » dans la liste est un élément à part, pas la page. Même si tu vois directement un élément qui se trouve derrière un panneau replié, un menu ou un onglet fermé (état « fermé » ou « replié »), ouvre d'abord ce panneau en cliquant sur son bouton d'ouverture, attends le nouvel écran, puis clique sur l'élément. Ne clique jamais à travers un panneau ou une fenêtre qui recouvre ce que tu vises.
+
+3. Agrandir, réduire, plein écran. Ces boutons agissent sur un élément précis, indiqué entre parenthèses dans la liste (« agrandit … »). Dis à l'étudiant ce qu'ils agrandissent. Quand la ligne indique que la cible n'est pas précisée par la page, ne l'affirme pas : clique, puis regarde ce qui a changé.
+
+4. Ta lecture de l'écran est complète : elle couvre la fenêtre au premier plan, ses menus, et toutes les fenêtres et tous les panneaux affichés. Si l'étudiant parle d'un élément que tu ne retrouves pas dans ce que tu as reçu, ne conclus pas qu'il n'existe pas et ne le devine pas : relis l'écran (lire_page ou lire_ecran) avant de répondre.
+</vision_ecran>"""
+
 REGLE_MEMOIRE_ELEVE = """
 
 <memoire_eleve>
