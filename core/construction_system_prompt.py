@@ -6,12 +6,18 @@ import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from configuration import get_system_prompt
-from profils_agents import INSTRUCTIONS_FORMATS_AFFICHAGE, INSTRUCTIONS_ARBITRAGE_CALCUL, REGLE_CONTEXTE_INVISIBLE, REGLE_ETAT_APPLICATION_TAIRE, REGLE_MEMOIRE_ELEVE, INSTRUCTIONS_LONGUEUR_REPONSE, MODES_PEDAGOGIQUES, REGLE_BASCULE_MODE_PEDAGOGIQUE, construire_instruction_guide, construire_instruction_guide_visuel, construire_instruction_demo, MODES_SOURCE
+from profils_agents import INSTRUCTIONS_FORMATS_AFFICHAGE, INSTRUCTIONS_ARBITRAGE_CALCUL, REGLE_CONTEXTE_INVISIBLE, REGLE_ETAT_APPLICATION_TAIRE, REGLE_VISION_ECRAN, REGLE_MEMOIRE_ELEVE, INSTRUCTIONS_LONGUEUR_REPONSE, MODES_PEDAGOGIQUES, REGLE_BASCULE_MODE_PEDAGOGIQUE, construire_instruction_guide, construire_instruction_guide_visuel, construire_instruction_demo, MODES_SOURCE
 from guide_conversation import obtenir_sections_guide
 from core.canal_agent_applicatif import obtenir_etat_editeur
 from historique_reponses_qcm import formater_reponses_qcm
 from core.configuration_etudiant import construire_bloc_configuration
 from core.memoire_eleve import construire_bloc_sommaire
+
+
+# Alignée sur la longueur voulue côté frontend (lib/scanElementsInteractifs.ts) :
+# une ligne porte la fenêtre ou le panneau, le nom, l'état et la cible d'un
+# agrandissement. Couper plus court effacerait justement la fin de la ligne.
+LONGUEUR_MAX_LIGNE_ACTION = 240
 
 
 def _texte_actions_application(actions):
@@ -108,7 +114,7 @@ def _texte_actions_application(actions):
         "dessus pour expliquer quelque chose avant ou pendant une action.\n\n"
     )
     lignes = "\n".join(
-        f"- {a.get('id')} : {str(a.get('description', ''))[:100]}"
+        f"- {a.get('id')} : {str(a.get('description', ''))[:LONGUEUR_MAX_LIGNE_ACTION]}"
         for a in actions
         if isinstance(a.get("id"), str)
     )
@@ -196,7 +202,7 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # tour-la. Seulement si user_id est connu : un visiteur sans compte n'a
     # pas de memoire (les 3 outils ne lui sont pas proposes non plus, voir
     # core/main.py), la consigne serait trompeuse.
-    system_final = INSTRUCTIONS_FORMATS_AFFICHAGE + INSTRUCTIONS_ARBITRAGE_CALCUL + REGLE_CONTEXTE_INVISIBLE + REGLE_ETAT_APPLICATION_TAIRE + (REGLE_MEMOIRE_ELEVE if user_id else "")
+    system_final = INSTRUCTIONS_FORMATS_AFFICHAGE + INSTRUCTIONS_ARBITRAGE_CALCUL + REGLE_CONTEXTE_INVISIBLE + REGLE_ETAT_APPLICATION_TAIRE + REGLE_VISION_ECRAN + (REGLE_MEMOIRE_ELEVE if user_id else "")
     system_final += "\n\n" + (get_system_prompt(agent_id) or "")
 
     # Mécanisme "à la skill" (13/08/2026) : le texte long n'est plus
