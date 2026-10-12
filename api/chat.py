@@ -26,8 +26,9 @@ from pydantic import BaseModel
 from typing import List, Optional, Literal
 
 from api.auth import utilisateur_optionnel, supabase
+from core.arret_tour import demander_arret_utilisateur, fermer_arret, ouvrir_arret
 from core.canal_agent_applicatif import (
-    debuter_tour, definir_lecture_editeur_chat, renvoyer_messages_non_lus,
+    annuler_attentes, debuter_tour, definir_lecture_editeur_chat, diffuser_arret, renvoyer_messages_non_lus,
     retirer_lecture_editeur_chat, terminer_tour,
 )
 from core.plafond_outils_tour import retirer_plafond_tour
@@ -246,13 +247,16 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
     if user_id:
         definir_lecture_editeur_chat(user_id, payload.conversation_id, payload.etat_editeur)
         debuter_tour(user_id)
+    # Jeton d'arrêt de ce tour (12/10/2026, bouton Arrêter) : levé par POST /api/chat/arreter.
+    arret = ouvrir_arret(user_id)
     try:
         if payload.reprise is not None:
             generateur = chat_generateur(
                 reprise={
                     "etat_reprise": payload.reprise.etat_reprise,
                     "approuve": payload.reprise.approuve,
-                }
+                },
+                arret_tour=arret,
             )
         else:
             generateur = chat_generateur(
@@ -280,6 +284,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
                 message_automatique=payload.message_automatique or False,
                 parent_id=payload.parent_id,
                 regenerer=payload.regenerer or False,
+                arret_tour=arret,
             )
         for evenement in generateur:
             yield f"data: {json.dumps(evenement)}\n\n"
@@ -287,6 +292,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
         logging.error(f"ERREUR chat() en streaming (agent_id={payload.agent_id}) : {e}")
         yield f"data: {json.dumps({'type': 'reponse', 'texte': 'Une erreur est survenue, réessaie dans un instant.'})}\n\n"
     finally:
+        fermer_arret(arret)
         if user_id:
             retirer_lecture_editeur_chat(user_id, payload.conversation_id, payload.etat_editeur)
             retirer_plafond_tour(user_id)
@@ -302,6 +308,25 @@ def _evenement_bloque(texte: str):
     message clair, pas une erreur technique brute (Partie 7)."""
     yield f"data: {json.dumps({'type': 'reponse', 'texte': texte})}\n\n"
     yield "data: [DONE]\n\n"
+
+
+@router.post("/arreter")
+async def arreter_tour(utilisateur=Depends(utilisateur_optionnel)):
+    """
+    Bouton Arrêter du chat et du canal en direct (12/10/2026, demande Bourama : « arrêter
+    c'est arrêter »). Couper la connexion du flux ne suffisait pas : les outils en cours et
+    la boucle d'agent continuaient côté serveur. Cette route lève le signal d'arrêt de tous
+    les tours en cours du compte (plus de nouvel outil, plus d'attente des outils lancés),
+    termine les actions que Clovis attendait de l'appli, et prévient l'appli pour qu'elle
+    arrête aussi ce qu'elle avait en file. Sans compte connecté, il n'y a rien à arrêter ici.
+    """
+    user_id = utilisateur.id if utilisateur else None
+    if not user_id:
+        return {"tours_arretes": 0, "attentes_annulees": 0}
+    tours = demander_arret_utilisateur(user_id)
+    attentes = annuler_attentes(user_id)
+    await diffuser_arret(user_id)
+    return {"tours_arretes": tours, "attentes_annulees": attentes}
 
 
 @router.post("")

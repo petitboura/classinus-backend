@@ -25,6 +25,26 @@ class _AttenteConfirmation(Exception):
         self.appels_restants = appels_restants
 
 
+def _attendre_termines(futures, arret):
+    """
+    Remplace concurrent.futures.as_completed (12/10/2026, bouton Arrêter) : rend les
+    appels dans l'ordre où ils finissent, mais regarde le signal d'arrêt toutes les
+    0,25 s au lieu de rester bloqué jusqu'à la fin du plus lent. Dès que l'arrêt est
+    demandé, on ne rend plus que ce qui est déjà fini et on s'en va : les outils encore
+    en route ne sont plus attendus (un fil en cours ne peut pas être tué, son résultat
+    est simplement ignoré).
+    """
+    en_attente = set(futures)
+    while en_attente:
+        termines, en_attente = concurrent.futures.wait(
+            en_attente, timeout=0.25, return_when=concurrent.futures.FIRST_COMPLETED
+        )
+        for future in termines:
+            yield future
+        if arret is not None and arret.est_demande():
+            return
+
+
 def _executer_un_appel(appel, table_routage):
     try:
         arguments = json.loads(appel["arguments"] or "{}")
@@ -410,7 +430,7 @@ def _est_outil_sensible(appel):
     return bool(action) and f"{appel['name']}:{action}" in OUTILS_SENSIBLES
 
 
-def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None):
+def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None, arret=None):
     """
     Execute une liste d'appels d'outils, en ajoutant le resultat de chacun
     a messages_agent au fur et a mesure. Des qu'un outil sensible
@@ -438,6 +458,9 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
     """
     if compteur_sources is None:
         compteur_sources = [0]
+    # Arrêt demandé avant même de commencer ce lot : aucun outil n'est lancé.
+    if arret is not None and arret.est_demande():
+        return
     index_sensible = next(
         (i for i, appel in enumerate(appels) if _est_outil_sensible(appel)),
         None,
@@ -471,12 +494,19 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                 "action": _action_appel(appel),
             }
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(appels_surs)) as executor:
+        # Pas de `with` ici (12/10/2026, bouton Arrêter) : sa sortie attend la fin de TOUS
+        # les fils, donc un arrêt ne servirait à rien tant que l'outil le plus lent n'a pas
+        # fini. Le shutdown(wait=False) du finally laisse les fils déjà partis finir seuls,
+        # sans que personne n'attende leur résultat.
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(appels_surs))
+        try:
             futures = {
                 executor.submit(_executer_un_appel, appel, table_routage): appel
                 for appel in appels_surs
             }
-            for future in concurrent.futures.as_completed(futures):
+            finis = set()
+            for future in _attendre_termines(futures, arret):
+                finis.add(future)
                 appel = futures[future]
                 try:
                     resultat = future.result()
@@ -626,7 +656,23 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                     "tool_call_id": appel["id"],
                     "content": contenu_pour_modele,
                 })
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
 
+        # Arrêt demandé pendant le lot : les outils qui n'ont pas fini sont marqués annulés
+        # (leur ligne ne doit pas rester « en cours »), et on s'arrête là.
+        if arret is not None and arret.est_demande():
+            for future, appel in futures.items():
+                if future not in finis:
+                    yield {
+                        "type": "statut_termine",
+                        "texte": f"{_nom_lisible_appel(appel)} annulée",
+                        "id_appel": appel["id"],
+                    }
+            return
+
+    if arret is not None and arret.est_demande():
+        return
     if index_sensible is not None:
         raise _AttenteConfirmation(appels[index_sensible], appels[index_sensible + 1:])
 
