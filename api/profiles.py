@@ -666,10 +666,10 @@ def supprimer_mon_compte(request: Request, utilisateur=Depends(utilisateur_coura
     l'API admin (le client `supabase` de api.auth utilise déjà la service
     role key, seule capable d'appeler `auth.admin`).
 
-    Ne touche PAS à `historique_conversations` (même choix que
-    supprimer_agent_completement, journal permanent jamais purgé ailleurs
-    dans le projet) : les échanges passés restent en base, seulement
-    détachés de tout profil/agent visible.
+    Purge aussi les conversations de l'élève (historique_conversations,
+    conversations, historique_fils_meta, conversation_summaries), demande de
+    Bourama du 12/10/2026 : plus aucun échange ne doit rester en base après
+    la suppression du compte.
 
     Chaque étape est best-effort (log et continue) sauf la suppression
     finale du compte Auth, seule à faire échouer la requête si elle
@@ -702,6 +702,10 @@ def supprimer_mon_compte(request: Request, utilisateur=Depends(utilisateur_coura
         ("agent_update_likes", "user_id"),
         ("agent_update_comments", "user_id"),
         ("notifications", "user_id"),
+        ("historique_conversations", "user_id"),
+        ("conversations", "user_id"),
+        ("historique_fils_meta", "user_id"),
+        ("conversation_summaries", "user_id"),
     ):
         try:
             supabase.table(table).delete().eq(colonne, user_id).execute()
