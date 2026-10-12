@@ -209,7 +209,7 @@ def _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, 
 def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                  appels_en_cours_a_finir=None, modele=GROQ_PRIMARY, reasoning_effort=None, agent_nom=None,
                  rattrapage_tool_code_restant=1, conversation_id=None,
-                 catalogue_complet=None, table_routage_complet=None, user_id=None):
+                 catalogue_complet=None, table_routage_complet=None, user_id=None, arret=None):
     """
     Boucle d'agent generique sur le modele Groq utilise (par defaut
     GROQ_PRIMARY, mais peut recevoir n'importe quel modele Groq qui sait
@@ -221,6 +221,10 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
     `reasoning_effort`, si fourni (ex: "none"), est transmis tel quel a
     l'appel Groq : certains modeles de secours (ex: qwen3) font du
     raisonnement par defaut, ce qui peut etre desactive pour rester rapide.
+
+    `arret` (12/10/2026, bouton Arrêter) : jeton d'arrêt du tour (core/arret_tour.py).
+    Dès qu'il est levé, la boucle s'arrête sans exception (la cascade de chat() ne doit
+    pas basculer sur un autre modèle) : plus d'appel au modèle, plus de nouvel outil.
 
     Genere des evenements "statut"/"reponse"/"confirmation_requise".
     S'arrete (sans exception) des qu'une reponse finale a ete produite OU
@@ -283,7 +287,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
 
     if appels_en_cours_a_finir:
         try:
-            for event in _traiter_appels(appels_en_cours_a_finir, messages_agent, table_routage, compteur_sources):
+            for event in _traiter_appels(appels_en_cours_a_finir, messages_agent, table_routage, compteur_sources, arret=arret):
                 yield event
         except _AttenteConfirmation as attente:
             yield _evenement_confirmation(attente, messages_agent, outils_mcp, table_routage, modele, reasoning_effort, agent_nom)
@@ -311,6 +315,8 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
     limite_atteinte = False
     etape = 0
     while True:
+        if arret is not None and arret.est_demande():
+            return
         if etape >= budget_courant:
             if budget_courant >= plafond_absolu:
                 limite_atteinte = True
@@ -399,6 +405,13 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
         dernier_usage = None
 
         for chunk in completion:
+            # Arrêt demandé : on lâche le flux du modèle tout de suite (12/10/2026).
+            if arret is not None and arret.est_demande():
+                try:
+                    completion.close()
+                except Exception:
+                    pass
+                return
             # Diagnostic du bug de troncature (27/07) : le dernier chunk
             # du flux porte finish_reason ("stop" = fin normale, "length" =
             # coupé faute de budget de tokens) et parfois x_groq.usage
@@ -477,7 +490,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     rattrapage_tool_code_restant=rattrapage_tool_code_restant - 1,
                     conversation_id=conversation_id,
                     catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
-                    user_id=user_id,
+                    user_id=user_id, arret=arret,
                 )
                 return
             else:
@@ -722,7 +735,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
 
         if appels_normaux:
             try:
-                for event in _traiter_appels(appels_normaux, messages_agent, table_routage, compteur_sources):
+                for event in _traiter_appels(appels_normaux, messages_agent, table_routage, compteur_sources, arret=arret):
                     yield event
             except _AttenteConfirmation as attente:
                 yield _evenement_confirmation(attente, messages_agent, outils_mcp, table_routage, modele, reasoning_effort, agent_nom)
