@@ -38,6 +38,8 @@ _verrou_connexions = asyncio.Lock()
 _verrous_envoi: dict[tuple[str, str], asyncio.Lock] = {}
 
 _attentes: dict[str, "asyncio.Future[Any]"] = {}
+# correlation_id -> user_id, pour pouvoir annuler les attentes d'un compte (bouton Arrêter, 12/10/2026).
+_attentes_utilisateur: dict[str, str] = {}
 
 # Chantier D : dernier etat des actions disponibles POUSSE par chaque
 # connexion (jamais interroge activement -- purement passif, mis a jour
@@ -311,6 +313,7 @@ async def _diffuser_et_attendre(
     correlation_id = message["id"]
     future: "asyncio.Future[Any]" = asyncio.get_event_loop().create_future()
     _attentes[correlation_id] = future
+    _attentes_utilisateur[correlation_id] = user_id
 
     try:
         for cle, websocket in connexions:
@@ -348,8 +351,40 @@ async def _diffuser_et_attendre(
             return None
     finally:
         _attentes.pop(correlation_id, None)
+        _attentes_utilisateur.pop(correlation_id, None)
         if not future.done():
             future.cancel()
+
+
+def annuler_attentes(user_id: str) -> int:
+    """
+    Bouton Arrêter (12/10/2026) : toutes les actions que Clovis attend encore de l'appli
+    (clic, saisie, lecture de page, action PC...) sont terminées tout de suite avec une
+    erreur, au lieu d'attendre la réponse ou le délai d'abandon. À appeler depuis la
+    boucle d'événements (les Futures y vivent). Renvoie le nombre d'attentes annulées.
+    """
+    nombre = 0
+    for correlation_id, proprietaire in list(_attentes_utilisateur.items()):
+        if proprietaire != user_id:
+            continue
+        future = _attentes.get(correlation_id)
+        if future is not None and not future.done():
+            future.set_result({"erreur": "Arrêt demandé par l'étudiant."})
+            nombre += 1
+    return nombre
+
+
+async def diffuser_arret(user_id: str) -> None:
+    """Prévient toutes les connexions du compte (appli web, PC) : plus aucune action de Clovis ne doit partir ni continuer."""
+    async with _verrou_connexions:
+        connexions = [(cle, ws) for cle, ws in _connexions.items() if cle[0] == user_id]
+    for cle, websocket in connexions:
+        verrou_envoi = await _verrou_envoi_pour(cle)
+        try:
+            async with verrou_envoi:
+                await websocket.send_json({"arret_tache": True})
+        except Exception as e:
+            logging.error(f"ERREUR diffusion arret canal agent applicatif (user={user_id}, appareil={cle[1]}) : {e}")
 
 
 async def demander_execution_action(user_id: str, action_id: str, on_statut=None) -> Any | None:
