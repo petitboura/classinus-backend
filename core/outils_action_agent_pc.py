@@ -348,6 +348,16 @@ async def taper_clavier(texte: str, cible: str, ctx: Context) -> str:
     le resultat te dit combien de caracteres ont ete tapes. Dans ce cas, ne
     tape pas dans une autre fenetre : demande a l'etudiant ce qu'il veut.
 
+    Ecriture en arriere plan (12/10/2026) : si la fenetre visee n'est PAS
+    celle que l'etudiant a devant lui, le texte est ecrit directement dans
+    son champ de texte sans la mettre devant, sans clavier et sans toucher a
+    la souris, pour ne pas gener l'etudiant. Le texte est alors AJOUTE A LA
+    FIN du champ (pas a l'endroit du curseur). Si l'application ne le permet
+    pas, l'etudiant est prevenu par une annonce, la fenetre est mise devant et
+    le texte est tape au clavier, sans s'arreter ; l'etudiant peut arreter
+    avec Echap. Si la fenetre visee est deja devant, le texte est tape touche
+    par touche comme d'habitude.
+
     Si un champ precis doit d'abord recevoir le focus, clique dessus
     avec cliquer_ecran avant d'appeler cet outil. Pour une touche seule ou
     un raccourci (Entree, Ctrl+C, Alt+Tab), utilise appuyer_touches. Tant
@@ -409,6 +419,14 @@ async def taper_clavier(texte: str, cible: str, ctx: Context) -> str:
         return MESSAGE_ECHEC_SYSTEME
     if isinstance(resultat, dict) and resultat.get("erreur"):
         return f"Erreur : {resultat['erreur']}"
+    if isinstance(resultat, dict) and resultat.get("mode") == "arriere_plan":
+        fenetre = resultat.get("fenetre") if isinstance(resultat.get("fenetre"), str) else cible.strip()
+        return await _relire_apres_action(
+            user_id,
+            f"Texte écrit en arrière plan dans « {fenetre} », ajouté à la fin du champ. "
+            "La fenêtre n'a pas été mise devant : l'écran ci dessous est celui de l'étudiant, pas celui de cette fenêtre.",
+            DELAI_APRES_CLAVIER_SECONDES,
+        )
     return await _relire_apres_action(user_id, "Texte tapé au clavier avec succès.", DELAI_APRES_CLAVIER_SECONDES)
 
 
