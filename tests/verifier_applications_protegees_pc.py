@@ -30,7 +30,7 @@ ctx = SimpleNamespace(request_context=SimpleNamespace(request=requete))
 
 
 async def principal():
-    await outils.taper_clavier("bonjour", ctx)
+    await outils.taper_clavier("bonjour", "Bloc-notes", ctx)
     await outils.appuyer_touches("ctrl+c", ctx)
     await outils.ouvrir_application("notepad", ctx)
 
@@ -46,6 +46,13 @@ async def principal():
         assert abandon is not None and abandon >= outils.DELAI_AUTORISATION_PC_MS / 1000 + 30, f"{action} : abandon trop court"
     # Les parametres propres a chaque action sont conserves.
     assert recus[0][1]["texte"] == "bonjour"
+    # 12/10/2026 : la fenetre visee est transmise a l'application PC ; sans elle, rien n'est envoye.
+    assert recus[0][1]["cible"] == "Bloc-notes", recus[0][1]
+    avant = len(recus)
+    for vide in ("", "   "):
+        message = await outils.taper_clavier("bonjour", vide, ctx)
+        assert message.startswith("Erreur") and "cible" in message, message
+    assert len(recus) == avant, "aucune frappe ne doit partir sans cible"
     assert recus[1][1]["touches"] == "ctrl+c"
     assert recus[2][1]["nom"] == "notepad"
     print("OK : applications protegees et delai d'accord envoyes avec taper_clavier, appuyer_touches et ouvrir_application.")

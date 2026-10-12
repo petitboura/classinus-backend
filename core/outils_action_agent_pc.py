@@ -330,13 +330,23 @@ async def cliquer_ecran(x: int, y: int, ctx: Context) -> str:
 
 @mcp_generation.tool()
 @une_action_pc_a_la_fois
-async def taper_clavier(texte: str, ctx: Context) -> str:
+async def taper_clavier(texte: str, cible: str, ctx: Context) -> str:
     """
     Lot S (27/09/2026). Tape `texte` au clavier, a l'endroit ou se
     trouve le curseur de saisie ACTUEL sur le PC de l'etudiant (la
     fenetre/le champ deja au premier plan) -- pas dans un champ de la
     page Classinus (pour ca, utilise plutot remplir_champ_application,
     core/outils_action_agent.py).
+
+    cible (OBLIGATOIRE, 12/10/2026) : la fenetre dans laquelle le texte doit
+    aller, telle que tu l'as lue a l'ecran (son titre, par exemple
+    "Sans titre - Bloc-notes", ou au moins le nom de l'application, par exemple
+    "Bloc-notes"). Avant d'ecrire, puis avant chaque morceau de texte,
+    l'application PC verifie que le clavier est bien dans cette fenetre.
+    Si ce n'est pas le cas, ou si l'etudiant quitte la fenetre pendant que
+    tu ecris, la frappe s'arrete tout de suite : rien n'est ecrit ailleurs et
+    le resultat te dit combien de caracteres ont ete tapes. Dans ce cas, ne
+    tape pas dans une autre fenetre : demande a l'etudiant ce qu'il veut.
 
     Si un champ precis doit d'abord recevoir le focus, clique dessus
     avec cliquer_ecran avant d'appeler cet outil. Pour une touche seule ou
@@ -379,6 +389,11 @@ async def taper_clavier(texte: str, ctx: Context) -> str:
         return erreur
     if not texte:
         return "Erreur : paramètre 'texte' manquant."
+    if not isinstance(cible, str) or not cible.strip():
+        return (
+            "Erreur : paramètre 'cible' manquant. Dis dans quelle fenêtre le texte doit être écrit "
+            "(son titre tel que lu à l'écran, par exemple \"Sans titre - Bloc-notes\"). Rien n'a été écrit."
+        )
 
     bloque = await _lecture_prealable_si_necessaire(user_id, _conversation_id(ctx))
     if bloque is not None:
@@ -387,7 +402,7 @@ async def taper_clavier(texte: str, ctx: Context) -> str:
     resultat = await _demander_action_systeme(
         user_id,
         "taper_clavier",
-        {"texte": texte, **_parametres_protection()},
+        {"texte": texte, "cible": cible.strip(), **_parametres_protection()},
         delai_abandon_secondes=_delai_abandon_avec_autorisation(),
     )
     if resultat is None:
