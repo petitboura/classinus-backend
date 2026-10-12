@@ -40,7 +40,7 @@ drapeaux_automatique = []
 def installer_faux_transport(lecture=LECTURE, reponses_actions=None):
     appels = []
 
-    async def demander(user_id, action, parametres, on_statut=None):
+    async def demander(user_id, action, parametres, on_statut=None, delai_abandon_secondes=None):
         appels.append(action)
         if action == "lire_ecran":
             drapeaux_automatique.append(parametres.get("automatique"))
@@ -70,7 +70,7 @@ async def verifier():
 
     # 3. Les autres actions PC suivent la meme regle.
     for nom_action, appel in (
-        ("taper_clavier", lambda c: outils.taper_clavier("bonjour", c)),
+        ("taper_clavier", lambda c: outils.taper_clavier("bonjour", "Bloc-notes", c)),
         ("appuyer_touches", lambda c: outils.appuyer_touches("ctrl+c", c)),
         ("ouvrir_application", lambda c: outils.ouvrir_application("notepad", c)),
     ):
@@ -87,7 +87,7 @@ async def verifier():
 
     # 4. Une autre conversation repart de zero.
     appels = installer_faux_transport()
-    texte = await outils.taper_clavier("bonjour", ctx_pour("conv-C"))
+    texte = await outils.taper_clavier("bonjour", "Bloc-notes", ctx_pour("conv-C"))
     assert appels == ["lire_ecran"] and "NON exécutée" in texte, (appels, texte)
 
     # 5. Un echec de lecture n'ouvre pas le verrou et n'execute rien.
@@ -101,7 +101,7 @@ async def verifier():
     # 6. Un echec d'action ne declenche pas de relecture (erreur renvoyee telle quelle).
     lecture_ecran_continue.marquer_lu("test-pc", "conv-E")
     appels = installer_faux_transport(reponses_actions={"taper_clavier": {"erreur": "texte vide"}})
-    texte = await outils.taper_clavier("x", ctx_pour("conv-E"))
+    texte = await outils.taper_clavier("x", "Bloc-notes", ctx_pour("conv-E"))
     assert appels == ["taper_clavier"] and texte == "Erreur : texte vide", (appels, texte)
 
     # 7. lire_ecran explicite compte comme premiere lecture.
@@ -110,7 +110,7 @@ async def verifier():
     await outils.lire_ecran(ctx_pour("conv-F"))
     assert lecture_ecran_continue.a_deja_lu("test-pc", "conv-F")
     appels = installer_faux_transport()
-    await outils.taper_clavier("x", ctx_pour("conv-F"))
+    await outils.taper_clavier("x", "Bloc-notes", ctx_pour("conv-F"))
     assert appels == ["taper_clavier", "lire_ecran"], appels
 
     # 7 bis. Une lecture decidee par le serveur est marquee automatique (l'application PC

@@ -99,6 +99,40 @@ DELAI_APRES_CLIC_SECONDES = float(os.environ.get("CLASSINUS_PC_DELAI_APRES_CLIC_
 DELAI_APRES_CLAVIER_SECONDES = float(os.environ.get("CLASSINUS_PC_DELAI_APRES_CLAVIER_S", "0.5"))
 DELAI_APRES_OUVERTURE_SECONDES = float(os.environ.get("CLASSINUS_PC_DELAI_APRES_OUVERTURE_S", "2.0"))
 
+# Garde-fou 2 du canal PC (08/10/2026, decision Bourama) : applications protegees.
+# Pour taper au clavier ou ouvrir l'une d'elles, l'etudiant doit autoriser chaque
+# action (bulle Autoriser ou Refuser dans la superposition). Noms de programmes
+# Windows, sans ".exe", en minuscules. Modifiable sans toucher au code avec la
+# variable CLASSINUS_PC_APPLICATIONS_PROTEGEES (liste separee par des virgules).
+# VS Code et les editeurs de code n'y sont pas, volontairement : l'ecriture de code
+# par taper_clavier doit rester fluide. Le plugin Electron n'a aucune valeur propre :
+# la liste et le delai lui sont envoyes avec chaque demande.
+APPLICATIONS_PROTEGEES_PAR_DEFAUT = (
+    "powershell,powershell_ise,pwsh,cmd,windowsterminal,wt,conhost,openconsole,wsl,bash,mintty,"
+    "1password,bitwarden,keepass,keepassxc,enpass,dashlane,"
+    "systemsettings,control,regedit"
+)
+APPLICATIONS_PROTEGEES_PC = [
+    nom.strip().lower()
+    for nom in os.environ.get("CLASSINUS_PC_APPLICATIONS_PROTEGEES", APPLICATIONS_PROTEGEES_PAR_DEFAUT).split(",")
+    if nom.strip()
+]
+DELAI_AUTORISATION_PC_MS = int(os.environ.get("CLASSINUS_PC_DELAI_AUTORISATION_MS", "60000"))
+# Marge laissee a l'action apres la fin de l'attente d'accord, avant l'abandon cote serveur.
+MARGE_ABANDON_APRES_AUTORISATION_SECONDES = 30
+
+
+def _parametres_protection() -> dict:
+    """Ce que le plugin Electron doit savoir pour demander l'accord de l'etudiant."""
+    return {
+        "applications_protegees": list(APPLICATIONS_PROTEGEES_PC),
+        "delai_autorisation_ms": DELAI_AUTORISATION_PC_MS,
+    }
+
+
+def _delai_abandon_avec_autorisation() -> float:
+    return DELAI_AUTORISATION_PC_MS / 1000 + MARGE_ABANDON_APRES_AUTORISATION_SECONDES
+
 MESSAGE_LECTURE_PREALABLE = (
     "Action NON exécutée : tu n'avais pas encore lu l'écran du PC dans cette conversation. "
     "Voici l'écran à cet instant. Choisis maintenant ce que tu fais, en t'appuyant sur ce contenu "
@@ -296,13 +330,33 @@ async def cliquer_ecran(x: int, y: int, ctx: Context) -> str:
 
 @mcp_generation.tool()
 @une_action_pc_a_la_fois
-async def taper_clavier(texte: str, ctx: Context) -> str:
+async def taper_clavier(texte: str, cible: str, ctx: Context) -> str:
     """
     Lot S (27/09/2026). Tape `texte` au clavier, a l'endroit ou se
     trouve le curseur de saisie ACTUEL sur le PC de l'etudiant (la
     fenetre/le champ deja au premier plan) -- pas dans un champ de la
     page Classinus (pour ca, utilise plutot remplir_champ_application,
     core/outils_action_agent.py).
+
+    cible (OBLIGATOIRE, 12/10/2026) : la fenetre dans laquelle le texte doit
+    aller, telle que tu l'as lue a l'ecran (son titre, par exemple
+    "Sans titre - Bloc-notes", ou au moins le nom de l'application, par exemple
+    "Bloc-notes"). Avant d'ecrire, puis avant chaque morceau de texte,
+    l'application PC verifie que le clavier est bien dans cette fenetre.
+    Si ce n'est pas le cas, ou si l'etudiant quitte la fenetre pendant que
+    tu ecris, la frappe s'arrete tout de suite : rien n'est ecrit ailleurs et
+    le resultat te dit combien de caracteres ont ete tapes. Dans ce cas, ne
+    tape pas dans une autre fenetre : demande a l'etudiant ce qu'il veut.
+
+    Ecriture en arriere plan (12/10/2026) : si la fenetre visee n'est PAS
+    celle que l'etudiant a devant lui, le texte est ecrit directement dans
+    son champ de texte sans la mettre devant, sans clavier et sans toucher a
+    la souris, pour ne pas gener l'etudiant. Le texte est alors AJOUTE A LA
+    FIN du champ (pas a l'endroit du curseur). Si l'application ne le permet
+    pas, l'etudiant est prevenu par une annonce, la fenetre est mise devant et
+    le texte est tape au clavier, sans s'arreter ; l'etudiant peut arreter
+    avec Echap. Si la fenetre visee est deja devant, le texte est tape touche
+    par touche comme d'habitude.
 
     Si un champ precis doit d'abord recevoir le focus, clique dessus
     avec cliquer_ecran avant d'appeler cet outil. Pour une touche seule ou
@@ -335,24 +389,44 @@ async def taper_clavier(texte: str, ctx: Context) -> str:
     Une seule verification a la fin, dans l'ecran renvoye : corrige
     seulement ce qui est faux (lettre manquante, caractere en trop).
 
-    Aucune confirmation etudiant pour ce lot (meme regle que le reste du
-    canal en direct depuis le 19/09/2026).
+    Pas de confirmation de l'etudiant pour les applications ordinaires. Pour une
+    application protegee (terminal, PowerShell, gestionnaire de mots de passe,
+    parametres Windows, fenetre Executer), l'etudiant doit autoriser chaque action :
+    s'il refuse ou ne repond pas, l'action n'est PAS faite, ne la retente pas.
     """
     user_id, erreur = _user_id_ou_erreur(ctx)
     if erreur:
         return erreur
     if not texte:
         return "Erreur : paramètre 'texte' manquant."
+    if not isinstance(cible, str) or not cible.strip():
+        return (
+            "Erreur : paramètre 'cible' manquant. Dis dans quelle fenêtre le texte doit être écrit "
+            "(son titre tel que lu à l'écran, par exemple \"Sans titre - Bloc-notes\"). Rien n'a été écrit."
+        )
 
     bloque = await _lecture_prealable_si_necessaire(user_id, _conversation_id(ctx))
     if bloque is not None:
         return bloque
 
-    resultat = await _demander_action_systeme(user_id, "taper_clavier", {"texte": texte})
+    resultat = await _demander_action_systeme(
+        user_id,
+        "taper_clavier",
+        {"texte": texte, "cible": cible.strip(), **_parametres_protection()},
+        delai_abandon_secondes=_delai_abandon_avec_autorisation(),
+    )
     if resultat is None:
         return MESSAGE_ECHEC_SYSTEME
     if isinstance(resultat, dict) and resultat.get("erreur"):
         return f"Erreur : {resultat['erreur']}"
+    if isinstance(resultat, dict) and resultat.get("mode") == "arriere_plan":
+        fenetre = resultat.get("fenetre") if isinstance(resultat.get("fenetre"), str) else cible.strip()
+        return await _relire_apres_action(
+            user_id,
+            f"Texte écrit en arrière plan dans « {fenetre} », ajouté à la fin du champ. "
+            "La fenêtre n'a pas été mise devant : l'écran ci dessous est celui de l'étudiant, pas celui de cette fenêtre.",
+            DELAI_APRES_CLAVIER_SECONDES,
+        )
     return await _relire_apres_action(user_id, "Texte tapé au clavier avec succès.", DELAI_APRES_CLAVIER_SECONDES)
 
 
@@ -375,8 +449,10 @@ async def appuyer_touches(touches: str, ctx: Context) -> str:
     presse et l'ecran t'est renvoye. Ensuite, le resultat contient deja
     l'etat de l'ecran qui suit : inutile d'appeler lire_ecran apres.
 
-    Aucune confirmation etudiant pour ce lot (meme regle que le reste du
-    canal en direct depuis le 19/09/2026).
+    Pas de confirmation de l'etudiant pour les applications ordinaires. Pour une
+    application protegee (terminal, PowerShell, gestionnaire de mots de passe,
+    parametres Windows, fenetre Executer), l'etudiant doit autoriser chaque action :
+    s'il refuse ou ne repond pas, l'action n'est PAS faite, ne la retente pas.
     """
     user_id, erreur = _user_id_ou_erreur(ctx)
     if erreur:
@@ -388,7 +464,12 @@ async def appuyer_touches(touches: str, ctx: Context) -> str:
     if bloque is not None:
         return bloque
 
-    resultat = await _demander_action_systeme(user_id, "appuyer_touches", {"touches": touches.strip()})
+    resultat = await _demander_action_systeme(
+        user_id,
+        "appuyer_touches",
+        {"touches": touches.strip(), **_parametres_protection()},
+        delai_abandon_secondes=_delai_abandon_avec_autorisation(),
+    )
     if resultat is None:
         return MESSAGE_ECHEC_SYSTEME
     if isinstance(resultat, dict) and resultat.get("erreur"):
@@ -415,8 +496,10 @@ async def ouvrir_application(nom: str, ctx: Context) -> str:
     l'etat de l'ecran qui suit (apres un court delai pour laisser la fenetre
     s'ouvrir) : inutile d'appeler lire_ecran apres.
 
-    Aucune confirmation etudiant pour ce lot (meme regle que le reste du
-    canal en direct depuis le 19/09/2026).
+    Pas de confirmation de l'etudiant pour les applications ordinaires. Pour une
+    application protegee (terminal, PowerShell, gestionnaire de mots de passe,
+    parametres Windows, fenetre Executer), l'etudiant doit autoriser chaque action :
+    s'il refuse ou ne repond pas, l'action n'est PAS faite, ne la retente pas.
     """
     user_id, erreur = _user_id_ou_erreur(ctx)
     if erreur:
@@ -428,7 +511,12 @@ async def ouvrir_application(nom: str, ctx: Context) -> str:
     if bloque is not None:
         return bloque
 
-    resultat = await _demander_action_systeme(user_id, "ouvrir_application", {"nom": nom})
+    resultat = await _demander_action_systeme(
+        user_id,
+        "ouvrir_application",
+        {"nom": nom, **_parametres_protection()},
+        delai_abandon_secondes=_delai_abandon_avec_autorisation(),
+    )
     if resultat is None:
         return MESSAGE_ECHEC_SYSTEME
     if isinstance(resultat, dict) and resultat.get("erreur"):
