@@ -85,7 +85,8 @@ def bloc_etat_ecran_pc(user_id, conversation_id, table_routage) -> str:
         "menus ouverts), et chaque action que tu fais te renvoie l'écran qui suit. N'appelle pas lire_ecran "
         "parce que tu penses que l'écran a changé, ni pour la refaire : agis directement à partir de ce qui suit. Elle ne montre que la "
         "fenêtre au premier plan : pour voir la barre des tâches ou le bureau, appelle "
-        "lire_ecran avec zone=\"barre_des_taches\" ou zone=\"bureau\". Sur le PC, n'appelle lire_page que si "
+        "lire_ecran avec zone=\"barre_des_taches\" ou zone=\"bureau\" ; pour lire une fenêtre qui est derrière, "
+        "lire_ecran avec fenetre=\"son titre\". Sur le PC, n'appelle lire_page que si "
         "l'étudiant te demande explicitement de faire quelque chose dans l'application Classinus : jamais de ta "
         "propre initiative.\n\n" + texte
     )

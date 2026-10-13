@@ -36,6 +36,7 @@ async def principal():
     texte = await outils.taper_clavier("bonjour", "Bloc-notes", ctx)
     assert "arrière plan" in texte and "Sans titre - Bloc-notes" in texte, texte
     assert "à la fin" in texte and "pas celui de cette fenêtre" in texte, texte
+    assert 'lire_ecran avec fenetre="Sans titre - Bloc-notes"' in texte, texte
 
     # Frappe normale : message d'avant, inchange.
     reponse.clear()
