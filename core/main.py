@@ -148,7 +148,7 @@ def _client_pour_reprise(modele):
     return Groq(api_key=get_secret("GROQ_API_KEY"), max_retries=0)
 
 
-def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None, effort_reflexion=None):
+def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None, effort_reflexion=None, arret_tour=None):
     """
     Generateur d'evenements. Chaque element produit est un dictionnaire :
     - {"type": "statut", "texte": "..."}         -> un outil MCP est en cours d'utilisation (ou, depuis le 11/09/2026, Gemini en train de lire une image/video jointe)
@@ -382,6 +382,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 modele=modele_reprise, reasoning_effort=reasoning_effort_reprise,
                 agent_nom=etat.get("agent_nom"), conversation_id=conversation_id,
                 catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
+                arret=arret_tour,
             )
         except Exception as e:
             logging.error(f"ERREUR GROQ (reprise apres limite/répétition) {modele_reprise}: {e}")
@@ -479,6 +480,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 modele=modele_reprise, reasoning_effort=reasoning_effort_reprise,
                 agent_nom=etat.get("agent_nom"), conversation_id=conversation_id,
                 catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
+                arret=arret_tour,
             )
         except Exception as e:
             logging.error(f"ERREUR GROQ (reprise apres confirmation) {modele_reprise}: {e}")
@@ -1453,8 +1455,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             )
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
-            _finaliser_memoire_en_arriere_plan(user_id, agent_id)
-            forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
+            if not (arret_tour is not None and arret_tour.est_demande()):
+                _finaliser_memoire_en_arriere_plan(user_id, agent_id)
+                forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
         except Exception as e:
             logging.error(f"ERREUR MODELE PREMIUM ({modele_force}) : {e}")
             if not reponse_accumulee:
@@ -1511,7 +1514,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     _agent_groq(client_deepseek, messages_agent, outils_mcp, table_routage, agent_nom=agent_nom,
                                 modele=DEEPSEEK_PRIMARY, reasoning_effort=effort_reflexion, conversation_id=conversation_id,
                                 catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
-                                user_id=user_id),
+                                user_id=user_id, arret=arret_tour),
                     reponse_accumulee,
                     meta_assistant,
                     fichiers_generes_accumules,
@@ -1519,8 +1522,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=DEEPSEEK_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
                 if ids_historique:
                     yield {"type": "meta", **ids_historique}
-                _finaliser_memoire_en_arriere_plan(user_id, agent_id)
-                forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
+                if not (arret_tour is not None and arret_tour.est_demande()):
+                    _finaliser_memoire_en_arriere_plan(user_id, agent_id)
+                    forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
                 return
             except Exception as e:
                 if not _est_timeout(e):
@@ -1537,7 +1541,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                             reasoning_effort=MODELES_AVEC_REASONING_EFFORT.get(GROQ_PRIMARY),
                             conversation_id=conversation_id,
                             catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
-                            user_id=user_id),
+                            user_id=user_id, arret=arret_tour),
                 reponse_accumulee,
                 meta_assistant,
                 fichiers_generes_accumules,
@@ -1545,8 +1549,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GROQ_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
-            _finaliser_memoire_en_arriere_plan(user_id, agent_id)
-            forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
+            if not (arret_tour is not None and arret_tour.est_demande()):
+                _finaliser_memoire_en_arriere_plan(user_id, agent_id)
+                forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
             return
         except Exception as e:
             if not _est_timeout(e):
@@ -1579,7 +1584,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                         modele=model, reasoning_effort=reasoning_pour_ce_modele, agent_nom=agent_nom,
                         conversation_id=conversation_id,
                         catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
-                        user_id=user_id,
+                        user_id=user_id, arret=arret_tour,
                     ),
                     reponse_accumulee,
                     meta_assistant,
@@ -1597,8 +1602,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     meta_a_envoyer["modele_qualite_reduite"] = True
                 if meta_a_envoyer:
                     yield {"type": "meta", **meta_a_envoyer}
-                _finaliser_memoire_en_arriere_plan(user_id, agent_id)
-                forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
+                if not (arret_tour is not None and arret_tour.est_demande()):
+                    _finaliser_memoire_en_arriere_plan(user_id, agent_id)
+                    forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
                 return
             except Exception as e:
                 if not _est_timeout(e):
@@ -1720,8 +1726,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GOOGLE_MODEL, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
-            _finaliser_memoire_en_arriere_plan(user_id, agent_id)
-            forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
+            if not (arret_tour is not None and arret_tour.est_demande()):
+                _finaliser_memoire_en_arriere_plan(user_id, agent_id)
+                forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
             return
         except Exception as e:
             if not _est_timeout(e):

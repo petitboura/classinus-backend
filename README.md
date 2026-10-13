@@ -196,6 +196,19 @@ donc ça marche aussi sur téléphone.
   (voir `RAILWAY_DEPLOY.md`). Sans elle l'API répond que la vidéo est
   indisponible.
 
+## Bouton Arrêter (12/10/2026)
+
+Arrêter doit tout arrêter, pas seulement le texte. Chaque tour de chat reçoit un jeton
+d'arrêt (`core/arret_tour.py`, ouvert dans `api/chat.py`, transmis par `chat()` à
+`_agent_groq` puis `_traiter_appels`). `POST /api/chat/arreter` lève le jeton de tous les
+tours en cours du compte, termine les attentes du canal en direct
+(`annuler_attentes`, `core/canal_agent_applicatif.py`) et prévient l'appli (`arret_tache`
+sur la WebSocket). Les contrôles se font par lecture du jeton, jamais par exception : la
+cascade de modèles de `chat()` attrape les exceptions et relancerait une réponse. Limite :
+un fil d'outil déjà parti ne peut pas être tué, il finit seul et son résultat est jeté.
+Le signal est gardé en mémoire du processus, comme le reste du canal en direct (une seule
+instance du serveur).
+
 ## Variables d'environnement / secrets nécessaires
 
 | Variable | Utilisée par |
