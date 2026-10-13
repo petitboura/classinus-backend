@@ -342,12 +342,15 @@ async def taper_clavier(texte: str, cible: str, ctx: Context) -> str:
     cible (OBLIGATOIRE, 12/10/2026) : la fenetre dans laquelle le texte doit
     aller, telle que tu l'as lue a l'ecran (son titre, par exemple
     "Sans titre - Bloc-notes", ou au moins le nom de l'application, par exemple
-    "Bloc-notes"). Avant d'ecrire, puis avant chaque morceau de texte,
-    l'application PC verifie que le clavier est bien dans cette fenetre.
-    Si ce n'est pas le cas, ou si l'etudiant quitte la fenetre pendant que
-    tu ecris, la frappe s'arrete tout de suite : rien n'est ecrit ailleurs et
-    le resultat te dit combien de caracteres ont ete tapes. Dans ce cas, ne
-    tape pas dans une autre fenetre : demande a l'etudiant ce qu'il veut.
+    "Bloc-notes"). Donne de preference le TITRE COMPLET de la fenetre, tel que
+    lu a l'ecran : avec un nom court comme "Chrome", l'application PC ne voit
+    pas que l'etudiant a change d'onglet. Avant d'ecrire, puis avant chaque
+    morceau de texte, l'application PC verifie que le clavier est bien dans
+    cette fenetre. Si ce n'est pas le cas, ou si l'etudiant reprend la main
+    pendant que tu ecris (autre fenetre, autre onglet, souris deplacee pour
+    aller dans un autre champ), la frappe s'arrete tout de suite : plus rien
+    n'est ecrit et le resultat te dit combien de caracteres ont ete tapes.
+    Dans ce cas, ne tape pas ailleurs : demande a l'etudiant ce qu'il veut.
 
     Ecriture en arriere plan (12/10/2026) : si la fenetre visee n'est PAS
     celle que l'etudiant a devant lui, le texte est ecrit directement dans
