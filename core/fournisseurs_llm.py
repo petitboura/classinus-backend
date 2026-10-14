@@ -161,6 +161,50 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque):
     return resultats
 
 
+# Fournisseurs montrés avec la mention "Bientôt" dans le sélecteur de modèle du
+# chat (14/10/2026, demande de Bourama : DeepSeek est utilisable, les autres
+# s'affichent mais ne se choisissent pas encore). Liste désignée à la main : pour
+# ouvrir un fournisseur, retirer son nom d'ici (et ajouter sa clé API sur Railway).
+DISTRIBUTEURS_BIENTOT = ["claude", "gpt", "gemini"]
+
+
+def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque):
+    """
+    Modèles affichés grisés avec la mention "Bientôt" : les trois niveaux de
+    chaque fournisseur de DISTRIBUTEURS_BIENTOT, dans l'ordre de
+    ORDRE_DISTRIBUTEURS puis ORDRE_PALIERS. Même forme d'élément que
+    modeles_disponibles_pour_agent.
+
+    Vide quand l'agent n'a aucun modèle choisissable : le frontend n'affiche
+    alors aucun sélecteur, comme avant. Un modèle déjà choisissable est exclu,
+    pour qu'il ne figure jamais deux fois dans la liste.
+
+    Ces modèles ne sont JAMAIS acceptés par modele_id_est_autorise (qui ne lit
+    que modeles_disponibles_pour_agent) : le frontend ne peut pas les imposer.
+    """
+    disponibles = modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque)
+    if not disponibles:
+        return []
+
+    ids_a_exclure = {m["modele_id"] for m in disponibles}
+    resultats = []
+    for distributeur in ORDRE_DISTRIBUTEURS:
+        if distributeur not in DISTRIBUTEURS_BIENTOT:
+            continue
+        for palier in ORDRE_PALIERS:
+            info = HIERARCHIE_MODELES[distributeur][palier]
+            if info["id"] in ids_a_exclure:
+                continue
+            ids_a_exclure.add(info["id"])
+            resultats.append({
+                "modele_id": info["id"],
+                "label": info["label"],
+                "distributeur": distributeur,
+                "palier": palier,
+            })
+    return resultats
+
+
 def modele_id_est_autorise(modele_id, distributeur_debloque, palier_debloque):
     """
     Verification cote backend AVANT d'honorer un choix de modele envoye
