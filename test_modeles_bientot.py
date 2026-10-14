@@ -31,10 +31,22 @@ class ModelesBientot(unittest.TestCase):
         ids = [m["modele_id"] for m in disponibles + bientot]
         self.assertEqual(len(ids), len(set(ids)))
 
-    def test_un_modele_devenu_disponible_sort_de_la_liste_bientot(self):
-        cles = {"DEEPSEEK_API_KEY": "x", "OPENAI_API_KEY": "x"}
+    def test_cle_presente_ne_rend_pas_un_fournisseur_bientot_utilisable(self):
+        cles = {"DEEPSEEK_API_KEY": "x", "OPENAI_API_KEY": "x", "ANTHROPIC_API_KEY": "x", "GOOGLE_API_KEY": "x"}
         with patch.dict(os.environ, cles, clear=True):
+            disponibles = modeles_disponibles_pour_agent("claude", "pro")
             bientot = modeles_bientot_pour_agent("claude", "pro")
+            self.assertTrue(all(m["distributeur"] == "deepseek" for m in disponibles))
+            self.assertEqual({m["distributeur"] for m in bientot}, set(DISTRIBUTEURS_BIENTOT))
+            for m in bientot:
+                self.assertFalse(modele_id_est_autorise(m["modele_id"], "claude", "pro"))
+
+    def test_fournisseur_retire_de_la_liste_devient_utilisable(self):
+        cles = {"DEEPSEEK_API_KEY": "x", "OPENAI_API_KEY": "x"}
+        with patch.dict(os.environ, cles, clear=True), patch("core.fournisseurs_llm.DISTRIBUTEURS_BIENTOT", ["claude", "gemini"]):
+            disponibles = modeles_disponibles_pour_agent("claude", "pro")
+            bientot = modeles_bientot_pour_agent("claude", "pro")
+        self.assertIn("gpt", {m["distributeur"] for m in disponibles})
         self.assertNotIn("gpt", {m["distributeur"] for m in bientot})
 
     def test_agent_sans_modele_debloque_n_a_rien(self):
