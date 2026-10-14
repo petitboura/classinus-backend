@@ -12,6 +12,7 @@ from core.canal_agent_applicatif import obtenir_etat_editeur
 from historique_reponses_qcm import formater_reponses_qcm
 from core.configuration_etudiant import construire_bloc_configuration
 from core.memoire_eleve import construire_bloc_sommaire
+import prompt_thonny
 
 
 def _texte_actions_application(actions):
@@ -164,7 +165,7 @@ def _texte_editeur(etat):
         "- Les boutons de l'éditeur (Exécuter, Ouvrir, Enregistrer, Vers le chat, plein écran) sont dans la liste des éléments à l'écran.\n"
     )
 
-def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None, reponses_qcm_recentes=None, etat_editeur=None, configuration_etudiant=None, sommaire_memoire=None):
+def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None, reponses_qcm_recentes=None, etat_editeur=None, configuration_etudiant=None, sommaire_memoire=None, client=None, libelles_client=None):
     # Restauré le 14/08 (voir commentaire des constantes plus haut) : la
     # page Notion de l'agent (get_system_prompt) ne doit plus contenir QUE
     # la personnalité/le comportement propre à l'agent -- les 3 blocs fixes
@@ -196,7 +197,14 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # tour-la. Seulement si user_id est connu : un visiteur sans compte n'a
     # pas de memoire (les 3 outils ne lui sont pas proposes non plus, voir
     # core/main.py), la consigne serait trompeuse.
-    system_final = INSTRUCTIONS_FORMATS_AFFICHAGE + INSTRUCTIONS_ARBITRAGE_CALCUL + REGLE_CONTEXTE_INVISIBLE + REGLE_ETAT_APPLICATION_TAIRE + (REGLE_MEMOIRE_ELEVE if user_id else "")
+    # Client Thonny (14/10/2026, demande Bourama) : le panneau Thonny n'affiche aucun element du site,
+    # ses consignes d'affichage sont remplacees par celles de core/prompt_thonny.py. Pour tous les
+    # autres clients, rien ne change.
+    client_thonny = prompt_thonny.est_client_thonny(client)
+    if client_thonny:
+        system_final = prompt_thonny.blocs_plateforme(bool(user_id)) + prompt_thonny.consignes(libelles_client)
+    else:
+        system_final = INSTRUCTIONS_FORMATS_AFFICHAGE + INSTRUCTIONS_ARBITRAGE_CALCUL + REGLE_CONTEXTE_INVISIBLE + REGLE_ETAT_APPLICATION_TAIRE + (REGLE_MEMOIRE_ELEVE if user_id else "")
     system_final += "\n\n" + (get_system_prompt(agent_id) or "")
 
     # Mécanisme "à la skill" (13/08/2026) : le texte long n'est plus
@@ -307,7 +315,7 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # leur propre conversation dediee (jamais mélangées sur la meme), donc
     # jamais plus d'une des trois active a la fois ici.
     guide_actif = guide_actif or {"actif": False, "sous_mode": "textuel"}
-    if guide_actif["actif"]:
+    if guide_actif["actif"] and not client_thonny:
         sous_mode_decouverte = guide_actif.get("sous_mode") or "textuel"
         if sous_mode_decouverte == "visuel":
             system_final += construire_instruction_guide_visuel(obtenir_sections_guide())
@@ -340,7 +348,7 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # lu dans chat() et recu ici en parametre. None ou liste vide (canal
     # en direct inactif, ou application ouverte nulle part) : rien n'est
     # injecte du tout.
-    if actions_ecran:
+    if actions_ecran and not client_thonny:
         system_final += _texte_actions_application(actions_ecran)
 
     # Editeur de code (28/09/2026) : uniquement quand il est monte a
@@ -354,11 +362,11 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # mais ne doit jamais pouvoir masquer un éditeur qui était bien ouvert
     # au moment où l'étudiant a envoyé son message.
     etat_editeur_effectif = etat_editeur
-    if etat_editeur_effectif is None and user_id:
+    if etat_editeur_effectif is None and user_id and not client_thonny:
         # Compatibilité avec les anciens appelants internes qui ne fournissent
         # pas encore le nouvel argument.
         etat_editeur_effectif = obtenir_etat_editeur(user_id)
-    if isinstance(etat_editeur_effectif, dict):
+    if isinstance(etat_editeur_effectif, dict) and not client_thonny:
         system_final += _texte_editeur(etat_editeur_effectif)
 
     # Injection automatique des reponses QCM (23/09/2026, demande Bourama) :
@@ -370,7 +378,7 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # derniers messages de l'etudiant (celui-ci compris) -- au-dela, voir
     # l'outil de secours lire_reponses_qcm (core/outils_reponses_qcm.py).
     # None ou liste vide : rien n'est injecte du tout, comportement inchange.
-    if reponses_qcm_recentes:
+    if reponses_qcm_recentes and not client_thonny:
         system_final += (
             "\n\n### Réponses récentes de l'étudiant aux QCM\n"
             "L'étudiant vient de répondre au(x) QCM suivant(s) -- tiens-en compte "
@@ -480,9 +488,12 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
             "demande ce que tu sais faire, dis que ça dépend de la question plutôt "
             "que de prétendre n'avoir aucune capacité. Le texte de ta réponse ne doit "
             "contenir aucun outil inventé ni pseudo-syntaxe d'appel (TOOL_CODE, "
-            "nom_outil(...), nom_outil{...}, call:nom_outil{...}). Les blocs "
-            "d'affichage mermaid/chart/carte/widget/animation/geometrie restent disponibles : "
-            "ce sont des formats de sortie, pas des outils.\n"
+            "nom_outil(...), nom_outil{...}, call:nom_outil{...})."
+            + ("" if client_thonny else (
+                " Les blocs d'affichage mermaid/chart/carte/widget/animation/geometrie restent disponibles : "
+                "ce sont des formats de sortie, pas des outils."
+            ))
+            + "\n"
             "ORDRE DE RECHERCHE (12/09/2026, demande Bourama) : quand tu appelles "
             "demander_outils, décris d'abord le besoin le plus précis possible pour "
             "trouver l'outil exact qui répond à la demande (ex: envoyer un message, "
