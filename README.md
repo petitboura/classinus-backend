@@ -32,7 +32,7 @@ core/
                                 candidats, le grand modèle décide lui-même de lire le texte complet
   contenu_dynamique_matiere.py résolution du system prompt pour les agents à contenu dynamique par matière
   auth.py                      authentification (email/mot de passe + Google) via Supabase Auth
-  fournisseurs_llm.py          LLM premium (Claude, GPT, Gemini, DeepSeek) — gardes-fous d'accès
+  fournisseurs_llm.py          LLM premium (Claude, GPT, Gemini, DeepSeek) — gardes-fous d'accès, et liste des modèles affichés « Bientôt » dans le sélecteur du chat (DISTRIBUTEURS_BIENTOT)
   retriever.py                 recherche vectorielle parallèle (prompts, documents), scopée par agent
   embeddings.py                vectorisation partagée (gemini-embedding-001)
   bibliotheque_fichiers.py     bibliothèque de fichiers uploadés, persistante, à 3 niveaux d'accès
