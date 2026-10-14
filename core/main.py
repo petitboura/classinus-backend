@@ -148,7 +148,17 @@ def _client_pour_reprise(modele):
     return Groq(api_key=get_secret("GROQ_API_KEY"), max_retries=0)
 
 
-def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None, effort_reflexion=None, arret_tour=None):
+def _texte_a_enregistrer(message_utilisateur, message_enregistre):
+    """Le texte de la question tel qu'il est range dans l'historique.
+
+    Un client qui ajoute des consignes ou du contexte devant la question (le plugin Thonny) envoie
+    la vraie question dans `message_enregistre` : c'est elle qui apparait dans l'historique et
+    comme titre de la conversation, pas les consignes. Sans ce champ, rien ne change.
+    """
+    return message_enregistre if message_enregistre else message_utilisateur
+
+
+def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None, effort_reflexion=None, arret_tour=None, message_enregistre=None):
     """
     Generateur d'evenements. Chaque element produit est un dictionnaire :
     - {"type": "statut", "texte": "..."}         -> un outil MCP est en cours d'utilisation (ou, depuis le 11/09/2026, Gemini en train de lire une image/video jointe)
@@ -1450,7 +1460,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 yield {"type": "reponse", "texte": morceau}
             logging.info(f"Réponse via MODELE PREMIUM : {modele_force}")
             ids_historique = _sauvegarder_echange(
-                user_id, agent_id, message_utilisateur, "".join(reponse_accumulee), conversation_id, modele=modele_force, meta_utilisateur=meta_utilisateur,
+                user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre), "".join(reponse_accumulee), conversation_id, modele=modele_force, meta_utilisateur=meta_utilisateur,
                 parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer
             )
             if ids_historique:
@@ -1519,7 +1529,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     meta_assistant,
                     fichiers_generes_accumules,
                 )
-                ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=DEEPSEEK_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
+                ids_historique = _sauvegarder_echange(user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre), "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=DEEPSEEK_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
                 if ids_historique:
                     yield {"type": "meta", **ids_historique}
                 if not (arret_tour is not None and arret_tour.est_demande()):
@@ -1546,7 +1556,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 meta_assistant,
                 fichiers_generes_accumules,
             )
-            ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GROQ_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
+            ids_historique = _sauvegarder_echange(user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre), "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GROQ_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
             if not (arret_tour is not None and arret_tour.est_demande()):
@@ -1590,7 +1600,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     meta_assistant,
                     fichiers_generes_accumules,
                 )
-                ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=model, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
+                ids_historique = _sauvegarder_echange(user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre), "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=model, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
                 # Signale au frontend quand la reponse vient d'un modele de
                 # qualite reduite (demande Bourama, 26/07) : evite que
                 # l'utilisateur juge la plateforme sur une reponse plus
@@ -1723,7 +1733,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # deja obtenus par un modele Groq/DeepSeek avant l'echec
             # disparaissaient donc reellement a la reouverture de la
             # conversation, meme s'ils restaient visibles en direct.
-            ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GOOGLE_MODEL, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
+            ids_historique = _sauvegarder_echange(user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre), "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GOOGLE_MODEL, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
             if not (arret_tour is not None and arret_tour.est_demande()):

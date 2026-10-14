@@ -195,6 +195,10 @@ class EnvoyerMessagePayload(BaseModel):
     # version alternative de l'ancienne (au lieu d'une suite).
     parent_id: Optional[int] = None
     regenerer: Optional[bool] = False
+    # Vraie question a ranger dans l'historique quand `message` contient en plus des consignes ou du
+    # contexte du client (plugin Thonny, 14/10/2026, demande Bourama : sinon le titre de la
+    # conversation et son historique montrent les consignes). Absent : `message` est enregistre.
+    message_enregistre: Optional[str] = None
 
 
 def _resoudre_modele_force(agent_id, modele_demande):
@@ -285,6 +289,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
                 parent_id=payload.parent_id,
                 regenerer=payload.regenerer or False,
                 arret_tour=arret,
+                message_enregistre=payload.message_enregistre,
             )
         for evenement in generateur:
             yield f"data: {json.dumps(evenement)}\n\n"
