@@ -100,6 +100,14 @@ def _distributeur_disponible(distributeur):
     return bool(variable and get_secret(variable))
 
 
+# Fournisseurs "Bientôt" (14/10/2026, demande de Bourama : DeepSeek est utilisable, les
+# autres s'affichent grisés dans le sélecteur de modèle du chat mais ne se choisissent
+# pas encore). Liste désignée à la main, et elle prime sur tout : même avec une clé API
+# et un déblocage, un fournisseur de cette liste n'est ni proposé ni accepté. Pour
+# ouvrir un fournisseur, retirer son nom d'ici (et ajouter sa clé API sur Railway).
+DISTRIBUTEURS_BIENTOT = ["claude", "gpt", "gemini"]
+
+
 def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque):
     """
     Calcule la liste des modeles reellement choisissables pour un agent,
@@ -113,7 +121,8 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque):
     gating pattern (cle API absente = fournisseur invisible), donc un
     agent peut tres bien avoir un distributeur_debloque="claude" mais ne
     voir apparaitre que gemini/deepseek si ANTHROPIC_API_KEY/OPENAI_API_KEY
-    manquent encore sur Railway.
+    manquent encore sur Railway. Les fournisseurs de DISTRIBUTEURS_BIENTOT sont
+    toujours exclus, clé API présente ou non.
     """
     if not distributeur_debloque or distributeur_debloque == "aucun":
         return []
@@ -139,6 +148,8 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque):
     resultats = []
     ids_deja_vus = set()
     for distributeur in distributeurs_autorises:
+        if distributeur in DISTRIBUTEURS_BIENTOT:
+            continue
         if not _distributeur_disponible(distributeur):
             continue
         for palier in paliers_autorises:
@@ -161,13 +172,6 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque):
     return resultats
 
 
-# Fournisseurs montrés avec la mention "Bientôt" dans le sélecteur de modèle du
-# chat (14/10/2026, demande de Bourama : DeepSeek est utilisable, les autres
-# s'affichent mais ne se choisissent pas encore). Liste désignée à la main : pour
-# ouvrir un fournisseur, retirer son nom d'ici (et ajouter sa clé API sur Railway).
-DISTRIBUTEURS_BIENTOT = ["claude", "gpt", "gemini"]
-
-
 def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque):
     """
     Modèles affichés grisés avec la mention "Bientôt" : les trois niveaux de
@@ -177,7 +181,8 @@ def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque):
 
     Vide quand l'agent n'a aucun modèle choisissable : le frontend n'affiche
     alors aucun sélecteur, comme avant. Un modèle déjà choisissable est exclu,
-    pour qu'il ne figure jamais deux fois dans la liste.
+    pour qu'il ne figure jamais deux fois dans la liste (cas qui ne peut plus
+    arriver tant que modeles_disponibles_pour_agent écarte ces fournisseurs).
 
     Ces modèles ne sont JAMAIS acceptés par modele_id_est_autorise (qui ne lit
     que modeles_disponibles_pour_agent) : le frontend ne peut pas les imposer.
