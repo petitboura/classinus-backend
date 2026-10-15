@@ -38,8 +38,8 @@ class ModelesBientot(unittest.TestCase):
             bientot = modeles_bientot_pour_agent("claude", "pro")
         self.assertEqual({m["distributeur"] for m in disponibles}, {"deepseek"})
         self.assertEqual({m["distributeur"] for m in bientot}, set(DISTRIBUTEURS_BIENTOT))
-        # 3 niveaux pour Claude, GPT et Gemini, 2 modèles pour Grok (grok-4.3 sert deux niveaux).
-        self.assertEqual(len(bientot), 11)
+        # 3 niveaux pour Claude, GPT et Gemini, 3 modèles pour Grok (grok-4.3 sert deux niveaux, plus grok-build-0.1).
+        self.assertEqual(len(bientot), 12)
 
     def test_aucun_modele_en_double(self):
         with patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True):
@@ -115,7 +115,7 @@ class ModelesBientot(unittest.TestCase):
             disponibles = modeles_disponibles_pour_agent("claude", "pro")
             bientot = modeles_bientot_pour_agent("claude", "pro")
         self.assertEqual({m["distributeur"] for m in disponibles}, {"deepseek"})
-        self.assertEqual(len(bientot), 11)
+        self.assertEqual(len(bientot), 12)
 
     def test_supabase_en_panne_garde_la_derniere_configuration_connue(self):
         def ouvrir_gpt(config):
@@ -166,7 +166,7 @@ class ModelesGrok(unittest.TestCase):
         with patch.dict(os.environ, {"XAI_API_KEY": "x", "DEEPSEEK_API_KEY": "x"}, clear=True):
             bientot = modeles_bientot_pour_agent("claude", "pro")
             grok = [m["modele_id"] for m in bientot if m["distributeur"] == "grok"]
-            self.assertEqual(grok, ["grok-4.3", "grok-4.7"])
+            self.assertEqual(grok, ["grok-4.3", "grok-4.7", "grok-build-0.1"])
             self.assertFalse(modele_id_est_autorise("grok-4.7", "claude", "pro"))
 
     def test_grok_utilisable_quand_bientot_retire_et_cle_presente(self):
@@ -178,6 +178,13 @@ class ModelesGrok(unittest.TestCase):
                 self.assertTrue(modele_id_est_autorise("grok-4.7", "gemini", "pro"))
                 # Un agent debloque a DeepSeek ne voit pas Grok (hierarchie descendante).
                 self.assertNotIn("grok-4.7", [m["modele_id"] for m in modeles_disponibles_pour_agent("deepseek", "pro")])
+
+    def test_grok_build_jamais_choisissable_meme_sans_bientot(self):
+        with _avec_config_supabase(lambda config: config["fournisseurs"]["grok"].update(bientot=False)):
+            with patch.dict(os.environ, {"XAI_API_KEY": "x"}, clear=True):
+                for palier in ("essentiel", "avance", "pro"):
+                    self.assertFalse(modele_id_est_autorise("grok-build-0.1", "claude", palier))
+                self.assertTrue(modele_id_est_autorise("grok-build-0.1", "claude", "specialise"))
 
     def test_grok_sans_cle_invisible(self):
         with _avec_config_supabase(lambda config: config["fournisseurs"]["grok"].update(bientot=False)):

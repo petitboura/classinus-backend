@@ -44,7 +44,11 @@ def get_secret(key):
 ORDRE_DISTRIBUTEURS = ["claude", "gpt", "gemini", "grok", "deepseek"]
 
 # Ordre = hierarchie cumulative ascendante.
-ORDRE_PALIERS = ["essentiel", "avance", "pro"]
+ORDRE_PALIERS = ["essentiel", "avance", "pro", "specialise"]
+# "specialise" (16/10/2026) : niveau reserve aux modeles a usage precis qu'on
+# affiche sans les proposer en discussion normale (aujourd'hui seulement
+# grok-build-0.1, modele de code). Aucun agent n'a ce palier debloque, donc
+# ces modeles ne sont jamais choisissables ; ils servent a l'affichage Bientot.
 
 # palier "essentiel"/"avance"/"pro" (nom commercial, cote agents/pricing)
 # -> mappe sur le palier de qualite "simple"/"parfait"/"pro" de la page
@@ -81,6 +85,9 @@ HIERARCHIE_MODELES = {
         "essentiel": {"id": "grok-4.3", "label": "Grok 4.3"},
         "avance": {"id": "grok-4.3", "label": "Grok 4.3"},
         "pro": {"id": "grok-4.7", "label": "Grok 4.7"},
+        # Affichage seulement (Bientot), pas branche : grok-build-0.1 est un
+        # modele de code (1 $ / 2 $ par million), pas un modele de discussion.
+        "specialise": {"id": "grok-build-0.1", "label": "Grok Build 0.1"},
     },
     "deepseek": {
         # L'API DeepSeek n'expose que 2 modeles stables a la fois
