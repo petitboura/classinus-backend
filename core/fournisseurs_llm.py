@@ -1,5 +1,5 @@
 """
-Fournisseurs LLM premium (Claude, GPT, Gemini, DeepSeek) -- gardes-fous
+Fournisseurs LLM premium (Claude, GPT, Gemini, Grok, DeepSeek) -- gardes-fous
 "abonnement" par agent, distincts de la cascade Groq/Gemini-vision de
 main.py qui reste le comportement PAR DEFAUT (voir GROQ_PRIMARY).
 
@@ -7,9 +7,9 @@ Contexte (voir page Notion "Pricing -- Agent Maths", 01/08/2026) : un agent
 peut debloquer un `distributeur` (fournisseur) + un `palier` (qualite de
 modele). La hierarchie des distributeurs est CUMULATIVE DESCENDANTE :
 
-    claude > gpt > gemini > deepseek
+    claude > gpt > gemini > deepseek > grok
 
-debloquer "claude" donne aussi acces a gpt/gemini/deepseek. Le palier est
+debloquer "claude" donne aussi acces a gpt/gemini/deepseek/grok. Le palier est
 lui aussi cumulatif ascendant (pro >= avance >= essentiel) : un agent en
 "pro" peut choisir un modele "essentiel" du meme distributeur si l'usager
 veut une reponse plus rapide/moins chere.
@@ -41,10 +41,14 @@ def get_secret(key):
 
 
 # Ordre = hierarchie cumulative descendante (voir docstring plus haut).
-ORDRE_DISTRIBUTEURS = ["claude", "gpt", "gemini", "deepseek"]
+ORDRE_DISTRIBUTEURS = ["claude", "gpt", "gemini", "deepseek", "grok"]
 
 # Ordre = hierarchie cumulative ascendante.
-ORDRE_PALIERS = ["essentiel", "avance", "pro"]
+ORDRE_PALIERS = ["essentiel", "avance", "pro", "specialise"]
+# "specialise" (16/10/2026) : niveau reserve aux modeles a usage precis qu'on
+# affiche sans les proposer en discussion normale (aujourd'hui seulement
+# grok-build-0.1, modele de code). Aucun agent n'a ce palier debloque, donc
+# ces modeles ne sont jamais choisissables ; ils servent a l'affichage Bientot.
 
 # palier "essentiel"/"avance"/"pro" (nom commercial, cote agents/pricing)
 # -> mappe sur le palier de qualite "simple"/"parfait"/"pro" de la page
@@ -70,6 +74,21 @@ HIERARCHIE_MODELES = {
         "avance": {"id": "gemini-3.6-flash", "label": "Gemini 3.6 Flash"},
         "pro": {"id": "gemini-3.1-pro", "label": "Gemini 3.1 Pro"},
     },
+    "grok": {
+        # Grok (xAI), ajoute le 16/10/2026 sur demande de Bourama : seulement
+        # grok-4.3 et grok-4.7 (ni grok-build-0.1, modele de code, ni
+        # grok-4.20-multi-agent, modele de recherche approfondie en beta).
+        # Comme DeepSeek, deux modeles pour trois paliers : essentiel et
+        # avance partagent grok-4.3, pro passe sur grok-4.7. Prix xAI par
+        # million de tokens (docs.x.ai/developers/pricing) : grok-4.3 a
+        # 1,25 $ / 2,50 $, grok-4.7 a 2 $ / 6 $.
+        "essentiel": {"id": "grok-4.3", "label": "Grok 4.3"},
+        "avance": {"id": "grok-4.3", "label": "Grok 4.3"},
+        "pro": {"id": "grok-4.7", "label": "Grok 4.7"},
+        # Affichage seulement (Bientot), pas branche : grok-build-0.1 est un
+        # modele de code (1 $ / 2 $ par million), pas un modele de discussion.
+        "specialise": {"id": "grok-build-0.1", "label": "Grok Build 0.1"},
+    },
     "deepseek": {
         # L'API DeepSeek n'expose que 2 modeles stables a la fois
         # (aujourd'hui deepseek-v4-flash / deepseek-v4-pro), pas de nom
@@ -94,6 +113,7 @@ VARIABLES_CLE_PAR_DISTRIBUTEUR = {
     "claude": "ANTHROPIC_API_KEY",
     "gpt": "OPENAI_API_KEY",
     "gemini": "GOOGLE_API_KEY",  # reprend la cle Gemini deja utilisee par main.py si presente
+    "grok": "XAI_API_KEY",
     "deepseek": "DEEPSEEK_API_KEY",
 }
 
@@ -120,7 +140,7 @@ def _distributeur_disponible(distributeur, config=None):
 # encore). Depuis le 15/10/2026 le statut Bientôt se règle dans Supabase, colonne
 # bientot de la table fournisseurs_llm. Cette liste ne sert plus que si Supabase ne
 # répond pas ou si les tables sont vides.
-DISTRIBUTEURS_BIENTOT = ["claude", "gpt", "gemini"]
+DISTRIBUTEURS_BIENTOT = ["claude", "gpt", "gemini", "grok"]
 
 # Mot affiché sur les modèles Bientôt, par langue. Valeur de repli : le texte se règle
 # dans la table textes_modeles_llm de Supabase (cle = bientot).
@@ -480,6 +500,25 @@ def _stream_deepseek(modele_id, system_prompt, messages, effort=None):
             yield delta.content
 
 
+def _stream_grok(modele_id, system_prompt, messages):
+    # Grok (xAI) : API compatible OpenAI, seule la base_url change
+    # (https://api.x.ai/v1, docs.x.ai/developers/pricing). Texte seul, comme
+    # Claude, GPT et Gemini : pas d'outils sur ce chemin. Aucun reglage
+    # d'effort envoye : la page xAI ne le documente pas pour ces modeles.
+    from openai import OpenAI
+    client = OpenAI(api_key=get_secret("XAI_API_KEY"), base_url="https://api.x.ai/v1")
+    messages_openai = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + messages
+    flux = client.chat.completions.create(
+        model=modele_id,
+        messages=messages_openai,
+        stream=True,
+    )
+    for morceau in flux:
+        delta = morceau.choices[0].delta.content if morceau.choices else None
+        if delta:
+            yield delta
+
+
 def _stream_gemini(modele_id, system_prompt, messages):
     # Reutilise le client google-genai deja initialise ailleurs dans le
     # projet (voir core/main.py) -- instancie ici localement pour garder
@@ -505,6 +544,7 @@ _STREAMERS_PAR_DISTRIBUTEUR = {
     "claude": _stream_claude,
     "gpt": _stream_gpt,
     "deepseek": _stream_deepseek,
+    "grok": _stream_grok,
     "gemini": _stream_gemini,
 }
 
