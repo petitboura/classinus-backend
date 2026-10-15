@@ -193,6 +193,12 @@ class MonStatutReponse(BaseModel):
     # None/False = traduction seulement à la demande (bouton "Traduire"),
     # True = traduction automatique dès qu'une erreur apparaît.
     traduction_auto_erreurs: Optional[bool] = None
+    # 15/10/2026, demande Bourama (bouton du modèle en haut du chat) : dernier
+    # modèle choisi par l'élève, gardé sur son compte pour le retrouver sur
+    # n'importe quel appareil. None = jamais choisi (le frontend retombe alors
+    # sur DeepSeek Flash). Un id absent de la liste de l'agent est ignoré par
+    # le frontend, et revalidé côté serveur à chaque envoi (api/chat.py).
+    modele_prefere: Optional[str] = None
 
 
 @router.get("/moi/statut", response_model=MonStatutReponse)
@@ -202,7 +208,7 @@ def mon_statut(utilisateur=Depends(utilisateur_courant)):
             supabase.table("profiles")
             .select(
                 "est_createur, est_majeur, est_professeur, "
-                "langue_cible_erreurs, traduction_auto_erreurs"
+                "langue_cible_erreurs, traduction_auto_erreurs, modele_prefere"
             )
             .eq("user_id", utilisateur.id)
             .maybe_single()
@@ -217,6 +223,7 @@ def mon_statut(utilisateur=Depends(utilisateur_courant)):
     est_professeur = donnees.get("est_professeur")
     langue_cible_erreurs = donnees.get("langue_cible_erreurs")
     traduction_auto_erreurs = donnees.get("traduction_auto_erreurs")
+    modele_prefere = donnees.get("modele_prefere")
 
     agents_administres = _agents_administres_de(utilisateur.id)
 
@@ -227,6 +234,7 @@ def mon_statut(utilisateur=Depends(utilisateur_courant)):
         est_professeur=est_professeur,
         langue_cible_erreurs=langue_cible_erreurs,
         traduction_auto_erreurs=traduction_auto_erreurs,
+        modele_prefere=modele_prefere,
     )
 
 
@@ -395,6 +403,9 @@ class MettreAJourProfilPayload(BaseModel):
     # ne rien changer.
     langue_cible_erreurs: Optional[str] = None
     traduction_auto_erreurs: Optional[bool] = None
+    # 15/10/2026, voir MonStatutReponse.modele_prefere. None = champ omis,
+    # ne rien changer.
+    modele_prefere: Optional[str] = Field(default=None, max_length=100)
 
 
 @router.patch("/me", response_model=ProfilPublic)
@@ -466,6 +477,8 @@ def mettre_a_jour_mon_profil(
         ligne["langue_cible_erreurs"] = payload.langue_cible_erreurs.strip() or None
     if payload.traduction_auto_erreurs is not None:
         ligne["traduction_auto_erreurs"] = payload.traduction_auto_erreurs
+    if payload.modele_prefere is not None:
+        ligne["modele_prefere"] = payload.modele_prefere.strip() or None
 
     try:
         deja_existant = (
