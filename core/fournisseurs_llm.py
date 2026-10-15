@@ -14,10 +14,12 @@ lui aussi cumulatif ascendant (pro >= avance >= essentiel) : un agent en
 "pro" peut choisir un modele "essentiel" du meme distributeur si l'usager
 veut une reponse plus rapide/moins chere.
 
-IMPORTANT -- ces identifiants de modele bougent vite (nouvelles versions
-tous les 1-2 mois chez chaque fournisseur). Modifier UNIQUEMENT
-HIERARCHIE_MODELES ci-dessous quand un fournisseur sort un nouveau modele,
-rien d'autre a toucher dans ce fichier ni dans main.py.
+IMPORTANT : ces identifiants de modele bougent vite (nouvelles versions
+tous les 1-2 mois chez chaque fournisseur). Depuis le 15/10/2026 ils se
+reglent dans Supabase (tables fournisseurs_llm, modeles_llm et
+textes_modeles_llm), sans toucher au code ni redeployer : le backend relit
+la configuration environ toutes les minutes. HIERARCHIE_MODELES ci-dessous
+ne sert plus que de valeur de repli si Supabase ne repond pas.
 
 LIMITE CONNUE (v1, 02/08/2026) : ces fournisseurs premium repondent en
 TEXTE SEUL, sans les outils MCP (Wolfram, RAG, Notion, recherche web...).
@@ -28,6 +30,7 @@ fait ici. A previlegier pour la v2 si Bourama le confirme.
 """
 
 import os
+import time
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -95,17 +98,164 @@ VARIABLES_CLE_PAR_DISTRIBUTEUR = {
 }
 
 
-def _distributeur_disponible(distributeur):
-    variable = VARIABLES_CLE_PAR_DISTRIBUTEUR.get(distributeur)
+def _distributeur_disponible(distributeur, config=None):
+    """
+    Regle de cle API lue dans Supabase (table fournisseurs_llm) : si
+    cle_api_requise vaut true, le fournisseur disparait quand sa cle est
+    absente du serveur ; si elle vaut false, il reste visible sans verifier
+    la cle.
+    """
+    config = config or _config_modeles()
+    fournisseur = config["fournisseurs"].get(distributeur)
+    if not fournisseur:
+        return False
+    if not fournisseur["cle_api_requise"]:
+        return True
+    variable = fournisseur["variable_cle_api"]
     return bool(variable and get_secret(variable))
 
 
-# Fournisseurs "Bientôt" (14/10/2026, demande de Bourama : DeepSeek est utilisable, les
-# autres s'affichent grisés dans le sélecteur de modèle du chat mais ne se choisissent
-# pas encore). Liste désignée à la main, et elle prime sur tout : même avec une clé API
-# et un déblocage, un fournisseur de cette liste n'est ni proposé ni accepté. Pour
-# ouvrir un fournisseur, retirer son nom d'ici (et ajouter sa clé API sur Railway).
+# Valeur de repli (14/10/2026, demande de Bourama : DeepSeek est utilisable, les autres
+# s'affichent grisés dans le sélecteur de modèle du chat mais ne se choisissent pas
+# encore). Depuis le 15/10/2026 le statut Bientôt se règle dans Supabase, colonne
+# bientot de la table fournisseurs_llm. Cette liste ne sert plus que si Supabase ne
+# répond pas ou si les tables sont vides.
 DISTRIBUTEURS_BIENTOT = ["claude", "gpt", "gemini"]
+
+# Mot affiché sur les modèles Bientôt, par langue. Valeur de repli : le texte se règle
+# dans la table textes_modeles_llm de Supabase (cle = bientot).
+LIBELLE_BIENTOT_DE_REPLI = {"fr": "Bientôt"}
+
+# Configuration des modèles (demande de Bourama du 15/10/2026 : tout doit se régler
+# depuis Supabase, sans toucher au code). Trois tables : fournisseurs_llm (ordre de la
+# hiérarchie, statut Bientôt, règle de clé API), modeles_llm (un modèle par ligne) et
+# textes_modeles_llm (mot Bientôt par langue). Les constantes ci-dessus restent comme
+# valeurs de repli. Un changement dans Supabase est vu en une minute environ.
+DUREE_CACHE_CONFIG_MODELES_SECONDES = 60
+
+_cache_config_modeles = {"valeur": None, "expire_a": 0}
+_supabase_config_modeles = None
+
+
+def _client_supabase_config_modeles():
+    global _supabase_config_modeles
+    if _supabase_config_modeles is None:
+        from supabase import create_client, ClientOptions
+        try:
+            from core.client_http_supabase import nouveau_client_http_supabase
+        except ImportError:
+            from client_http_supabase import nouveau_client_http_supabase
+        _supabase_config_modeles = create_client(
+            get_secret("SUPABASE_URL"),
+            get_secret("SUPABASE_SECRET"),
+            options=ClientOptions(httpx_client=nouveau_client_http_supabase()),
+        )
+    return _supabase_config_modeles
+
+
+def _config_modeles_de_repli():
+    fournisseurs = {}
+    for distributeur in ORDRE_DISTRIBUTEURS:
+        fournisseurs[distributeur] = {
+            "bientot": distributeur in DISTRIBUTEURS_BIENTOT,
+            "cle_api_requise": True,
+            "variable_cle_api": VARIABLES_CLE_PAR_DISTRIBUTEUR.get(distributeur),
+        }
+    return {
+        "distributeurs": list(ORDRE_DISTRIBUTEURS),
+        "fournisseurs": fournisseurs,
+        "paliers": list(ORDRE_PALIERS),
+        "modeles": {distributeur: dict(paliers) for distributeur, paliers in HIERARCHIE_MODELES.items()},
+        "textes": {"bientot": dict(LIBELLE_BIENTOT_DE_REPLI)},
+    }
+
+
+def _lire_config_modeles_supabase():
+    """
+    Lit les trois tables de configuration. Renvoie None si Supabase n'est pas
+    configuré sur ce serveur ou si les tables sont vides (le repli prend alors le
+    relais) ; laisse remonter l'exception si la lecture échoue.
+    """
+    if not (get_secret("SUPABASE_URL") and get_secret("SUPABASE_SECRET")):
+        return None
+    client = _client_supabase_config_modeles()
+    lignes_fournisseurs = (
+        client.table("fournisseurs_llm")
+        .select("distributeur, ordre, bientot, cle_api_requise, variable_cle_api")
+        .order("ordre")
+        .execute()
+        .data
+        or []
+    )
+    lignes_modeles = (
+        client.table("modeles_llm")
+        .select("distributeur, palier, niveau, modele_id, label, actif")
+        .execute()
+        .data
+        or []
+    )
+    lignes_textes = client.table("textes_modeles_llm").select("cle, langue, texte").execute().data or []
+    if not lignes_fournisseurs or not lignes_modeles:
+        logging.warning("Tables fournisseurs_llm ou modeles_llm vides : valeurs de repli du code utilisees.")
+        return None
+
+    fournisseurs = {}
+    for ligne in lignes_fournisseurs:
+        fournisseurs[ligne["distributeur"]] = {
+            "bientot": bool(ligne.get("bientot")),
+            "cle_api_requise": bool(ligne.get("cle_api_requise", True)),
+            "variable_cle_api": ligne.get("variable_cle_api"),
+        }
+    modeles = {}
+    niveaux = {}
+    for ligne in lignes_modeles:
+        if not ligne.get("actif", True) or ligne["distributeur"] not in fournisseurs:
+            continue
+        modeles.setdefault(ligne["distributeur"], {})[ligne["palier"]] = {
+            "id": ligne["modele_id"],
+            "label": ligne["label"],
+        }
+        niveau = ligne["niveau"]
+        niveaux[ligne["palier"]] = min(niveau, niveaux.get(ligne["palier"], niveau))
+    textes = {}
+    for ligne in lignes_textes:
+        textes.setdefault(ligne["cle"], {})[ligne["langue"]] = ligne["texte"]
+    return {
+        "distributeurs": [ligne["distributeur"] for ligne in lignes_fournisseurs],
+        "fournisseurs": fournisseurs,
+        "paliers": sorted(niveaux, key=lambda palier: niveaux[palier]),
+        "modeles": modeles,
+        "textes": textes,
+    }
+
+
+def _config_modeles():
+    """
+    Configuration des modèles en vigueur : Supabase (cache d'une minute), sinon la
+    dernière configuration connue si la lecture échoue, sinon les valeurs de repli.
+    """
+    maintenant = time.time()
+    if _cache_config_modeles["valeur"] is not None and _cache_config_modeles["expire_a"] > maintenant:
+        return _cache_config_modeles["valeur"]
+    try:
+        config = _lire_config_modeles_supabase() or _config_modeles_de_repli()
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (lecture configuration des modèles) : {e}")
+        config = _cache_config_modeles["valeur"] or _config_modeles_de_repli()
+    _cache_config_modeles["valeur"] = config
+    _cache_config_modeles["expire_a"] = maintenant + DUREE_CACHE_CONFIG_MODELES_SECONDES
+    return config
+
+
+def reinitialiser_cache_config_modeles():
+    """Force la relecture immédiate de la configuration (utile aux tests)."""
+    _cache_config_modeles["valeur"] = None
+    _cache_config_modeles["expire_a"] = 0
+
+
+def libelles_bientot():
+    """Mot affiché sur les modèles Bientôt, par langue (table textes_modeles_llm)."""
+    return dict(_config_modeles()["textes"].get("bientot") or LIBELLE_BIENTOT_DE_REPLI)
 
 
 def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque):
@@ -113,53 +263,49 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque):
     Calcule la liste des modeles reellement choisissables pour un agent,
     a partir de son distributeur/palier debloques (colonnes `agents`,
     voir api/agents.py). Renvoie [] si distributeur_debloque est None/
-    "aucun" -- dans ce cas le frontend n'affiche AUCUN selecteur, l'agent
+    "aucun" : dans ce cas le frontend n'affiche AUCUN selecteur, l'agent
     tourne sur la cascade Groq habituelle comme avant cette feature.
 
     Chaque element : {"modele_id", "label", "distributeur", "palier"}.
     Cumulatif sur les deux axes (voir docstring du module) ET filtre par
-    gating pattern (cle API absente = fournisseur invisible), donc un
-    agent peut tres bien avoir un distributeur_debloque="claude" mais ne
-    voir apparaitre que gemini/deepseek si ANTHROPIC_API_KEY/OPENAI_API_KEY
-    manquent encore sur Railway. Les fournisseurs de DISTRIBUTEURS_BIENTOT sont
-    toujours exclus, clé API présente ou non.
+    la regle de cle API (cle absente et cle_api_requise vrai : fournisseur
+    invisible). Les fournisseurs marques Bientôt dans Supabase sont toujours
+    exclus, cle API presente ou non. Tout vient de la configuration Supabase
+    (voir _config_modeles), avec le code comme valeur de repli.
     """
     if not distributeur_debloque or distributeur_debloque == "aucun":
         return []
-    if distributeur_debloque not in ORDRE_DISTRIBUTEURS:
+    config = _config_modeles()
+    ordre_distributeurs = config["distributeurs"]
+    ordre_paliers = config["paliers"]
+    if distributeur_debloque not in ordre_distributeurs:
         logging.error(f"distributeur_debloque inconnu : {distributeur_debloque}")
         return []
-    if palier_debloque not in ORDRE_PALIERS:
-        palier_debloque = "essentiel"
+    if not ordre_paliers:
+        return []
+    if palier_debloque not in ordre_paliers:
+        palier_debloque = ordre_paliers[0]
 
-    index_distributeur = ORDRE_DISTRIBUTEURS.index(distributeur_debloque)
-    # BUG CORRIGE (02/08/2026, repere par Bourama : seul Claude
-    # apparaissait pour un agent debloque en "claude") -- claude est en
-    # TETE de ORDRE_DISTRIBUTEURS (index 0) et doit debloquer tout ce qui
-    # suit (gpt/gemini/deepseek), donc la tranche va de cet index
-    # JUSQU'A LA FIN de la liste, pas du debut jusqu'a cet index (l'ancien
-    # ORDRE_DISTRIBUTEURS[:index+1] faisait l'inverse : "claude" ->
-    # uniquement ["claude"], jamais rien en dessous).
-    distributeurs_autorises = ORDRE_DISTRIBUTEURS[index_distributeur:]
-
-    index_palier = ORDRE_PALIERS.index(palier_debloque)
-    paliers_autorises = ORDRE_PALIERS[: index_palier + 1]
+    # Hierarchie cumulative descendante : le premier de la liste debloque tout
+    # ce qui le suit, donc la tranche va de l'index du distributeur debloque
+    # jusqu'a la fin de la liste.
+    distributeurs_autorises = ordre_distributeurs[ordre_distributeurs.index(distributeur_debloque):]
+    paliers_autorises = ordre_paliers[: ordre_paliers.index(palier_debloque) + 1]
 
     resultats = []
     ids_deja_vus = set()
     for distributeur in distributeurs_autorises:
-        if distributeur in DISTRIBUTEURS_BIENTOT:
+        if config["fournisseurs"][distributeur]["bientot"]:
             continue
-        if not _distributeur_disponible(distributeur):
+        if not _distributeur_disponible(distributeur, config):
             continue
         for palier in paliers_autorises:
-            info = HIERARCHIE_MODELES[distributeur][palier]
-            # Dedoublonnage par modele_id (cas DeepSeek, seul fournisseur
-            # ou 2 paliers partagent le meme modele_id -- voir
-            # HIERARCHIE_MODELES : essentiel et avance valent tous les
-            # deux "deepseek-v4-flash" -- sans ca "DeepSeek V4 Flash"
-            # apparaissait deux fois d'affilee dans la liste, repere par
-            # Bourama sur la capture d'ecran de Nucleos).
+            info = config["modeles"].get(distributeur, {}).get(palier)
+            if not info:
+                continue
+            # Dedoublonnage par modele_id (cas DeepSeek, ou deux paliers
+            # partagent le meme modele) : sans cela le meme modele apparaitrait
+            # deux fois d'affilee dans la liste.
             if info["id"] in ids_deja_vus:
                 continue
             ids_deja_vus.add(info["id"])
@@ -174,15 +320,15 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque):
 
 def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque):
     """
-    Modèles affichés grisés avec la mention "Bientôt" : les trois niveaux de
-    chaque fournisseur de DISTRIBUTEURS_BIENTOT, dans l'ordre de
-    ORDRE_DISTRIBUTEURS puis ORDRE_PALIERS. Même forme d'élément que
-    modeles_disponibles_pour_agent.
+    Modèles affichés grisés avec la mention "Bientôt" : tous les niveaux de
+    chaque fournisseur marqué Bientôt dans Supabase (table fournisseurs_llm),
+    dans l'ordre de la hiérarchie puis des niveaux. Même forme d'élément que
+    modeles_disponibles_pour_agent, plus la clé libelles_bientot (le mot
+    Bientôt par langue, réglé dans la table textes_modeles_llm).
 
     Vide quand l'agent n'a aucun modèle choisissable : le frontend n'affiche
     alors aucun sélecteur, comme avant. Un modèle déjà choisissable est exclu,
-    pour qu'il ne figure jamais deux fois dans la liste (cas qui ne peut plus
-    arriver tant que modeles_disponibles_pour_agent écarte ces fournisseurs).
+    pour qu'il ne figure jamais deux fois dans la liste.
 
     Ces modèles ne sont JAMAIS acceptés par modele_id_est_autorise (qui ne lit
     que modeles_disponibles_pour_agent) : le frontend ne peut pas les imposer.
@@ -191,14 +337,16 @@ def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque):
     if not disponibles:
         return []
 
+    config = _config_modeles()
+    libelles = libelles_bientot()
     ids_a_exclure = {m["modele_id"] for m in disponibles}
     resultats = []
-    for distributeur in ORDRE_DISTRIBUTEURS:
-        if distributeur not in DISTRIBUTEURS_BIENTOT:
+    for distributeur in config["distributeurs"]:
+        if not config["fournisseurs"][distributeur]["bientot"]:
             continue
-        for palier in ORDRE_PALIERS:
-            info = HIERARCHIE_MODELES[distributeur][palier]
-            if info["id"] in ids_a_exclure:
+        for palier in config["paliers"]:
+            info = config["modeles"].get(distributeur, {}).get(palier)
+            if not info or info["id"] in ids_a_exclure:
                 continue
             ids_a_exclure.add(info["id"])
             resultats.append({
@@ -206,6 +354,7 @@ def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque):
                 "label": info["label"],
                 "distributeur": distributeur,
                 "palier": palier,
+                "libelles_bientot": dict(libelles),
             })
     return resultats
 
@@ -215,7 +364,7 @@ def modele_id_est_autorise(modele_id, distributeur_debloque, palier_debloque):
     Verification cote backend AVANT d'honorer un choix de modele envoye
     par le frontend (jamais fait confiance a un id de modele venu du
     client sans le revalider contre ce que l'agent a reellement
-    debloque) -- voir api/chat.py et api/agents.py.
+    debloque) : voir api/chat.py et api/agents.py.
     """
     disponibles = modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque)
     return any(m["modele_id"] == modele_id for m in disponibles)
@@ -224,7 +373,7 @@ def modele_id_est_autorise(modele_id, distributeur_debloque, palier_debloque):
 def distributeur_pour_modele_id(modele_id):
     """Retrouve le nom du distributeur a partir d'un modele_id, pour
     savoir quel SDK appeler dans generer_reponse_premium ci-dessous."""
-    for distributeur, paliers in HIERARCHIE_MODELES.items():
+    for distributeur, paliers in _config_modeles()["modeles"].items():
         for info in paliers.values():
             if info["id"] == modele_id:
                 return distributeur
