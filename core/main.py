@@ -1457,6 +1457,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         if _cle_deepseek_choisi:
             client_deepseek_choisi = OpenAI(api_key=_cle_deepseek_choisi, base_url="https://api.deepseek.com")
             messages_agent = list(messages_base)
+            # Identité de l'assistant (16/10/2026) : ce chemin a été ajouté le 15/10 sans le
+            # bloc d'identité, DeepSeek choisi dans le sélecteur se disait donc Classinus.
+            messages_agent[0] = message_systeme(messages_base[0]["content"], modele_force)
             reponse_accumulee = []
             meta_assistant = {}
             fichiers_generes_accumules = []
