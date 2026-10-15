@@ -1444,6 +1444,48 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # chat() -- meme structure que le bloc image juste au-dessus :
         # pas d'outils MCP, pas de cascade de secours multi-modeles, un
         # seul appel, on retombe sur MESSAGE_ERREUR s'il echoue.
+        # DeepSeek choisi dans le sélecteur (15/10/2026, demande de Bourama) :
+        # même boucle d'agent avec outils que la cascade (_agent_groq). Avant
+        # ce correctif, ce chemin partait sans aucun outil (ni demander_outils,
+        # ni garder_outils, ni mémoire) alors que le prompt système les
+        # annonçait : DeepSeek écrivait son appel d'outil en texte brut (DSML)
+        # dans le chat. Claude, GPT et Gemini gardent le chemin texte seul
+        # ci-dessous, inchangé. Clé API absente : on retombe sur ce chemin
+        # texte seul, comme avant.
+        _cle_deepseek_choisi = get_secret("DEEPSEEK_API_KEY") if str(modele_force).startswith("deepseek") else None
+        if _cle_deepseek_choisi:
+            client_deepseek_choisi = OpenAI(api_key=_cle_deepseek_choisi, base_url="https://api.deepseek.com")
+            messages_agent = list(messages_base)
+            reponse_accumulee = []
+            meta_assistant = {}
+            fichiers_generes_accumules = []
+            try:
+                yield from _capturer_reponse(
+                    _agent_groq(client_deepseek_choisi, messages_agent, outils_mcp, table_routage, agent_nom=_nom_agent(agent_id),
+                                modele=modele_force, reasoning_effort=effort_reflexion, conversation_id=conversation_id,
+                                catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
+                                user_id=user_id, arret=arret_tour),
+                    reponse_accumulee,
+                    meta_assistant,
+                    fichiers_generes_accumules,
+                )
+                ids_historique = _sauvegarder_echange(
+                    user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre),
+                    "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules),
+                    conversation_id, modele=modele_force, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant,
+                    parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer
+                )
+                if ids_historique:
+                    yield {"type": "meta", **ids_historique}
+                if not (arret_tour is not None and arret_tour.est_demande()):
+                    _finaliser_memoire_en_arriere_plan(user_id, agent_id)
+                    forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
+            except Exception as e:
+                logging.error(f"ERREUR MODELE PREMIUM AVEC OUTILS ({modele_force}) : {e}")
+                if not reponse_accumulee:
+                    yield {"type": "reponse", "texte": MESSAGE_ERREUR}
+            return
+
         messages_premium = [
             {"role": m["role"], "content": m["content"]}
             for m in messages_base if m["role"] != "system"
