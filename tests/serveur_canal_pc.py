@@ -51,7 +51,7 @@ async def ecran():
 
 @app.get("/test/taper")
 async def taper():
-    return {"texte": await taper_clavier("Texte test", ctx)}
+    return {"texte": await taper_clavier("Texte test", "Bloc-notes", ctx)}
 
 @app.get("/test/ouvrir")
 async def ouvrir():

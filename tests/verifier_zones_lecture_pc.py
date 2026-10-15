@@ -10,7 +10,7 @@ demandes = []
 
 
 def installer_faux_transport(resultat):
-    async def demander(user_id, action, parametres, on_statut=None):
+    async def demander(user_id, action, parametres, on_statut=None, delai_abandon_secondes=None):
         demandes.append((action, dict(parametres)))
         return resultat if action == "lire_ecran" else {"ok": True}
 

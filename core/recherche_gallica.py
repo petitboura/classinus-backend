@@ -23,6 +23,7 @@ journal le dira), sans gêner les autres sources.
 """
 
 import logging
+import os
 import xml.etree.ElementTree as ET
 from urllib.parse import urlparse
 
@@ -42,6 +43,19 @@ NOM_SOURCE = "Gallica"
 ErreurRechercheGallica = ErreurRechercheSource
 
 _URL_RECHERCHE = "https://gallica.bnf.fr/SRU"
+
+# Essai du 10/10/2026 (NON confirmé comme la cause) : Gallica répond 403 à
+# toutes les demandes venant de Railway avec l'en-tête commun, qui contient un
+# caractère accentué. On s'identifie ici avec la forme habituelle des robots
+# ("Mozilla/5.0 (compatible; nom; +adresse)"), en ASCII seulement, toujours sous
+# le nom de Classinus. Modifiable sans redéploiement de code par la variable
+# RECHERCHE_GALLICA_USER_AGENT.
+_USER_AGENT_PAR_DEFAUT = "Mozilla/5.0 (compatible; Classinus/1.0; +https://classinus.com)"
+
+
+def _en_tetes():
+    agent = (os.environ.get("RECHERCHE_GALLICA_USER_AGENT") or "").strip() or _USER_AGENT_PAR_DEFAUT
+    return {"User-Agent": agent, "Accept": "application/xml, text/xml;q=0.9, */*;q=0.8"}
 _CHAMPS_LUS = ("title", "creator", "date", "language", "identifier")
 
 
@@ -93,6 +107,7 @@ def rechercher_documents(requete, nombre=None):
             "maximumRecords": nombre,
         },
         NOM_SOURCE,
+        en_tetes=_en_tetes(),
     )
     try:
         racine = ET.fromstring(reponse.content)

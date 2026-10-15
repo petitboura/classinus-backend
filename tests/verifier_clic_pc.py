@@ -21,7 +21,7 @@ async def verifier():
         ({"ok": True}, "Clic effectué à l'écran"),
         ({"erreur": "Clic incertain"}, "Clic incertain"),
     ):
-        async def demander(user_id, action, parametres, on_statut=None, resultat=resultat):
+        async def demander(user_id, action, parametres, on_statut=None, resultat=resultat, delai_abandon_secondes=None):
             if action == "lire_ecran":
                 return LECTURE
             assert action == "cliquer_ecran"
