@@ -160,6 +160,8 @@ def _config_modeles_de_repli():
             "bientot": distributeur in DISTRIBUTEURS_BIENTOT,
             "cle_api_requise": True,
             "variable_cle_api": VARIABLES_CLE_PAR_DISTRIBUTEUR.get(distributeur),
+            # None : core/identite_modele.py prend alors son nom de repli.
+            "nom_affiche": None,
         }
     return {
         "distributeurs": list(ORDRE_DISTRIBUTEURS),
@@ -181,7 +183,7 @@ def _lire_config_modeles_supabase():
     client = _client_supabase_config_modeles()
     lignes_fournisseurs = (
         client.table("fournisseurs_llm")
-        .select("distributeur, ordre, bientot, cle_api_requise, variable_cle_api")
+        .select("distributeur, ordre, bientot, cle_api_requise, variable_cle_api, nom_affiche")
         .order("ordre")
         .execute()
         .data
@@ -205,6 +207,7 @@ def _lire_config_modeles_supabase():
             "bientot": bool(ligne.get("bientot")),
             "cle_api_requise": bool(ligne.get("cle_api_requise", True)),
             "variable_cle_api": ligne.get("variable_cle_api"),
+            "nom_affiche": ligne.get("nom_affiche"),
         }
     modeles = {}
     niveaux = {}
