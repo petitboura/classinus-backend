@@ -32,7 +32,7 @@ core/
                                 candidats, le grand modèle décide lui-même de lire le texte complet
   contenu_dynamique_matiere.py résolution du system prompt pour les agents à contenu dynamique par matière
   auth.py                      authentification (email/mot de passe + Google) via Supabase Auth
-  fournisseurs_llm.py          LLM premium (Claude, GPT, Gemini, DeepSeek) — gardes-fous d'accès, et liste des modèles affichés « Bientôt » dans le sélecteur du chat (DISTRIBUTEURS_BIENTOT)
+  fournisseurs_llm.py          LLM premium (Claude, GPT, Gemini, Grok, DeepSeek) — gardes-fous d'accès, et liste des modèles affichés « Bientôt » dans le sélecteur du chat (DISTRIBUTEURS_BIENTOT)
   retriever.py                 recherche vectorielle parallèle (prompts, documents), scopée par agent
   embeddings.py                vectorisation partagée (gemini-embedding-001)
   bibliotheque_fichiers.py     bibliothèque de fichiers uploadés, persistante, à 3 niveaux d'accès
@@ -220,7 +220,7 @@ instance du serveur).
 | `TAVILY_API_KEY` | `core/registre_outils.py` (outil de recherche web) |
 | `GITHUB_TOKEN` (optionnel) | `core/serveur_mcp_github.py` — sans lui, l'API GitHub non authentifiée est plafonnée à 60 requêtes/heure PAR IP ; un classic token `public_repo` fait passer la limite à 5000/heure |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | `connexions/oauth_generique.py` (connexion OAuth GitHub par agent) |
-| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `DEEPSEEK_API_KEY` | `core/fournisseurs_llm.py` (LLM premium optionnels — absents, seuls Gemini/DeepSeek de secours restent proposés) |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` / `DEEPSEEK_API_KEY` | `core/fournisseurs_llm.py` (LLM premium optionnels — absents, seuls Gemini/DeepSeek de secours restent proposés) |
 | `TOGETHER_API_KEY` | `core/generation_images.py` (meilleure fiabilité que le fournisseur par défaut) |
 | `FAL_KEY` | `core/generation_3d.py`, `core/generation_video.py` — absente en prod, ces deux outils sont désactivés (`disponible=false`) |
 | `GOOGLE_TTS_API_KEY` / `AUDIO_TTS_ACTIF` | `core/generation_audio.py` — absentes en prod, `generer_audio` désactivé |
