@@ -14,8 +14,10 @@ chaque appel de modèle (voir core/main.py), jamais une fois pour toutes dans
 _construire_system_prompt, qui ne sait pas encore quel modèle va répondre.
 """
 
-# Nom affiché de chaque fournisseur du sélecteur de modèles (clé = distributeur de la
-# table fournisseurs_llm de Supabase).
+# Nom de repli de chaque fournisseur du sélecteur de modèles (clé = distributeur de la
+# table fournisseurs_llm). Le nom réellement utilisé se règle dans Supabase, colonne
+# nom_affiche de fournisseurs_llm (migration 2026_10_15_fournisseurs_llm_nom_affiche.sql) :
+# ce dictionnaire ne sert que si cette colonne est vide ou si Supabase ne répond pas.
 NOMS_FOURNISSEURS = {
     "claude": "Anthropic",
     "gpt": "OpenAI",
@@ -60,10 +62,14 @@ def _depuis_configuration_selecteur(modele_id):
             import fournisseurs_llm
         except ImportError:
             from core import fournisseurs_llm
-        for distributeur, paliers in fournisseurs_llm._config_modeles()["modeles"].items():
+        config = fournisseurs_llm._config_modeles()
+        for distributeur, paliers in config["modeles"].items():
             for info in paliers.values():
                 if info["id"] == modele_id:
-                    fournisseur = NOMS_FOURNISSEURS.get(distributeur) or distributeur
+                    # Nom réglé dans Supabase (colonne nom_affiche de fournisseurs_llm),
+                    # sinon le nom de repli du code.
+                    nom_supabase = (config["fournisseurs"].get(distributeur) or {}).get("nom_affiche")
+                    fournisseur = nom_supabase or NOMS_FOURNISSEURS.get(distributeur) or distributeur
                     return fournisseur, info["label"]
     except Exception:
         # La configuration est illisible : on retombe sur le bloc sans nom plutôt que de

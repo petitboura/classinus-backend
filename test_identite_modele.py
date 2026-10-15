@@ -28,6 +28,22 @@ class TestBlocIdentite(unittest.TestCase):
 
         self.assertIn("propulsé par Anthropic, modèle Claude Sonnet 5", bloc)
 
+    def test_nom_du_fournisseur_regle_dans_supabase_prime_sur_le_repli(self):
+        config = _config_modeles_de_repli()
+        config["fournisseurs"]["claude"]["nom_affiche"] = "Anthropic PBC"
+        with patch.object(fournisseurs_llm, "_config_modeles", return_value=config):
+            bloc = identite_modele.bloc_identite("claude-sonnet-5")
+
+        self.assertIn("propulsé par Anthropic PBC, modèle Claude Sonnet 5", bloc)
+
+    def test_nom_du_fournisseur_vide_dans_supabase_prend_le_repli(self):
+        config = _config_modeles_de_repli()
+        config["fournisseurs"]["gpt"]["nom_affiche"] = None
+        with patch.object(fournisseurs_llm, "_config_modeles", return_value=config):
+            bloc = identite_modele.bloc_identite("gpt-5.4")
+
+        self.assertIn("propulsé par OpenAI, modèle GPT-5.4", bloc)
+
     def test_classinus_est_le_nom_de_l_application(self):
         bloc = identite_modele.bloc_identite("openai/gpt-oss-120b")
 
