@@ -34,6 +34,7 @@ from signalements import signalements_pertinents_pour_injection
 from mcp_tools import lister_outils_autorises_pour_agent, filtrer_catalogue_par_outil_force, appeler_outil
 from registre_outils import CATEGORIES_OUTILS
 from fournisseurs_llm import generer_reponse_premium
+from identite_modele import message_systeme, systeme_avec_identite
 
 # 05/09/2026 (demande Bourama) : main.py decoupe en plusieurs fichiers pour
 # ne plus avoir un seul fichier de presque 4000 lignes -- voir
@@ -1450,7 +1451,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         ]
         reponse_accumulee = []
         try:
-            for morceau in generer_reponse_premium(modele_force, system_final, messages_premium, effort=effort_reflexion):
+            for morceau in generer_reponse_premium(modele_force, systeme_avec_identite(system_final, modele_force), messages_premium, effort=effort_reflexion):
                 if isinstance(morceau, dict):
                     # Reflexion du modele (DeepSeek) : affichee a l'ecran
                     # mais jamais sauvegardee comme partie de la reponse.
@@ -1507,6 +1508,10 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # deja recupere (cause du bug ou la page Notion trouvee n'arrivait
         # jamais dans la reponse finale).
         messages_agent = list(messages_base)
+        # Identité de l'assistant (15/10/2026) : le modèle qui répond change d'un maillon
+        # de la cascade à l'autre, le bloc d'identité est donc remplacé juste avant
+        # chaque appel (voir core/identite_modele.py). Le prompt de base reste intact.
+        systeme_base = messages_base[0]["content"]
         reponse_accumulee = []
         meta_assistant = {}
         fichiers_generes_accumules = []
@@ -1520,6 +1525,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # voir plus haut).
         if client_deepseek:
             try:
+                messages_agent[0] = message_systeme(systeme_base, DEEPSEEK_PRIMARY)
                 yield from _capturer_reponse(
                     _agent_groq(client_deepseek, messages_agent, outils_mcp, table_routage, agent_nom=agent_nom,
                                 modele=DEEPSEEK_PRIMARY, reasoning_effort=effort_reflexion, conversation_id=conversation_id,
@@ -1546,6 +1552,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
 
         # 2. GPT-OSS 120B, avec cycle d'outils MCP dynamique
         try:
+            messages_agent[0] = message_systeme(systeme_base, GROQ_PRIMARY)
             yield from _capturer_reponse(
                 _agent_groq(client_groq, messages_agent, outils_mcp, table_routage, agent_nom=agent_nom,
                             reasoning_effort=MODELES_AVEC_REASONING_EFFORT.get(GROQ_PRIMARY),
@@ -1587,6 +1594,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # commentaire ci-dessus).
         for model in GROQ_FALLBACKS:
             try:
+                messages_agent[0] = message_systeme(systeme_base, model)
                 reasoning_pour_ce_modele = MODELES_AVEC_REASONING_EFFORT.get(model)
                 yield from _capturer_reponse(
                     _agent_groq(
@@ -1687,7 +1695,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # systeme.
             if outil_deja_execute:
                 system_gemini_sans_outils = (
-                    system_final
+                    systeme_avec_identite(system_final, GOOGLE_MODEL)
                     + "\n\nIMPORTANT : un outil a DÉJÀ été exécuté plus tôt dans cet échange et son "
                     "résultat est présent ci-dessus, marqué \"[Résultat de l'outil déjà exécuté]\" -- "
                     "base ta réponse DESSUS. Ne dis JAMAIS que tu ne peux pas faire de recherche ou "
@@ -1698,7 +1706,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 )
             else:
                 system_gemini_sans_outils = (
-                    system_final
+                    systeme_avec_identite(system_final, GOOGLE_MODEL)
                     + "\n\nIMPORTANT : tu n'as accès à AUCUN outil réel dans cette réponse précise "
                     "(pas de recherche web, pas d'API externe, pas de Notion, rien). Si la question "
                     "porte sur une information qui change (prix, taux de change, actualité, données "
