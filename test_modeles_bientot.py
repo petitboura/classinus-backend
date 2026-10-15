@@ -150,9 +150,9 @@ class ModelesGrok(unittest.TestCase):
     def tearDown(self):
         reinitialiser_cache_config_modeles()
 
-    def test_grok_entre_gemini_et_deepseek(self):
+    def test_grok_en_dernier_apres_deepseek(self):
         from core.fournisseurs_llm import ORDRE_DISTRIBUTEURS
-        self.assertEqual(ORDRE_DISTRIBUTEURS, ["claude", "gpt", "gemini", "grok", "deepseek"])
+        self.assertEqual(ORDRE_DISTRIBUTEURS, ["claude", "gpt", "gemini", "deepseek", "grok"])
 
     def test_grok_deux_modeles_trois_niveaux_et_bientot(self):
         config = _config_modeles_de_repli()
@@ -176,8 +176,10 @@ class ModelesGrok(unittest.TestCase):
                 ids = [m["modele_id"] for m in disponibles]
                 self.assertEqual(ids, ["grok-4.3", "grok-4.7"])
                 self.assertTrue(modele_id_est_autorise("grok-4.7", "gemini", "pro"))
-                # Un agent debloque a DeepSeek ne voit pas Grok (hierarchie descendante).
-                self.assertNotIn("grok-4.7", [m["modele_id"] for m in modeles_disponibles_pour_agent("deepseek", "pro")])
+                # Grok est le dernier de la hierarchie : un agent debloque a DeepSeek le voit aussi.
+                self.assertIn("grok-4.7", [m["modele_id"] for m in modeles_disponibles_pour_agent("deepseek", "pro")])
+                # Un agent debloque a Grok seul ne voit que Grok.
+                self.assertEqual({m["distributeur"] for m in modeles_disponibles_pour_agent("grok", "pro")}, {"grok"})
 
     def test_grok_build_jamais_choisissable_meme_sans_bientot(self):
         with _avec_config_supabase(lambda config: config["fournisseurs"]["grok"].update(bientot=False)):

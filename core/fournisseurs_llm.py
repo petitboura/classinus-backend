@@ -7,9 +7,9 @@ Contexte (voir page Notion "Pricing -- Agent Maths", 01/08/2026) : un agent
 peut debloquer un `distributeur` (fournisseur) + un `palier` (qualite de
 modele). La hierarchie des distributeurs est CUMULATIVE DESCENDANTE :
 
-    claude > gpt > gemini > grok > deepseek
+    claude > gpt > gemini > deepseek > grok
 
-debloquer "claude" donne aussi acces a gpt/gemini/grok/deepseek. Le palier est
+debloquer "claude" donne aussi acces a gpt/gemini/deepseek/grok. Le palier est
 lui aussi cumulatif ascendant (pro >= avance >= essentiel) : un agent en
 "pro" peut choisir un modele "essentiel" du meme distributeur si l'usager
 veut une reponse plus rapide/moins chere.
@@ -41,7 +41,7 @@ def get_secret(key):
 
 
 # Ordre = hierarchie cumulative descendante (voir docstring plus haut).
-ORDRE_DISTRIBUTEURS = ["claude", "gpt", "gemini", "grok", "deepseek"]
+ORDRE_DISTRIBUTEURS = ["claude", "gpt", "gemini", "deepseek", "grok"]
 
 # Ordre = hierarchie cumulative ascendante.
 ORDRE_PALIERS = ["essentiel", "avance", "pro", "specialise"]
