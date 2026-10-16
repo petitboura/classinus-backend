@@ -28,6 +28,7 @@ from core.guide_conversation import obtenir_guide_actif
 from core.plafond_outils_tour import definir_plafond_tour, PLAFOND_OUTILS_GUIDE_VISUEL
 from core.canal_agent_applicatif import obtenir_actions_disponibles
 from core.ecran_pc_continu import bloc_etat_ecran_pc_anticipe, lancer_lecture_anticipee
+from core.etat_canal_prompt import bloc_etat_canal
 from core.zip_chat import iterer_statuts as _iterer_statuts_zip, obtenir_etat as _obtenir_etat_zip, construire_digest_zip as _construire_digest_zip
 from avancement_notions_ia import notions_pertinentes_pour_eleve, resoudre_code_actif_eleve
 from signalements import signalements_pertinents_pour_injection
@@ -1119,6 +1120,12 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             outils_mcp, table_routage = _outils_memoire_toujours_disponibles(
                 outils_mcp, table_routage, catalogue_complet, table_routage_complet
             )
+
+    # Etat du canal dit au modele a chaque message (16/10/2026, demande Bourama) : active ou
+    # non, et pour le canal actif la regle des cartes de videos et d'images (leur lien doit etre
+    # ecrit, elles ne s'affichent pas d'elles-memes). Voir core/etat_canal_prompt.py.
+    if system_final:
+        system_final += bloc_etat_canal(bool(canal_en_direct), agent_id == "clovis")
 
     # Canal en direct sur PC (03/10/2026, demande Bourama) : etat de l'ecran
     # a jour lu avant le tour, voir core/ecran_pc_continu.py.
