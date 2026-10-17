@@ -25,6 +25,7 @@ from api.auth import utilisateur_courant, utilisateur_optionnel, supabase
 from api.agents import supprimer_agent_completement
 from api.journal import journaliser
 from core.limitation_debit import limiteur
+from core.purge_compte import purger_donnees_compte
 from creation_agent import generer_id_depuis_nom
 from core.erreurs import erreur_api
 
@@ -679,10 +680,14 @@ def supprimer_mon_compte(request: Request, utilisateur=Depends(utilisateur_coura
     l'API admin (le client `supabase` de api.auth utilise déjà la service
     role key, seule capable d'appeler `auth.admin`).
 
-    Ne touche PAS à `historique_conversations` (même choix que
-    supprimer_agent_completement, journal permanent jamais purgé ailleurs
-    dans le projet) : les échanges passés restent en base, seulement
-    détachés de tout profil/agent visible.
+    Purge aussi les conversations de l'élève (historique_conversations,
+    conversations, historique_fils_meta, conversation_summaries), demande de
+    Bourama du 12/10/2026 : plus aucun échange ne doit rester en base après
+    la suppression du compte.
+
+    Purge ensuite toutes les autres données liées au compte via
+    core/purge_compte.py (demande de Bourama du 12/10/2026), sauf le journal
+    des actions, gardé pour la sécurité.
 
     Chaque étape est best-effort (log et continue) sauf la suppression
     finale du compte Auth, seule à faire échouer la requête si elle
@@ -715,11 +720,21 @@ def supprimer_mon_compte(request: Request, utilisateur=Depends(utilisateur_coura
         ("agent_update_likes", "user_id"),
         ("agent_update_comments", "user_id"),
         ("notifications", "user_id"),
+        ("historique_conversations", "user_id"),
+        ("conversations", "user_id"),
+        ("historique_fils_meta", "user_id"),
+        ("conversation_summaries", "user_id"),
     ):
         try:
             supabase.table(table).delete().eq(colonne, user_id).execute()
         except Exception as e:
             logging.error(f"ERREUR SUPABASE (purge table {table} pour compte {user_id}) : {e}")
+
+    # Tout le reste des données liées au compte (bibliothèque et ses fichiers,
+    # connexions Notion et Google, temps d'écran, rappels, réponses aux QCM,
+    # contenu partagé ou publié, etc.), voir core/purge_compte.py. Doit passer
+    # AVANT la suppression du profil : des liens vers lui n'ont pas de cascade.
+    purger_donnees_compte(supabase, user_id)
 
     for table, colonne in (("follows", "follower_id"), ("follows", "creator_id")):
         try:
