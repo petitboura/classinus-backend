@@ -63,15 +63,19 @@ def bloc_etat_ecran_pc(user_id, conversation_id, table_routage) -> str:
     debut = time.monotonic()
     try:
         from core.lecture_ecran_continue import a_deja_lu
-        if not a_deja_lu(user_id, conversation_id):
-            return ""
+        # Pas encore de lecture complete dans cette conversation (16/10/2026, demande de Bourama :
+        # Classinus doit toujours savoir quelle fenetre est au premier plan) : lecture LEGERE, les
+        # titres seulement, jamais le contenu des fenetres. Le contenu n'est lu qu'apres une lecture
+        # voulue par le modele (lire_ecran), comme avant.
+        lecture_legere = not a_deja_lu(user_id, conversation_id)
         from core.mcp_tools import appeler_outil
         # Lecture decidee par le serveur : signalee dans l'URL (l'IA ne peut pas
         # la modifier) pour que l'application PC ne l'affiche pas comme une
         # action de l'IA.
         route = table_routage["lire_ecran"]
         separateur = "&" if "?" in route["url"] else "?"
-        table_auto = {**table_routage, "lire_ecran": {**route, "url": f"{route['url']}{separateur}automatique=1"}}
+        options_url = "automatique=1&titres_seuls=1" if lecture_legere else "automatique=1"
+        table_auto = {**table_routage, "lire_ecran": {**route, "url": f"{route['url']}{separateur}{options_url}"}}
         texte = appeler_outil("lire_ecran", {}, table_auto)
         logging.info(f"Lecture automatique de l'ecran PC : {time.monotonic() - debut:.1f} s")
     except Exception as e:
@@ -79,6 +83,14 @@ def bloc_etat_ecran_pc(user_id, conversation_id, table_routage) -> str:
         return ""
     if not texte or not isinstance(texte, str) or texte.startswith(_DEBUTS_ECHEC_LECTURE):
         return ""
+    if lecture_legere:
+        return (
+            "\n\n## Fenêtre au premier plan du PC (lue automatiquement à l'instant, titres seulement)\n"
+            "Voici quelle fenêtre est au premier plan sur le PC de l'étudiant et quelles autres sont ouvertes. "
+            "Le contenu n'a pas encore été lu : avant d'agir sur le PC, appelle lire_ecran. Le bureau compte "
+            "comme une fenêtre : lire_ecran avec fenetre=\"Bureau\" (ou zone=\"bureau\") le lit, "
+            "zone=\"barre_des_taches\" lit la barre des tâches, fenetre=\"son titre\" lit une autre fenêtre.\n\n" + texte
+        )
     return (
         "\n\n## État actuel de l'écran du PC (lu automatiquement à l'instant)\n"
         "Cette lecture est complète et à jour pour ce message de l'étudiant (fenêtre au premier plan et "

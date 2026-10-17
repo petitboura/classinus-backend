@@ -647,6 +647,7 @@ def _formater_lecture_ecran(resultat: dict) -> str:
     fenetres = [f for f in (resultat.get("fenetres_ouvertes") or []) if isinstance(f, str) and f]
 
     zone_lue = resultat.get("zone_lue")
+    bureau_devant = bool(resultat.get("bureau_premier_plan"))
     lignes = []
     if zone_lue == "barre_des_taches":
         lignes.append(
@@ -654,7 +655,13 @@ def _formater_lecture_ecran(resultat: dict) -> str:
             "zone de notification, heure)."
         )
     elif zone_lue == "bureau":
-        lignes.append("Bureau de Windows (icônes et raccourcis posés sur le bureau).")
+        if bureau_devant:
+            lignes.append(
+                "Le bureau de Windows est au premier plan : aucune fenêtre n'est ouverte devant, l'étudiant est "
+                "sur le bureau (icônes et raccourcis posés sur le bureau)."
+            )
+        else:
+            lignes.append("Bureau de Windows (icônes et raccourcis posés sur le bureau).")
     derriere = bool(resultat.get("fenetre_visee"))
     if titre and derriere:
         appli_txt = f" ({application})" if application else ""
@@ -667,6 +674,10 @@ def _formater_lecture_ecran(resultat: dict) -> str:
         lignes.append(f"Fenêtre au premier plan : « {titre} »{appli_txt}")
     elif zone_lue not in ("barre_des_taches", "bureau"):
         lignes.append("Aucune fenêtre au premier plan n'a été trouvée.")
+    # Le bureau compte comme une fenetre : il apparait dans la liste quand une fenetre est lue et qu'il
+    # n'est pas deja le sujet de la lecture (16/10/2026).
+    if zone_lue in (None, "fenetre") and not bureau_devant:
+        fenetres = fenetres + ["Bureau"]
     if fenetres:
         lignes.append("Autres fenêtres ouvertes : " + ", ".join(f"« {f} »" for f in fenetres))
 
@@ -675,6 +686,13 @@ def _formater_lecture_ecran(resultat: dict) -> str:
             "Aucune fenêtre en dehors de Classinus n'a pu être lue : seule Classinus est ouverte ou au "
             "premier plan. Ne devine pas ce qui pourrait être affiché ailleurs sur le PC."
         )
+
+    if resultat.get("titres_seuls"):
+        lignes.append(
+            "Contenu non lu : ce sont seulement les titres des fenêtres. Appelle lire_ecran pour lire la "
+            "fenêtre avant d'agir dessus."
+        )
+        return "\n".join(lignes)
 
     elements = [e for e in (resultat.get("elements") or []) if isinstance(e, dict)]
     if resultat.get("mode") != "uia" or not elements:
@@ -733,11 +751,14 @@ def _formater_lecture_ecran(resultat: dict) -> str:
 # Ce que lire_ecran peut lire (04/10/2026, demande Bourama : le bureau et la barre du bas
 # avec le MEME outil, pas un autre). "fenetre" : la fenetre au premier plan (par defaut).
 ZONES_LECTURE_ECRAN = ("fenetre", "barre_des_taches", "bureau")
+# Le bureau se lit aussi comme une fenetre (16/10/2026, demande de Bourama) : fenetre="Bureau"
+# revient a zone="bureau". Comparaison sans tenir compte des majuscules.
+NOMS_FENETRE_BUREAU = ("bureau", "le bureau", "desktop", "bureau windows", "bureau de windows")
 # Longueur maximale du titre d'une fenetre a lire (meme borne que l'application PC).
 LONGUEUR_MAX_FENETRE_LECTURE = 200
 
 
-async def _lire_ecran_pour_modele(user_id: str, automatique: bool = False, zone: str = "fenetre", fenetre: str = "") -> tuple[str, bool]:
+async def _lire_ecran_pour_modele(user_id: str, automatique: bool = False, zone: str = "fenetre", fenetre: str = "", titres_seuls: bool = False) -> tuple[str, bool]:
     """
     Lit la fenetre externe au premier plan du PC (via le pont Electron) et
     renvoie (texte pour le modele, lecture_reussie). Utilisee par lire_ecran,
@@ -756,6 +777,7 @@ async def _lire_ecran_pour_modele(user_id: str, automatique: bool = False, zone:
             "automatique": automatique,
             "zone": zone,
             **({"fenetre_cible": fenetre} if fenetre else {}),
+            **({"titres_seuls": True} if titres_seuls else {}),
             "nb_max_elements": NB_MAX_ELEMENTS_LECTURE_ECRAN,
             "nb_max_textes": NB_MAX_TEXTES_LECTURE_ECRAN,
             "nb_max_fenetres": NB_MAX_FENETRES_LECTURE_ECRAN,
@@ -780,6 +802,11 @@ async def _lire_ecran_pour_modele(user_id: str, automatique: bool = False, zone:
             "(mise à jour nécessaire). Rien n'a été lu. Ne devine pas ce que contient cette fenêtre.",
             False,
         )
+    # Lecture legere demandee (titres seulement) : une application PC plus ancienne l'ignore et lit tout, ou
+    # une lecture qui a echoue renvoie un repli sans le marqueur. Dans les deux cas rien n'est donne au
+    # modele, qui ne doit jamais croire avoir une lecture legere quand ce n'en est pas une.
+    if titres_seuls and not (resultat.get("titres_seuls") or resultat.get("fenetre_classinus")):
+        return "Erreur : la lecture légère de la fenêtre au premier plan n'a pas abouti.", False
     # Pas de trace du contenu brut dans les logs : ce sont des textes affiches
     # sur l'ecran de l'etudiant, et la lecture est maintenant automatique.
     texte = _formater_lecture_ecran(resultat)
@@ -834,7 +861,8 @@ async def lire_ecran(ctx: Context, zone: str = "fenetre", fenetre: str = "") -> 
     bureau. Leurs elements ont des coordonnees utilisables avec
     cliquer_ecran, comme ceux d'une fenetre. Quand il n'y a plus aucune
     fenetre ouverte ou que l'etudiant est sur le bureau, la lecture normale
-    lit deja le bureau toute seule. Laisse zone vide dans tous les autres cas. Certaines applications (jeux, bureau a distance) ne rendent
+    lit deja le bureau toute seule, et le texte te dit alors que l'etudiant est sur le bureau. Le bureau compte
+    comme une fenetre : fenetre="Bureau" revient a zone="bureau". Laisse zone vide dans tous les autres cas. Certaines applications (jeux, bureau a distance) ne rendent
     presque rien lisible : l'outil le dit, dans ce cas ne devine pas.
 
     Le parametre fenetre (13/10/2026) lit une AUTRE fenetre que celle du
@@ -868,13 +896,19 @@ async def lire_ecran(ctx: Context, zone: str = "fenetre", fenetre: str = "") -> 
             "\"barre_des_taches\" ou \"bureau\"."
         )
     fenetre = (fenetre or "").strip()[:LONGUEUR_MAX_FENETRE_LECTURE]
+    if fenetre and zone == "fenetre" and fenetre.casefold() in NOMS_FENETRE_BUREAU:
+        fenetre, zone = "", "bureau"
     if fenetre and zone != "fenetre":
         return "Erreur : le paramètre fenetre ne se combine pas avec zone. Lis soit une fenêtre, soit la barre des tâches ou le bureau."
     if fenetre and automatique:
         fenetre = ""
-    texte, ok = await _lire_ecran_pour_modele(user_id, automatique=automatique, zone=zone, fenetre=fenetre)
+    # Lecture legere (titres seulement) : decidee par le serveur, jamais par l'IA (meme principe que
+    # automatique, le parametre vient de l'URL), voir core/ecran_pc_continu.py.
+    titres_seuls = automatique and ctx.request_context.request.query_params.get("titres_seuls") == "1"
+    texte, ok = await _lire_ecran_pour_modele(user_id, automatique=automatique, zone=zone, fenetre=fenetre, titres_seuls=titres_seuls)
     # Lire une fenetre derriere ne vaut pas premiere lecture de l'ecran de l'etudiant : les actions
     # (clic, frappe) restent verrouillees tant que la fenetre au premier plan n'a pas ete lue.
-    if ok and not fenetre:
+    # Une lecture legere (titres seulement) ne vaut pas non plus premiere lecture : le contenu n'a pas ete lu.
+    if ok and not fenetre and not titres_seuls:
         lecture_ecran_continue.marquer_lu(user_id, _conversation_id(ctx))
     return texte

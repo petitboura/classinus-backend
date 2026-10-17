@@ -56,10 +56,22 @@ def verifier():
     assert ecran_pc_continu.lancer_lecture_anticipee("u1", "c1", {"autre": TABLE["autre"]}) is None
     assert ecran_pc_continu.lancer_lecture_anticipee(None, "c1", TABLE) is None
 
-    # 5. Premiere lecture pas encore faite : rien n'est ajoute (le verrou reste en place).
+    # 5. Premiere lecture pas encore faite (16/10/2026, demande de Bourama : Classinus doit toujours
+    # savoir quelle fenetre est au premier plan) : lecture LEGERE, titres seulement, demandee dans
+    # l'adresse. Le contenu n'est pas lu et le verrou de premiere lecture reste en place.
     lecture_ecran_continue._lectures_faites.clear()
     futur = ecran_pc_continu.lancer_lecture_anticipee("u1", "c1", TABLE)
-    assert ecran_pc_continu.bloc_etat_ecran_pc_anticipe(futur, "u1", "c1", TABLE) == ""
+    texte_leger = ecran_pc_continu.bloc_etat_ecran_pc_anticipe(futur, "u1", "c1", TABLE)
+    assert "titres seulement" in texte_leger and "Bloc-notes" in texte_leger, texte_leger
+    assert "appelle lire_ecran" in texte_leger and 'fenetre="Bureau"' in texte_leger, texte_leger
+    assert "N'appelle pas lire_ecran" not in texte_leger, texte_leger
+    assert urls_appelees[-1].endswith("&automatique=1&titres_seuls=1"), urls_appelees
+    assert not lecture_ecran_continue.a_deja_lu("u1", "c1"), "une lecture legere ne vaut pas premiere lecture"
+
+    # 6. Lecture complete deja faite : l'adresse ne demande PAS la lecture legere.
+    lecture_ecran_continue.marquer_lu("u1", "c1")
+    ecran_pc_continu.bloc_etat_ecran_pc_anticipe(None, "u1", "c1", TABLE)
+    assert urls_appelees[-1].endswith("&automatique=1") and "titres_seuls" not in urls_appelees[-1], urls_appelees
     print("OK : lecture de l'ecran anticipee, marquee automatique, sans changer le resultat.")
 
 
