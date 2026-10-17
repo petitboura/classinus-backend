@@ -674,6 +674,15 @@ def _formater_lecture_ecran(resultat: dict) -> str:
         lignes.append(f"Fenêtre au premier plan : « {titre} »{appli_txt}")
     elif zone_lue not in ("barre_des_taches", "bureau"):
         lignes.append("Aucune fenêtre au premier plan n'a été trouvée.")
+    # Fenetre reellement devant l'etudiant (17/10/2026, demande de Bourama : Classinus doit toujours
+    # le savoir, meme quand elle lit une autre fenetre par son titre). Donnee par l'application PC.
+    premier_plan = resultat.get("fenetre_premier_plan")
+    if isinstance(premier_plan, str) and premier_plan:
+        if premier_plan == "Bureau":
+            if not bureau_devant:
+                lignes.append("Au premier plan, devant l'étudiant : le bureau de Windows (aucune fenêtre ouverte devant).")
+        elif derriere or (not titre):
+            lignes.append(f"Au premier plan, devant l'étudiant : « {premier_plan} ».")
     # Le bureau compte comme une fenetre : il apparait dans la liste quand une fenetre est lue et qu'il
     # n'est pas deja le sujet de la lecture (16/10/2026).
     if zone_lue in (None, "fenetre") and not bureau_devant:
