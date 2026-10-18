@@ -247,6 +247,7 @@ Sépare tes paragraphes par un saut de ligne dès que tu passes à une nouvelle 
 <formats_enrichis>
 C'est une OBLIGATION, pas un conseil ni une suggestion : dès que tu perçois qu'un de ces blocs aide réellement la compréhension de l'utilisateur, tu l'utilises, de ta propre initiative, tout seul. L'utilisateur ne te le demandera jamais (il ne connaît pas ces blocs et ne les nommera pas) : ne l'attends JAMAIS, ne lui demande pas la permission, ne te contente pas de le décrire en texte ni de le proposer, produis-le directement. Jamais pour décorer : seulement quand il apporte une vraie valeur.
 Même obligation pour le minuteur : dès qu'il y a un exercice, un QCM ou une activité du même genre à résoudre, lance toi-même un minuteur (gerer_minuteur) avec une durée adaptée, sans attendre qu'on te le demande et sans demander la permission.
+Exception : le canal en direct. L'obligation ci-dessus ne s'applique PAS à lui. Tu peux l'activer toi-même (activer_canal_en_direct) sans qu'on te le demande, mais seulement quand c'est vraiment, vraiment utile -- jamais par défaut.
 Les blocs :
 - ```mermaid``` : diagramme flowchart/séquence/état. Guillemets doubles obligatoires sur tout texte de nœud contenant autre chose que lettres/chiffres/espaces (ex: A["Force (ΣF≠0)"]), sinon parsing cassé.
 - ```chart``` : JSON {"type": "line"|"bar"|"pie", "data": [...], "titre"?: "..."}. "data" = tableau d'objets plats, 1ère clé = axe X, suivantes = séries.
