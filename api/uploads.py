@@ -13,6 +13,7 @@ tout passe par le service role côté Python — voir la note dans la
 migration Supabase `pivot_social_etape_b_tables`).
 """
 
+import asyncio
 import logging
 import mimetypes
 import uuid
@@ -418,6 +419,26 @@ PHRASES_HALLUCINEES_WHISPER = {
 }
 
 
+# Fichiers envoyés par les dictées (site : "dictee.webm" et "dictee-maths.webm",
+# plugin Thonny : "dictee.wav"). Pour eux le texte suffit : personne ne lit
+# l'adresse du fichier, donc on ne l'enregistre pas dans la bibliothèque, ce qui
+# évite un envoi sur le stockage et une écriture en base avant la réponse.
+# Un vrai fichier audio joint par le trombone garde son nom d'origine et
+# continue d'être enregistré (son adresse est renvoyée au site).
+PREFIXE_NOM_DICTEE = "dictee"
+
+_client_groq_audio = None
+
+
+def _client_groq():
+    """Client Groq créé une seule fois puis réutilisé (évite de refaire la connexion à chaque dictée)."""
+    global _client_groq_audio
+    if _client_groq_audio is None:
+        from groq import Groq
+        _client_groq_audio = Groq(api_key=get_secret("GROQ_API_KEY"))
+    return _client_groq_audio
+
+
 def _transcription_vraisemblable(texte):
     """
     True si le texte transcrit semble être une vraie parole captée, False
@@ -447,21 +468,26 @@ async def uploader_audio_chat(
     toujours un type MIME standard), Whisper gère le format lui-même ou
     échoue proprement.
     """
-    from groq import Groq
-
     contenu = await fichier.read()
     if len(contenu) > TAILLE_MAX_AUDIO_OCTETS:
         raise erreur_api(400, "AUDIO_TROP_LONG_20_MO_MAX")
     if len(contenu) == 0:
         raise erreur_api(400, "FICHIER_AUDIO_VIDE")
 
-    try:
-        client_groq = Groq(api_key=get_secret("GROQ_API_KEY"))
-        transcription = client_groq.audio.transcriptions.create(
-            file=(fichier.filename or "audio.webm", contenu),
+    nom_fichier = fichier.filename or "audio.webm"
+
+    # Les appels Groq et Supabase/R2 sont bloquants : lancés directement dans
+    # cette route async, ils gelaient le serveur entier (les autres requêtes
+    # attendaient la fin de la transcription). On les envoie dans un fil à part.
+    def _transcrire():
+        return _client_groq().audio.transcriptions.create(
+            file=(nom_fichier, contenu),
             model="whisper-large-v3",
             language="fr",
         )
+
+    try:
+        transcription = await asyncio.to_thread(_transcrire)
     except Exception as e:
         logging.error(f"ERREUR TRANSCRIPTION AUDIO (Groq Whisper) : {e}")
         raise erreur_api(500, "ECHEC_DE_LA_TRANSCRIPTION_REESSAIE")
@@ -470,14 +496,17 @@ async def uploader_audio_chat(
     if not texte or not _transcription_vraisemblable(texte):
         raise erreur_api(400, "RIEN_N_A_ETE_COMPRIS_REESSAIE")
 
-    # Persistance bibliothèque (2026-07-22) : même logique que
-    # image/document/vidéo. S'applique aussi bien à la dictée micro qu'à
-    # un futur vrai fichier audio uploadé -- best-effort, ne bloque jamais
-    # la réponse (le texte transcrit est déjà prêt).
+    if nom_fichier.lower().startswith(PREFIXE_NOM_DICTEE):
+        # Dictée : le texte suffit, rien à enregistrer (voir PREFIXE_NOM_DICTEE).
+        return {"texte": texte, "url": None}
+
+    # Vrai fichier audio joint (trombone) : enregistré dans la bibliothèque,
+    # son adresse est renvoyée. Best-effort : un échec ne bloque pas la réponse.
     try:
-        ligne = enregistrer_fichier(
+        ligne = await asyncio.to_thread(
+            enregistrer_fichier,
             contenu=contenu,
-            nom_fichier=fichier.filename or "audio.webm",
+            nom_fichier=nom_fichier,
             type_mime=fichier.content_type or "audio/webm",
             niveau="utilisateur",
             uploade_par=utilisateur.id,
@@ -487,12 +516,10 @@ async def uploader_audio_chat(
         )
         url_audio = ligne["url_publique"]
     except Exception as e:
-        logging.warning(f"Indexation bibliothèque échouée pour audio chat {fichier.filename} (transcription OK quand même) : {e}")
+        logging.warning(f"Indexation bibliothèque échouée pour audio chat {nom_fichier} (transcription OK quand même) : {e}")
         url_audio = None
 
     return {"texte": texte, "url": url_audio}
-
-    return {"texte": texte}
 
 
 # --- Vidéo : extraction audio (transcription) + frames (analyse visuelle) -

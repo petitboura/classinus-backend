@@ -33,6 +33,14 @@ from api.journal import journaliser
 from core.erreurs import erreur_api
 from core import stockage_r2
 from core.compteurs_catalogue_public import incrementer_enregistrement_fichier
+from core.limitation_debit import limiteur
+from core.relais_fichier_externe import (
+    TYPES_AUTORISES,
+    ErreurRelais,
+    creer_jeton,
+    inspecter,
+    ouvrir_fichier_externe,
+)
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "core"))
 from bibliotheque_fichiers import enregistrer_fichier, enregistrer_lien, lister_fichiers, obtenir_fichier, supprimer_fichier  # noqa: E402
@@ -204,6 +212,115 @@ async def uploader_document(
         asyncio.create_task(asyncio.to_thread(vectoriser_maintenant_privee, ligne["id"]))
 
     return _journaliser_ajout(contenu, fichier.content_type, nom_original, description_finale, ligne, utilisateur, request)
+
+
+_LIMITE_DEPUIS_URL = os.environ.get("BIBLIOTHEQUE_DEPUIS_URL_LIMITE") or "20/minute"
+_EXTENSION_PAR_TYPE_EXTERNE = {"ole": "doc", "texte": "txt"}
+
+# 10/10/2026 : le relais (core/relais_fichier_externe.py) accepte maintenant tous
+# les formats pour l'apercu (video, audio, EPUB...) et un plafond de 500 Mo. L'import
+# dans la bibliotheque, lui, charge le fichier en memoire puis le vectorise : il garde
+# les types et le plafond d'avant, sans quoi une video de 500 Mo pourrait y entrer.
+_TYPES_IMPORT_DEPUIS_URL = frozenset({"pdf", "docx", "xlsx", "pptx", "ole", "png", "jpg", "gif", "webp", "texte"})
+
+
+def _taille_max_depuis_url():
+    try:
+        valeur = int(os.environ.get("BIBLIOTHEQUE_DEPUIS_URL_TAILLE_MAX", 100 * 1024 * 1024))
+        return valeur if valeur > 0 else 100 * 1024 * 1024
+    except (TypeError, ValueError):
+        return 100 * 1024 * 1024
+
+
+class CorpsFichierExterne(BaseModel):
+    url: str
+    titre: str | None = None
+
+
+def _recuperer_fichier_externe(url: str, titre: str | None):
+    """
+    Telecharge un fichier d'un site externe en passant par le relais
+    (core/relais_fichier_externe.py) : memes garde-fous que l'apercu (anti-SSRF
+    a chaque redirection, type verifie sur les octets, plafond de taille).
+    Renvoie (contenu, nom_de_fichier, type_mime). Leve ErreurRelais.
+    """
+    plafond = _taille_max_depuis_url()
+    infos = inspecter(url, plafond=plafond)
+    type_reconnu = infos["type"]
+    if type_reconnu not in _TYPES_IMPORT_DEPUIS_URL:
+        # Hors liste : un zip serait deplie par la bibliotheque, et les videos, sons
+        # et livres numeriques ne sont pas lisibles pour la vectorisation.
+        raise ErreurRelais(415, "TYPE_FICHIER_NON_AUTORISE")
+    extension = _EXTENSION_PAR_TYPE_EXTERNE.get(type_reconnu, type_reconnu)
+
+    nom = (titre or "").strip() or infos["nom"]
+    nom = nom.replace("\\", "/").rsplit("/", 1)[-1].strip() or "fichier"
+    if "." not in nom or nom.rsplit(".", 1)[-1].lower() != extension:
+        nom = f"{nom}.{extension}"
+
+    relais = ouvrir_fichier_externe(creer_jeton(url, type_reconnu), nom, "GET", None, True, plafond=plafond)
+    try:
+        contenu = b"".join(relais.flux)
+    finally:
+        relais.fermer()
+
+    # Le flux est coupe sans erreur si le site distant change de contenu ou
+    # depasse le plafond : une taille differente de celle annoncee = incomplet.
+    try:
+        annoncee = int(relais.entetes.get("Content-Length") or 0)
+    except ValueError:
+        annoncee = 0
+    if not contenu or (annoncee and len(contenu) != annoncee):
+        raise ErreurRelais(502, "SITE_EXTERNE_INDISPONIBLE")
+
+    return contenu, nom, TYPES_AUTORISES[type_reconnu].split(";")[0]
+
+
+@router.post("/depuis-url", status_code=201)
+@limiteur.limit(_LIMITE_DEPUIS_URL)
+async def ajouter_depuis_url(
+    request: Request,
+    corps: CorpsFichierExterne,
+    utilisateur=Depends(utilisateur_courant),
+):
+    """
+    10/10/2026, demande Bourama : ajoute a la bibliotheque personnelle un
+    fichier trouve sur un site externe (par exemple un PDF que Clovis a donne
+    dans le chat), a partir de son adresse. Le fichier est telecharge cote
+    serveur puis enregistre comme un upload normal (meme vectorisation).
+    """
+    url = (corps.url or "").strip()
+    if not url or len(url) > 2048:
+        raise erreur_api(400, "LIEN_EXTERNE_NON_AUTORISE")
+    try:
+        contenu, nom_original, type_mime = await asyncio.to_thread(_recuperer_fichier_externe, url, corps.titre)
+    except ErreurRelais as e:
+        raise erreur_api(e.statut, e.code)
+
+    description_finale = (corps.titre or "").strip() or nom_original
+    try:
+        ligne = await asyncio.to_thread(
+            enregistrer_fichier,
+            contenu=contenu,
+            nom_fichier=nom_original,
+            type_mime=type_mime,
+            niveau="utilisateur",
+            uploade_par=utilisateur.id,
+            user_id=utilisateur.id,
+            description=description_finale,
+            statut_vectorisation="en_attente" if necessite_vectorisation_fichier_privee(type_mime, nom_original) else "pret",
+        )
+    except APIError as e:
+        if getattr(e, "code", None) == "23505":
+            raise erreur_api(409, "NOM_DEJA_UTILISE_BIBLIOTHEQUE_PERSO", nom=nom_original)
+        raise erreur_api(500, "ECHEC_DU_STOCKAGE_REESSAIE")
+    except Exception:
+        raise erreur_api(500, "ECHEC_DU_STOCKAGE_REESSAIE")
+
+    if ligne.get("statut_vectorisation") == "en_attente":
+        asyncio.create_task(asyncio.to_thread(vectoriser_maintenant_privee, ligne["id"]))
+
+    return _journaliser_ajout(contenu, type_mime, nom_original, description_finale, ligne, utilisateur, request)
 
 
 @router.post("/copier-depuis-publique/{entree_id}", status_code=201)

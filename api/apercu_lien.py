@@ -30,7 +30,7 @@ avec l'existant plutôt qu'un garde-fou ad hoc plus strict ici seulement.
 
 import logging
 import re
-from urllib.parse import urljoin, urlparse
+from urllib.parse import unquote, urljoin, urlparse
 
 import requests
 from fastapi import APIRouter, Response
@@ -52,6 +52,71 @@ MOTIFS_META = {
     for cle in ("og:title", "og:image", "og:description", "description", "og:site_name")
 }
 MOTIF_TITRE = re.compile(r"<title[^>]*>([^<]*)</title>", re.I)
+
+# 09/10/2026, demande Bourama : un lien sans extension dans son adresse
+# (ex. ?download=12725) peut pointer vers un vrai fichier. Le type est lu dans
+# les en-têtes de la réponse, sans télécharger le corps, et renvoyé au
+# frontend qui affiche alors la carte fichier (PDF, image, audio...) au lieu
+# d'une carte de site.
+EXTENSION_PAR_TYPE_CONTENU = {
+    "application/pdf": "pdf",
+    "application/msword": "doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/vnd.ms-excel": "xls",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "application/vnd.ms-powerpoint": "ppt",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+    "text/csv": "csv",
+    "application/json": "json",
+    "text/markdown": "md",
+    "application/zip": "zip",
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+    "audio/mpeg": "mp3",
+    "audio/wav": "wav",
+    "audio/x-wav": "wav",
+    "audio/ogg": "ogg",
+    "audio/mp4": "m4a",
+    "video/mp4": "mp4",
+    "video/webm": "webm",
+    "video/quicktime": "mov",
+}
+EXTENSIONS_FICHIER_CONNUES = set(EXTENSION_PAR_TYPE_CONTENU.values()) | {"jpeg", "xml", "tex"}
+MOTIF_NOM_FICHIER = re.compile(r"filename\*?=(?:UTF-8\'\')?\"?([^\";]+)\"?", re.I)
+
+
+def _fichier_depuis_entetes(entetes) -> dict | None:
+    """
+    Type réel du fichier d'après les en-têtes (Content-Disposition d'abord :
+    le nom de fichier est plus précis qu'un type générique, puis
+    Content-Type). None si la réponse n'est pas un fichier connu (page web,
+    type inconnu), le flux normal d'aperçu de site continue alors.
+    """
+    nom = None
+    extension = None
+
+    disposition = entetes.get("Content-Disposition", "")
+    trouve = MOTIF_NOM_FICHIER.search(disposition)
+    if trouve:
+        nom = unquote(trouve.group(1)).strip()
+        candidat = nom.rsplit(".", 1)[-1].lower() if "." in nom else ""
+        if candidat in EXTENSIONS_FICHIER_CONNUES:
+            extension = candidat
+
+    if extension is None:
+        type_contenu = entetes.get("Content-Type", "").split(";")[0].strip().lower()
+        extension = EXTENSION_PAR_TYPE_CONTENU.get(type_contenu)
+
+    if extension is None:
+        return None
+
+    taille = entetes.get("Content-Length", "")
+    return {
+        "extension": extension,
+        "nom": nom,
+        "taille": int(taille) if taille.isdigit() else None,
+    }
 
 
 def _extraire_meta(html: str, cle: str) -> str | None:
@@ -95,6 +160,9 @@ def apercu_lien(url: str, response: Response):
         ) as r:
             if not r.ok:
                 return {}
+            fichier = _fichier_depuis_entetes(r.headers)
+            if fichier:
+                return {"fichier": fichier}
             html = ""
             recu = 0
             for morceau in r.iter_content(chunk_size=8192, decode_unicode=False):

@@ -76,6 +76,8 @@ from api.dossiers_designes import router as dossiers_designes_router
 from api.programme_notions import router as programme_notions_router
 from api.programme_catalogue_public import router as programme_catalogue_public_router  # 22/09/2026
 from api.fichiers_r2 import router as fichiers_r2_router
+from api.fichiers_archive import router as fichiers_archive_router  # 09/10/2026, relais des PDF Internet Archive
+from api.fichiers_externes import router as fichiers_externes_router  # 10/10/2026, relais des fichiers de sites externes
 from api.apercu_lien import router as apercu_lien_router
 from api.rendu_animation import router as rendu_animation_router  # 07/10/2026
 from core.rendu_animation_travaux import nettoyer_anciens_fichiers
@@ -599,14 +601,31 @@ def _route_mcp_principale(app_mcp_starlette, chemin_complet):
 # tout le monde par defaut.
 import os
 from mcp.server.transport_security import TransportSecuritySettings
+from core.aiguillage_hote_mcp import AiguillageHoteMcp, hote_depuis_url
+from core.mcp_auth_public import URL_BASE_PUBLIQUE
+
+# Chemin interne du serveur MCP "espace" (celui du connecteur Claude).
+# Le connecteur s'ajoute avec l'adresse nue du domaine dedie (ex.
+# https://mcp.classinus.com) : voir core/aiguillage_hote_mcp.py, qui
+# renvoie la racine de ce domaine vers ce chemin.
+CHEMIN_INTERNE_MCP_ESPACE = "/mcp/espace"
+
+# Domaine dedie du connecteur, deduit de URL_RESOURCE_SERVER_PUBLIC.
+_hote_mcp_public = hote_depuis_url(URL_BASE_PUBLIQUE)
 
 _domaine_public_railway = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
+# Hotes autorises : domaine de service Railway (comme avant) ET domaine
+# dedie du connecteur, sinon la protection anti DNS rebinding rejetterait
+# les requetes arrivant par ce dernier (421 Misdirected Request).
+_hotes_autorises_transport = [
+    hote for hote in (_domaine_public_railway, _hote_mcp_public) if hote
+]
 _reglages_securite_transport = (
     TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
-        allowed_hosts=[_domaine_public_railway],
+        allowed_hosts=_hotes_autorises_transport,
     )
-    if _domaine_public_railway
+    if _hotes_autorises_transport
     else TransportSecuritySettings(enable_dns_rebinding_protection=False)
 )
 
@@ -624,10 +643,10 @@ app.router.routes.append(
     _route_mcp_principale(
         mcp_espace.streamable_http_app(
             stateless_http=True,
-            streamable_http_path="/mcp/espace",
+            streamable_http_path=CHEMIN_INTERNE_MCP_ESPACE,
             transport_security=_reglages_securite_transport,
         ),
-        "/mcp/espace",
+        CHEMIN_INTERNE_MCP_ESPACE,
     )
 )
 
@@ -650,16 +669,32 @@ app.router.routes.append(
 # dupliquee/en dur ici) directement a la racine de l'app FastAPI, la ou
 # Claude va reellement les chercher.
 from mcp.server.auth.routes import create_protected_resource_routes
-from core.mcp_auth_public import construire_auth_settings
+from core.mcp_auth_public import CHEMIN_AUTH_MCP_ESPACE, construire_auth_settings
 
-for _chemin_public in ("/mcp/public", "/mcp/espace"):
+# Le serveur "espace" est annonce a la racine de son domaine dedie (chemin
+# vide), le serveur "public" garde son chemin.
+for _chemin_public in ("/mcp/public", CHEMIN_AUTH_MCP_ESPACE):
     _reglages_auth = construire_auth_settings(_chemin_public)
-    app.router.routes.extend(
-        create_protected_resource_routes(
-            resource_url=_reglages_auth.resource_server_url,
-            authorization_servers=[_reglages_auth.issuer_url],
-        )
+    _routes_decouverte = create_protected_resource_routes(
+        resource_url=_reglages_auth.resource_server_url,
+        authorization_servers=[_reglages_auth.issuer_url],
     )
+    # CORRECTIF (08/10) : la route de decouverte repondait 500 a chaque
+    # tentative de connexion d'un client MCP externe (logs Railway :
+    # "'CORSMiddleware' object has no attribute '__name__'"), si bien que
+    # Claude ne trouvait jamais le serveur d'autorisation et affichait
+    # "Impossible de s'inscrire". Meme cause que le correctif du 22/09 sur
+    # la route MCP principale : la librairie mcp enveloppe l'endpoint dans
+    # un objet (CORSMiddleware) qui n'a pas de `__name__`, et
+    # SlowAPIMiddleware lit `route.endpoint.__name__` sur toutes les
+    # routes de l'app. Meme solution : lui donner un nom.
+    for _route_decouverte in _routes_decouverte:
+        if not hasattr(_route_decouverte.endpoint, "__name__"):
+            _route_decouverte.endpoint.__name__ = (
+                f"decouverte_oauth_{_chemin_public.strip('/').replace('/', '_')}"
+            )
+
+    app.router.routes.extend(_routes_decouverte)
 
 # Domaines autorisés à appeler cette API. Service isolé pour Clovis
 # uniquement (séparé de djiguigne-backend le 12/08) -- seules les origines
@@ -717,6 +752,12 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # 10/10/2026, demande Bourama : le frontend affiche le pourcentage d'un
+    # téléchargement. Sans cette liste, le navigateur masque ces en-têtes aux
+    # appels venant d'un autre domaine (Content-Length illisible, donc pas de
+    # pourcentage). Content-Encoding permet de savoir si la taille annoncée est
+    # celle d'un fichier compressé en route (alors pas de pourcentage trompeur).
+    expose_headers=["Content-Length", "Content-Encoding", "Content-Range", "Content-Disposition", "Accept-Ranges"],
 )
 
 
@@ -730,6 +771,15 @@ class GZipSaufChat:
     flush inutile, à l'encontre du réglage anti-buffering déjà en place
     (X-Accel-Buffering: no, voir api/chat.py). D'où l'exclusion
     explicite plutôt qu'un GZipMiddleware appliqué partout.
+
+    11/10/2026, demande Bourama : /fichiers/ (fichiers stockés, PDF des
+    archives, fichiers relayés de sites externes) est exclu aussi. Ce sont des
+    PDF, images, vidéos et archives, déjà compressés ou presque, et la
+    compression en route change Content-Length (taille compressée) alors que le
+    navigateur reçoit les octets décompressés : le pourcentage de
+    téléchargement ne pouvait plus être calculé, la barre restait en
+    "Préparation" jusqu'à la fin. Elle gênait aussi les requêtes Range des
+    lecteurs audio, vidéo et PDF.
     """
 
     def __init__(self, app):
@@ -737,13 +787,22 @@ class GZipSaufChat:
         self._app_gzip = GZipMiddleware(app, minimum_size=500)
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] == "http" and scope["path"].startswith("/api/chat"):
+        if scope["type"] == "http" and scope["path"].startswith(("/api/chat", "/fichiers/")):
             await self._app_brut(scope, receive, send)
         else:
             await self._app_gzip(scope, receive, send)
 
 
 app.add_middleware(GZipSaufChat)
+
+# Doit rester le DERNIER middleware ajoute (donc le plus externe) : il
+# change le chemin de la requete avant tout le reste, y compris la
+# limitation de debit qui lit le chemin pour choisir la route.
+app.add_middleware(
+    AiguillageHoteMcp,
+    hote_mcp=_hote_mcp_public,
+    chemin_interne=CHEMIN_INTERNE_MCP_ESPACE,
+)
 
 app.include_router(agents_router)
 app.include_router(profiles_router)
@@ -824,6 +883,8 @@ app.include_router(webhooks_github_router)
 app.include_router(programme_notions_router)
 app.include_router(programme_catalogue_public_router)  # 22/09/2026
 app.include_router(fichiers_r2_router)
+app.include_router(fichiers_archive_router)  # 09/10/2026, relais des PDF Internet Archive
+app.include_router(fichiers_externes_router)  # 10/10/2026, relais des fichiers de sites externes
 app.include_router(apercu_lien_router)
 app.include_router(rendu_animation_router)  # 07/10/2026, vidéo d'une animation du chat
 

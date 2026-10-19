@@ -23,7 +23,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Optional, Literal
+from typing import Dict, List, Optional, Literal
 
 from api.auth import utilisateur_optionnel, supabase
 from core.arret_tour import demander_arret_utilisateur, fermer_arret, ouvrir_arret
@@ -195,6 +195,16 @@ class EnvoyerMessagePayload(BaseModel):
     # version alternative de l'ancienne (au lieu d'une suite).
     parent_id: Optional[int] = None
     regenerer: Optional[bool] = False
+    # Vraie question a ranger dans l'historique quand `message` contient en plus des consignes ou du
+    # contexte du client (plugin Thonny, 14/10/2026, demande Bourama : sinon le titre de la
+    # conversation et son historique montrent les consignes). Absent : `message` est enregistre.
+    message_enregistre: Optional[str] = None
+    # Client qui envoie la requete (14/10/2026, demande Bourama). "thonny" : le prompt systeme
+    # n'a plus les consignes d'affichage du site mais celles de Thonny (core/prompt_thonny.py).
+    # Absent ou inconnu : comportement inchange. `libelles_client` donne le nom des boutons du
+    # client dans la langue de l'eleve (cles dans prompt_thonny.LIBELLES_AUTORISES).
+    client: Optional[str] = None
+    libelles_client: Optional[Dict[str, str]] = None
 
 
 def _resoudre_modele_force(agent_id, modele_demande):
@@ -285,6 +295,9 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
                 parent_id=payload.parent_id,
                 regenerer=payload.regenerer or False,
                 arret_tour=arret,
+                message_enregistre=payload.message_enregistre,
+                client=payload.client,
+                libelles_client=payload.libelles_client,
             )
         for evenement in generateur:
             yield f"data: {json.dumps(evenement)}\n\n"

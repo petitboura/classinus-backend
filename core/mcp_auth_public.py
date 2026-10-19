@@ -79,6 +79,13 @@ URL_BASE_PUBLIQUE = os.environ.get("URL_RESOURCE_SERVER_PUBLIC") or (
 )
 
 
+# Le serveur MCP "espace" (celui du connecteur Claude) s'ajoute avec une
+# adresse nue, sans chemin (ex. https://mcp.classinus.com). Son
+# identifiant de ressource OAuth est donc l'adresse publique seule : chemin
+# vide. Voir core/aiguillage_hote_mcp.py pour l'aiguillage des requetes.
+CHEMIN_AUTH_MCP_ESPACE = ""
+
+
 class VerificateurJetonSupabase(TokenVerifier):
     """Vérifie un jeton d'accès OAuth émis par Supabase Auth.
 
@@ -106,9 +113,10 @@ class VerificateurJetonSupabase(TokenVerifier):
 
 
 def construire_auth_settings(chemin_montage: str) -> AuthSettings:
-    """`chemin_montage` : ex. "/mcp/public" ou "/mcp/espace" -- doit
-    correspondre exactement au chemin utilisé dans app.mount(...) côté
-    api/main.py, sert d'identifiant de ressource RFC 8707/9728.
+    """`chemin_montage` : ex. "/mcp/public" -- doit correspondre
+    exactement au chemin public du serveur côté api/main.py, sert
+    d'identifiant de ressource RFC 8707/9728. Chaîne vide pour un serveur
+    joignable à la racine de son domaine (voir CHEMIN_AUTH_MCP_ESPACE).
 
     CORRECTIF (16/08) -- `issuer_url` doit pointer vers
     `{SUPABASE_URL}/auth/v1`, PAS vers `SUPABASE_URL` seul (utilisé

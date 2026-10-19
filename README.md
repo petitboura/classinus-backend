@@ -32,7 +32,7 @@ core/
                                 candidats, le grand modèle décide lui-même de lire le texte complet
   contenu_dynamique_matiere.py résolution du system prompt pour les agents à contenu dynamique par matière
   auth.py                      authentification (email/mot de passe + Google) via Supabase Auth
-  fournisseurs_llm.py          LLM premium (Claude, GPT, Gemini, DeepSeek) — gardes-fous d'accès
+  fournisseurs_llm.py          LLM premium (Claude, GPT, Gemini, Grok, DeepSeek) — gardes-fous d'accès, et liste des modèles affichés « Bientôt » dans le sélecteur du chat (DISTRIBUTEURS_BIENTOT)
   retriever.py                 recherche vectorielle parallèle (prompts, documents), scopée par agent
   embeddings.py                vectorisation partagée (gemini-embedding-001)
   bibliotheque_fichiers.py     bibliothèque de fichiers uploadés, persistante, à 3 niveaux d'accès
@@ -62,7 +62,10 @@ core/
                                 monté directement dans l'app
   serveur_mcp_github.py        serveur MCP interne pour le connecteur GitHub
   serveur_mcp_espace.py        serveur MCP PUBLIC "Mon espace" — connecteur externe (Claude, etc.) exposé
-                                à l'utilisateur, authentifié par OAuth 2.1
+                                à l'utilisateur, authentifié par OAuth 2.1 ; s'ajoute dans Claude avec
+                                l'adresse nue du domaine dédié (ex. https://mcp.classinus.com), sans chemin
+  aiguillage_hote_mcp.py       middleware : la racine du domaine dédié du connecteur est traitée comme
+                                le chemin interne /mcp/espace (domaine déduit de URL_RESOURCE_SERVER_PUBLIC)
   serveur_mcp_public.py        serveur MCP PUBLIC de Clovis, destiné à être ajouté comme connecteur
   mcp_auth_public.py           vérification des jetons OAuth pour les serveurs MCP publics
   confirmations_mcp.py         confirmations en attente pour l'outil MCP externe discuter_avec_clovis
@@ -217,7 +220,7 @@ instance du serveur).
 | `TAVILY_API_KEY` | `core/registre_outils.py` (outil de recherche web) |
 | `GITHUB_TOKEN` (optionnel) | `core/serveur_mcp_github.py` — sans lui, l'API GitHub non authentifiée est plafonnée à 60 requêtes/heure PAR IP ; un classic token `public_repo` fait passer la limite à 5000/heure |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | `connexions/oauth_generique.py` (connexion OAuth GitHub par agent) |
-| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `DEEPSEEK_API_KEY` | `core/fournisseurs_llm.py` (LLM premium optionnels — absents, seuls Gemini/DeepSeek de secours restent proposés) |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` / `DEEPSEEK_API_KEY` | `core/fournisseurs_llm.py` (LLM premium optionnels — absents, seuls Gemini/DeepSeek de secours restent proposés) |
 | `TOGETHER_API_KEY` | `core/generation_images.py` (meilleure fiabilité que le fournisseur par défaut) |
 | `FAL_KEY` | `core/generation_3d.py`, `core/generation_video.py` — absente en prod, ces deux outils sont désactivés (`disponible=false`) |
 | `GOOGLE_TTS_API_KEY` / `AUDIO_TTS_ACTIF` | `core/generation_audio.py` — absentes en prod, `generer_audio` désactivé |
@@ -228,7 +231,7 @@ instance du serveur).
 | `FCM_SERVICE_ACCOUNT_JSON_B64` / `FCM_PROJECT_ID` | `core/notifications_push.py`, canal Android — pas encore configurées en prod (TODO explicite) |
 | `APNS_KEY_P8_B64` / `APNS_KEY_ID` / `APNS_TEAM_ID` | `core/notifications_push.py`, canal iOS — pas encore configurées en prod (TODO explicite) |
 | `URL_RETOUR_APP` | `connexions/notion.py`, `connexions/oauth_generique.py`, `api/agents.py` — URL publique du déploiement pour le retour OAuth, à recalculer à chaque changement de domaine |
-| `URL_RESOURCE_SERVER_PUBLIC` | `core/mcp_auth_public.py` (serveur MCP public, retombe sur `RAILWAY_PUBLIC_DOMAIN` si absente) |
+| `URL_RESOURCE_SERVER_PUBLIC` | `core/mcp_auth_public.py`, `core/aiguillage_hote_mcp.py`, `api/main.py` — adresse publique du connecteur MCP, sans chemin et sans slash final (ex. `https://mcp.classinus.com`). Elle sert d'identifiant OAuth du connecteur, définit le domaine dont la racine mène au serveur MCP "espace", et ajoute ce domaine aux hôtes autorisés du transport MCP. Le domaine doit aussi être ajouté au service sur Railway. Absente, retombe sur le domaine de service Railway |
 
 Détail complet, variables obsolètes et checklist Railway : voir
 `RAILWAY_DEPLOY.md`.

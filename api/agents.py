@@ -34,7 +34,7 @@ from storage import upload_document, list_documents, delete_document  # noqa: E4
 from bibliotheque_fichiers import enregistrer_fichier, enregistrer_lien, lister_fichiers, supprimer_fichier  # noqa: E402
 from mcp_tools import lister_outils_autorises_pour_agent  # noqa: E402
 from core.erreurs import erreur_api
-from core.fournisseurs_llm import modeles_disponibles_pour_agent, modele_id_est_autorise
+from core.fournisseurs_llm import modeles_disponibles_pour_agent, modeles_bientot_pour_agent, modele_id_est_autorise
 
 logging.basicConfig(level=logging.INFO)
 
@@ -310,6 +310,10 @@ class AgentDetailPublic(BaseModel):
     # AgentEditable -- un visiteur/étudiant a juste besoin de savoir QUELS
     # modèles il peut choisir, pas la mécanique d'abonnement derrière.
     modeles_disponibles: List[dict] = Field(default_factory=list)
+    # Ajouté le 14/10/2026 : modèles montrés grisés avec la mention "Bientôt" dans
+    # le sélecteur du chat, voir core/fournisseurs_llm.py:modeles_bientot_pour_agent.
+    # Jamais choisissables : le backend ne les accepte pas (modele_id_est_autorise).
+    modeles_bientot: List[dict] = Field(default_factory=list)
     modele_choisi: Optional[str] = None
     # Ajouté 2026-08-06 (agent "Nitrux", contenu dynamique par matière) :
     # dit au frontend d'afficher l'entrée "Matières" (écrire du contenu /
@@ -400,6 +404,9 @@ def obtenir_agent_public(agent_id: str):
         filiere=ligne.get("filiere"),
         domaine=ligne.get("domaine"),
         modeles_disponibles=modeles_disponibles_pour_agent(
+            ligne.get("distributeur_debloque"), ligne.get("palier_debloque")
+        ),
+        modeles_bientot=modeles_bientot_pour_agent(
             ligne.get("distributeur_debloque"), ligne.get("palier_debloque")
         ),
         modele_choisi=ligne.get("modele_choisi"),

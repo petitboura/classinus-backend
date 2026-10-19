@@ -25,6 +25,7 @@ from api.auth import utilisateur_courant, utilisateur_optionnel, supabase
 from api.agents import supprimer_agent_completement
 from api.journal import journaliser
 from core.limitation_debit import limiteur
+from core.purge_compte import purger_donnees_compte
 from creation_agent import generer_id_depuis_nom
 from core.erreurs import erreur_api
 
@@ -193,6 +194,12 @@ class MonStatutReponse(BaseModel):
     # None/False = traduction seulement à la demande (bouton "Traduire"),
     # True = traduction automatique dès qu'une erreur apparaît.
     traduction_auto_erreurs: Optional[bool] = None
+    # 15/10/2026, demande Bourama (bouton du modèle en haut du chat) : dernier
+    # modèle choisi par l'élève, gardé sur son compte pour le retrouver sur
+    # n'importe quel appareil. None = jamais choisi (le frontend retombe alors
+    # sur DeepSeek Flash). Un id absent de la liste de l'agent est ignoré par
+    # le frontend, et revalidé côté serveur à chaque envoi (api/chat.py).
+    modele_prefere: Optional[str] = None
 
 
 @router.get("/moi/statut", response_model=MonStatutReponse)
@@ -202,7 +209,7 @@ def mon_statut(utilisateur=Depends(utilisateur_courant)):
             supabase.table("profiles")
             .select(
                 "est_createur, est_majeur, est_professeur, "
-                "langue_cible_erreurs, traduction_auto_erreurs"
+                "langue_cible_erreurs, traduction_auto_erreurs, modele_prefere"
             )
             .eq("user_id", utilisateur.id)
             .maybe_single()
@@ -217,6 +224,7 @@ def mon_statut(utilisateur=Depends(utilisateur_courant)):
     est_professeur = donnees.get("est_professeur")
     langue_cible_erreurs = donnees.get("langue_cible_erreurs")
     traduction_auto_erreurs = donnees.get("traduction_auto_erreurs")
+    modele_prefere = donnees.get("modele_prefere")
 
     agents_administres = _agents_administres_de(utilisateur.id)
 
@@ -227,6 +235,7 @@ def mon_statut(utilisateur=Depends(utilisateur_courant)):
         est_professeur=est_professeur,
         langue_cible_erreurs=langue_cible_erreurs,
         traduction_auto_erreurs=traduction_auto_erreurs,
+        modele_prefere=modele_prefere,
     )
 
 
@@ -395,6 +404,9 @@ class MettreAJourProfilPayload(BaseModel):
     # ne rien changer.
     langue_cible_erreurs: Optional[str] = None
     traduction_auto_erreurs: Optional[bool] = None
+    # 15/10/2026, voir MonStatutReponse.modele_prefere. None = champ omis,
+    # ne rien changer.
+    modele_prefere: Optional[str] = Field(default=None, max_length=100)
 
 
 @router.patch("/me", response_model=ProfilPublic)
@@ -466,6 +478,8 @@ def mettre_a_jour_mon_profil(
         ligne["langue_cible_erreurs"] = payload.langue_cible_erreurs.strip() or None
     if payload.traduction_auto_erreurs is not None:
         ligne["traduction_auto_erreurs"] = payload.traduction_auto_erreurs
+    if payload.modele_prefere is not None:
+        ligne["modele_prefere"] = payload.modele_prefere.strip() or None
 
     try:
         deja_existant = (
@@ -666,10 +680,14 @@ def supprimer_mon_compte(request: Request, utilisateur=Depends(utilisateur_coura
     l'API admin (le client `supabase` de api.auth utilise déjà la service
     role key, seule capable d'appeler `auth.admin`).
 
-    Ne touche PAS à `historique_conversations` (même choix que
-    supprimer_agent_completement, journal permanent jamais purgé ailleurs
-    dans le projet) : les échanges passés restent en base, seulement
-    détachés de tout profil/agent visible.
+    Purge aussi les conversations de l'élève (historique_conversations,
+    conversations, historique_fils_meta, conversation_summaries), demande de
+    Bourama du 12/10/2026 : plus aucun échange ne doit rester en base après
+    la suppression du compte.
+
+    Purge ensuite toutes les autres données liées au compte via
+    core/purge_compte.py (demande de Bourama du 12/10/2026), sauf le journal
+    des actions, gardé pour la sécurité.
 
     Chaque étape est best-effort (log et continue) sauf la suppression
     finale du compte Auth, seule à faire échouer la requête si elle
@@ -702,11 +720,21 @@ def supprimer_mon_compte(request: Request, utilisateur=Depends(utilisateur_coura
         ("agent_update_likes", "user_id"),
         ("agent_update_comments", "user_id"),
         ("notifications", "user_id"),
+        ("historique_conversations", "user_id"),
+        ("conversations", "user_id"),
+        ("historique_fils_meta", "user_id"),
+        ("conversation_summaries", "user_id"),
     ):
         try:
             supabase.table(table).delete().eq(colonne, user_id).execute()
         except Exception as e:
             logging.error(f"ERREUR SUPABASE (purge table {table} pour compte {user_id}) : {e}")
+
+    # Tout le reste des données liées au compte (bibliothèque et ses fichiers,
+    # connexions Notion et Google, temps d'écran, rappels, réponses aux QCM,
+    # contenu partagé ou publié, etc.), voir core/purge_compte.py. Doit passer
+    # AVANT la suppression du profil : des liens vers lui n'ont pas de cascade.
+    purger_donnees_compte(supabase, user_id)
 
     for table, colonne in (("follows", "follower_id"), ("follows", "creator_id")):
         try:

@@ -35,6 +35,7 @@ from signalements import signalements_pertinents_pour_injection
 from mcp_tools import lister_outils_autorises_pour_agent, filtrer_catalogue_par_outil_force, appeler_outil
 from registre_outils import CATEGORIES_OUTILS
 from fournisseurs_llm import generer_reponse_premium
+from identite_modele import message_systeme, systeme_avec_identite
 
 # 05/09/2026 (demande Bourama) : main.py decoupe en plusieurs fichiers pour
 # ne plus avoir un seul fichier de presque 4000 lignes -- voir
@@ -149,7 +150,17 @@ def _client_pour_reprise(modele):
     return Groq(api_key=get_secret("GROQ_API_KEY"), max_retries=0)
 
 
-def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None, effort_reflexion=None, arret_tour=None):
+def _texte_a_enregistrer(message_utilisateur, message_enregistre):
+    """Le texte de la question tel qu'il est range dans l'historique.
+
+    Un client qui ajoute des consignes ou du contexte devant la question (le plugin Thonny) envoie
+    la vraie question dans `message_enregistre` : c'est elle qui apparait dans l'historique et
+    comme titre de la conversation, pas les consignes. Sans ce champ, rien ne change.
+    """
+    return message_enregistre if message_enregistre else message_utilisateur
+
+
+def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None, effort_reflexion=None, arret_tour=None, message_enregistre=None, client=None, libelles_client=None):
     """
     Generateur d'evenements. Chaque element produit est un dictionnaire :
     - {"type": "statut", "texte": "..."}         -> un outil MCP est en cours d'utilisation (ou, depuis le 11/09/2026, Gemini en train de lire une image/video jointe)
@@ -951,7 +962,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 lecture_ecran_anticipee.append(lancer_lecture_anticipee(user_id, conversation_id, table_routage_complet))
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force_contexte_seul)
             outil_force_verifie_optimiste = [o["function"]["name"] for o in outils_mcp] if outil_force_contexte_seul else None
-            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire)
+            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire, client=client, libelles_client=libelles_client)
             return outils_mcp, table_routage, system_final, catalogue_complet, table_routage_complet
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -1070,7 +1081,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id)
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force)
             outil_force_verifie = [o["function"]["name"] for o in outils_mcp] if outil_force else outil_force
-        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire)
+        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire, client=client, libelles_client=libelles_client)
 
         # PERF (10/08) : second (et dernier) point de vérification --
         # couvre tous les chemins qui ne passent PAS par le premier
@@ -1441,13 +1452,58 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # chat() -- meme structure que le bloc image juste au-dessus :
         # pas d'outils MCP, pas de cascade de secours multi-modeles, un
         # seul appel, on retombe sur MESSAGE_ERREUR s'il echoue.
+        # DeepSeek choisi dans le sélecteur (15/10/2026, demande de Bourama) :
+        # même boucle d'agent avec outils que la cascade (_agent_groq). Avant
+        # ce correctif, ce chemin partait sans aucun outil (ni demander_outils,
+        # ni garder_outils, ni mémoire) alors que le prompt système les
+        # annonçait : DeepSeek écrivait son appel d'outil en texte brut (DSML)
+        # dans le chat. Claude, GPT et Gemini gardent le chemin texte seul
+        # ci-dessous, inchangé. Clé API absente : on retombe sur ce chemin
+        # texte seul, comme avant.
+        _cle_deepseek_choisi = get_secret("DEEPSEEK_API_KEY") if str(modele_force).startswith("deepseek") else None
+        if _cle_deepseek_choisi:
+            client_deepseek_choisi = OpenAI(api_key=_cle_deepseek_choisi, base_url="https://api.deepseek.com")
+            messages_agent = list(messages_base)
+            # Identité de l'assistant (16/10/2026) : ce chemin a été ajouté le 15/10 sans le
+            # bloc d'identité, DeepSeek choisi dans le sélecteur se disait donc Classinus.
+            messages_agent[0] = message_systeme(messages_base[0]["content"], modele_force)
+            reponse_accumulee = []
+            meta_assistant = {}
+            fichiers_generes_accumules = []
+            try:
+                yield from _capturer_reponse(
+                    _agent_groq(client_deepseek_choisi, messages_agent, outils_mcp, table_routage, agent_nom=_nom_agent(agent_id),
+                                modele=modele_force, reasoning_effort=effort_reflexion, conversation_id=conversation_id,
+                                catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
+                                user_id=user_id, arret=arret_tour),
+                    reponse_accumulee,
+                    meta_assistant,
+                    fichiers_generes_accumules,
+                )
+                ids_historique = _sauvegarder_echange(
+                    user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre),
+                    "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules),
+                    conversation_id, modele=modele_force, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant,
+                    parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer
+                )
+                if ids_historique:
+                    yield {"type": "meta", **ids_historique}
+                if not (arret_tour is not None and arret_tour.est_demande()):
+                    _finaliser_memoire_en_arriere_plan(user_id, agent_id)
+                    forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
+            except Exception as e:
+                logging.error(f"ERREUR MODELE PREMIUM AVEC OUTILS ({modele_force}) : {e}")
+                if not reponse_accumulee:
+                    yield {"type": "reponse", "texte": MESSAGE_ERREUR}
+            return
+
         messages_premium = [
             {"role": m["role"], "content": m["content"]}
             for m in messages_base if m["role"] != "system"
         ]
         reponse_accumulee = []
         try:
-            for morceau in generer_reponse_premium(modele_force, system_final, messages_premium, effort=effort_reflexion):
+            for morceau in generer_reponse_premium(modele_force, systeme_avec_identite(system_final, modele_force), messages_premium, effort=effort_reflexion):
                 if isinstance(morceau, dict):
                     # Reflexion du modele (DeepSeek) : affichee a l'ecran
                     # mais jamais sauvegardee comme partie de la reponse.
@@ -1457,7 +1513,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 yield {"type": "reponse", "texte": morceau}
             logging.info(f"Réponse via MODELE PREMIUM : {modele_force}")
             ids_historique = _sauvegarder_echange(
-                user_id, agent_id, message_utilisateur, "".join(reponse_accumulee), conversation_id, modele=modele_force, meta_utilisateur=meta_utilisateur,
+                user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre), "".join(reponse_accumulee), conversation_id, modele=modele_force, meta_utilisateur=meta_utilisateur,
                 parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer
             )
             if ids_historique:
@@ -1504,6 +1560,10 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # deja recupere (cause du bug ou la page Notion trouvee n'arrivait
         # jamais dans la reponse finale).
         messages_agent = list(messages_base)
+        # Identité de l'assistant (15/10/2026) : le modèle qui répond change d'un maillon
+        # de la cascade à l'autre, le bloc d'identité est donc remplacé juste avant
+        # chaque appel (voir core/identite_modele.py). Le prompt de base reste intact.
+        systeme_base = messages_base[0]["content"]
         reponse_accumulee = []
         meta_assistant = {}
         fichiers_generes_accumules = []
@@ -1517,6 +1577,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # voir plus haut).
         if client_deepseek:
             try:
+                messages_agent[0] = message_systeme(systeme_base, DEEPSEEK_PRIMARY)
                 yield from _capturer_reponse(
                     _agent_groq(client_deepseek, messages_agent, outils_mcp, table_routage, agent_nom=agent_nom,
                                 modele=DEEPSEEK_PRIMARY, reasoning_effort=effort_reflexion, conversation_id=conversation_id,
@@ -1526,7 +1587,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     meta_assistant,
                     fichiers_generes_accumules,
                 )
-                ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=DEEPSEEK_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
+                ids_historique = _sauvegarder_echange(user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre), "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=DEEPSEEK_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
                 if ids_historique:
                     yield {"type": "meta", **ids_historique}
                 if not (arret_tour is not None and arret_tour.est_demande()):
@@ -1543,6 +1604,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
 
         # 2. GPT-OSS 120B, avec cycle d'outils MCP dynamique
         try:
+            messages_agent[0] = message_systeme(systeme_base, GROQ_PRIMARY)
             yield from _capturer_reponse(
                 _agent_groq(client_groq, messages_agent, outils_mcp, table_routage, agent_nom=agent_nom,
                             reasoning_effort=MODELES_AVEC_REASONING_EFFORT.get(GROQ_PRIMARY),
@@ -1553,7 +1615,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 meta_assistant,
                 fichiers_generes_accumules,
             )
-            ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GROQ_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
+            ids_historique = _sauvegarder_echange(user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre), "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GROQ_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
             if not (arret_tour is not None and arret_tour.est_demande()):
@@ -1584,6 +1646,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # commentaire ci-dessus).
         for model in GROQ_FALLBACKS:
             try:
+                messages_agent[0] = message_systeme(systeme_base, model)
                 reasoning_pour_ce_modele = MODELES_AVEC_REASONING_EFFORT.get(model)
                 yield from _capturer_reponse(
                     _agent_groq(
@@ -1597,7 +1660,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     meta_assistant,
                     fichiers_generes_accumules,
                 )
-                ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=model, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
+                ids_historique = _sauvegarder_echange(user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre), "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=model, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
                 # Signale au frontend quand la reponse vient d'un modele de
                 # qualite reduite (demande Bourama, 26/07) : evite que
                 # l'utilisateur juge la plateforme sur une reponse plus
@@ -1684,7 +1747,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # systeme.
             if outil_deja_execute:
                 system_gemini_sans_outils = (
-                    system_final
+                    systeme_avec_identite(system_final, GOOGLE_MODEL)
                     + "\n\nIMPORTANT : un outil a DÉJÀ été exécuté plus tôt dans cet échange et son "
                     "résultat est présent ci-dessus, marqué \"[Résultat de l'outil déjà exécuté]\" -- "
                     "base ta réponse DESSUS. Ne dis JAMAIS que tu ne peux pas faire de recherche ou "
@@ -1695,7 +1758,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 )
             else:
                 system_gemini_sans_outils = (
-                    system_final
+                    systeme_avec_identite(system_final, GOOGLE_MODEL)
                     + "\n\nIMPORTANT : tu n'as accès à AUCUN outil réel dans cette réponse précise "
                     "(pas de recherche web, pas d'API externe, pas de Notion, rien). Si la question "
                     "porte sur une information qui change (prix, taux de change, actualité, données "
@@ -1730,7 +1793,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # deja obtenus par un modele Groq/DeepSeek avant l'echec
             # disparaissaient donc reellement a la reouverture de la
             # conversation, meme s'ils restaient visibles en direct.
-            ids_historique = _sauvegarder_echange(user_id, agent_id, message_utilisateur, "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GOOGLE_MODEL, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
+            ids_historique = _sauvegarder_echange(user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre), "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GOOGLE_MODEL, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
             if not (arret_tour is not None and arret_tour.est_demande()):

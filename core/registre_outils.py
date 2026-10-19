@@ -401,6 +401,15 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "rechercher_video": {"label": "Recherche de vidéo", "icone": "Video", "onglet": "rechercher"},
     # Ajouté 07/10 : lecture de ce qui est dit dans une vidéo YouTube (sous-titres).
     "lire_video": {"label": "Lecture d'une vidéo", "icone": "FileSearch", "onglet": "rechercher"},
+    # Ajouté 09/10/2026 (demande Bourama, lot 1 du chantier Internet Archive) :
+    # recherche d'un livre ou d'un PDF hors de Classinus, catégorie
+    # documents_externes. Icône "Landmark" vérifiée dans lucide-react 0.383.0
+    # (la version du frontend), et distincte de toutes les autres du registre.
+    "rechercher_document_externe": {"label": "Recherche de document", "icone": "Landmark", "onglet": "rechercher"},
+    # Ajouté 09/10 : lecture du texte d'un livre ou PDF Internet Archive (lot 2).
+    "lire_document_internet_archive": {"label": "Lecture d'un document", "icone": "Glasses", "onglet": "rechercher"},
+    # Ajouté 10/10 : lecteur unique d'un fichier externe à partir de son lien direct.
+    "lire_document_externe": {"label": "Lecture d'un fichier externe", "icone": "ScanText", "onglet": "rechercher"},
     # gerer_document_bibliotheque (consolidé le 26/08, ex 12 outils
     # séparés -- consulter_bibliotheque, consulter_bibliotheque_publique,
     # lister/ajouter/supprimer/classer/déclasser/ranger/retirer/lire_entier,
@@ -692,6 +701,9 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "appuyer_touches": {"label": "Raccourci clavier", "icone": "Command", "onglet": None},
     "ouvrir_application": {"label": "Ouverture d'une application", "icone": "AppWindow", "onglet": None},
     "lire_ecran": {"label": "Lecture de l'écran", "icone": "Eye", "onglet": None},
+    # Vision ecran Android lot 3 (11/10/2026) : lecture et marque sur le telephone, meme rappel de cache 24h.
+    "lire_ecran_telephone": {"label": "Lecture de l'écran du téléphone", "icone": "Eye", "onglet": None},
+    "marquer_ecran_telephone": {"label": "Marque sur l'écran du téléphone", "icone": "Highlighter", "onglet": None},
     # Editeur de code (28/09/2026, demande Bourama), meme rappel de cache 24h.
     "lire_editeur": {"label": "Lecture de l'éditeur de code", "icone": "FileCode", "onglet": None},
     "montrer_dans_editeur": {"label": "Montrer dans l'éditeur", "icone": "Crosshair", "onglet": None},
@@ -848,6 +860,12 @@ CATEGORIES_OUTILS = {
         "gerer_programme_catalogue_public",  # 22/09/2026
         "ajouter_commentaire_catalogue_public", "supprimer_commentaire_catalogue_public",  # 22/09/2026
     ],
+    # Livres et PDF trouvés HORS de Classinus (Internet Archive), 09/10/2026,
+    # demande Bourama. Catégorie à part : rangés dans recherche_web ou
+    # catalogue_public, ces outils seraient confondus avec la recherche web ou
+    # avec le catalogue interne (le modèle ouvrirait le catalogue public pour
+    # un livre qui n'y est pas).
+    "documents_externes": ["rechercher_document_externe", "lire_document_internet_archive", "lire_document_externe"],
     "base_connaissance": ["gerer_base_connaissance"],
     "pedagogie": [
         "gerer_avancement_notions", "consulter_avancement_notion",
@@ -879,6 +897,7 @@ CATEGORIES_OUTILS = {
         "executer_clic_generique", "montrer_element_application", "ecrire_dans_champ",
         "lire_page",
         "pointer_ecran", "marquer_ecran", "cliquer_ecran", "taper_clavier", "appuyer_touches", "ouvrir_application", "lire_ecran",
+        "lire_ecran_telephone", "marquer_ecran_telephone",
         "lire_editeur", "montrer_dans_editeur", "ecrire_dans_editeur",
         "desactiver_canal_en_direct",
     ],
@@ -900,10 +919,29 @@ NOMS_CATEGORIES_OUTILS = list(CATEGORIES_OUTILS.keys()) + list(CATEGORIES_OUTILS
 # Texte compact envoye dans la description de demander_outils (voir
 # routage_outils._outil_demander_outils) : les categories evidentes sont
 # nommees seules, les autres ont une parenthese pour lever l'ambiguite.
+
+
+def _sources_documents_externes_pour_index():
+    """
+    Noms des sources de documents externes actives, lus dans leur registre
+    (core/sources_documents_externes.py) au lieu d'etre ecrits ici : ajouter
+    ou desactiver une source change l'index sans toucher ce fichier. Import
+    fait ici et non en haut du fichier : ce module ne contient que des
+    donnees, il ne doit pas tirer les modules de recherche tant qu'on n'en
+    a pas besoin.
+    """
+    from core.sources_documents_externes import noms_sources
+
+    return ", ".join(noms_sources())
+
+
 INDEX_CATEGORIES_OUTILS = (
     "Catégories : notion, google_drive, github, generation_documents, "
-    "recherche_web (web + recherche d'image), bibliotheque (documents/dossiers "
-    "personnels), catalogue_public, base_connaissance (Classinus lui même), "
+    "recherche_web (web, actualité, images et vidéos ; pas le premier réflexe "
+    "pour trouver un livre ou un PDF), bibliotheque (documents/dossiers "
+    "personnels), catalogue_public, documents_externes (TOUT livre, manuel, PDF, "
+    "thèse ou article à trouver en ligne, hors de Classinus ; sources : "
+    f"{_sources_documents_externes_pour_index()}), base_connaissance (Classinus lui même), "
     "pedagogie (avancement, signalements), comportement (skills), memoire, "
     "telephone_etudiant (mobile, écran, concentration), historique "
     "(conversations passées), agent_applicatif (actions dans l'appli), minuteur (minuteurs dans le chat)."
