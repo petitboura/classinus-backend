@@ -3,7 +3,7 @@ Ecran "Ma memoire" de l'eleve (27/09/2026, chantier memoire eleve, puis
 fusion avec l'ancien ecran le 29/09/2026 : il n'y a plus qu'un seul
 systeme de memoire, celui de core/memoire_eleve.py).
 
-Trois routes :
+Quatre routes :
 - GET /api/memoire-eleve : tout ce que Classinus retient de l'eleve
   connecte, groupe par categorie du socle (identite, scolarite,
   apprentissage, preferences). Les 4 categories sont toujours presentes,
@@ -11,10 +11,11 @@ Trois routes :
 - DELETE /api/memoire-eleve/{categorie} : oublie une categorie entiere
   (sa ligne racine et toutes ses sous-categories).
 - DELETE /api/memoire-eleve : oublie tout.
-
-Volontairement pas de modification a la main : le contenu est un JSON libre
-ecrit par le modele, pas un texte pense pour etre edite (decision de
-Bourama, 29/09/2026 : lecture seule, avec la possibilite d'oublier).
+- PUT /api/memoire-eleve/{categorie} : remplace le contenu d'UNE ligne
+  existante (18/10/2026, demande de Bourama : le menu "..." de chaque
+  categorie propose Editer en plus d'Oublier). Remplace la decision du
+  29/09/2026 (lecture seule). La description de la ligne n'est pas
+  modifiable ici, elle reste celle ecrite par le modele.
 """
 
 import logging
@@ -25,7 +26,7 @@ from pydantic import BaseModel
 from api.auth import utilisateur_courant, supabase
 from api.journal import journaliser
 from core.erreurs import erreur_api
-from core.memoire_eleve import CATEGORIES_MEMOIRE_ELEVE
+from core.memoire_eleve import CATEGORIES_MEMOIRE_ELEVE, ecrire_categorie
 
 router = APIRouter(prefix="/api/memoire-eleve", tags=["memoire_eleve"])
 
@@ -91,6 +92,53 @@ def obtenir_ma_memoire(utilisateur=Depends(utilisateur_courant)):
             )
         )
     return MemoirePayload(categories=categories)
+
+
+class EditionPayload(BaseModel):
+    sous_categorie: str | None = None
+    contenu: dict
+
+
+@router.put("/{categorie}", status_code=204)
+def modifier_une_ligne(
+    categorie: str,
+    payload: EditionPayload,
+    request: Request,
+    utilisateur=Depends(utilisateur_courant),
+):
+    """Remplace le contenu d'une ligne qui existe deja (jamais de creation ici)."""
+    if categorie not in CATEGORIES_MEMOIRE_ELEVE:
+        raise erreur_api(404, "MEMOIRE_ELEVE_CATEGORIE_INCONNUE")
+    sous = payload.sous_categorie or _RACINE
+    try:
+        existantes = (
+            supabase.table("memoire_eleve")
+            .select("description")
+            .eq("user_id", utilisateur.id)
+            .eq("categorie", categorie)
+            .eq("sous_categorie", sous)
+            .execute()
+        ).data or []
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (lecture avant edition memoire_eleve {categorie} user={utilisateur.id}) : {e}")
+        raise erreur_api(500, "MEMOIRE_ELEVE_LECTURE_ECHEC")
+    if not existantes:
+        raise erreur_api(404, "MEMOIRE_ELEVE_LIGNE_INTROUVABLE")
+
+    succes, _message = ecrire_categorie(
+        utilisateur.id, categorie, payload.sous_categorie, payload.contenu, existantes[0].get("description") or ""
+    )
+    if not succes:
+        raise erreur_api(500, "MEMOIRE_ELEVE_EDITION_ECHEC")
+
+    journaliser(
+        action="memoire.ligne_editee_par_user",
+        user_id=utilisateur.id,
+        cible_type="profile",
+        cible_id=utilisateur.id,
+        details={"categorie": categorie, "sous_categorie": sous},
+        request=request,
+    )
 
 
 @router.delete("/{categorie}", status_code=204)

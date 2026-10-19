@@ -275,6 +275,8 @@ MESSAGES_FR: dict[str, str] = {
     "MEMOIRE_ELEVE_LECTURE_ECHEC": "Impossible de charger ta mémoire pour le moment.",
     "MEMOIRE_ELEVE_EFFACEMENT_ECHEC": "Impossible d'effacer ta mémoire pour le moment.",
     "MEMOIRE_ELEVE_CATEGORIE_INCONNUE": "Cette catégorie de mémoire n'existe pas.",
+    "MEMOIRE_ELEVE_LIGNE_INTROUVABLE": "Cet élément de mémoire n'existe plus.",
+    "MEMOIRE_ELEVE_EDITION_ECHEC": "Impossible de modifier ta mémoire pour le moment.",
     "ANNONCE_VIDE": "L'annonce ne peut pas être vide.",
     "TEXTE_REQUIS": "Le texte ne peut pas être vide.",
     "COMPORTEMENT_INTROUVABLE": "Comportement introuvable.",
