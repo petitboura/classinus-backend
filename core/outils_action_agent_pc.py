@@ -128,11 +128,66 @@ def _parametres_protection() -> dict:
     return {
         "applications_protegees": list(APPLICATIONS_PROTEGEES_PC),
         "delai_autorisation_ms": DELAI_AUTORISATION_PC_MS,
+        **_parametres_autorisation(),
     }
 
 
 def _delai_abandon_avec_autorisation() -> float:
     return DELAI_AUTORISATION_PC_MS / 1000 + MARGE_ABANDON_APRES_AUTORISATION_SECONDES
+
+
+# Autorisations du canal PC (19/10/2026, decision de Bourama : tester la regle avant d'ecrire le vrai
+# serveur). Le fonctionnement (trois boutons, applications sensibles, etc.) est dans l'application PC ;
+# ici ne sont envoyes que les CONDITIONS, modifiables sans toucher au code. ETEINT PAR DEFAUT :
+# tant que CLASSINUS_PC_AUTORISATION_ACTIVE n'est pas "true", l'application PC garde son ancien
+# comportement et rien ne change pour les etudiants. Listes et textes ci dessous = valeurs de DEPART
+# POUR LES TESTS, a remplacer par le vrai serveur (table et reglages distants) plus tard.
+# Les choix "toujours" de l'etudiant ne sont PAS encore memorises sur le compte : applications_toujours
+# n'est donc pas envoye, l'application PC retient "toujours" jusqu'a sa fermeture.
+AUTORISATION_PC_ACTIVE = os.environ.get("CLASSINUS_PC_AUTORISATION_ACTIVE", "false").strip().lower() == "true"
+APPLICATIONS_SENSIBLES_PAR_DEFAUT = (
+    "whatsapp,telegram,signal,discord,slack,thunderbird,"
+    "mmc,gpedit,taskmgr,diskmgmt,compmgmt,eventvwr,services"
+)
+MOTS_TITRE_SENSIBLES_PAR_DEFAUT = (
+    "banque,bancaire,bank,paypal,paiement,payment,carte bancaire,virement,"
+    "mot de passe,password,connexion securisee,"
+    "impots,impôts,sante,santé,ordonnance,"
+    "messagerie,inbox,boite de reception,boîte de réception"
+)
+ACTIONS_CONTROLEES_PAR_DEFAUT = "lire,ecrire,ouvrir,cliquer"
+
+
+def _liste_depuis_env(nom: str, defaut: str) -> list[str]:
+    return [m.strip().lower() for m in os.environ.get(nom, defaut).split(",") if m.strip()]
+
+
+def _parametres_autorisation() -> dict:
+    """Le bloc `autorisation` lu par l'application PC (voir plan-canal-en-direct-pc.md). Vide si eteint."""
+    if not AUTORISATION_PC_ACTIVE:
+        return {}
+    bloc: dict = {
+        "active": True,
+        "applications_sensibles": _liste_depuis_env("CLASSINUS_PC_APPLICATIONS_SENSIBLES", APPLICATIONS_SENSIBLES_PAR_DEFAUT),
+        "mots_titre_sensibles": _liste_depuis_env("CLASSINUS_PC_MOTS_TITRE_SENSIBLES", MOTS_TITRE_SENSIBLES_PAR_DEFAUT),
+        "actions": _liste_depuis_env("CLASSINUS_PC_ACTIONS_CONTROLEES", ACTIONS_CONTROLEES_PAR_DEFAUT),
+    }
+    # Textes facultatifs : absents, l'application PC utilise son texte de secours.
+    for cle, variable in (("message_risque", "CLASSINUS_PC_MESSAGE_RISQUE"), ("message_risque_action", "CLASSINUS_PC_MESSAGE_RISQUE_ACTION")):
+        texte = os.environ.get(variable, "").strip()
+        if texte:
+            bloc[cle] = texte
+    return {"autorisation": bloc}
+
+
+def _parametres_si_autorisation() -> dict:
+    """Pour le clic et la lecture : rien de plus qu'avant tant que la regle est eteinte."""
+    return _parametres_protection() if AUTORISATION_PC_ACTIVE else {}
+
+
+def _delai_abandon_si_autorisation() -> float | None:
+    """Une action qui peut attendre l'accord de l'etudiant a un abandon plus long ; sinon on ne change rien."""
+    return _delai_abandon_avec_autorisation() if AUTORISATION_PC_ACTIVE else None
 
 MESSAGE_LECTURE_PREALABLE = (
     "Action NON exécutée : tu n'avais pas encore lu l'écran du PC dans cette conversation. "
@@ -313,7 +368,12 @@ async def cliquer_ecran(x: int, y: int, ctx: Context) -> str:
     if bloque is not None:
         return bloque
 
-    resultat = await _demander_action_systeme(user_id, "cliquer_ecran", {"x": x, "y": y})
+    resultat = await _demander_action_systeme(
+        user_id,
+        "cliquer_ecran",
+        {"x": x, "y": y, **_parametres_si_autorisation()},
+        delai_abandon_secondes=_delai_abandon_si_autorisation(),
+    )
     if resultat is None:
         return MESSAGE_ECHEC_SYSTEME
     if isinstance(resultat, dict) and resultat.get("erreur"):
@@ -794,7 +854,10 @@ async def _lire_ecran_pour_modele(user_id: str, automatique: bool = False, zone:
             "longueur_max_valeur": LONGUEUR_MAX_VALEUR_LECTURE_ECRAN,
             "profondeur_max": PROFONDEUR_MAX_LECTURE_ECRAN,
             "delai_max_ms": DELAI_MAX_LECTURE_ECRAN_MS,
+            **_parametres_si_autorisation(),
         },
+        # Seule une lecture demandee par l'IA peut attendre l'accord ; la lecture automatique n'en pose jamais.
+        delai_abandon_secondes=None if automatique else _delai_abandon_si_autorisation(),
     )
     logging.info(f"Lecture de l'ecran PC (automatique={automatique}) : {time.monotonic() - debut_lecture:.1f} s")
     if resultat is None:
