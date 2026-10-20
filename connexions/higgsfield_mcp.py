@@ -107,6 +107,7 @@ def demarrer_connexion(user_id, agent_id=None):
             "code_challenge": challenge,
             "code_challenge_method": "S256",
             "state": state,
+            "resource": MCP_URL,
         }
         scopes = metadata.get("scopes_supported") or ["openid", "email", "offline_access"]
         params["scope"] = " ".join(scopes)
@@ -135,6 +136,7 @@ def finaliser_connexion(code, state):
             "redirect_uri": pending["redirect_uri"],
             "client_id": pending["client_id"],
             "code_verifier": pending["code_verifier"],
+            "resource": MCP_URL,
         }
         if pending.get("client_secret"):
             payload["client_secret"] = pending["client_secret"]
@@ -186,6 +188,7 @@ def obtenir_token_valide(user_id):
                 "grant_type": "refresh_token",
                 "refresh_token": refresh_token,
                 "client_id": row["client_id"],
+                "resource": MCP_URL,
             }
             if row.get("client_secret"):
                 payload["client_secret"] = row["client_secret"]
