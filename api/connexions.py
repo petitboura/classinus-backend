@@ -37,7 +37,7 @@ from connexions.oauth_generique import (
     finaliser_connexion,
     get_secret,
 )
-import connexions.notion as notion
+import connexions.notion as notion\nimport connexions.higgsfield_mcp as higgsfield_mcp
 
 router = APIRouter(prefix="/api/connexions", tags=["connexions"])
 
