@@ -10,6 +10,8 @@ from mcp_tools import parametres_outils
 from core.canal_agent_applicatif import retirer_messages_etudiant
 from core.plafond_outils_tour import plafond_tour
 from constantes_agent import GROQ_PRIMARY, MODELES_AVEC_REASONING_EFFORT, DELAI_MAX_PAR_APPEL
+from efforts_modeles import effort_valide_pour_modele, est_modele_avec_adaptateur
+from adaptateur_commun import CLE_ETAT_FOURNISSEUR
 from fournisseurs_llm import CONSIGNE_LANGUE_REFLEXION, DEEPSEEK_REASONING_EFFORT, ajouter_consigne_langue_reflexion, normaliser_effort_reflexion
 from execution_outils import _AttenteConfirmation, _traiter_appels
 from routage_outils import (
@@ -133,6 +135,10 @@ def _effort_reflexion(modele, reasoning_effort):
     max), sinon retombe sur le defaut. Tout autre modele : valeur inchangee."""
     if str(modele or "").startswith("deepseek"):
         return normaliser_effort_reflexion(reasoning_effort) or DEEPSEEK_REASONING_EFFORT
+    # Claude, GPT, Gemini et Grok (20/10/2026) : chaque modèle a ses propres niveaux, voir
+    # core/efforts_modeles.py. Un effort que le modèle ne connaît pas est remplacé par son défaut.
+    if est_modele_avec_adaptateur(modele):
+        return effort_valide_pour_modele(modele, reasoning_effort)
     return reasoning_effort
 
 
@@ -586,6 +592,14 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                 for appel in appels
             ],
         })
+        # Claude, GPT, Gemini et Grok (20/10/2026) : ce que le fournisseur doit revoir à
+        # l'identique au tour suivant (réflexion signée, signatures), voir
+        # core/adaptateur_commun.py. Les autres clients n'ont pas cette méthode.
+        etat_fournisseur = getattr(client_groq, "etat_dernier_tour", None)
+        if callable(etat_fournisseur):
+            etat = etat_fournisseur()
+            if etat:
+                messages_agent[-1][CLE_ETAT_FOURNISSEUR] = etat
 
         # Reponses synthetiques pour les appels garder_outils de ce lot --
         # jamais via _traiter_appels (aucun evenement outil_resultat,

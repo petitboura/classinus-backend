@@ -312,6 +312,19 @@ OUTILS_SENSIBLES = {
     # "nom_outil:action" (voir plus bas pour gerer_document_bibliotheque) :
     # seule cette action est sensible, "explorer" et "lire_fichier" non.
     "gerer_depot_github:modifier_fichier",
+    # Actions GitHub ajoutées le 20/10/2026 qui écrivent ou agissent au nom
+    # de la personne connectée : toutes interrompues pour confirmation.
+    "gerer_depot_github:creer_issue",
+    "gerer_depot_github:commenter",
+    "gerer_depot_github:fermer_ou_rouvrir_issue",
+    "gerer_depot_github:creer_branche",
+    "gerer_depot_github:ouvrir_pull_request",
+    "gerer_depot_github:supprimer_fichier",
+    "gerer_depot_github:fusionner_pull_request",
+    "gerer_depot_github:etoiler",
+    "gerer_depot_github:forker",
+    "gerer_depot_github:creer_depot",
+    "gerer_depot_github:relancer_ci",
     # Entrées "supprimer_programme"/"supprimer_matiere"/"supprimer_chapitre"/
     # "supprimer_document_programme"/"supprimer_exercice_programme"/
     # "supprimer_examen" retirées le 29/08/2026 -- ces outils n'existent
