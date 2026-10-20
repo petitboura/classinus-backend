@@ -34,6 +34,8 @@ a ecrire ici.
 import os
 
 from connexions.notion import obtenir_token_valide
+from connexions.higgsfield_mcp import obtenir_token_valide as obtenir_token_higgsfield
+from connexions.platform_mcp_oauth import obtenir_token_valide as obtenir_token_platform_mcp
 
 def _url_generation(get_secret, user_id, agent_id, conversation_id=None):
     # Serveur MCP interne, pas un tiers externe (voir
@@ -117,6 +119,42 @@ def _headers_notion(get_secret, user_id, agent_id):
     return {"Authorization": f"Bearer {token}"}
 
 
+def _url_higgsfield(get_secret, user_id, agent_id, conversation_id=None):
+    return "https://mcp.higgsfield.ai/mcp"
+
+
+def _headers_higgsfield(get_secret, user_id, agent_id):
+    token = obtenir_token_higgsfield(user_id)
+    return {"Authorization": f"Bearer {token}"} if token else None
+
+
+def _url_vercel_mcp(get_secret, user_id, agent_id, conversation_id=None):
+    return "https://mcp.vercel.com"
+
+
+def _headers_vercel_mcp(get_secret, user_id, agent_id):
+    token = obtenir_token_platform_mcp("vercel_mcp", user_id)
+    return {"Authorization": f"Bearer {token}"} if token else None
+
+
+def _url_railway_mcp(get_secret, user_id, agent_id, conversation_id=None):
+    return "https://mcp.railway.com"
+
+
+def _headers_railway_mcp(get_secret, user_id, agent_id):
+    token = obtenir_token_platform_mcp("railway_mcp", user_id)
+    return {"Authorization": f"Bearer {token}"} if token else None
+
+
+def _url_supabase_mcp(get_secret, user_id, agent_id, conversation_id=None):
+    return "https://mcp.supabase.com/mcp"
+
+
+def _headers_supabase_mcp(get_secret, user_id, agent_id):
+    token = obtenir_token_platform_mcp("supabase_mcp", user_id)
+    return {"Authorization": f"Bearer {token}"} if token else None
+
+
 def _url_google_drive(get_secret, user_id, agent_id, conversation_id=None):
     # Serveur MCP Drive OFFICIEL de Google (tiers externe, comme Notion),
     # pas un serveur interne -- voir connexions/oauth_generique.py pour
@@ -189,6 +227,30 @@ SERVEURS_MCP = [
         # réellement sur un dépôt, dans OUTILS_SENSIBLES plus bas (format
         # "nom_outil:action"), donc TOUJOURS interrompu pour confirmation
         # avant exécution, quel que soit le mode (direct ou branche+PR).
+    },
+    {
+        "nom": "higgsfield_mcp",
+        "url_builder": _url_higgsfield,
+        "headers_builder": _headers_higgsfield,
+        "necessite_utilisateur": True,
+    },
+    {
+        "nom": "vercel_mcp",
+        "url_builder": _url_vercel_mcp,
+        "headers_builder": _headers_vercel_mcp,
+        "necessite_utilisateur": True,
+    },
+    {
+        "nom": "railway_mcp",
+        "url_builder": _url_railway_mcp,
+        "headers_builder": _headers_railway_mcp,
+        "necessite_utilisateur": True,
+    },
+    {
+        "nom": "supabase_mcp",
+        "url_builder": _url_supabase_mcp,
+        "headers_builder": _headers_supabase_mcp,
+        "necessite_utilisateur": True,
     },
     {
         "nom": "notion",
