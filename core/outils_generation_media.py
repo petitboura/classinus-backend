@@ -337,3 +337,37 @@ def rechercher_video(requete: str) -> str:
     except Exception as e:
         logging.error(f"ERREUR outil recherche vidéo : {e}")
         return "Erreur : la recherche de vidéos a échoué, réessaie."
+
+
+# Higgsfield API — intégration optionnelle et séparée du fournisseur vidéo actuel.
+from core.generation_video_higgsfield import (
+    higgsfield_api_disponible,
+    lancer_generation_video_higgsfield as _lancer_video_higgsfield,
+    statut_generation_video_higgsfield as _statut_video_higgsfield,
+)
+
+if higgsfield_api_disponible():
+    @mcp_generation.tool()
+    def lancer_video_higgsfield(prompt: str, titre: str) -> str:
+        """Lance une génération vidéo via l'API Higgsfield et renvoie l'identifiant de suivi."""
+        try:
+            resultat = _lancer_video_higgsfield(prompt)
+            return (
+                f"Génération Higgsfield lancée (id: {resultat['request_id']}). "
+                "Utilise ensuite consulter_video_higgsfield avec cet identifiant."
+            )
+        except Exception as e:
+            logging.error("ERREUR lancement vidéo Higgsfield : %s", e)
+            return "Erreur : impossible de lancer la génération Higgsfield. Vérifie la configuration API."
+
+    @mcp_generation.tool()
+    def consulter_video_higgsfield(request_id: str) -> str:
+        """Vérifie le statut d'une vidéo Higgsfield et renvoie son URL quand elle est disponible."""
+        try:
+            resultat = _statut_video_higgsfield(request_id)
+            if resultat.get("url"):
+                return f"Vidéo terminée : {resultat['url']}"
+            return f"Statut Higgsfield : {resultat.get('statut', 'inconnu')}. Réessaie plus tard."
+        except Exception as e:
+            logging.error("ERREUR statut vidéo Higgsfield : %s", e)
+            return "Erreur : impossible de consulter cette génération Higgsfield."
