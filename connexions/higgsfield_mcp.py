@@ -17,6 +17,8 @@ MCP_URL = "https://mcp.higgsfield.ai/mcp"
 RESOURCE_METADATA_URL = "https://mcp.higgsfield.ai/.well-known/oauth-protected-resource"
 MARGE_RAFRAICHISSEMENT = timedelta(minutes=5)
 CACHE_TTL = 120
+# Un etat de connexion non finalise au bout de ce delai est refuse puis purge.
+DUREE_VIE_ETAT = timedelta(minutes=15)
 
 _supabase = create_client(
     os.environ.get("SUPABASE_URL"),
@@ -71,9 +73,22 @@ def _oauth_metadata():
     raise RuntimeError(f"Métadonnées OAuth Higgsfield incomplètes: {last_error}")
 
 
+def _limite_etat():
+    return (datetime.now(timezone.utc) - DUREE_VIE_ETAT).isoformat()
+
+
+def _purger_etats_expires():
+    """Supprime les connexions abandonnees (code_verifier et client_secret compris)."""
+    try:
+        _supabase.table("higgsfield_oauth_temp").delete().lt("created_at", _limite_etat()).execute()
+    except Exception as exc:
+        logging.warning("Purge des etats Higgsfield expires impossible: %s", exc)
+
+
 def demarrer_connexion(user_id, agent_id=None):
     if not user_id:
         return None
+    _purger_etats_expires()
     try:
         metadata = _oauth_metadata()
         registration_endpoint = metadata.get("registration_endpoint")
@@ -129,12 +144,18 @@ def demarrer_connexion(user_id, agent_id=None):
 
 
 def etat_en_attente(state):
-    result = _supabase.table("higgsfield_oauth_temp").select("state").eq("state", state).execute()
+    result = (
+        _supabase.table("higgsfield_oauth_temp").select("state")
+        .eq("state", state).gte("created_at", _limite_etat()).execute()
+    )
     return bool(result.data)
 
 
 def finaliser_connexion(code, state):
-    result = _supabase.table("higgsfield_oauth_temp").select("*").eq("state", state).execute()
+    result = (
+        _supabase.table("higgsfield_oauth_temp").select("*")
+        .eq("state", state).gte("created_at", _limite_etat()).execute()
+    )
     if not result.data:
         return False, "Session Higgsfield expirée ou déjà utilisée."
     pending = result.data[0]

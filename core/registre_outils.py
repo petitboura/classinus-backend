@@ -299,6 +299,10 @@ OUTILS_SENSIBLES = {
     # pour confirmation avant execution.
     "create_file",
     "copy_file",
+    # Higgsfield (20/10/2026, demande de Bourama) : lance une generation
+    # video par la cle API, potentiellement payante, donc TOUJOURS
+    # interrompue pour confirmation avant execution.
+    "lancer_video_higgsfield",
     # ÉCRIT réellement sur un dépôt GitHub (voir
     # core/serveur_mcp_github.py, gerer_depot_github action
     # "modifier_fichier", consolidé le 26/08, ex modifier_fichier_depot_github) :

@@ -223,8 +223,8 @@ instance du serveur).
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | `connexions/oauth_generique.py` (connexion OAuth GitHub par agent) |
 | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` / `DEEPSEEK_API_KEY` | `core/fournisseurs_llm.py` (LLM premium optionnels — absents, seuls Gemini/DeepSeek de secours restent proposés) |
 | `TOGETHER_API_KEY` | `core/generation_images.py` (meilleure fiabilité que le fournisseur par défaut) |
-| `HIGGSFIELD_API_KEY` ou `HIGGSFIELD_API_KEY_ID` + `HIGGSFIELD_API_KEY_SECRET` | `core/generation_video_higgsfield.py` — API vidéo Higgsfield/Seedance, outils exposés uniquement si une clé API est configurée |
-| `URL_RETOUR_APP` + migration `higgsfield_mcp_oauth.sql` | `connexions/higgsfield_mcp.py` — connexion OAuth DCR par utilisateur au MCP Higgsfield; aucune clé API partagée requise |
+| `HIGGSFIELD_API_KEY` ou `HIGGSFIELD_API_KEY_ID` + `HIGGSFIELD_API_KEY_SECRET` | `core/generation_video_higgsfield.py` : API vidéo Higgsfield/Seedance, outils exposés uniquement si une clé API est configurée |
+| `URL_RETOUR_APP` + migration `2026_10_20_higgsfield_mcp_oauth.sql` | `connexions/higgsfield_mcp.py` : connexion OAuth DCR par utilisateur au MCP Higgsfield; aucune clé API partagée requise |
 | `FAL_KEY` | `core/generation_3d.py`, `core/generation_video.py` — absente en prod, ces deux outils sont désactivés (`disponible=false`) |
 | `GOOGLE_TTS_API_KEY` / `AUDIO_TTS_ACTIF` | `core/generation_audio.py` — absentes en prod, `generer_audio` désactivé |
 | `LUMIN_API_KEY` | `core/generation_signature.py` — absente en prod, `envoyer_pour_signature` désactivé |

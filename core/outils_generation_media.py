@@ -339,7 +339,7 @@ def rechercher_video(requete: str) -> str:
         return "Erreur : la recherche de vidéos a échoué, réessaie."
 
 
-# Higgsfield API — intégration optionnelle et séparée du fournisseur vidéo actuel.
+# Higgsfield API : intégration optionnelle et séparée du fournisseur vidéo actuel.
 from core.generation_video_higgsfield import (
     higgsfield_api_disponible,
     lancer_generation_video_higgsfield as _lancer_video_higgsfield,
@@ -354,7 +354,7 @@ if higgsfield_api_disponible():
             resultat = _lancer_video_higgsfield(prompt)
             return (
                 f"Génération Higgsfield lancée (id: {resultat['request_id']}). "
-                f"Utilise ensuite consulter_video_higgsfield avec cet identifiant et le même titre (\\"{titre}\\")."
+                f"Utilise ensuite consulter_video_higgsfield avec cet identifiant et le même titre ({titre})."
             )
         except Exception as e:
             logging.error("ERREUR lancement vidéo Higgsfield : %s", e)

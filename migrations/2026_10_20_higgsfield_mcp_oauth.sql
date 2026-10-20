@@ -1,8 +1,15 @@
--- Classinus: stockage OAuth DCR Higgsfield, tokens isolés par utilisateur.
--- À appliquer dans Supabase avant d'activer le connecteur.
+/*
+  Classinus : stockage OAuth DCR du MCP Higgsfield, tokens isoles par utilisateur.
+  A appliquer dans Supabase avant d'activer le connecteur.
+
+  Les deux tables ont la RLS activee et AUCUNE policy volontairement : seuls
+  le backend (cle secrete Supabase) y accede, jamais un client direct.
+  user_id pointe vers auth.users avec ON DELETE CASCADE : les tokens partent
+  avec le compte (voir aussi core/purge_compte.py).
+*/
 create table if not exists public.higgsfield_oauth_temp (
   state text primary key,
-  user_id text not null,
+  user_id uuid not null references auth.users(id) on delete cascade,
   agent_id text,
   code_verifier text not null,
   client_id text not null,
@@ -14,7 +21,7 @@ create table if not exists public.higgsfield_oauth_temp (
 );
 
 create table if not exists public.higgsfield_oauth_connections (
-  user_id text primary key,
+  user_id uuid primary key references auth.users(id) on delete cascade,
   client_id text not null,
   client_secret text,
   issuer text not null,
@@ -28,11 +35,16 @@ create table if not exists public.higgsfield_oauth_connections (
 create index if not exists higgsfield_oauth_temp_created_at_idx
   on public.higgsfield_oauth_temp (created_at);
 
+create index if not exists higgsfield_oauth_temp_user_id_idx
+  on public.higgsfield_oauth_temp (user_id);
+
 alter table public.higgsfield_oauth_temp enable row level security;
 alter table public.higgsfield_oauth_connections enable row level security;
 
--- Active le connecteur dans le registre plateforme. Sans cette ligne,
--- core/mcp_tools.py ne tentera pas de lister ses outils.
+/*
+  Active le connecteur dans le registre plateforme. Sans cette ligne,
+  core/mcp_tools.py ne tentera pas de lister ses outils.
+*/
 insert into public.registre_outils_plateforme (nom_outil, categorie, nom_serveur, disponible, updated_at)
 values ('serveur_higgsfield_mcp', 3, 'higgsfield_mcp', true, now())
 on conflict (nom_outil) do update
