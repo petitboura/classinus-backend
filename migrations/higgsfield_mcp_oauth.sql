@@ -30,3 +30,13 @@ create index if not exists higgsfield_oauth_temp_created_at_idx
 
 alter table public.higgsfield_oauth_temp enable row level security;
 alter table public.higgsfield_oauth_connections enable row level security;
+
+-- Active le connecteur dans le registre plateforme. Sans cette ligne,
+-- core/mcp_tools.py ne tentera pas de lister ses outils.
+insert into public.registre_outils_plateforme (nom_outil, categorie, nom_serveur, disponible, updated_at)
+values ('serveur_higgsfield_mcp', 3, 'higgsfield_mcp', true, now())
+on conflict (nom_outil) do update
+set categorie = excluded.categorie,
+    nom_serveur = excluded.nom_serveur,
+    disponible = true,
+    updated_at = now();
