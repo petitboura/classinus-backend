@@ -34,6 +34,7 @@ a ecrire ici.
 import os
 
 from connexions.notion import obtenir_token_valide
+from connexions.higgsfield_mcp import obtenir_token_valide as obtenir_token_higgsfield
 
 def _url_generation(get_secret, user_id, agent_id, conversation_id=None):
     # Serveur MCP interne, pas un tiers externe (voir
@@ -112,6 +113,17 @@ def _headers_notion(get_secret, user_id, agent_id):
     # (voir docstring en tete de fichier) mais n'est plus utilise ici :
     # la connexion Notion est scopee par user_id seul (compte unifie).
     token = obtenir_token_valide(user_id)
+    if not token:
+        return None
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _url_higgsfield(get_secret, user_id, agent_id, conversation_id=None):
+    return "https://mcp.higgsfield.ai/mcp"
+
+
+def _headers_higgsfield(get_secret, user_id, agent_id):
+    token = obtenir_token_higgsfield(user_id)
     if not token:
         return None
     return {"Authorization": f"Bearer {token}"}
@@ -211,6 +223,12 @@ SERVEURS_MCP = [
         # interrompus pour confirmation utilisateur avant execution.
     },
     {
+        "nom": "higgsfield_mcp",
+        "url_builder": _url_higgsfield,
+        "headers_builder": _headers_higgsfield,
+        "necessite_utilisateur": True,
+    },
+    {
         "nom": "google_drive",
         "url_builder": _url_google_drive,
         "headers_builder": _headers_google_drive,
@@ -281,6 +299,10 @@ OUTILS_SENSIBLES = {
     # pour confirmation avant execution.
     "create_file",
     "copy_file",
+    # Higgsfield (20/10/2026, demande de Bourama) : lance une generation
+    # video par la cle API, potentiellement payante, donc TOUJOURS
+    # interrompue pour confirmation avant execution.
+    "lancer_video_higgsfield",
     # ÉCRIT réellement sur un dépôt GitHub (voir
     # core/serveur_mcp_github.py, gerer_depot_github action
     # "modifier_fichier", consolidé le 26/08, ex modifier_fichier_depot_github) :

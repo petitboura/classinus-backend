@@ -37,6 +37,8 @@ _TABLES_SIMPLES = (
     ("connexions_oauth", "user_id"),
     ("notion_oauth_temp", "user_id"),
     ("oauth_temp", "user_id"),
+    ("higgsfield_oauth_connections", "user_id"),
+    ("higgsfield_oauth_temp", "user_id"),
     # Appareil : temps d'écran, actions, jetons de notifications, rappels.
     ("usage_appareil_mobile", "user_id"),
     ("actions_appareil_mobile", "user_id"),
