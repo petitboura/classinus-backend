@@ -39,9 +39,20 @@ def _oauth_metadata():
     r.raise_for_status()
     resource = r.json()
     issuers = resource.get("authorization_servers") or []
-    if not issuers:
+    hints = resource.get("higgsfield_auth_hints") or {}
+    options = hints.get("options") or []
+    # Higgsfield annonce son serveur MCP comme issuer, mais le flux OAuth
+    # navigateur est délégué à Clerk. Utiliser l'issuer amont annoncé
+    # explicitement évite le mismatch d'issuer documenté sur le flux proxy.
+    upstream = next(
+        (option.get("upstream_authorization_server") for option in options
+         if option.get("flow") == "authorization_code_pkce"
+         and option.get("upstream_authorization_server")),
+        None,
+    )
+    issuer = (upstream or (issuers[0] if issuers else "")).rstrip("/")
+    if not issuer:
         raise RuntimeError("Higgsfield n'annonce aucun authorization server.")
-    issuer = issuers[0].rstrip("/")
     candidates = [
         f"{issuer}/.well-known/oauth-authorization-server",
         f"{issuer}/.well-known/openid-configuration",
