@@ -14,7 +14,7 @@ from supabase import create_client, ClientOptions
 from core.client_http_supabase import nouveau_client_http_supabase
 
 MCP_URL = "https://mcp.higgsfield.ai/mcp"
-RESOURCE_METADATA_URL = "https://mcp.higgsfield.ai/.well-known/oauth-protected-resource/mcp"
+RESOURCE_METADATA_URL = "https://mcp.higgsfield.ai/.well-known/oauth-protected-resource"
 MARGE_RAFRAICHISSEMENT = timedelta(minutes=5)
 CACHE_TTL = 120
 
