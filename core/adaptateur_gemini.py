@@ -19,12 +19,12 @@ from google.genai import types
 try:
     from adaptateur_commun import (
         CLE_ETAT_FOURNISSEUR, DELAI_APPEL_FOURNISSEUR_SECONDES, TEXTE_RESULTAT_VIDE, ClientCompatible, Flux,
-        arguments_en_dict, fragment_appel, morceau, noms_des_appels, texte_du_contenu,
+        arguments_en_dict, fragment_appel, morceau, noms_des_appels, texte_du_contenu, verifier_reponse_non_vide,
     )
 except ImportError:
     from core.adaptateur_commun import (
         CLE_ETAT_FOURNISSEUR, DELAI_APPEL_FOURNISSEUR_SECONDES, TEXTE_RESULTAT_VIDE, ClientCompatible, Flux,
-        arguments_en_dict, fragment_appel, morceau, noms_des_appels, texte_du_contenu,
+        arguments_en_dict, fragment_appel, morceau, noms_des_appels, texte_du_contenu, verifier_reponse_non_vide,
     )
 
 NIVEAUX_REFLEXION = {
@@ -136,6 +136,7 @@ class ClientGemini(ClientCompatible):
     def _lire(self, modele, contenus, configuration):
         parties_du_tour = []
         nombre_appels = 0
+        a_repondu = False
         fin = "stop"
         flux_api = self._client.models.generate_content_stream(
             model=modele, contents=contenus, config=configuration
@@ -156,6 +157,7 @@ class ClientGemini(ClientCompatible):
                 if appel is not None:
                     identifiant = appel.id or f"appel_gemini_{nombre_appels}"
                     appel.id = identifiant
+                    a_repondu = True
                     parties_du_tour.append(partie)
                     yield morceau(appels=[fragment_appel(
                         nombre_appels, identifiant, appel.name, json.dumps(appel.args or {}, ensure_ascii=False),
@@ -167,7 +169,9 @@ class ClientGemini(ClientCompatible):
                     if partie.thought:
                         yield morceau(raisonnement=partie.text)
                     else:
+                        a_repondu = True
                         yield morceau(contenu=partie.text)
+        verifier_reponse_non_vide(a_repondu, "Gemini", fin)
         if nombre_appels:
             fin = "tool_calls"
             self._etat_dernier_tour = {

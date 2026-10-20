@@ -3,12 +3,26 @@
 import unittest
 from unittest.mock import patch
 
-from core import fournisseurs_llm, identite_modele
+from core import identite_modele
 from core.fournisseurs_llm import _config_modeles_de_repli
 
 
+def _fournisseurs_llm_utilise():
+    """
+    Le module fournisseurs_llm que identite_modele lit réellement. Il l'importe à l'appel, d'abord
+    sans préfixe puis avec core. : quand un autre test a ajouté core au chemin d'import, ce n'est
+    plus le même objet que core.fournisseurs_llm, et un patch posé sur ce dernier n'aurait aucun
+    effet (échec constaté seulement quand toute la suite tourne ensemble).
+    """
+    try:
+        import fournisseurs_llm
+    except ImportError:
+        from core import fournisseurs_llm
+    return fournisseurs_llm
+
+
 def _avec_config_de_repli():
-    return patch.object(fournisseurs_llm, "_config_modeles", return_value=_config_modeles_de_repli())
+    return patch.object(_fournisseurs_llm_utilise(), "_config_modeles", return_value=_config_modeles_de_repli())
 
 
 class TestBlocIdentite(unittest.TestCase):
@@ -24,25 +38,25 @@ class TestBlocIdentite(unittest.TestCase):
 
     def test_modele_du_selecteur_vient_de_la_configuration(self):
         with _avec_config_de_repli():
-            bloc = identite_modele.bloc_identite("claude-sonnet-5")
+            bloc = identite_modele.bloc_identite("claude-sonnet-5-5")
 
-        self.assertIn("propulsé par Anthropic, modèle Claude Sonnet 5", bloc)
+        self.assertIn("propulsé par Anthropic, modèle Claude Sonnet 5.5", bloc)
 
     def test_nom_du_fournisseur_regle_dans_supabase_prime_sur_le_repli(self):
         config = _config_modeles_de_repli()
         config["fournisseurs"]["claude"]["nom_affiche"] = "Anthropic PBC"
-        with patch.object(fournisseurs_llm, "_config_modeles", return_value=config):
-            bloc = identite_modele.bloc_identite("claude-sonnet-5")
+        with patch.object(_fournisseurs_llm_utilise(), "_config_modeles", return_value=config):
+            bloc = identite_modele.bloc_identite("claude-sonnet-5-5")
 
-        self.assertIn("propulsé par Anthropic PBC, modèle Claude Sonnet 5", bloc)
+        self.assertIn("propulsé par Anthropic PBC, modèle Claude Sonnet 5.5", bloc)
 
     def test_nom_du_fournisseur_vide_dans_supabase_prend_le_repli(self):
         config = _config_modeles_de_repli()
         config["fournisseurs"]["gpt"]["nom_affiche"] = None
-        with patch.object(fournisseurs_llm, "_config_modeles", return_value=config):
-            bloc = identite_modele.bloc_identite("gpt-5.4")
+        with patch.object(_fournisseurs_llm_utilise(), "_config_modeles", return_value=config):
+            bloc = identite_modele.bloc_identite("gpt-6.1-sol")
 
-        self.assertIn("propulsé par OpenAI, modèle GPT-5.4", bloc)
+        self.assertIn("propulsé par OpenAI, modèle GPT-6.1 Sol", bloc)
 
     def test_classinus_est_le_nom_de_l_application(self):
         bloc = identite_modele.bloc_identite("openai/gpt-oss-120b")
@@ -62,8 +76,8 @@ class TestBlocIdentite(unittest.TestCase):
         self.assertEqual(identite_modele.bloc_identite(None), identite_modele.BLOC_IDENTITE_INCONNU)
 
     def test_configuration_illisible_ne_fait_pas_echouer(self):
-        with patch.object(fournisseurs_llm, "_config_modeles", side_effect=RuntimeError("supabase")):
-            bloc = identite_modele.bloc_identite("claude-sonnet-5")
+        with patch.object(_fournisseurs_llm_utilise(), "_config_modeles", side_effect=RuntimeError("supabase")):
+            bloc = identite_modele.bloc_identite("claude-sonnet-5-5")
 
         self.assertEqual(bloc, identite_modele.BLOC_IDENTITE_INCONNU)
 

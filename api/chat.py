@@ -139,7 +139,7 @@ class EnvoyerMessagePayload(BaseModel):
     reprise: Optional[RepriseConfirmation] = None
     # Selecteur de modele premium (02/08/2026, voir core/fournisseurs_llm.py
     # et djiguigne-frontend) : modele_id choisi par l'etudiant/le createur
-    # pour CE message (ex: "claude-sonnet-5"). None = comportement
+    # pour CE message (ex: "claude-sonnet-5-5"). None = comportement
     # historique inchange (cascade Groq/Gemini par defaut). REVALIDE ici
     # contre les modeles reellement debloques de l'agent avant d'etre
     # transmis a chat() -- jamais fait confiance a la valeur brute envoyee

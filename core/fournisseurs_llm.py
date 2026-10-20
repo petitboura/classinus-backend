@@ -56,23 +56,24 @@ ORDRE_PALIERS = ["essentiel", "avance", "pro", "specialise"]
 # a 3 niveaux, deux vocabulaires differents selon le contexte (vente vs
 # ingenierie) -- fusionnes ici pour eviter un 3e mapping inutile.
 HIERARCHIE_MODELES = {
+    # Identifiants alignés le 20/10/2026 sur ceux réglés dans Supabase (tables modeles_llm), qui
+    # priment : ce repli ne sert que si Supabase ne répond pas. Il portait encore les anciens
+    # noms (claude-sonnet-5, gpt-5.4, gemini-3.6-flash...), donc un modèle absent ou refusé par
+    # le fournisseur dès que Supabase tombait.
     "claude": {
-        "essentiel": {"id": "claude-haiku-4-5-20251001", "label": "Claude Haiku 4.5"},
-        "avance": {"id": "claude-sonnet-5", "label": "Claude Sonnet 5"},
-        # "Claude Opus 5" (page Notion) n'existe pas encore cote Anthropic
-        # au moment d'ecrire ceci -- Opus 4.8 est le dernier Opus reel,
-        # a corriger ici des la sortie d'un vrai "Opus 5".
-        "pro": {"id": "claude-opus-4-8", "label": "Claude Opus 4.8"},
+        "essentiel": {"id": "claude-haiku-5-5", "label": "Claude Haiku 5.5"},
+        "avance": {"id": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5"},
+        "pro": {"id": "claude-opus-5-5", "label": "Claude Opus 5.5"},
     },
     "gpt": {
-        "essentiel": {"id": "gpt-5-nano", "label": "GPT-5 nano"},
-        "avance": {"id": "gpt-5.4", "label": "GPT-5.4"},
-        "pro": {"id": "gpt-5.5", "label": "GPT-5.5"},
+        "essentiel": {"id": "gpt-6-luna", "label": "GPT-6 Luna"},
+        "avance": {"id": "gpt-6.1-sol", "label": "GPT-6.1 Sol"},
+        "pro": {"id": "gpt-6-astra", "label": "GPT-6 Astra"},
     },
     "gemini": {
         "essentiel": {"id": "gemini-3.5-flash-lite", "label": "Gemini 3.5 Flash-Lite"},
-        "avance": {"id": "gemini-3.6-flash", "label": "Gemini 3.6 Flash"},
-        "pro": {"id": "gemini-3.1-pro", "label": "Gemini 3.1 Pro"},
+        "avance": {"id": "gemini-3.8-flash", "label": "Gemini 3.8 Flash"},
+        "pro": {"id": "gemini-4-argon", "label": "Gemini 4 Argon"},
     },
     "grok": {
         # Grok (xAI), ajoute le 16/10/2026 sur demande de Bourama : seulement

@@ -1203,12 +1203,10 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # La version allegee de l'historique n'est utilisee que si l'outil de
     # rappel correspondant est reellement propose ce tour-ci (jamais de rappel
     # qui renvoie vers un outil absent, ex. chemin image sans outils).
-    # modele_force (Claude/GPT/Gemini/DeepSeek premium, voir plus bas) ne
-    # recoit JAMAIS d'outils MCP (messages_premium les retire explicitement) :
-    # aucun des 3 outils de gestion d'historique n'y est donc jamais vraiment
-    # disponible, meme si outils_mcp les contient pour le calcul normal.
-    # Claude, GPT, Gemini et Grok reçoivent désormais les outils (20/10/2026) : seul un modèle
-    # premium resté en texte seul (clé absente) n'en a vraiment aucun.
+    # modele_force (Claude/GPT/Gemini/Grok/DeepSeek choisi dans le sélecteur, voir plus bas) reçoit
+    # les outils MCP et les 3 outils de gestion d'historique comme la cascade : DeepSeek depuis le
+    # 15/10/2026, Claude, GPT, Gemini et Grok depuis le 20/10/2026. Seul un modèle resté en texte
+    # seul (clé API absente) n'a aucun outil, ce que modele_a_des_outils indique.
     noms_outils_tour = set() if (modele_force and not modele_a_des_outils(modele_force)) else {o["function"]["name"] for o in (outils_mcp or [])}
     if a_des_messages_allegers(historique_allege) and "rappeler_echange_conversation" not in noms_outils_tour:
         historique_pour_modele = historique

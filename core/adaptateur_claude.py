@@ -16,12 +16,12 @@ from anthropic import Anthropic
 try:
     from adaptateur_commun import (
         CLE_ETAT_FOURNISSEUR, DELAI_APPEL_FOURNISSEUR_SECONDES, TEXTE_RESULTAT_VIDE, ClientCompatible, Flux,
-        arguments_en_dict, fragment_appel, morceau, texte_du_contenu,
+        arguments_en_dict, fragment_appel, morceau, texte_du_contenu, verifier_reponse_non_vide,
     )
 except ImportError:
     from core.adaptateur_commun import (
         CLE_ETAT_FOURNISSEUR, DELAI_APPEL_FOURNISSEUR_SECONDES, TEXTE_RESULTAT_VIDE, ClientCompatible, Flux,
-        arguments_en_dict, fragment_appel, morceau, texte_du_contenu,
+        arguments_en_dict, fragment_appel, morceau, texte_du_contenu, verifier_reponse_non_vide,
     )
 
 # max_tokens est obligatoire chez Anthropic et compte aussi la réflexion : assez large pour
@@ -133,12 +133,14 @@ class ClientClaude(ClientCompatible):
     def _lire(self, arguments):
         index_outil_par_bloc = {}
         nombre_appels = 0
+        a_repondu = False
         with self._client.messages.stream(**arguments) as flux_api:
             for evenement in flux_api:
                 type_evenement = getattr(evenement, "type", "")
                 if type_evenement == "content_block_start":
                     bloc = evenement.content_block
                     if getattr(bloc, "type", "") == "tool_use":
+                        a_repondu = True
                         index_outil_par_bloc[evenement.index] = nombre_appels
                         yield morceau(appels=[fragment_appel(nombre_appels, bloc.id, bloc.name, "")])
                         nombre_appels += 1
@@ -146,6 +148,7 @@ class ClientClaude(ClientCompatible):
                     delta = evenement.delta
                     type_delta = getattr(delta, "type", "")
                     if type_delta == "text_delta" and delta.text:
+                        a_repondu = True
                         yield morceau(contenu=delta.text)
                     elif type_delta == "thinking_delta" and delta.thinking:
                         yield morceau(raisonnement=delta.thinking)
@@ -154,6 +157,7 @@ class ClientClaude(ClientCompatible):
                         if index is not None:
                             yield morceau(appels=[fragment_appel(index, arguments=delta.partial_json)])
             final = flux_api.get_final_message()
+        verifier_reponse_non_vide(a_repondu, "Claude", final.stop_reason)
         if nombre_appels:
             self._etat_dernier_tour = {
                 "blocs": [bloc.model_dump(exclude_none=True) for bloc in final.content],

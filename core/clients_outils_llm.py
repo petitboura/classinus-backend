@@ -19,14 +19,20 @@ except ImportError:
 
 
 def modele_a_des_outils(modele_id):
-    """Vrai si ce modèle passe par un adaptateur d'outils et que sa clé API est présente."""
+    """
+    Vrai si ce modèle du sélecteur reçoit les outils : DeepSeek (client OpenAI, voir core/main.py)
+    ou Claude, GPT, Gemini et Grok (adaptateurs), à condition que la clé API du fournisseur existe.
+    Sans clé, le modèle retombe sur le chemin texte seul.
+    """
     distributeur = distributeur_du_modele(modele_id)
-    return distributeur in DISTRIBUTEURS_AVEC_ADAPTATEUR and bool(fournisseurs_llm.cle_api_du_distributeur(distributeur))
+    if distributeur != "deepseek" and distributeur not in DISTRIBUTEURS_AVEC_ADAPTATEUR:
+        return False
+    return bool(fournisseurs_llm.cle_api_du_distributeur(distributeur))
 
 
 def client_avec_outils(modele_id):
-    """Client avec outils pour ce modèle, ou None."""
-    if not modele_a_des_outils(modele_id):
+    """Client avec outils pour un modèle Claude, GPT, Gemini ou Grok, ou None (DeepSeek : voir core/main.py)."""
+    if distributeur_du_modele(modele_id) not in DISTRIBUTEURS_AVEC_ADAPTATEUR or not modele_a_des_outils(modele_id):
         return None
     distributeur = distributeur_du_modele(modele_id)
     cle = fournisseurs_llm.cle_api_du_distributeur(distributeur)

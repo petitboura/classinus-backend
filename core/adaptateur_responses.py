@@ -21,12 +21,12 @@ from openai import BadRequestError, OpenAI
 try:
     from adaptateur_commun import (
         CLE_ETAT_FOURNISSEUR, DELAI_APPEL_FOURNISSEUR_SECONDES, ClientCompatible, Flux,
-        fragment_appel, morceau, texte_du_contenu,
+        fragment_appel, morceau, texte_du_contenu, verifier_reponse_non_vide,
     )
 except ImportError:
     from core.adaptateur_commun import (
         CLE_ETAT_FOURNISSEUR, DELAI_APPEL_FOURNISSEUR_SECONDES, ClientCompatible, Flux,
-        fragment_appel, morceau, texte_du_contenu,
+        fragment_appel, morceau, texte_du_contenu, verifier_reponse_non_vide,
     )
 
 ADRESSE_XAI = "https://api.x.ai/v1"
@@ -176,11 +176,13 @@ class ClientResponses(ClientCompatible):
         arguments_diffuses = set()
         nombre_appels = 0
         fin = "stop"
+        a_repondu = False
         try:
             for evenement in flux_api:
                 type_evenement = getattr(evenement, "type", "")
                 if type_evenement == "response.output_text.delta":
                     if evenement.delta:
+                        a_repondu = True
                         yield morceau(contenu=evenement.delta)
                 elif type_evenement in ("response.reasoning_summary_text.delta", "response.reasoning_text.delta"):
                     if evenement.delta:
@@ -188,6 +190,7 @@ class ClientResponses(ClientCompatible):
                 elif type_evenement == "response.output_item.added":
                     element = evenement.item
                     if getattr(element, "type", "") == "function_call":
+                        a_repondu = True
                         index_par_element[element.id] = nombre_appels
                         yield morceau(appels=[fragment_appel(nombre_appels, element.call_id, element.name, "")])
                         nombre_appels += 1
@@ -215,6 +218,7 @@ class ClientResponses(ClientCompatible):
                     flux_api.close()
                 except Exception:
                     pass
+        verifier_reponse_non_vide(a_repondu, "OpenAI/xAI", fin)
         if nombre_appels:
             fin = "tool_calls"
             self._etat_dernier_tour = {"elements": elements}

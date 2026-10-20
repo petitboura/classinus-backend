@@ -93,6 +93,20 @@ class Efforts(unittest.TestCase):
         self.assertTrue(claude)
 
 
+class OutilsParModele(unittest.TestCase):
+    def test_deepseek_et_les_quatre_autres_ont_les_outils_quand_la_cle_existe(self):
+        import clients_outils_llm as clients
+        config = fournisseurs_llm._config_modeles_de_repli()
+        with patch.object(clients.fournisseurs_llm, "_config_modeles", return_value=config), \
+                patch.dict("os.environ", {"DEEPSEEK_API_KEY": "x", "XAI_API_KEY": "x"}, clear=True):
+            self.assertTrue(clients.modele_a_des_outils("deepseek-v4-flash"))
+            self.assertTrue(clients.modele_a_des_outils("grok-4.7"))
+            self.assertFalse(clients.modele_a_des_outils("gpt-6-astra"))  # clé absente : texte seul
+            self.assertIsNone(clients.client_avec_outils("deepseek-v4-flash"))  # DeepSeek garde son client
+            self.assertIsNotNone(clients.client_avec_outils("grok-4.7"))
+            self.assertFalse(clients.modele_a_des_outils("openai/gpt-oss-120b"))
+
+
 class Responses(unittest.TestCase):
     def _client(self, evenements):
         client = ClientResponses("cle", "openai")
@@ -157,11 +171,16 @@ class Responses(unittest.TestCase):
 
     def test_grok_sans_stockage_ni_resume(self):
         client = ClientResponses("cle", "xai")
-        client._client = NS(responses=NS(create=lambda **a: self._enregistrer(a, [])))
+        client._client = NS(responses=NS(create=lambda **a: self._enregistrer(a, [NS(type="response.output_text.delta", delta="ok")])))
         lire_flux(client.chat.completions.create(model="grok-4.7", messages=[], reasoning_effort="xhigh"))
         self.assertEqual(self.arguments["reasoning"], {"effort": "xhigh"})
         self.assertNotIn("store", self.arguments)
         self.assertNotIn("include", self.arguments)
+
+    def test_reponse_vide_est_une_erreur_et_pas_un_message_blanc(self):
+        client = self._client([NS(type="response.completed")])
+        with self.assertRaises(RuntimeError):
+            lire_flux(client.chat.completions.create(model="gpt-6-luna", messages=[]))
 
     def test_echec_du_fournisseur_remonte(self):
         client = self._client([NS(type="response.failed", response=NS(error=NS(code="server_error", message="boum")))])
@@ -170,6 +189,26 @@ class Responses(unittest.TestCase):
 
 
 class Claude(unittest.TestCase):
+    def test_refus_sans_aucun_mot_est_une_erreur(self):
+        class Flux:
+            def __iter__(self_inner):
+                return iter([])
+
+            def get_final_message(self_inner):
+                return NS(content=[], stop_reason="refusal")
+
+        class Contexte:
+            def __enter__(self_inner):
+                return Flux()
+
+            def __exit__(self_inner, *a):
+                return False
+
+        client = ClientClaude("cle")
+        client._client = NS(messages=NS(stream=lambda **a: Contexte()))
+        with self.assertRaises(RuntimeError):
+            lire_flux(client.chat.completions.create(model="claude-opus-5-5", messages=[]))
+
     def test_outil_reflexion_signee_et_effort(self):
         from anthropic.types import TextBlock, ThinkingBlock, ToolUseBlock
         blocs = [
@@ -184,13 +223,6 @@ class Claude(unittest.TestCase):
             NS(type="content_block_delta", index=2, delta=NS(type="input_json_delta", partial_json='"x"}')),
         ]
         final = NS(content=blocs, stop_reason="tool_use")
-
-        class Contexte:
-            def __enter__(self_inner):
-                return NS(__iter__=None, get_final_message=lambda: final, evenements=evenements)
-
-            def __exit__(self_inner, *a):
-                return False
 
         class Flux:
             def __init__(self_inner):
@@ -252,6 +284,15 @@ class Claude(unittest.TestCase):
 
 
 class Gemini(unittest.TestCase):
+    def test_reponse_sans_texte_ni_outil_est_une_erreur(self):
+        from google.genai import types as gt
+        reponse = gt.GenerateContentResponse.model_validate({"candidates": [{"finish_reason": "MAX_TOKENS", "content": {
+            "role": "model", "parts": [{"text": "je réfléchis", "thought": True}]}}]})
+        client = ClientGemini("cle")
+        client._client = NS(models=NS(generate_content_stream=lambda **a: iter([reponse])))
+        with self.assertRaises(RuntimeError):
+            lire_flux(client.chat.completions.create(model="gemini-4-argon", messages=[]))
+
     def test_appel_d_outil_signature_et_niveau(self):
         from google.genai import types as gt
         reponses = [

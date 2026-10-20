@@ -91,6 +91,16 @@ def noms_des_appels(messages):
     return noms
 
 
+def verifier_reponse_non_vide(a_repondu, fournisseur, fin):
+    """
+    Une réponse sans aucun mot ni appel d'outil (refus du fournisseur, coupure pendant la
+    réflexion) ferait un message blanc sans trace : on la remonte comme une erreur, que le
+    chat traite comme les autres (message d'erreur et journal avec la raison de fin).
+    """
+    if not a_repondu:
+        raise RuntimeError(f"Réponse vide de {fournisseur} (fin : {fin})")
+
+
 class Flux:
     """
     Flux de morceaux, avec close() : la boucle d'agent le ferme dès que la personne clique sur
