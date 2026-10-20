@@ -200,7 +200,7 @@ async def _appeler_outil_async(url, nom_outil, arguments, headers=None):
     return ""
 
 
-def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, conversation_id=None):
+def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, conversation_id=None, origine=None):
     """
     Se connecte a chaque serveur MCP du registre actif cote plateforme et
     retourne :
@@ -306,7 +306,10 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
         except Exception as e:
             logging.error(f"ERREUR MCP listing ({nom}): {e}")
 
-    return outils_pour_llm, table_routage
+    # Origine de l'appareil (20/10/2026, demande de Bourama) : les outils d'écran qui n'existent pas
+    # sur l'appareil utilisé ne sont jamais proposés. Origine inconnue : rien n'est retiré.
+    from core.origine_appareil import filtrer_catalogue_par_origine
+    return filtrer_catalogue_par_origine(outils_pour_llm, table_routage, origine)
 
 
 def filtrer_catalogue_par_outil_force(outils_pour_llm, table_routage, outil_force=None):

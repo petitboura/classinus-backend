@@ -205,6 +205,11 @@ class EnvoyerMessagePayload(BaseModel):
     # client dans la langue de l'eleve (cles dans prompt_thonny.LIBELLES_AUTORISES).
     client: Optional[str] = None
     libelles_client: Optional[Dict[str, str]] = None
+    # Origine de l'appareil (20/10/2026, demande de Bourama) : annoncée par l'application avec
+    # chaque message, jamais devinée par le serveur. Valeurs connues : telephone_appli,
+    # telephone_navigateur, pc_navigateur, pc_appli (voir core/origine_appareil.py). Absente ou
+    # inconnue : comportement d'avant, rien n'est filtré.
+    origine: Optional[str] = None
 
 
 def _resoudre_modele_force(agent_id, modele_demande):
@@ -298,6 +303,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
                 message_enregistre=payload.message_enregistre,
                 client=payload.client,
                 libelles_client=payload.libelles_client,
+                origine=payload.origine,
             )
         for evenement in generateur:
             yield f"data: {json.dumps(evenement)}\n\n"

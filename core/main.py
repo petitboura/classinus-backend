@@ -28,6 +28,7 @@ from core.guide_conversation import obtenir_guide_actif
 from core.plafond_outils_tour import definir_plafond_tour, PLAFOND_OUTILS_GUIDE_VISUEL
 from core.canal_agent_applicatif import obtenir_actions_disponibles
 from core.ecran_pc_continu import bloc_etat_ecran_pc_anticipe, lancer_lecture_anticipee
+from core.origine_appareil import lecture_ecran_pc_autorisee, normaliser_origine
 from core.etat_canal_prompt import bloc_etat_canal
 from core.zip_chat import iterer_statuts as _iterer_statuts_zip, obtenir_etat as _obtenir_etat_zip, construire_digest_zip as _construire_digest_zip
 from avancement_notions_ia import notions_pertinentes_pour_eleve, resoudre_code_actif_eleve
@@ -160,7 +161,7 @@ def _texte_a_enregistrer(message_utilisateur, message_enregistre):
     return message_enregistre if message_enregistre else message_utilisateur
 
 
-def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None, effort_reflexion=None, arret_tour=None, message_enregistre=None, client=None, libelles_client=None):
+def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None, effort_reflexion=None, arret_tour=None, message_enregistre=None, client=None, libelles_client=None, origine=None):
     """
     Generateur d'evenements. Chaque element produit est un dictionnaire :
     - {"type": "statut", "texte": "..."}         -> un outil MCP est en cours d'utilisation (ou, depuis le 11/09/2026, Gemini en train de lire une image/video jointe)
@@ -773,6 +774,16 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # (simplification du 14/08, plus de vrai système multi-agents côté
     # produit malgré le code partagé avec djiguigne-backend).
     if agent_id == "clovis":
+        # Base de connaissance de Classinus donnée à CHAQUE message (20/10/2026,
+        # demande Bourama : "on va juste toujours lui donner l'outil, c'est plus
+        # simple"). Remplace l'idée d'injecter automatiquement les passages par
+        # similarité dans le prompt (abandonnée). Avant, l'IA devait d'abord
+        # demander l'outil via demander_outils et pouvait ne pas y penser. Ne
+        # dépend pas de user_id : un visiteur sans compte la reçoit aussi (le
+        # serveur "generation" n'exige pas d'utilisateur, voir
+        # lister_outils_autorises_pour_agent). Coût : la description de l'outil
+        # (environ 2 700 caractères) part à chaque message.
+        outils_forces_contexte.append("gerer_base_connaissance")
         # DÉSACTIVÉ TEMPORAIREMENT (05/09/2026, demande Bourama) : pour
         # libérer du budget tokens pendant les tests d'explorer_dossier/
         # gerer_dossier_telephone. Description de gerer_document_bibliotheque
@@ -818,6 +829,10 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # Lecture de l'ecran PC lancee en parallele de la preparation du tour (04/10/2026) :
     # voir core/ecran_pc_continu.py. Remplie par _tache_prompt_optimiste, reprise plus bas.
     lecture_ecran_anticipee = []
+
+    # Origine de l'appareil annoncée par l'application (20/10/2026, demande de Bourama) : voir
+    # core/origine_appareil.py. None (absente ou inconnue) : comportement d'avant.
+    origine = normaliser_origine(origine)
 
     # Activation par Clovis (02/10/2026, demande Bourama : "il faut que Classinus,
     # dans le chat, puisse activer le canal en direct") : tant que le canal est
@@ -924,7 +939,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     routeur_auto = False
     if not ROUTEUR_OUTILS_AUTO_DESACTIVE and not outil_force and not ignorer_suggestion_outils and message_utilisateur and not toutes_les_urls_images and not images_base64:
         def _tache_routeur():
-            outils_disponibles_agent, _ = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id)
+            outils_disponibles_agent, _ = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id, origine=origine)
             # Notion + GitHub exclus du CATALOGUE envoyé au routeur automatique
             # (14/08, demande Bourama : "enlève le catalogue que ce ne soit
             # plus suggéré, comme s'il ne fonctionne plus"). Ces deux serveurs
@@ -957,12 +972,12 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # renvoye avec le reste -- reutilise plus bas pour
             # demander_outils au lieu d'etre redemande.
             outil_force_contexte_seul = _fusionner_outils(None, outils_forces_contexte + outils_retenus_precedents)
-            catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id)
-            if canal_en_direct and user_id:
+            catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id, origine=origine)
+            if canal_en_direct and user_id and lecture_ecran_pc_autorisee(origine):
                 lecture_ecran_anticipee.append(lancer_lecture_anticipee(user_id, conversation_id, table_routage_complet))
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force_contexte_seul)
             outil_force_verifie_optimiste = [o["function"]["name"] for o in outils_mcp] if outil_force_contexte_seul else None
-            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire, client=client, libelles_client=libelles_client)
+            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire, client=client, libelles_client=libelles_client, origine=origine)
             return outils_mcp, table_routage, system_final, catalogue_complet, table_routage_complet
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -1078,10 +1093,10 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # FOIS ici, reutilise plus bas pour demander_outils au lieu
             # d'etre redemande (11/09/2026, meme correctif que la branche
             # routeur juste au-dessus).
-            catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id)
+            catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id, origine=origine)
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force)
             outil_force_verifie = [o["function"]["name"] for o in outils_mcp] if outil_force else outil_force
-        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire, client=client, libelles_client=libelles_client)
+        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire, client=client, libelles_client=libelles_client, origine=origine)
 
         # PERF (10/08) : second (et dernier) point de vérification --
         # couvre tous les chemins qui ne passent PAS par le premier
