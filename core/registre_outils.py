@@ -340,8 +340,8 @@ OUTILS_SENSIBLES = {
 #
 # `icone` est une chaîne = un nom d'export de lucide-react (vérifié
 # présent dans la version installée, classgpt-frontend/package.json).
-# Exception : "notion-logo", un cas spécial connu du frontend (logo
-# Notion, pas un export lucide-react).
+# Exceptions : "notion-logo" et "github-logo", cas spéciaux connus du frontend (logos
+# de marque, pas des exports lucide-react).
 #
 # `onglet` correspond aux catégories du menu "Outils" du frontend :
 # "generer" / "rechercher" / "action_app" / "utilitaires".
@@ -441,7 +441,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "gerer_base_connaissance": {"label": "Aide Classinus", "icone": "BookMarked", "onglet": "rechercher"},
 
     # --- Action dans l'app : GitHub ---
-    "gerer_depot_github": {"label": "Dépôt GitHub", "icone": "Github", "onglet": "action_app", "appli": "github"},
+    "gerer_depot_github": {"label": "Dépôt GitHub", "icone": "github-logo", "onglet": "action_app", "appli": "github"},
 
     # --- Action dans l'app : Notion ---
     "notion-search": {"label": "Recherche dans Notion", "icone": "notion-logo", "onglet": "action_app", "appli": "notion"},
