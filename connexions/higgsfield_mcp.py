@@ -43,9 +43,10 @@ def _oauth_metadata():
     issuers = resource.get("authorization_servers") or []
     hints = resource.get("higgsfield_auth_hints") or {}
     options = hints.get("options") or []
-    # Higgsfield annonce son serveur MCP comme issuer, mais le flux OAuth
-    # navigateur est délégué à Clerk. Utiliser l'issuer amont annoncé
-    # explicitement évite le mismatch d'issuer documenté sur le flux proxy.
+    # Higgsfield annonce son serveur d'autorisation (clerk.higgsfield.ai) dans
+    # authorization_servers. Si une option du flux navigateur nomme un
+    # serveur amont explicite, on l'utilise en priorite pour eviter un
+    # decalage d'issuer.
     upstream = next(
         (option.get("upstream_authorization_server") for option in options
          if option.get("flow") == "authorization_code_pkce"
@@ -67,6 +68,11 @@ def _oauth_metadata():
             metadata = response.json()
             if metadata.get("authorization_endpoint") and metadata.get("token_endpoint"):
                 metadata["_issuer"] = issuer
+                # Droits demandes : ceux que le serveur MCP annonce pour lui-meme
+                # (openid, email, offline_access), jamais la liste complete du
+                # serveur d'autorisation (elle inclut des droits inutiles ici,
+                # comme private_metadata et user:org:read).
+                metadata["_scopes"] = resource.get("scopes_supported") or []
                 return metadata
         except Exception as exc:
             last_error = exc
@@ -135,7 +141,7 @@ def demarrer_connexion(user_id, agent_id=None):
             "state": state,
             "resource": MCP_URL,
         }
-        scopes = metadata.get("scopes_supported") or ["openid", "email", "offline_access"]
+        scopes = metadata.get("_scopes") or ["openid", "email", "offline_access"]
         params["scope"] = " ".join(scopes)
         return f'{metadata["authorization_endpoint"]}?{urlencode(params)}'
     except Exception as exc:
@@ -144,11 +150,18 @@ def demarrer_connexion(user_id, agent_id=None):
 
 
 def etat_en_attente(state):
-    result = (
-        _supabase.table("higgsfield_oauth_temp").select("state")
-        .eq("state", state).gte("created_at", _limite_etat()).execute()
-    )
-    return bool(result.data)
+    # Appelee pour TOUTE finalisation OAuth (Notion, Google Drive, GitHub aussi).
+    # Une erreur ici (table absente, base injoignable) ne doit jamais bloquer
+    # ces autres services : on repond simplement "pas un etat Higgsfield".
+    try:
+        result = (
+            _supabase.table("higgsfield_oauth_temp").select("state")
+            .eq("state", state).gte("created_at", _limite_etat()).execute()
+        )
+        return bool(result.data)
+    except Exception as exc:
+        logging.warning("Verification de l'etat OAuth Higgsfield impossible: %s", exc)
+        return False
 
 
 def finaliser_connexion(code, state):
