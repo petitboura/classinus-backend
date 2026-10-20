@@ -33,7 +33,7 @@ a ecrire ici.
 
 import os
 
-from connexions.notion import obtenir_token_valide
+from connexions.notion import obtenir_token_valide\nfrom connexions.higgsfield_mcp import obtenir_token_valide as obtenir_token_higgsfield
 
 def _url_generation(get_secret, user_id, agent_id, conversation_id=None):
     # Serveur MCP interne, pas un tiers externe (voir
@@ -117,7 +117,7 @@ def _headers_notion(get_secret, user_id, agent_id):
     return {"Authorization": f"Bearer {token}"}
 
 
-def _url_google_drive(get_secret, user_id, agent_id, conversation_id=None):
+def _url_higgsfield(get_secret, user_id, agent_id, conversation_id=None):\n    return "https://mcp.higgsfield.ai/mcp"\n\n\ndef _headers_higgsfield(get_secret, user_id, agent_id):\n    token = obtenir_token_higgsfield(user_id)\n    if not token:\n        return None\n    return {"Authorization": f"Bearer {token}"}\n\n\ndef _url_google_drive(get_secret, user_id, agent_id, conversation_id=None):
     # Serveur MCP Drive OFFICIEL de Google (tiers externe, comme Notion),
     # pas un serveur interne -- voir connexions/oauth_generique.py pour
     # le detail (client OAuth a creer manuellement dans Google Cloud
