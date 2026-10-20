@@ -38,12 +38,18 @@ from connexions.oauth_generique import (
     get_secret,
 )
 import connexions.notion as notion
+import connexions.higgsfield_mcp as higgsfield_mcp
+import connexions.platform_mcp_oauth as platform_mcp_oauth
 
 router = APIRouter(prefix="/api/connexions", tags=["connexions"])
 
 
 @router.get("/{service}/statut")
 def statut_connexion(service: str, utilisateur=Depends(utilisateur_courant)):
+    if service == "higgsfield_mcp":
+        return {"connecte": higgsfield_mcp.est_connecte(utilisateur.id)}
+    if service in platform_mcp_oauth.FOURNISSEURS:
+        return {"connecte": platform_mcp_oauth.est_connecte(service, utilisateur.id)}
     if service == "notion":
         return {"connecte": notion.est_connecte(utilisateur.id)}
     if service not in SERVICES:
@@ -59,6 +65,18 @@ def diagnostic_config(service: str):
     URL_RETOUR_APP n'est pas un secret (adresse publique de retour), elle est
     renvoyée en clair pour repérer une faute de frappe ou un mauvais domaine.
     """
+    if service == "higgsfield_mcp":
+        return {"url_retour_app": URL_RETOUR, "oauth_dynamique": True}
+    if service in platform_mcp_oauth.FOURNISSEURS:
+        config = platform_mcp_oauth.FOURNISSEURS[service]
+        if service == "railway_mcp":
+            return {
+                "url_retour_app": URL_RETOUR,
+                "client_id_present": bool(get_secret("RAILWAY_OAUTH_CLIENT_ID")),
+                "client_secret_present": bool(get_secret("RAILWAY_OAUTH_CLIENT_SECRET")),
+                "oauth_dynamique": False,
+            }
+        return {"url_retour_app": URL_RETOUR, "oauth_dynamique": True, "serveur_mcp": config["mcp_url"]}
     if service == "notion":
         return {"url_retour_app": notion.URL_RETOUR}
 
@@ -77,6 +95,21 @@ def diagnostic_config(service: str):
 def demarrer(service: str, agent_id: str = "", utilisateur=Depends(utilisateur_courant)):
     # On vérifie nous-mêmes chaque pièce de configuration avant de démarrer,
     # pour renvoyer une erreur précise plutôt qu'un échec muet.
+    if service == "higgsfield_mcp":
+        url = higgsfield_mcp.demarrer_connexion(utilisateur.id, agent_id or None)
+        if not url:
+            raise erreur_api(503, "CONNEXION_INDISPONIBLE", message="Connexion Higgsfield indisponible : vérifie les métadonnées OAuth du fournisseur et URL_RETOUR_APP.")
+        return {"url": url}
+    if service in platform_mcp_oauth.FOURNISSEURS:
+        url = platform_mcp_oauth.demarrer_connexion(service, utilisateur.id, agent_id or None)
+        if not url:
+            if service == "railway_mcp":
+                message = "Connexion Railway indisponible : configure RAILWAY_OAUTH_CLIENT_ID et RAILWAY_OAUTH_CLIENT_SECRET dans Railway, ainsi que URL_RETOUR_APP."
+            else:
+                message = f"Connexion {service} indisponible : le serveur MCP n'a pas fourni de métadonnées OAuth compatibles ou URL_RETOUR_APP est absent."
+            raise erreur_api(503, "CONNEXION_INDISPONIBLE", message=message)
+        return {"url": url}
+
     if service == "notion":
         if not notion.URL_RETOUR:
             raise erreur_api(
@@ -125,6 +158,15 @@ def finaliser(payload: FinaliserPayload):
     # Pas de connexion requise ici : la page de retour appelle cette route
     # juste après la redirection du fournisseur. Le `state` (opaque, généré
     # par le serveur, à usage unique) sert de preuve d'origine.
+    if higgsfield_mcp.etat_en_attente(payload.state):
+        succes, message = higgsfield_mcp.finaliser_connexion(payload.code, payload.state)
+        return {"succes": succes, "message": message, "service": "higgsfield_mcp"}
+
+    service_platform = platform_mcp_oauth.etat_en_attente(payload.state)
+    if service_platform:
+        succes, message = platform_mcp_oauth.finaliser_connexion(service_platform, payload.code, payload.state)
+        return {"succes": succes, "message": message, "service": service_platform}
+
     service = etat_en_attente(payload.state)
     if service:
         succes, message = finaliser_connexion(service, payload.code, payload.state)
