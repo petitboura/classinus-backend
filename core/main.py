@@ -774,6 +774,16 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # (simplification du 14/08, plus de vrai système multi-agents côté
     # produit malgré le code partagé avec djiguigne-backend).
     if agent_id == "clovis":
+        # Base de connaissance de Classinus donnée à CHAQUE message (20/10/2026,
+        # demande Bourama : "on va juste toujours lui donner l'outil, c'est plus
+        # simple"). Remplace l'idée d'injecter automatiquement les passages par
+        # similarité dans le prompt (abandonnée). Avant, l'IA devait d'abord
+        # demander l'outil via demander_outils et pouvait ne pas y penser. Ne
+        # dépend pas de user_id : un visiteur sans compte la reçoit aussi (le
+        # serveur "generation" n'exige pas d'utilisateur, voir
+        # lister_outils_autorises_pour_agent). Coût : la description de l'outil
+        # (environ 2 700 caractères) part à chaque message.
+        outils_forces_contexte.append("gerer_base_connaissance")
         # DÉSACTIVÉ TEMPORAIREMENT (05/09/2026, demande Bourama) : pour
         # libérer du budget tokens pendant les tests d'explorer_dossier/
         # gerer_dossier_telephone. Description de gerer_document_bibliotheque

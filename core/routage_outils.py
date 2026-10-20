@@ -231,13 +231,11 @@ def _outil_demander_outils():
                 "PRIORITE (12/09/2026, demande Bourama) : decris d'abord "
                 "l'outil precis dont tu as besoin pour la tache demandee "
                 "(ex: envoyer un message, gerer un document, un skill, "
-                "chercher sur le web). N'utilise gerer_base_connaissance "
-                "qu'en dernier recours, apres au maximum 2 recherches "
-                "d'outils precis infructueuses -- sauf si la question "
-                "porte clairement sur Classinus ou l'application elle-meme "
-                "(fonctionnement, bug, fonctionnalite), auquel cas "
-                "demande directement gerer_base_connaissance des la "
-                "premiere recherche."
+                "chercher sur le web). gerer_base_connaissance (questions "
+                "sur Classinus ou l'application elle-meme : fonctionnement, "
+                "bug, fonctionnalite) est deja disponible a chaque message "
+                "(20/10/2026, demande Bourama) : appelle-le directement, "
+                "sans passer par cette recherche."
             ),
             "parameters": {
                 "type": "object",

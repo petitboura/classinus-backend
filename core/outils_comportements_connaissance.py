@@ -8,6 +8,9 @@ déplacement de code.
 """
 
 import logging
+from urllib.parse import quote
+
+import requests
 
 from retriever import chercher_candidats as _chercher_candidats
 from contenu_dynamique_matiere import resoudre_system_prompt as _resoudre_system_prompt_matiere
@@ -32,9 +35,15 @@ from core.outils_generation_commun import (
     mcp_generation,
     Context,
     _supabase_memoire,
+    _SUPABASE_URL,
     TYPES_EMPLACEMENT_BIBLIOTHEQUE,
     _libelle_emplacement,
 )
+
+# Espace de stockage Supabase des fichiers originaux des articles de la base
+# de connaissance (même nom que côté serveur public, core/serveur_mcp_espace.py).
+# Un fichier y est rangé sous <agent_id>/<nom de l'article>.
+BUCKET_FICHIERS_CONNAISSANCE = "documents-agents"
 
 
 
@@ -298,6 +307,14 @@ def gerer_base_connaissance(
       cette conversation (résultat toujours visible, marqué "[Résultat
       de l'outil déjà exécuté]"), ne le relis pas -- son contenu n'a pas
       changé entre deux messages. Paramètre : `nom`.
+    - "obtenir_fichier" : renvoie le lien du FICHIER original d'un article
+      (pas son texte recopié), identifié par son `nom` exact. À utiliser
+      quand l'utilisateur gagnerait à avoir le fichier lui même (procédure
+      à suivre pas à pas, contenu de référence à garder), pas seulement à
+      lire le texte (pour ça, "lire_article"). Si le fichier n'est pas
+      disponible, l'outil le dit : ne donne alors aucun lien et n'en
+      invente jamais un, propose plutôt de lire l'article. Si `nom` est
+      inconnu, utilise d'abord "lister_articles". Paramètre : `nom`.
     """
     requete = ctx.request_context.request
     agent_id = requete.query_params.get("agent_id")
@@ -349,9 +366,54 @@ def gerer_base_connaissance(
             logging.error(f"ERREUR gerer_base_connaissance (lire_article) : {e}")
             return "Erreur : la lecture de l'article a échoué, réessaie."
 
+    if action == "obtenir_fichier":
+        # Ajouté le 20/10/2026, demande Bourama ("il faut donner l'outil obtenir
+        # fichier aussi") : le prompt de l'IA (core/profils_agents.py, bloc
+        # base_connaissances_classinus) parlait déjà de cette action, qui
+        # n'existait que sur le serveur public (clovis_obtenir_fichier_connaissance).
+        # Différence voulue avec le serveur public : on vérifie que le fichier
+        # existe vraiment avant de donner le lien, pour ne jamais renvoyer un
+        # lien mort à l'IA (l'espace de stockage peut être vide ou absent).
+        try:
+            res = (
+                _supabase_memoire.table("documents")
+                .select("nom")
+                .eq("agent_id", agent_id)
+                .eq("nom", nom)
+                .limit(1)
+                .execute()
+            )
+        except Exception as e:
+            logging.error(f"ERREUR gerer_base_connaissance (obtenir_fichier, lecture article) : {e}")
+            return "Erreur : la récupération du fichier a échoué, réessaie."
+        if not res.data:
+            return f"Aucun article nommé '{nom}' trouvé dans la base de connaissances."
+
+        url = f"{_SUPABASE_URL}/storage/v1/object/public/{BUCKET_FICHIERS_CONNAISSANCE}/{quote(agent_id)}/{quote(nom)}"
+        try:
+            # GET sans lire le contenu (stream=True) plutôt que HEAD : on ne
+            # veut que le code de réponse, et ça évite de dépendre du support
+            # de HEAD par l'espace de stockage.
+            reponse = requests.get(url, timeout=8, stream=True)
+            code = reponse.status_code
+            reponse.close()
+        except Exception as e:
+            logging.error(f"ERREUR gerer_base_connaissance (obtenir_fichier, vérification du fichier) : {e}")
+            return "Erreur : la récupération du fichier a échoué, réessaie."
+        if code != 200:
+            logging.warning(
+                f"gerer_base_connaissance (obtenir_fichier) : fichier introuvable pour l'article "
+                f"'{nom}' (agent_id={agent_id}, code {code})."
+            )
+            return (
+                f"Le fichier original de l'article '{nom}' n'est pas disponible pour le moment. "
+                "Ne donne aucun lien. Si l'utilisateur veut son contenu, utilise l'action \"lire_article\"."
+            )
+        return f"Fichier : {url}"
+
     return (
         f"Erreur : action '{action}' inconnue. Actions valides : chercher, "
-        "lister_articles, lire_article."
+        "lister_articles, lire_article, obtenir_fichier."
     )
 
 
