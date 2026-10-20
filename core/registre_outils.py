@@ -223,6 +223,12 @@ SERVEURS_MCP = [
         # interrompus pour confirmation utilisateur avant execution.
     },
     {
+        "nom": "higgsfield_mcp",
+        "url_builder": _url_higgsfield,
+        "headers_builder": _headers_higgsfield,
+        "necessite_utilisateur": True,
+    },
+    {
         "nom": "google_drive",
         "url_builder": _url_google_drive,
         "headers_builder": _headers_google_drive,
