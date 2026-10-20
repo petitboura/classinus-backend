@@ -337,3 +337,39 @@ def rechercher_video(requete: str) -> str:
     except Exception as e:
         logging.error(f"ERREUR outil recherche vidéo : {e}")
         return "Erreur : la recherche de vidéos a échoué, réessaie."
+
+
+# Higgsfield API : intégration optionnelle et séparée du fournisseur vidéo actuel.
+from core.generation_video_higgsfield import (
+    higgsfield_api_disponible,
+    lancer_generation_video_higgsfield as _lancer_video_higgsfield,
+    statut_generation_video_higgsfield as _statut_video_higgsfield,
+)
+
+if higgsfield_api_disponible():
+    @mcp_generation.tool()
+    def lancer_video_higgsfield(prompt: str, titre: str) -> str:
+        """Lance une vidéo Higgsfield. Conserve le même titre pour la consultation et l'enregistrement dans la bibliothèque."""
+        try:
+            resultat = _lancer_video_higgsfield(prompt)
+            return (
+                f"Génération Higgsfield lancée (id: {resultat['request_id']}). "
+                f"Utilise ensuite consulter_video_higgsfield avec cet identifiant et le même titre ({titre})."
+            )
+        except Exception as e:
+            logging.error("ERREUR lancement vidéo Higgsfield : %s", e)
+            return "Erreur : impossible de lancer la génération Higgsfield. Vérifie la configuration API."
+
+    @mcp_generation.tool()
+    def consulter_video_higgsfield(request_id: str, titre: str, ctx: Context = None) -> str:
+        """Vérifie le statut Higgsfield et enregistre la vidéo terminée dans la bibliothèque Classinus sous le titre fourni."""
+        try:
+            resultat = _statut_video_higgsfield(request_id)
+            if resultat.get("url"):
+                nom = (titre.strip() or f"Video_Higgsfield_{request_id}") + ".mp4"
+                _sauvegarder_generation_bibliotheque(ctx, resultat["url"], nom, "video/mp4")
+                return f"Vidéo terminée et enregistrée dans la bibliothèque : {resultat['url']}"
+            return f"Statut Higgsfield : {resultat.get('statut', 'inconnu')}. Réessaie plus tard."
+        except Exception as e:
+            logging.error("ERREUR statut vidéo Higgsfield : %s", e)
+            return "Erreur : impossible de consulter cette génération Higgsfield."

@@ -47,7 +47,11 @@ router = APIRouter(prefix="/api/connexions", tags=["connexions"])
 @router.get("/{service}/statut")
 def statut_connexion(service: str, utilisateur=Depends(utilisateur_courant)):
     if service == "higgsfield_mcp":
-        return {"connecte": higgsfield_mcp.est_connecte(utilisateur.id)}
+        connecte = higgsfield_mcp.est_connecte(utilisateur.id)
+        return {
+            "connecte": connecte,
+            "a_reconnecter": (not connecte) and higgsfield_mcp.a_reconnecter(utilisateur.id),
+        }
     if service in platform_mcp_oauth.FOURNISSEURS:
         connecte = platform_mcp_oauth.est_connecte(service, utilisateur.id)
         return {
@@ -63,7 +67,10 @@ def statut_connexion(service: str, utilisateur=Depends(utilisateur_courant)):
 
 @router.post("/{service}/deconnecter")
 def deconnecter_plateforme_mcp(service: str, utilisateur=Depends(utilisateur_courant)):
-    """Supprime la connexion personnelle Vercel, Railway ou Supabase de la personne connectee."""
+    """Supprime la connexion personnelle Higgsfield, Vercel, Railway ou Supabase de la personne connectee."""
+    if service == "higgsfield_mcp":
+        higgsfield_mcp.deconnecter(utilisateur.id)
+        return {"connecte": False}
     if service not in platform_mcp_oauth.FOURNISSEURS:
         raise erreur_api(404, "SERVICE_INCONNU", service=service)
     platform_mcp_oauth.deconnecter(service, utilisateur.id)

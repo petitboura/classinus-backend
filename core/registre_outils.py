@@ -125,7 +125,9 @@ def _url_higgsfield(get_secret, user_id, agent_id, conversation_id=None):
 
 def _headers_higgsfield(get_secret, user_id, agent_id):
     token = obtenir_token_higgsfield(user_id)
-    return {"Authorization": f"Bearer {token}"} if token else None
+    if not token:
+        return None
+    return {"Authorization": f"Bearer {token}"}
 
 
 def _url_vercel_mcp(get_secret, user_id, agent_id, conversation_id=None):
@@ -400,6 +402,10 @@ OUTILS_SENSIBLES = {
     # pour confirmation avant execution.
     "create_file",
     "copy_file",
+    # Higgsfield (20/10/2026, demande de Bourama) : lance une generation
+    # video par la cle API, potentiellement payante, donc TOUJOURS
+    # interrompue pour confirmation avant execution.
+    "lancer_video_higgsfield",
     # ÉCRIT réellement sur un dépôt GitHub (voir
     # core/serveur_mcp_github.py, gerer_depot_github action
     # "modifier_fichier", consolidé le 26/08, ex modifier_fichier_depot_github) :
@@ -1034,6 +1040,10 @@ CATEGORIES_OUTILS = {
         "desactiver_canal_en_direct",
     ],
     "github": ["gerer_depot_github"],
+    # Outils internes de l'API vidéo Higgsfield (clé API partagée). Les outils du
+    # serveur MCP personnel sont reconnus par le préfixe "higgsfield_" plus bas :
+    # la catégorie les réunit tous.
+    "higgsfield": ["lancer_video_higgsfield", "consulter_video_higgsfield"],
     "google_drive": [
         "search_files", "read_file_content", "download_file_content",
         "list_recent_files", "get_file_metadata", "create_file", "copy_file",
@@ -1053,7 +1063,7 @@ CATEGORIES_OUTILS_PAR_PREFIXE = {
     "higgsfield": "higgsfield_",
 }
 
-NOMS_CATEGORIES_OUTILS = list(CATEGORIES_OUTILS.keys()) + list(CATEGORIES_OUTILS_PAR_PREFIXE.keys())
+NOMS_CATEGORIES_OUTILS = list(dict.fromkeys([*CATEGORIES_OUTILS.keys(), *CATEGORIES_OUTILS_PAR_PREFIXE.keys()]))
 
 # Texte compact envoye dans la description de demander_outils (voir
 # routage_outils._outil_demander_outils) : les categories evidentes sont

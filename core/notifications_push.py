@@ -112,8 +112,16 @@ def cle_publique_vapid() -> str:
 
 
 def _pem_prive() -> str:
-    b64 = _get_secret("VAPID_PRIVATE_KEY_PEM_B64")
-    return base64.b64decode(b64).decode("ascii")
+    """
+    Clé privée VAPID au format PEM. La variable s'appelle ..._PEM_B64 (PEM encodé en base64, voir
+    scripts/generer_cles_vapid.py), mais une clé collée telle quelle dans Railway, avec de vrais
+    retours à la ligne ou des \\n littéraux, ou entre guillemets, faisait échouer chaque envoi avec
+    « Could not deserialize key data » : les trois formes sont acceptées (constaté dans les
+    journaux du 20/10/2026).
+    """
+    brut = (_get_secret("VAPID_PRIVATE_KEY_PEM_B64") or "").strip().strip("\"'").strip()
+    texte = brut if "BEGIN" in brut else base64.b64decode(brut).decode("ascii")
+    return texte.replace("\\n", "\n").strip() + "\n"
 
 
 def enregistrer_abonnement(user_id: str, subscription_info: dict) -> None:

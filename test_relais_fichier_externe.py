@@ -131,6 +131,9 @@ class Relais(unittest.TestCase):
 
         app = FastAPI()
         app.include_router(api_fe.router)
+        # Utilisateur factice posé sur l'application elle-même : si un autre test a déjà importé le
+        # vrai api.auth, le remplacement de module en tête de fichier est sans effet (401 constaté).
+        app.dependency_overrides[api_fe.utilisateur_courant] = lambda: {"id": "test"}
         return TestClient(app)
 
     def test_en_tetes_imposes_par_nous(self):
@@ -299,6 +302,9 @@ class PlafondEtVideo(unittest.TestCase):
 
         app = FastAPI()
         app.include_router(api_fe.router)
+        # Utilisateur factice posé sur l'application elle-même : si un autre test a déjà importé le
+        # vrai api.auth, le remplacement de module en tête de fichier est sans effet (401 constaté).
+        app.dependency_overrides[api_fe.utilisateur_courant] = lambda: {"id": "test"}
         return TestClient(app)
 
     def test_plafond_par_defaut_500_mo(self):

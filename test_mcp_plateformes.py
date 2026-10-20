@@ -57,6 +57,26 @@ class TestCategoriesSeparees(unittest.TestCase):
                 self.assertIn(prefixe, r.CATEGORIES_OUTILS_PAR_PREFIXE.values(), serveur["nom"])
 
 
+class TestCategorieHiggsfield(unittest.TestCase):
+    def test_la_categorie_reunit_serveur_mcp_et_outils_api_sans_doublon_de_nom(self):
+        self.assertEqual(r.NOMS_CATEGORIES_OUTILS.count("higgsfield"), 1)
+        candidats = [_outil(n) for n in ("higgsfield_generate_image", "lancer_video_higgsfield", "consulter_video_higgsfield", "generer_image")]
+        noms = [o["function"]["name"] for o in r.outils_de_la_categorie("higgsfield", candidats)]
+        self.assertEqual(noms, ["higgsfield_generate_image", "lancer_video_higgsfield", "consulter_video_higgsfield"])
+
+
+class TestRegistreServeurs(unittest.TestCase):
+    def test_aucun_serveur_declare_deux_fois(self):
+        noms = [serveur["nom"] for serveur in r.SERVEURS_MCP]
+        self.assertEqual(len(noms), len(set(noms)), f"serveur en double : {sorted(n for n in set(noms) if noms.count(n) > 1)}")
+
+    def test_les_quatre_serveurs_personnels_ont_un_prefixe_distinct(self):
+        prefixes = {s["nom"]: s.get("prefixe_outils") for s in r.SERVEURS_MCP if s["nom"] in ("higgsfield_mcp", "vercel_mcp", "railway_mcp", "supabase_mcp")}
+        self.assertEqual(len(prefixes), 4)
+        self.assertEqual(len(set(prefixes.values())), 4)
+        self.assertNotIn(None, prefixes.values())
+
+
 class TestConfirmation(unittest.TestCase):
     def test_actions_qui_modifient_sont_confirmees(self):
         for nom in (
