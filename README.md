@@ -253,3 +253,20 @@ python indexers/index_documents.py mon_document.pdf
 ```
 
 (le fichier doit déjà être présent dans le bucket Supabase Storage configuré)
+
+
+## Connexions individuelles aux serveurs MCP
+
+Les utilisateurs peuvent connecter leurs propres comptes aux serveurs MCP officiels :
+- Higgsfield : `https://mcp.higgsfield.ai/mcp`
+- Vercel : `https://mcp.vercel.com`
+- Railway : `https://mcp.railway.com`
+- Supabase : `https://mcp.supabase.com/mcp`
+
+Les jetons sont stockés séparément par utilisateur et fournisseur, dans des tables avec RLS activée et sans politique d'accès direct côté client. Les migrations à appliquer sont `migrations/2026_10_20_higgsfield_mcp_oauth.sql` et `migrations/20261020_platform_mcp_oauth.sql`.
+
+Variables requises :
+- `URL_RETOUR_APP` : URL publique de la page frontend `/oauth/retour`.
+- `RAILWAY_OAUTH_CLIENT_ID` et `RAILWAY_OAUTH_CLIENT_SECRET` : identifiants de l'application OAuth Classinus créée dans Railway, avec la même URL de retour enregistrée.
+
+Vercel et Supabase utilisent la découverte OAuth MCP et l'enregistrement dynamique du client lorsque le fournisseur les annonce. Railway nécessite une application OAuth enregistrée. Routes communes : `/api/connexions/{service}/demarrer`, `/api/connexions/{service}/statut` et `/api/connexions/finaliser`.
