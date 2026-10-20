@@ -349,24 +349,26 @@ from core.generation_video_higgsfield import (
 if higgsfield_api_disponible():
     @mcp_generation.tool()
     def lancer_video_higgsfield(prompt: str, titre: str) -> str:
-        """Lance une génération vidéo via l'API Higgsfield et renvoie l'identifiant de suivi."""
+        """Lance une vidéo Higgsfield. Conserve le même titre pour la consultation et l'enregistrement dans la bibliothèque."""
         try:
             resultat = _lancer_video_higgsfield(prompt)
             return (
                 f"Génération Higgsfield lancée (id: {resultat['request_id']}). "
-                "Utilise ensuite consulter_video_higgsfield avec cet identifiant."
+                f"Utilise ensuite consulter_video_higgsfield avec cet identifiant et le même titre (\\"{titre}\\")."
             )
         except Exception as e:
             logging.error("ERREUR lancement vidéo Higgsfield : %s", e)
             return "Erreur : impossible de lancer la génération Higgsfield. Vérifie la configuration API."
 
     @mcp_generation.tool()
-    def consulter_video_higgsfield(request_id: str) -> str:
-        """Vérifie le statut d'une vidéo Higgsfield et renvoie son URL quand elle est disponible."""
+    def consulter_video_higgsfield(request_id: str, titre: str, ctx: Context = None) -> str:
+        """Vérifie le statut Higgsfield et enregistre la vidéo terminée dans la bibliothèque Classinus sous le titre fourni."""
         try:
             resultat = _statut_video_higgsfield(request_id)
             if resultat.get("url"):
-                return f"Vidéo terminée : {resultat['url']}"
+                nom = (titre.strip() or f"Video_Higgsfield_{request_id}") + ".mp4"
+                _sauvegarder_generation_bibliotheque(ctx, resultat["url"], nom, "video/mp4")
+                return f"Vidéo terminée et enregistrée dans la bibliothèque : {resultat['url']}"
             return f"Statut Higgsfield : {resultat.get('statut', 'inconnu')}. Réessaie plus tard."
         except Exception as e:
             logging.error("ERREUR statut vidéo Higgsfield : %s", e)
