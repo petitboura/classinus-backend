@@ -115,6 +115,7 @@ def _obtenir_configuration(service):
     config = FOURNISSEURS.get(service)
     if not config:
         raise RuntimeError("Fournisseur MCP inconnu.")
+    resource = {}
     if config.get("authorization_endpoint") and config.get("token_endpoint"):
         metadata = {
             "issuer": config.get("issuer"),
@@ -129,7 +130,7 @@ def _obtenir_configuration(service):
         if not issuers:
             raise RuntimeError("Le serveur MCP n'annonce aucun serveur OAuth.")
         metadata = _metadata_authorization(issuers[0])
-    metadata["_resource"] = resource.get("resource", config["resource_url"]) if "resource" in locals() else config["resource_url"]
+    metadata["_resource"] = resource.get("resource", config["resource_url"])
     metadata["_config"] = config
     return metadata
 
@@ -334,14 +335,26 @@ def obtenir_token_valide(service, user_id):
     return token
 
 
-def est_connecte(service, user_id):
-    if service not in FOURNISSEURS or not user_id:
-        return False
+def _ligne_existe(service, user_id):
     result = (
         _supabase.table("platform_mcp_oauth_connections").select("user_id")
         .eq("user_id", user_id).eq("service", service).execute()
     )
     return bool(result.data)
+
+
+def est_connecte(service, user_id):
+    """True seulement si le jeton est utilisable (valide ou rafraichissable)."""
+    if service not in FOURNISSEURS or not user_id:
+        return False
+    return obtenir_token_valide(service, user_id) is not None
+
+
+def a_reconnecter(service, user_id):
+    """Connexion enregistree mais devenue inutilisable (jeton expire ou revoque)."""
+    if service not in FOURNISSEURS or not user_id:
+        return False
+    return _ligne_existe(service, user_id) and not est_connecte(service, user_id)
 
 
 def deconnecter(service, user_id):

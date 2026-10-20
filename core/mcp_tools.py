@@ -284,13 +284,17 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
             if outils_autorises is not None:
                 outils = [o for o in outils if o.name in outils_autorises]
 
+            # Prefixe du serveur (vercel_, railway_, supabase_, higgsfield_) : le nom
+            # expose au LLM est unique entre serveurs, le vrai nom est garde pour l'appel.
+            prefixe = serveur.get("prefixe_outils") or ""
+
             noms_outils = [o.name for o in outils]
             logging.info(f"MCP '{nom}' -> {len(outils)} outil(s) listé(s) : {noms_outils}")
             for outil in outils:
                 outils_pour_llm.append({
                     "type": "function",
                     "function": {
-                        "name": outil.name,
+                        "name": f"{prefixe}{outil.name}",
                         "description": outil.description or "",
                         # CORRECTION (29/07) : mcp 2.0.0 a renomme inputSchema en
                         # input_schema sur l'objet Tool retourne par list_tools() --
@@ -302,7 +306,10 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
                         "parameters": outil.input_schema,
                     },
                 })
-                table_routage[outil.name] = {"url": url, "headers": headers}
+                route = {"url": url, "headers": headers}
+                if prefixe:
+                    route["nom_reel"] = outil.name
+                table_routage[f"{prefixe}{outil.name}"] = route
         except Exception as e:
             logging.error(f"ERREUR MCP listing ({nom}): {e}")
 
@@ -400,7 +407,7 @@ def appeler_outil(nom_outil, arguments, table_routage):
         return f"Erreur : outil '{nom_outil}' inconnu."
     try:
         resultat = asyncio.run(
-            _appeler_outil_async(route["url"], nom_outil, arguments, route.get("headers"))
+            _appeler_outil_async(route["url"], route.get("nom_reel", nom_outil), arguments, route.get("headers"))
         )
         logging.info(f"Résultat outil '{nom_outil}' : {len(resultat or '')} caractères")
         return resultat

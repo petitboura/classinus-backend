@@ -49,12 +49,25 @@ def statut_connexion(service: str, utilisateur=Depends(utilisateur_courant)):
     if service == "higgsfield_mcp":
         return {"connecte": higgsfield_mcp.est_connecte(utilisateur.id)}
     if service in platform_mcp_oauth.FOURNISSEURS:
-        return {"connecte": platform_mcp_oauth.est_connecte(service, utilisateur.id)}
+        connecte = platform_mcp_oauth.est_connecte(service, utilisateur.id)
+        return {
+            "connecte": connecte,
+            "a_reconnecter": (not connecte) and platform_mcp_oauth.a_reconnecter(service, utilisateur.id),
+        }
     if service == "notion":
         return {"connecte": notion.est_connecte(utilisateur.id)}
     if service not in SERVICES:
         raise erreur_api(404, "SERVICE_INCONNU", service=service)
     return {"connecte": est_connecte(service, utilisateur.id)}
+
+
+@router.post("/{service}/deconnecter")
+def deconnecter_plateforme_mcp(service: str, utilisateur=Depends(utilisateur_courant)):
+    """Supprime la connexion personnelle Vercel, Railway ou Supabase de la personne connectee."""
+    if service not in platform_mcp_oauth.FOURNISSEURS:
+        raise erreur_api(404, "SERVICE_INCONNU", service=service)
+    platform_mcp_oauth.deconnecter(service, utilisateur.id)
+    return {"connecte": False}
 
 
 @router.get("/diagnostic/{service}")

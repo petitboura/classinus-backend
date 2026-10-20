@@ -634,6 +634,19 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
             logging.error(f"ERREUR SUPABASE (export {table} pour {user_id}) : {e}")
             export[cle_export] = {"erreur": "recuperation impossible, reessayer plus tard"}
 
+    # Connexions personnelles aux plateformes (Vercel, Railway, Supabase) :
+    # seulement le service et les dates, JAMAIS les jetons ni les secrets.
+    try:
+        res = (
+            supabase.table("platform_mcp_oauth_connections")
+            .select("service, created_at, updated_at, expires_at")
+            .eq("user_id", user_id).execute()
+        )
+        export["connexions_plateformes_mcp"] = res.data or []
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (export platform_mcp_oauth_connections pour {user_id}) : {e}")
+        export["connexions_plateformes_mcp"] = {"erreur": "recuperation impossible, reessayer plus tard"}
+
     # follows et messages_directs : deux colonnes possibles chacune (sens
     # de la relation), donc pas dans la boucle simple ci-dessus.
     try:

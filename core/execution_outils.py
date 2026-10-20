@@ -9,7 +9,7 @@ import re
 import concurrent.futures
 import requests
 from mcp_tools import appeler_outil
-from registre_outils import OUTILS_SENSIBLES
+from registre_outils import OUTILS_SENSIBLES, est_outil_sensible_serveur_personnel
 from profils_agents import _nom_lisible_appel, _action_appel
 
 class _AttenteConfirmation(Exception):
@@ -421,6 +421,8 @@ def _est_outil_sensible(appel):
       `action`, dont certaines actions sont sensibles et d'autres non).
     """
     if appel["name"] in OUTILS_SENSIBLES:
+        return True
+    if est_outil_sensible_serveur_personnel(appel["name"]):
         return True
     try:
         arguments = json.loads(appel["arguments"] or "{}")

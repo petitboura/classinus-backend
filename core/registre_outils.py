@@ -233,24 +233,36 @@ SERVEURS_MCP = [
         "url_builder": _url_higgsfield,
         "headers_builder": _headers_higgsfield,
         "necessite_utilisateur": True,
+        # Prefixe ajoute au nom de chaque outil de ce serveur (voir mcp_tools.py) :
+        # evite les collisions avec les autres serveurs et permet la categorie par prefixe.
+        "prefixe_outils": "higgsfield_",
     },
     {
         "nom": "vercel_mcp",
         "url_builder": _url_vercel_mcp,
         "headers_builder": _headers_vercel_mcp,
         "necessite_utilisateur": True,
+        # Prefixe ajoute au nom de chaque outil de ce serveur (voir mcp_tools.py) :
+        # evite les collisions avec les autres serveurs et permet la categorie par prefixe.
+        "prefixe_outils": "vercel_",
     },
     {
         "nom": "railway_mcp",
         "url_builder": _url_railway_mcp,
         "headers_builder": _headers_railway_mcp,
         "necessite_utilisateur": True,
+        # Prefixe ajoute au nom de chaque outil de ce serveur (voir mcp_tools.py) :
+        # evite les collisions avec les autres serveurs et permet la categorie par prefixe.
+        "prefixe_outils": "railway_",
     },
     {
         "nom": "supabase_mcp",
         "url_builder": _url_supabase_mcp,
         "headers_builder": _headers_supabase_mcp,
         "necessite_utilisateur": True,
+        # Prefixe ajoute au nom de chaque outil de ce serveur (voir mcp_tools.py) :
+        # evite les collisions avec les autres serveurs et permet la categorie par prefixe.
+        "prefixe_outils": "supabase_",
     },
     {
         "nom": "notion",
@@ -303,6 +315,51 @@ SERVEURS_MCP = [
         ],
     },
 ]
+
+# Serveurs MCP personnels dont les outils portent un prefixe (voir
+# "prefixe_outils" dans SERVEURS_MCP). Leur catalogue est trop grand et change
+# trop souvent pour une liste a la main : un outil de ces serveurs est
+# SENSIBLE (confirmation obligatoire) sauf s'il est reconnu en lecture seule.
+PREFIXES_SERVEURS_PERSONNELS = tuple(
+    s["prefixe_outils"] for s in SERVEURS_MCP if s.get("prefixe_outils")
+)
+
+# Premier mot du nom reel (tirets lus comme "_") d'un outil de lecture seule.
+VERBES_LECTURE_SERVEURS_PERSONNELS = {
+    "get", "list", "search", "fetch", "read", "describe", "whoami",
+    "aggregate", "count", "query", "domain", "environment", "http",
+}
+
+# Lectures seules dont le nom commence par "generate" (verbe volontairement
+# absent de la liste ci-dessus : "generate" cree souvent quelque chose, comme
+# la generation d'une video ou d'un domaine public).
+LECTURES_EXPLICITES_SERVEURS_PERSONNELS = {"generate_typescript_types", "generate_route"}
+
+# Outils en apparence de lecture mais qui exposent un secret (valeur de
+# variable, identifiants) ou fabriquent un acces : toujours confirmes.
+LECTURES_A_CONFIRMER_SERVEURS_PERSONNELS = {
+    "get_access_to_vercel_url", "web_fetch_vercel_url", "get_shared_env_var",
+    "get_project_env", "filter_project_envs", "get_bucket_credentials",
+    "list_variables", "get_edge_config_token", "get_edge_config_tokens",
+}
+
+
+def est_outil_sensible_serveur_personnel(nom_outil):
+    """
+    True si `nom_outil` (nom expose au LLM, prefixe compris) vient d'un
+    serveur personnel prefixe et n'est pas reconnu en lecture seule.
+    False pour tout autre outil (les autres suivent OUTILS_SENSIBLES).
+    """
+    for prefixe in PREFIXES_SERVEURS_PERSONNELS:
+        if nom_outil.startswith(prefixe):
+            reel = nom_outil[len(prefixe):].replace("-", "_")
+            if reel in LECTURES_A_CONFIRMER_SERVEURS_PERSONNELS:
+                return True
+            if reel in LECTURES_EXPLICITES_SERVEURS_PERSONNELS:
+                return False
+            return reel.split("_")[0] not in VERBES_LECTURE_SERVEURS_PERSONNELS
+    return False
+
 
 # Outils qui MODIFIENT reellement quelque chose chez l'utilisateur (creation,
 # edition, suppression, deplacement...). main.py interrompt le flux et
@@ -987,6 +1044,13 @@ CATEGORIES_OUTILS = {
 # figee (voir commentaire au-dessus de CATEGORIES_OUTILS).
 CATEGORIES_OUTILS_PAR_PREFIXE = {
     "notion": "notion-",
+    # Serveurs MCP personnels (20/10/2026) : le prefixe est AJOUTE par
+    # mcp_tools.py au nom reel de chaque outil (voir "prefixe_outils" dans
+    # SERVEURS_MCP), contrairement a "notion-" qui fait deja partie du nom.
+    "vercel": "vercel_",
+    "railway": "railway_",
+    "supabase": "supabase_",
+    "higgsfield": "higgsfield_",
 }
 
 NOMS_CATEGORIES_OUTILS = list(CATEGORIES_OUTILS.keys()) + list(CATEGORIES_OUTILS_PAR_PREFIXE.keys())
@@ -1011,7 +1075,9 @@ def _sources_documents_externes_pour_index():
 
 
 INDEX_CATEGORIES_OUTILS = (
-    "Catégories : notion, google_drive, github, generation_documents, "
+    "Catégories : notion, google_drive, github, vercel (sites et déploiements), "
+    "railway (services et logs), supabase (base de données et SQL), "
+    "higgsfield (génération d'images et de vidéos), generation_documents, "
     "recherche_web (web, actualité, images et vidéos ; pas le premier réflexe "
     "pour trouver un livre ou un PDF), bibliotheque (documents/dossiers "
     "personnels), catalogue_public, documents_externes (TOUT livre, manuel, PDF, "
