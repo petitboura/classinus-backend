@@ -9,6 +9,7 @@ from configuration import get_system_prompt
 from profils_agents import INSTRUCTIONS_FORMATS_AFFICHAGE, INSTRUCTIONS_ARBITRAGE_CALCUL, REGLE_CONTEXTE_INVISIBLE, REGLE_ETAT_APPLICATION_TAIRE, REGLE_VISION_ECRAN, REGLE_MEMOIRE_ELEVE, INSTRUCTIONS_LONGUEUR_REPONSE, MODES_PEDAGOGIQUES, REGLE_BASCULE_MODE_PEDAGOGIQUE, construire_instruction_guide, construire_instruction_guide_visuel, construire_instruction_demo, MODES_SOURCE
 from guide_conversation import obtenir_sections_guide
 from core.canal_agent_applicatif import obtenir_etat_editeur
+from core.origine_appareil import bloc_prompt_origine, lecture_ecran_pc_autorisee
 from historique_reponses_qcm import formater_reponses_qcm
 from core.configuration_etudiant import construire_bloc_configuration
 from core.memoire_eleve import construire_bloc_sommaire
@@ -21,7 +22,7 @@ import prompt_thonny
 LONGUEUR_MAX_LIGNE_ACTION = 240
 
 
-def _texte_actions_application(actions):
+def _texte_actions_application(actions, origine=None):
     """
     Agent applicatif (19/09/2026, decision Bourama : retrait de l'outil
     lister_actions_disponibles, le modele ne le demande plus). Texte injecte
@@ -69,6 +70,10 @@ def _texte_actions_application(actions):
         "t'est nécessaire. lire_page ne lit QUE la page Classinus : jamais une autre fenêtre ni une autre "
         "application. La superposition du canal ne constitue pas la page à lire. Si la lecture est coupée, "
         "ne devine pas la suite.\n\n"
+    ) + (
+        # Section réservée au PC (20/10/2026, demande de Bourama) : absente quand l'origine du message
+        # est connue et n'est pas l'appli PC. Origine inconnue : section présente comme avant.
+        (
         "## Agir sur le PC, en dehors de Classinus\n"
         "Ce qui est affiché dans les autres fenêtres du PC (Bloc-notes, navigateur, Word, jeu...) ne se lit "
         "qu'avec lire_ecran, qui ne lit QUE ces fenêtres externes et jamais la page Classinus. Les deux "
@@ -96,6 +101,8 @@ def _texte_actions_application(actions):
         "de la suite. Si l'écran ne montre pas l'effet attendu, regarde ce qui a changé avant de recliquer au "
         "même endroit.\n"
         "- Ne devine jamais des coordonnées : prends-les dans la dernière lecture.\n\n"
+        ) if lecture_ecran_pc_autorisee(origine) else ""
+    ) + (
         # 20/09/2026, demande Bourama : le modèle croyait que l'étudiant voit tout ce qu'il écrit,
         # alors que l'étudiant ne voit que la bulle affichée à l'instant.
         "## Ce que l'étudiant voit vraiment\n"
@@ -173,7 +180,7 @@ def _texte_editeur(etat):
         "- Les boutons de l'éditeur (Exécuter, Ouvrir, Enregistrer, Vers le chat, plein écran) sont dans la liste des éléments à l'écran.\n"
     )
 
-def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None, reponses_qcm_recentes=None, etat_editeur=None, configuration_etudiant=None, sommaire_memoire=None, client=None, libelles_client=None):
+def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None, reponses_qcm_recentes=None, etat_editeur=None, configuration_etudiant=None, sommaire_memoire=None, client=None, libelles_client=None, origine=None):
     # Restauré le 14/08 (voir commentaire des constantes plus haut) : la
     # page Notion de l'agent (get_system_prompt) ne doit plus contenir QUE
     # la personnalité/le comportement propre à l'agent -- les 3 blocs fixes
@@ -357,7 +364,7 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # en direct inactif, ou application ouverte nulle part) : rien n'est
     # injecte du tout.
     if actions_ecran and not client_thonny:
-        system_final += _texte_actions_application(actions_ecran)
+        system_final += _texte_actions_application(actions_ecran, origine)
 
     # Editeur de code (28/09/2026) : uniquement quand il est monte a
     # l'ecran chez l'etudiant. Independant de actions_ecran ci-dessus
@@ -590,6 +597,11 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     ]
     date_fr = f"{jours_fr[maintenant.weekday()]} {maintenant.day} {mois_fr[maintenant.month - 1]} {maintenant.year}, {maintenant.strftime('%H:%M')}"
     system_final += f"\n\nNous sommes le {date_fr} (fuseau : {fuseau.key if hasattr(fuseau, 'key') else 'UTC'})."
+
+    # Appareil utilisé pour ce message (20/10/2026, demande de Bourama) : en fin de prompt, avec les
+    # éléments qui changent à chaque message. Vide si l'origine est inconnue.
+    if not client_thonny:
+        system_final += bloc_prompt_origine(origine)
 
     logging.info(
         f"Prompt système construit -> base_notion:{len(system_final or '')} caractères, "
