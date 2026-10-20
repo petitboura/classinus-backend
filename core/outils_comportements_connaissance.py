@@ -8,9 +8,8 @@ déplacement de code.
 """
 
 import logging
-from urllib.parse import quote
 
-import requests
+from botocore.exceptions import ClientError
 
 from retriever import chercher_candidats as _chercher_candidats
 from contenu_dynamique_matiere import resoudre_system_prompt as _resoudre_system_prompt_matiere
@@ -35,14 +34,16 @@ from core.outils_generation_commun import (
     mcp_generation,
     Context,
     _supabase_memoire,
-    _SUPABASE_URL,
     TYPES_EMPLACEMENT_BIBLIOTHEQUE,
     _libelle_emplacement,
 )
+from core import stockage_r2
 
-# Espace de stockage Supabase des fichiers originaux des articles de la base
-# de connaissance (même nom que côté serveur public, core/serveur_mcp_espace.py).
-# Un fichier y est rangé sous <agent_id>/<nom de l'article>.
+# Fichiers originaux des articles de la base de connaissance. Correctif du
+# 20/10/2026 : ils ne sont plus dans Supabase Storage mais dans Cloudflare R2
+# (voir core/stockage_r2.py), servis par le backend (api/fichiers_r2.py). Un
+# fichier y est rangé sous le nom logique "documents-agents", puis
+# <agent_id>/<nom de l'article>.
 BUCKET_FICHIERS_CONNAISSANCE = "documents-agents"
 
 
@@ -373,7 +374,7 @@ def gerer_base_connaissance(
         # n'existait que sur le serveur public (clovis_obtenir_fichier_connaissance).
         # Différence voulue avec le serveur public : on vérifie que le fichier
         # existe vraiment avant de donner le lien, pour ne jamais renvoyer un
-        # lien mort à l'IA (l'espace de stockage peut être vide ou absent).
+        # lien mort à l'IA (le fichier peut ne pas avoir été déposé).
         try:
             res = (
                 _supabase_memoire.table("documents")
@@ -389,26 +390,37 @@ def gerer_base_connaissance(
         if not res.data:
             return f"Aucun article nommé '{nom}' trouvé dans la base de connaissances."
 
-        url = f"{_SUPABASE_URL}/storage/v1/object/public/{BUCKET_FICHIERS_CONNAISSANCE}/{quote(agent_id)}/{quote(nom)}"
+        indisponible = (
+            f"Le fichier original de l'article '{nom}' n'est pas disponible pour le moment. "
+            "Ne donne aucun lien. Si l'utilisateur veut son contenu, utilise l'action \"lire_article\"."
+        )
+        chemin_fichier = f"{agent_id}/{nom}"
         try:
-            # GET sans lire le contenu (stream=True) plutôt que HEAD : on ne
-            # veut que le code de réponse, et ça évite de dépendre du support
-            # de HEAD par l'espace de stockage.
-            reponse = requests.get(url, timeout=8, stream=True)
-            code = reponse.status_code
-            reponse.close()
-        except Exception as e:
-            logging.error(f"ERREUR gerer_base_connaissance (obtenir_fichier, vérification du fichier) : {e}")
+            # Même vérification que la route qui sert les fichiers (api/fichiers_r2.py) :
+            # si elle répond 404 pour ce chemin, le lien serait mort.
+            stockage_r2._client.head_object(
+                Bucket=stockage_r2.R2_BUCKET_NAME,
+                Key=stockage_r2._cle_objet(BUCKET_FICHIERS_CONNAISSANCE, chemin_fichier),
+            )
+        except ClientError as e:
+            code = str(e.response.get("Error", {}).get("Code", ""))
+            if code in ("404", "NoSuchKey", "NotFound"):
+                logging.warning(
+                    f"gerer_base_connaissance (obtenir_fichier) : fichier absent de R2 pour l'article "
+                    f"'{nom}' (agent_id={agent_id})."
+                )
+                return indisponible
+            logging.error(f"ERREUR gerer_base_connaissance (obtenir_fichier, vérification R2) : {e}")
             return "Erreur : la récupération du fichier a échoué, réessaie."
-        if code != 200:
-            logging.warning(
-                f"gerer_base_connaissance (obtenir_fichier) : fichier introuvable pour l'article "
-                f"'{nom}' (agent_id={agent_id}, code {code})."
-            )
-            return (
-                f"Le fichier original de l'article '{nom}' n'est pas disponible pour le moment. "
-                "Ne donne aucun lien. Si l'utilisateur veut son contenu, utilise l'action \"lire_article\"."
-            )
+        except Exception as e:
+            logging.error(f"ERREUR gerer_base_connaissance (obtenir_fichier, vérification R2) : {e}")
+            return "Erreur : la récupération du fichier a échoué, réessaie."
+
+        url = stockage_r2.from_(BUCKET_FICHIERS_CONNAISSANCE).get_public_url(chemin_fichier)
+        if not url.startswith("http"):
+            # Adresse de base du backend non configurée : un lien relatif ne servirait à rien à l'IA.
+            logging.error(f"ERREUR gerer_base_connaissance (obtenir_fichier) : lien sans adresse de base ({url}).")
+            return indisponible
         return f"Fichier : {url}"
 
     return (
