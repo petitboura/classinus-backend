@@ -9,8 +9,6 @@ déplacement de code.
 
 import logging
 
-from botocore.exceptions import ClientError
-
 from retriever import chercher_candidats as _chercher_candidats
 from contenu_dynamique_matiere import resoudre_system_prompt as _resoudre_system_prompt_matiere
 
@@ -37,14 +35,6 @@ from core.outils_generation_commun import (
     TYPES_EMPLACEMENT_BIBLIOTHEQUE,
     _libelle_emplacement,
 )
-from core import stockage_r2
-
-# Fichiers originaux des articles de la base de connaissance. Correctif du
-# 20/10/2026 : ils ne sont plus dans Supabase Storage mais dans Cloudflare R2
-# (voir core/stockage_r2.py), servis par le backend (api/fichiers_r2.py). Un
-# fichier y est rangé sous le nom logique "documents-agents", puis
-# <agent_id>/<nom de l'article>.
-BUCKET_FICHIERS_CONNAISSANCE = "documents-agents"
 
 
 
@@ -308,14 +298,6 @@ def gerer_base_connaissance(
       cette conversation (résultat toujours visible, marqué "[Résultat
       de l'outil déjà exécuté]"), ne le relis pas -- son contenu n'a pas
       changé entre deux messages. Paramètre : `nom`.
-    - "obtenir_fichier" : renvoie le lien du FICHIER original d'un article
-      (pas son texte recopié), identifié par son `nom` exact. À utiliser
-      quand l'utilisateur gagnerait à avoir le fichier lui même (procédure
-      à suivre pas à pas, contenu de référence à garder), pas seulement à
-      lire le texte (pour ça, "lire_article"). Si le fichier n'est pas
-      disponible, l'outil le dit : ne donne alors aucun lien et n'en
-      invente jamais un, propose plutôt de lire l'article. Si `nom` est
-      inconnu, utilise d'abord "lister_articles". Paramètre : `nom`.
     """
     requete = ctx.request_context.request
     agent_id = requete.query_params.get("agent_id")
@@ -367,65 +349,9 @@ def gerer_base_connaissance(
             logging.error(f"ERREUR gerer_base_connaissance (lire_article) : {e}")
             return "Erreur : la lecture de l'article a échoué, réessaie."
 
-    if action == "obtenir_fichier":
-        # Ajouté le 20/10/2026, demande Bourama ("il faut donner l'outil obtenir
-        # fichier aussi") : le prompt de l'IA (core/profils_agents.py, bloc
-        # base_connaissances_classinus) parlait déjà de cette action, qui
-        # n'existait que sur le serveur public (clovis_obtenir_fichier_connaissance).
-        # Différence voulue avec le serveur public : on vérifie que le fichier
-        # existe vraiment avant de donner le lien, pour ne jamais renvoyer un
-        # lien mort à l'IA (le fichier peut ne pas avoir été déposé).
-        try:
-            res = (
-                _supabase_memoire.table("documents")
-                .select("nom")
-                .eq("agent_id", agent_id)
-                .eq("nom", nom)
-                .limit(1)
-                .execute()
-            )
-        except Exception as e:
-            logging.error(f"ERREUR gerer_base_connaissance (obtenir_fichier, lecture article) : {e}")
-            return "Erreur : la récupération du fichier a échoué, réessaie."
-        if not res.data:
-            return f"Aucun article nommé '{nom}' trouvé dans la base de connaissances."
-
-        indisponible = (
-            f"Le fichier original de l'article '{nom}' n'est pas disponible pour le moment. "
-            "Ne donne aucun lien. Si l'utilisateur veut son contenu, utilise l'action \"lire_article\"."
-        )
-        chemin_fichier = f"{agent_id}/{nom}"
-        try:
-            # Même vérification que la route qui sert les fichiers (api/fichiers_r2.py) :
-            # si elle répond 404 pour ce chemin, le lien serait mort.
-            stockage_r2._client.head_object(
-                Bucket=stockage_r2.R2_BUCKET_NAME,
-                Key=stockage_r2._cle_objet(BUCKET_FICHIERS_CONNAISSANCE, chemin_fichier),
-            )
-        except ClientError as e:
-            code = str(e.response.get("Error", {}).get("Code", ""))
-            if code in ("404", "NoSuchKey", "NotFound"):
-                logging.warning(
-                    f"gerer_base_connaissance (obtenir_fichier) : fichier absent de R2 pour l'article "
-                    f"'{nom}' (agent_id={agent_id})."
-                )
-                return indisponible
-            logging.error(f"ERREUR gerer_base_connaissance (obtenir_fichier, vérification R2) : {e}")
-            return "Erreur : la récupération du fichier a échoué, réessaie."
-        except Exception as e:
-            logging.error(f"ERREUR gerer_base_connaissance (obtenir_fichier, vérification R2) : {e}")
-            return "Erreur : la récupération du fichier a échoué, réessaie."
-
-        url = stockage_r2.from_(BUCKET_FICHIERS_CONNAISSANCE).get_public_url(chemin_fichier)
-        if not url.startswith("http"):
-            # Adresse de base du backend non configurée : un lien relatif ne servirait à rien à l'IA.
-            logging.error(f"ERREUR gerer_base_connaissance (obtenir_fichier) : lien sans adresse de base ({url}).")
-            return indisponible
-        return f"Fichier : {url}"
-
     return (
         f"Erreur : action '{action}' inconnue. Actions valides : chercher, "
-        "lister_articles, lire_article, obtenir_fichier."
+        "lister_articles, lire_article."
     )
 
 
