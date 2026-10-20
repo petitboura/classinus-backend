@@ -65,6 +65,19 @@ class TestCategorieHiggsfield(unittest.TestCase):
         self.assertEqual(noms, ["higgsfield_generate_image", "lancer_video_higgsfield", "consulter_video_higgsfield"])
 
 
+class TestPrefixesPourLeFrontend(unittest.TestCase):
+    def test_le_registre_sert_le_prefixe_de_chaque_appli(self):
+        try:
+            from api import outils_registre
+        except Exception as erreur:
+            self.skipTest(f"api.outils_registre non importable ici : {erreur}")
+        prefixes = outils_registre.lister_registre_affichage_outils()["prefixes_applis"]
+        self.assertEqual(
+            prefixes,
+            {"higgsfield_mcp": "higgsfield_", "vercel_mcp": "vercel_", "railway_mcp": "railway_", "supabase_mcp": "supabase_"},
+        )
+
+
 class TestRegistreServeurs(unittest.TestCase):
     def test_aucun_serveur_declare_deux_fois(self):
         noms = [serveur["nom"] for serveur in r.SERVEURS_MCP]
