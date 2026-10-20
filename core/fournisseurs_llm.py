@@ -118,6 +118,17 @@ VARIABLES_CLE_PAR_DISTRIBUTEUR = {
 }
 
 
+def cle_api_du_distributeur(distributeur):
+    """
+    Clé API d'un fournisseur : le nom de la variable se règle dans Supabase (colonne
+    variable_cle_api de fournisseurs_llm), avec VARIABLES_CLE_PAR_DISTRIBUTEUR comme repli.
+    None si la variable n'est pas définie sur le serveur.
+    """
+    fournisseur = _config_modeles()["fournisseurs"].get(distributeur) or {}
+    variable = fournisseur.get("variable_cle_api") or VARIABLES_CLE_PAR_DISTRIBUTEUR.get(distributeur)
+    return get_secret(variable) if variable else None
+
+
 def _distributeur_disponible(distributeur, config=None):
     """
     Regle de cle API lue dans Supabase (table fournisseurs_llm) : si
@@ -281,6 +292,22 @@ def libelles_bientot():
     return dict(_config_modeles()["textes"].get("bientot") or LIBELLE_BIENTOT_DE_REPLI)
 
 
+def efforts_pour_modele(modele_id, distributeur):
+    try:
+        from efforts_modeles import efforts_pour_modele as _efforts
+    except ImportError:
+        from core.efforts_modeles import efforts_pour_modele as _efforts
+    return _efforts(modele_id, distributeur)
+
+
+def effort_defaut(efforts):
+    try:
+        from efforts_modeles import effort_defaut as _defaut
+    except ImportError:
+        from core.efforts_modeles import effort_defaut as _defaut
+    return _defaut(efforts)
+
+
 def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque):
     """
     Calcule la liste des modeles reellement choisissables pour un agent,
@@ -332,11 +359,17 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque):
             if info["id"] in ids_deja_vus:
                 continue
             ids_deja_vus.add(info["id"])
+            # Efforts de réflexion possibles pour ce modèle (20/10/2026, voir
+            # core/efforts_modeles.py) : le frontend n'affiche que ceux-là, et aucun réglage
+            # d'effort si la liste est vide.
+            efforts = efforts_pour_modele(info["id"], distributeur)
             resultats.append({
                 "modele_id": info["id"],
                 "label": info["label"],
                 "distributeur": distributeur,
                 "palier": palier,
+                "efforts": efforts,
+                "effort_defaut": effort_defaut(efforts),
             })
     return resultats
 

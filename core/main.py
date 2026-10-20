@@ -37,6 +37,7 @@ from mcp_tools import lister_outils_autorises_pour_agent, filtrer_catalogue_par_
 from registre_outils import CATEGORIES_OUTILS
 from fournisseurs_llm import generer_reponse_premium
 from identite_modele import message_systeme, systeme_avec_identite
+from clients_outils_llm import client_avec_outils, modele_a_des_outils
 
 # 05/09/2026 (demande Bourama) : main.py decoupe en plusieurs fichiers pour
 # ne plus avoir un seul fichier de presque 4000 lignes -- voir
@@ -144,6 +145,11 @@ def _client_pour_reprise(modele):
     client DeepSeek (même construction que dans chat(), plus bas) ; tout le
     reste = Groq, comme avant.
     """
+    # Claude, GPT, Gemini et Grok (20/10/2026) : le client avec outils du fournisseur, le même
+    # que celui qui a démarré le tour (voir core/clients_outils_llm.py).
+    client_fournisseur = client_avec_outils(modele)
+    if client_fournisseur:
+        return client_fournisseur
     if modele and str(modele).startswith("deepseek"):
         cle_deepseek = get_secret("DEEPSEEK_API_KEY")
         if cle_deepseek:
@@ -1201,7 +1207,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # recoit JAMAIS d'outils MCP (messages_premium les retire explicitement) :
     # aucun des 3 outils de gestion d'historique n'y est donc jamais vraiment
     # disponible, meme si outils_mcp les contient pour le calcul normal.
-    noms_outils_tour = set() if modele_force else {o["function"]["name"] for o in (outils_mcp or [])}
+    # Claude, GPT, Gemini et Grok reçoivent désormais les outils (20/10/2026) : seul un modèle
+    # premium resté en texte seul (clé absente) n'en a vraiment aucun.
+    noms_outils_tour = set() if (modele_force and not modele_a_des_outils(modele_force)) else {o["function"]["name"] for o in (outils_mcp or [])}
     if a_des_messages_allegers(historique_allege) and "rappeler_echange_conversation" not in noms_outils_tour:
         historique_pour_modele = historique
     else:
@@ -1475,9 +1483,14 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # dans le chat. Claude, GPT et Gemini gardent le chemin texte seul
         # ci-dessous, inchangé. Clé API absente : on retombe sur ce chemin
         # texte seul, comme avant.
+        # 20/10/2026 : Claude, GPT, Gemini et Grok passent aussi par cette boucle, avec le client
+        # de leur fournisseur (core/clients_outils_llm.py) ; clé absente : chemin texte seul.
         _cle_deepseek_choisi = get_secret("DEEPSEEK_API_KEY") if str(modele_force).startswith("deepseek") else None
         if _cle_deepseek_choisi:
             client_deepseek_choisi = OpenAI(api_key=_cle_deepseek_choisi, base_url="https://api.deepseek.com")
+        else:
+            client_deepseek_choisi = client_avec_outils(modele_force)
+        if client_deepseek_choisi:
             messages_agent = list(messages_base)
             # Identité de l'assistant (16/10/2026) : ce chemin a été ajouté le 15/10 sans le
             # bloc d'identité, DeepSeek choisi dans le sélecteur se disait donc Classinus.
