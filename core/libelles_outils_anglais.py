@@ -201,7 +201,7 @@ def _base_vers_anglais(texte: str) -> str:
     exact = STATUTS_EN.get(texte) or LIBELLES_OUTILS_EN.get(texte) or VERBES_STATUT_EN.get(texte)
     if exact:
         return exact
-    composite = re.fullmatch(r"(.+?)\\s+\\((.+)\\)", texte)
+    composite = re.fullmatch(r"(.+?)\s+\((.+)\)", texte)
     if composite:
         verbe, libelle = composite.groups()
         verbe_en = VERBES_STATUT_EN.get(verbe, verbe)
