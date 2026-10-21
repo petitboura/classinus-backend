@@ -312,7 +312,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
             evenement_affiche = evenement
             if langue_interface == "en" and isinstance(evenement, dict):
                 type_evenement = evenement.get("type")
-                if type_evenement in ("statut", "statut_termine", "outil_resultat"):
+                if type_evenement in ("statut", "statut_termine", "outil_resultat", "confirmation_requise"):
                     evenement_affiche = dict(evenement)
                     if isinstance(evenement_affiche.get("nom_lisible"), str):
                         evenement_affiche["nom_lisible"] = traduire_libelle_outil(
@@ -321,6 +321,19 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
                     if type_evenement in ("statut", "statut_termine"):
                         evenement_affiche["texte"] = traduire_libelle_outil(
                             evenement_affiche.get("texte")
+                        )
+                    elif type_evenement == "confirmation_requise":
+                        # Ne pas traduire le nom d'agent ni les arguments de l'action :
+                        # ce sont des données choisies par l'utilisateur.
+                        nom_agent = evenement_affiche.get("agent_nom")
+                        nom_agent_affiche = (
+                            nom_agent.strip()
+                            if isinstance(nom_agent, str) and nom_agent.strip()
+                            else "This agent"
+                        )
+                        libelle_action = str(evenement_affiche.get("nom_lisible") or "")
+                        evenement_affiche["message"] = (
+                            f"{nom_agent_affiche} wants to do this: {libelle_action.rstrip('.')}."
                         )
             yield f"data: {json.dumps(evenement_affiche)}\n\n"
     except Exception as e:
