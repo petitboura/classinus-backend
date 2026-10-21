@@ -14,6 +14,8 @@ import importlib.util
 import json
 import logging
 import mimetypes
+import re
+import unicodedata
 import os
 import secrets
 import shutil
@@ -223,6 +225,72 @@ def _description(tool: Any) -> str:
     return str(getattr(tool, "description", None) or getattr(tool, "__doc__", None) or "").strip()
 
 
+def _normaliser_termes_video(texte: str) -> list[str]:
+    normalise = unicodedata.normalize("NFKD", (texte or "").casefold())
+    sans_accents = "".join(char for char in normalise if not unicodedata.combining(char))
+    return [terme for terme in re.split(r"[^a-z0-9_]+", sans_accents) if terme]
+
+
+_SYNONYMES_RECHERCHE_VIDEO = {
+    "couper": ("trim", "cut", "clip"),
+    "coupe": ("trim", "cut", "clip"),
+    "decouper": ("trim", "cut", "clip"),
+    "raccourcir": ("trim", "cut", "duration"),
+    "assembler": ("merge", "concat", "join"),
+    "fusionner": ("merge", "concat", "join"),
+    "recoller": ("merge", "concat", "join"),
+    "sous titre": ("subtitle", "subtitles", "caption", "captions"),
+    "sous titrage": ("subtitle", "subtitles", "caption"),
+    "transcrire": ("transcribe", "transcript", "speech"),
+    "transcription": ("transcribe", "transcript", "speech"),
+    "paroles": ("transcribe", "speech", "audio"),
+    "recadrer": ("crop", "resize"),
+    "recadrage": ("crop", "resize"),
+    "rogner": ("crop", "trim"),
+    "zoomer": ("zoom", "crop", "resize"),
+    "zone": ("crop", "mask", "overlay"),
+    "flou": ("blur", "mask"),
+    "masquer": ("mask", "blur", "overlay"),
+    "couleur": ("color", "colour", "grade"),
+    "luminosite": ("brightness", "color", "grade"),
+    "contraste": ("contrast", "color", "grade"),
+    "titre": ("text", "title", "subtitle", "caption"),
+    "texte": ("text", "title", "caption"),
+    "legende": ("caption", "subtitle", "text"),
+    "animation": ("animation", "mograph", "remotion"),
+    "graphique": ("motion", "mograph", "remotion"),
+    "transition": ("transition", "fade", "glitch"),
+    "fondu": ("fade", "transition"),
+    "ralentir": ("speed", "slow", "slow_motion"),
+    "accelerer": ("speed", "fast"),
+    "vitesse": ("speed", "slow_motion"),
+    "qualite": ("quality", "design", "analyze"),
+    "analyser": ("analyze", "metadata", "quality", "scene"),
+    "analyse": ("analyze", "metadata", "quality", "scene"),
+    "resolution": ("resolution", "resize", "upscale"),
+    "nettoyer": ("remove_silence", "denoise", "audio", "quality"),
+    "silence": ("remove_silence", "silence", "audio"),
+    "bruit": ("noise", "denoise", "audio"),
+    "son": ("audio", "sound", "music"),
+    "voix": ("voice", "speech", "audio"),
+    "exporter": ("export", "render"),
+    "export": ("export", "render"),
+    "rendu": ("render", "remotion", "export"),
+    "remotion": ("remotion", "render", "mograph"),
+}
+
+
+def _termes_recherche_video(recherche: str) -> list[str]:
+    termes = set(_normaliser_termes_video(recherche))
+    normalisee = " ".join(_normaliser_termes_video(recherche))
+    # Les termes anglais recherchés sont des synonymes de capacité, pas des
+    # outils forcés : Clovis choisit toujours le nom exact après découverte.
+    for expression, synonymes in _SYNONYMES_RECHERCHE_VIDEO.items():
+        if expression in normalisee:
+            termes.update(_normaliser_termes_video(" ".join(synonymes)))
+    return sorted(termes)
+
+
 @mcp_video.tool()
 def video_lister_outils(ctx: Context, recherche: str = "") -> dict[str, Any]:
     """Découvre les capacités vidéo disponibles (montage, audio, effets, analyse, Remotion).
@@ -253,11 +321,11 @@ def video_lister_outils(ctx: Context, recherche: str = "") -> dict[str, Any]:
     if not query:
         return {"success": True, "total_outils": len(tools), "categories": categories,
                 "consigne": "Utilise recherche pour obtenir les outils et leurs schémas adaptés à la demande."}
-    tokens = [word for word in query.split() if word]
+    tokens = _termes_recherche_video(query)
     hits = []
     for name, tool in tools.items():
-        text = f"{name} {_description(tool)}".lower()
-        score = sum(1 for token in tokens if token in text)
+        description = " ".join(_normaliser_termes_video(f"{name} {_description(tool)}"))
+        score = sum(1 for token in tokens if token in description)
         if score:
             hits.append((score, name, tool))
     hits.sort(key=lambda item: (-item[0], item[1]))
