@@ -164,6 +164,17 @@ class TestLocalisation(unittest.TestCase):
         texte = "Le résultat du document utilisateur."
         self.assertEqual(traduire_libelle_outil(texte), texte)
 
+    def test_ancien_detail_texte_catalogue_est_traduit(self):
+        enveloppe = {"detail": MESSAGES_FR["CET_AGENT_NE_T_APPARTIENT_PAS"]}
+        self.assertTrue(_traduire_enveloppe(enveloppe))
+        self.assertEqual(enveloppe["detail"], MESSAGES_EN["CET_AGENT_NE_T_APPARTIENT_PAS"])
+
+    def test_ancien_detail_texte_personnalise_est_preserve(self):
+        enveloppe = {"detail": "Ce message est propre à cette route."}
+        avant = dict(enveloppe)
+        self.assertFalse(_traduire_enveloppe(enveloppe))
+        self.assertEqual(enveloppe, avant)
+
     def test_code_inconnu_est_inchange(self):
         enveloppe = {"detail": {"code": "CODE_INCONNU", "message": "message français"}}
         avant = {"detail": dict(enveloppe["detail"])}
