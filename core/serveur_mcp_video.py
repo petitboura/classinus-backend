@@ -442,7 +442,11 @@ def _publier_sorties(paths: list[Path], user_id: str) -> list[dict[str, str]]:
             user_key = hashlib.sha256(user_id.encode("utf-8")).hexdigest()[:20]
             key = f"montages-video/{user_key}/{uuid.uuid4().hex}-{path.name}"
             bucket = stockage_r2.from_("images-publiques")
-            bucket.upload(key, path.read_bytes(), {"content-type": mime})
+            # Ne pas charger un rendu MP4 complet en RAM : Remotion et les
+            # rendus longs peuvent produire des fichiers bien plus lourds
+            # que les uploads d'entrée du chat.
+            with path.open("rb") as contenu:
+                bucket.upload(key, contenu, {"content-type": mime})
             publiees.append({"nom": path.name, "url": bucket.get_public_url(key), "type_mime": mime})
         except Exception:
             logging.exception("Publication R2 échouée pour une sortie vidéo.")
