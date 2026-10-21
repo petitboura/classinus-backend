@@ -41,20 +41,25 @@ def _traduire_enveloppe(erreur: Any) -> bool:
     if not isinstance(code, str):
         return False
     modele = MESSAGES_EN.get(code)
-    modele_fr = MESSAGES_FR.get(code)
-    if not modele or not modele_fr:
+    if not modele:
         return False
+    modele_fr = MESSAGES_FR.get(code)
     parametres = detail.get("params")
     try:
-        message_fr_attendu = (
-            modele_fr.format(**parametres) if isinstance(parametres, dict) else modele_fr
-        )
         message_en = modele.format(**parametres) if isinstance(parametres, dict) else modele
+        if modele_fr:
+            message_fr_attendu = (
+                modele_fr.format(**parametres) if isinstance(parametres, dict) else modele_fr
+            )
+        else:
+            # Les routes historiques sans entrée française dans le catalogue
+            # gardent leur repli français générique ; seule cette valeur précise
+            # peut être remplacée, jamais un message personnalisé.
+            message_fr_attendu = MESSAGES_FR["ERREUR_INCONNUE"]
     except (KeyError, IndexError, ValueError):
         # Une traduction mal paramétrée ne doit jamais casser une réponse API.
         return False
-    # Ne remplace pas un message métier explicitement fourni par un appelant :
-    # seules les erreurs fondées sur le catalogue stable sont traduites.
+    # Ne remplace pas un message métier explicitement fourni par un appelant.
     if detail.get("message") != message_fr_attendu:
         return False
     detail["message"] = message_en
