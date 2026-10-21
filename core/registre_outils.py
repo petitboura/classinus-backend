@@ -68,6 +68,21 @@ def _url_generation(get_secret, user_id, agent_id, conversation_id=None):
     return url
 
 
+def _url_video(get_secret, user_id, agent_id, conversation_id=None):
+    # Serveur dédié au montage vidéo (core/serveur_mcp_video.py).
+    # Il n'est interrogé que sur les tours où un contexte vidéo est fourni.
+    port = os.environ.get("PORT", "8000")
+    from urllib.parse import urlencode
+    params = urlencode({"user_id": user_id or "", "conversation_id": conversation_id or ""})
+    return f"http://localhost:{port}/mcp/video?{params}"
+
+
+def _headers_video(get_secret, user_id, agent_id):
+    # Jeton serveur-à-serveur : aucune clé ne passe dans l'URL.
+    secret = get_secret("SUPABASE_SECRET")
+    return {"Authorization": f"Bearer {secret}"} if secret else None
+
+
 def _url_github(get_secret, user_id, agent_id, conversation_id=None):
     # Même logique que _url_generation ci-dessus -- serveur MCP interne
     # (core/serveur_mcp_github.py), pas un tiers externe.
@@ -226,6 +241,14 @@ SERVEURS_MCP = [
         # _outils_generation_actifs_pour_agent. Ce serveur est TOUJOURS
         # interroge (voir lister_tous_les_outils), contrairement a
         # wolfram/github/notion qui dependent de agents_serveurs.
+    },
+    {
+        "nom": "video",
+        "url_builder": _url_video,
+        "headers_builder": _headers_video,
+        "necessite_utilisateur": True,
+        # Activé uniquement quand l'API chat reçoit un contexte vidéo validé.
+        # Ne pas ajouter ce serveur au menu d'outils manuel.
     },
     {
         "nom": "github",
