@@ -167,6 +167,31 @@ def _texte_a_enregistrer(message_utilisateur, message_enregistre):
     return message_enregistre if message_enregistre else message_utilisateur
 
 
+INSTRUCTION_LANGUE_EN = (
+    "LANGUAGE REQUIREMENT: Unless the user explicitly asks for another language, "
+    "write all natural-language responses in clear, idiomatic English. This includes explanations, "
+    "teaching, tool progress updates, summaries, follow-up questions, and user-facing labels in generated output. "
+    "Preserve code, identifiers, quotations, source titles, and requested target languages where appropriate. "
+    "Do not translate content written by the user or stored documents; answer in English."
+)
+
+
+def _messages_agent_avec_locale(messages_agent, langue_interface):
+    """Apply the current UI language to a resumed turn without changing saved state."""
+    messages = [dict(message) for message in messages_agent]
+    for message in messages:
+        if message.get("role") != "system" or not isinstance(message.get("content"), str):
+            continue
+        contenu = message["content"].replace("\n\n" + INSTRUCTION_LANGUE_EN, "")
+        if langue_interface == "en" and INSTRUCTION_LANGUE_EN not in contenu:
+            contenu = contenu.rstrip() + "\n\n" + INSTRUCTION_LANGUE_EN
+        message["content"] = contenu
+        return messages
+    if langue_interface == "en":
+        messages.insert(0, {"role": "system", "content": INSTRUCTION_LANGUE_EN})
+    return messages
+
+
 def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None, effort_reflexion=None, arret_tour=None, message_enregistre=None, client=None, libelles_client=None, origine=None, langue_interface="fr"):
     """
     Generateur d'evenements. Chaque element produit est un dictionnaire :
@@ -382,7 +407,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # modele de decider quoi en faire (continuer, s'arreter,
         # s'ajuster), pas au frontend de trancher en amont.
         etat = reprise["etat_reprise"]
-        messages_agent = etat["messages_agent"]
+        messages_agent = _messages_agent_avec_locale(etat["messages_agent"], langue_interface)
         outils_mcp = etat["outils_mcp"]
         table_routage = etat["table_routage"]
         modele_reprise = etat.get("modele", GROQ_PRIMARY)
@@ -411,7 +436,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     if reprise is not None:
         etat = reprise["etat_reprise"]
         approuve = reprise["approuve"]
-        messages_agent = etat["messages_agent"]
+        messages_agent = _messages_agent_avec_locale(etat["messages_agent"], langue_interface)
         outils_mcp = etat["outils_mcp"]
         table_routage = etat["table_routage"]
         appel = etat["appel"]
