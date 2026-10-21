@@ -1015,7 +1015,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # renvoye avec le reste -- reutilise plus bas pour
             # demander_outils au lieu d'etre redemande.
             outil_force_contexte_seul = _fusionner_outils(None, outils_forces_contexte + outils_retenus_precedents)
-            catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id, origine=origine)
+            catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id, origine=origine, contexte_video=bool(contexte_video))
             if canal_en_direct and user_id and lecture_ecran_pc_autorisee(origine):
                 lecture_ecran_anticipee.append(lancer_lecture_anticipee(user_id, conversation_id, table_routage_complet))
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force_contexte_seul)
@@ -1136,7 +1136,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # FOIS ici, reutilise plus bas pour demander_outils au lieu
             # d'etre redemande (11/09/2026, meme correctif que la branche
             # routeur juste au-dessus).
-            catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id, origine=origine)
+            catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id, origine=origine, contexte_video=bool(contexte_video))
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force)
             outil_force_verifie = [o["function"]["name"] for o in outils_mcp] if outil_force else outil_force
         system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire, client=client, libelles_client=libelles_client, origine=origine)
