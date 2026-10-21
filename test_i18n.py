@@ -5,6 +5,7 @@ import unittest
 
 from core.erreurs import MESSAGES_EN, MESSAGES_FR
 from core.localisation import MiddlewareLangueErreurs, _prefer_anglais, _traduire_enveloppe
+from core.libelles_outils_anglais import traduire_libelle_outil
 
 
 class TestLocalisation(unittest.TestCase):
@@ -142,6 +143,26 @@ class TestLocalisation(unittest.TestCase):
         avant = {"detail": dict(enveloppe["detail"])}
         self.assertFalse(_traduire_enveloppe(enveloppe))
         self.assertEqual(enveloppe, avant)
+
+    def test_libelle_outil_est_traduit(self):
+        self.assertEqual(traduire_libelle_outil("Recherche web"), "Web search")
+
+    def test_statut_dynamique_est_traduit(self):
+        self.assertEqual(traduire_libelle_outil("Recherche web..."), "Web search...")
+        self.assertEqual(
+            traduire_libelle_outil("Recherche (Ma bibliothèque) effectuée"),
+            "Search (My library) completed",
+        )
+
+    def test_statuts_de_lecture_image_sont_traduits(self):
+        self.assertEqual(
+            traduire_libelle_outil("Lecture de l'image a échoué"),
+            "Image reading failed",
+        )
+
+    def test_texte_non_reconnu_reste_inchange(self):
+        texte = "Le résultat du document utilisateur."
+        self.assertEqual(traduire_libelle_outil(texte), texte)
 
     def test_code_inconnu_est_inchange(self):
         enveloppe = {"detail": {"code": "CODE_INCONNU", "message": "message français"}}
