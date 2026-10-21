@@ -311,7 +311,8 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
             yield f"data: {json.dumps(evenement)}\n\n"
     except Exception as e:
         logging.error(f"ERREUR chat() en streaming (agent_id={payload.agent_id}) : {e}")
-        yield f"data: {json.dumps({'type': 'reponse', 'texte': 'Une erreur est survenue, réessaie dans un instant.'})}\n\n"
+        texte_erreur = "Something went wrong. Please try again shortly." if langue_interface == "en" else "Une erreur est survenue, réessaie dans un instant."
+        yield f"data: {json.dumps({'type': 'reponse', 'texte': texte_erreur})}\n\n"
     finally:
         fermer_arret(arret)
         if user_id:
@@ -380,7 +381,7 @@ def envoyer_message(request: Request, payload: EnvoyerMessagePayload, utilisateu
     if user_id and acces_chat_bloque_pour_mineur(user_id):
         return StreamingResponse(
             _evenement_bloque(
-                "L'accès au chat est réservé aux comptes mineurs ayant reçu un code de leur professeur ou établissement. Entre un code dans \"Mon espace\" pour continuer."
+                ("Chat access is reserved for minor accounts that have received a code from their teacher or institution. Enter a code in \\"My space\\" to continue." if langue_interface == "en" else "L'accès au chat est réservé aux comptes mineurs ayant reçu un code de leur professeur ou établissement. Entre un code dans \"Mon espace\" pour continuer."),
             ),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
