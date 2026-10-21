@@ -167,7 +167,7 @@ def _texte_a_enregistrer(message_utilisateur, message_enregistre):
     return message_enregistre if message_enregistre else message_utilisateur
 
 
-def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None, effort_reflexion=None, arret_tour=None, message_enregistre=None, client=None, libelles_client=None, origine=None):
+def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None, effort_reflexion=None, arret_tour=None, message_enregistre=None, client=None, libelles_client=None, origine=None, contexte_video=None):
     """
     Generateur d'evenements. Chaque element produit est un dictionnaire :
     - {"type": "statut", "texte": "..."}         -> un outil MCP est en cours d'utilisation (ou, depuis le 11/09/2026, Gemini en train de lire une image/video jointe)
@@ -356,6 +356,41 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     avant, il recoit la description au lieu de recevoir l'image elle-meme
     (generer_reponse_premium ne fait pas de vision).
     """
+    # Atelier de montage vidéo : le routeur HTTP a déjà vérifié la propriété
+    # du fichier dans l'espace de cette conversation. Le chemin reste relatif
+    # et sera revalidé par la passerelle MCP avant chaque opération.
+    if contexte_video:
+        source_relative = str(contexte_video.get("source_path") or "").replace("\\", "/")
+        segments_source = source_relative.split("/")
+        if len(segments_source) != 2 or segments_source[0] != "uploads" or any(p in ("", ".", "..") for p in segments_source):
+            yield {"type": "reponse", "texte": "La source vidéo n'est plus disponible dans cette conversation. Réimporte-la pour continuer."}
+            return
+        if not message_enregistre:
+            message_enregistre = message_utilisateur
+        details_video = [
+            "[CONTEXTE ATELIER VIDÉO — SOURCE ET SÉLECTION VALIDÉES]",
+            f"Fichier source (lecture seule) : {source_relative}",
+            f"Nom : {contexte_video.get('nom_fichier') or 'vidéo'}",
+            f"Durée : {float(contexte_video.get('duree_secondes') or 0):.3f} secondes",
+        ]
+        debut_video = contexte_video.get("debut")
+        fin_video = contexte_video.get("fin")
+        if debut_video is not None and fin_video is not None:
+            details_video.append(f"Intervalle demandé : {float(debut_video):.3f}s à {float(fin_video):.3f}s.")
+        zone_video = contexte_video.get("zone")
+        if isinstance(zone_video, dict):
+            details_video.append(
+                "Zone demandée, coordonnées normalisées entre 0 et 1 "
+                "(x, y, largeur, hauteur) : " + json.dumps(zone_video, ensure_ascii=False)
+                + ". Lis la résolution de la vidéo avant de convertir cette zone en pixels."
+            )
+        details_video.extend([
+            "Utilise video_lister_outils pour trouver les capacités pertinentes, puis video_executer_outil pour les exécuter.",
+            "Le chemin source est en lecture seule : ne l'utilise jamais comme chemin de sortie. Écris chaque résultat dans outputs/ (ou un projet Remotion sous projects/) pour conserver l'original.",
+            "Les outils publient les résultats accessibles et renvoient leurs liens de téléchargement. Donne à l'utilisateur le résultat réellement produit et signale toute dépendance ou étape impossible.",
+        ])
+        message_utilisateur = (message_utilisateur or "Modifie la vidéo selon ma sélection.") + "\n\n" + "\n".join(details_video)
+
     # Correctif 12/09/2026 (Bourama) : fusion de image_url (singulier,
     # historique) et image_urls (liste, ce que ChatIA.tsx envoie reellement
     # depuis le support multi-fichiers du 17/08) en une seule liste
@@ -742,6 +777,8 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     mes_programmes = []
     reponses_qcm_recentes = reponses_qcm_a_injecter(historique, conversation_id)
     outils_forces_contexte = []
+    if contexte_video:
+        outils_forces_contexte.extend(["video_lister_outils", "video_executer_outil"])
     if comportements_etudiant:
         outils_forces_contexte.append("gerer_comportement")
     if code_id_actif:
@@ -943,9 +980,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     #   où ça ne change rien).
     outils_suggeres = []
     routeur_auto = False
-    if not ROUTEUR_OUTILS_AUTO_DESACTIVE and not outil_force and not ignorer_suggestion_outils and message_utilisateur and not toutes_les_urls_images and not images_base64:
+    if not contexte_video and not ROUTEUR_OUTILS_AUTO_DESACTIVE and not outil_force and not ignorer_suggestion_outils and message_utilisateur and not toutes_les_urls_images and not images_base64:
         def _tache_routeur():
-            outils_disponibles_agent, _ = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id, origine=origine)
+            outils_disponibles_agent, _ = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id, origine=origine, contexte_video=bool(contexte_video))
             # Notion + GitHub exclus du CATALOGUE envoyé au routeur automatique
             # (14/08, demande Bourama : "enlève le catalogue que ce ne soit
             # plus suggéré, comme s'il ne fonctionne plus"). Ces deux serveurs
