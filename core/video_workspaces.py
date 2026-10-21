@@ -177,6 +177,7 @@ def chemin_video(user_id: str, conversation_id: str, video_id: str) -> Path:
         from core import stockage_r2
 
         contenu = stockage_r2.from_("images-publiques").download(cle_source)
+        chemin.parent.mkdir(parents=True, exist_ok=True)
         temporaire = chemin.with_suffix(chemin.suffix + ".part")
         temporaire.write_bytes(contenu)
         temporaire.replace(chemin)
