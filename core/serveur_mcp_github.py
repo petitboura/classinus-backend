@@ -28,7 +28,7 @@ Un seul outil (consolidé le 26/08, ex 3 outils séparés) :
 import logging
 
 import requests
-from mcp.server.mcpserver import MCPServer as FastMCP
+from mcp.server.mcpserver import MCPServer as FastMCP, Context
 
 from connexions.oauth_generique import obtenir_token_valide
 from core.github_actions_etendues import ACTIONS_ETENDUES, executer_action_etendue
@@ -55,6 +55,25 @@ def _token_lecture(user_id):
     return token_utilisateur or _get_secret("GITHUB_TOKEN")
 
 
+def _user_id_depuis_adresse(ctx):
+    """
+    Identité de la personne connectée, lue dans l'adresse d'appel que le serveur
+    pose lui-même (voir _url_github dans registre_outils.py), exactement comme
+    les autres outils internes. Elle ne vient JAMAIS du modèle : sinon il
+    pourrait agir avec le compte GitHub d'une autre personne, et sans elle
+    (21/10/2026, demande de Bourama) l'outil répondait toujours "aucune
+    personne connectée", même compte GitHub bien relié.
+    Renvoie "" si personne n'est connecté.
+    """
+    try:
+        valeur = ctx.request_context.request.query_params.get("user_id")
+    except Exception:
+        return ""
+    if not valeur or valeur in ("None", "null"):
+        return ""
+    return valeur
+
+
 @mcp_github.tool()
 def gerer_depot_github(
     action: str,
@@ -78,6 +97,7 @@ def gerer_depot_github(
     methode_fusion: str = "merge",
     prive: bool = True,
     nom: str = "",
+    ctx: Context = None,
 ) -> str:
     """
     Explore et modifie un dépôt GitHub, public ou privé (si la personne
@@ -164,6 +184,10 @@ def gerer_depot_github(
       défaut, sans `repo`).
     - "relancer_ci" (`numero` = identifiant du test donné par etat_ci).
     """
+    # Le paramètre `user_id` reste dans la signature par compatibilité, mais sa
+    # valeur est toujours remplacée par celle de l'adresse d'appel.
+    user_id = _user_id_depuis_adresse(ctx)
+
     if action == "explorer":
         token = _token_lecture(user_id or None)
         headers = {"Authorization": f"Bearer {token}"} if token else {}

@@ -71,8 +71,16 @@ def _url_generation(get_secret, user_id, agent_id, conversation_id=None):
 def _url_github(get_secret, user_id, agent_id, conversation_id=None):
     # Même logique que _url_generation ci-dessus -- serveur MCP interne
     # (core/serveur_mcp_github.py), pas un tiers externe.
+    #
+    # 21/10/2026 (demande de Bourama) : user_id ajouté en paramètre d'adresse,
+    # comme pour _url_generation. Avant, l'outil ne savait jamais QUI l'appelait
+    # et répondait "aucune personne connectée" pour toute action sur le compte
+    # (mes dépôts, issues, écriture), même avec GitHub bien relié.
     port = os.environ.get("PORT", "8000")
-    return f"http://localhost:{port}/mcp/github"
+    url = f"http://localhost:{port}/mcp/github"
+    if user_id:
+        url += f"?user_id={user_id}"
+    return url
 
 
 def _url_tavily(get_secret, user_id, agent_id, conversation_id=None):
