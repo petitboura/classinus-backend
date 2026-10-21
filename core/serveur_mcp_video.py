@@ -142,7 +142,7 @@ mcp_video = FastMCP(name="classinus-video")
 PATH_KEYS = {
     "input_path", "video_path", "audio_path", "image_path", "mask_path",
     "subtitle_path", "subtitle_file", "project_path", "project_dir",
-    "font_path", "file_path", "source_path", "input", "video", "audio",
+    "font_path", "file_path", "source_path", "input", "inputs", "video", "audio",
     "image", "clips", "images", "paths", "output_path", "output_dir",
 }
 EXTENSIONS_IMAGES = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
