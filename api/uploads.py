@@ -646,6 +646,7 @@ async def uploader_video_espace(
             nom=fichier.filename or f"video.{extension}",
             mime=fichier.content_type,
             contenu=contenu,
+            duree_secondes=duree,
         )
         enregistrement["source_path"] = f"uploads/{enregistrement['video_id']}.{extension}"
         enregistrement["duree_secondes"] = round(duree, 3)
