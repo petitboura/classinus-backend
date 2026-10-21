@@ -31,10 +31,107 @@ from core.video_workspaces import (
     workspace_dir,
 )
 
+def _installer_compat_fastmcp():
+    """Adapte uniquement les décorateurs amont, sans remplacer le MCP 2.0 du backend.
+
+    mcp-video 1.2.1 utilise mcp.server.fastmcp, absent de la version MCP 2.0
+    déjà utilisée par Classinus. On ne sert pas ce FastMCP amont directement :
+    on collecte ses fonctions et leurs schémas pour les exécuter derrière la
+    passerelle sécurisée Classinus. Le serveur HTTP reste le MCPServer du
+    backend, sans rétrograder la dépendance globale.
+    """
+    try:
+        importlib.import_module("mcp.server.fastmcp")
+        return
+    except ModuleNotFoundError:
+        pass
+
+    import sys
+    import types
+    from typing import get_type_hints
+    from pydantic import create_model
+
+    class _OutilCompat:
+        def __init__(self, fonction, nom: str | None = None, description: str | None = None):
+            self.fn = fonction
+            self.name = nom or fonction.__name__
+            self.description = (description or fonction.__doc__ or "").strip()
+            self.parameters = self._creer_schema(fonction)
+            self.inputSchema = self.parameters
+
+        @staticmethod
+        def _creer_schema(fonction) -> dict:
+            try:
+                annotations = get_type_hints(fonction, include_extras=True)
+            except Exception:
+                annotations = {}
+            champs = {}
+            for parametre in inspect.signature(fonction).parameters.values():
+                if parametre.name in {"ctx", "context"} or parametre.kind in {
+                    inspect.Parameter.VAR_POSITIONAL,
+                    inspect.Parameter.VAR_KEYWORD,
+                }:
+                    continue
+                annotation = annotations.get(parametre.name, parametre.annotation)
+                if annotation is inspect.Parameter.empty or isinstance(annotation, str):
+                    annotation = Any
+                defaut = ... if parametre.default is inspect.Parameter.empty else parametre.default
+                champs[parametre.name] = (annotation, defaut)
+            modele = create_model(f"{fonction.__name__.title().replace('_', '')}Arguments", **champs)
+            return modele.model_json_schema()
+
+    class _GestionnaireOutilsCompat:
+        def __init__(self):
+            self._tools: dict[str, _OutilCompat] = {}
+
+    class _FastMCPCompat:
+        def __init__(self, name: str, **kwargs):
+            self.name = name
+            self.instructions = kwargs.get("instructions")
+            self._tool_manager = _GestionnaireOutilsCompat()
+
+        def tool(self, name: str | None = None, description: str | None = None, **kwargs):
+            # Supporte @mcp.tool et @mcp.tool() ; mcp-video utilise surtout
+            # la seconde forme, mais cette compatibilité couvre les deux.
+            if callable(name):
+                fonction = name
+                self._tool_manager._tools[fonction.__name__] = _OutilCompat(fonction, description=description)
+                return fonction
+
+            def enregistrer(fonction):
+                outil = _OutilCompat(fonction, nom=name, description=description)
+                self._tool_manager._tools[outil.name] = outil
+                return fonction
+            return enregistrer
+
+        def resource(self, *args, **kwargs):
+            # Les resources amont ne sont pas exposées par l'atelier Classinus ;
+            # on préserve l'import des modules sans enregistrer d'endpoint amont.
+            def decorateur(fonction):
+                return fonction
+            if args and callable(args[0]) and len(args) == 1:
+                return args[0]
+            return decorateur
+
+        def prompt(self, *args, **kwargs):
+            return self.resource(*args, **kwargs)
+
+    module_compat = types.ModuleType("mcp.server.fastmcp")
+    module_compat.FastMCP = _FastMCPCompat
+    module_compat.__all__ = ["FastMCP"]
+    sys.modules["mcp.server.fastmcp"] = module_compat
+    serveur_mcp = sys.modules.get("mcp.server")
+    if serveur_mcp is not None:
+        setattr(serveur_mcp, "fastmcp", module_compat)
+
+
 try:
+    _installer_compat_fastmcp()
     from mcp_video import server as _source_server
     _SOURCE_TOOLS = getattr(getattr(_source_server.mcp, "_tool_manager", None), "_tools", {})
-except Exception as exc:  # le backend peut démarrer même si la dépendance est absente en dev
+    if not isinstance(_SOURCE_TOOLS, dict) or not _SOURCE_TOOLS:
+        raise RuntimeError("mcp-video n'a importé aucun outil.")
+except Exception:  # le backend peut démarrer même si la dépendance est absente en dev
     logging.exception("Initialisation de mcp-video impossible.")
     _SOURCE_TOOLS = {}
 
