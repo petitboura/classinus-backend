@@ -45,7 +45,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
       - name: Install video MCP and test dependencies
-        run: python -m pip install "mcp==2.0.0" "mcp-video[image,ai-scene]==1.2.1" boto3 pytest
+        run: python -m pip install "mcp==2.0.0" "mcp-video[image,ai-scene]==1.2.1" boto3 pytest fastapi httpx
       - name: Compile changed Python modules
         run: |
           python -m py_compile \
@@ -69,6 +69,57 @@ jobs:
           assert "subtitle" in _termes_recherche_video("ajouter un sous-titre"), "French subtitle request was not mapped"
           assert "text" in _termes_recherche_video("ajouter un titre"), "French title request was not mapped"
           print(f"Discovered {len(tools)} mcp-video tools; schemas and French discovery terms are available.")
+          PY
+      - name: Verify the mounted MCP HTTP interface end to end
+        run: |
+          python - <<'PY'
+          import asyncio
+          import os
+          import tempfile
+          from pathlib import Path
+
+          os.environ["SUPABASE_SECRET"] = "test-only-video-mcp-secret"
+
+          import httpx
+          from fastapi import FastAPI
+          from mcp import ClientSession
+          from mcp.client.streamable_http import streamable_http_client
+          from core.serveur_mcp_video import mcp_video
+          import core.video_workspaces as video_workspaces
+
+          async def verifier():
+              with tempfile.TemporaryDirectory(prefix="classinus-video-mcp-http-") as temporary:
+                  video_workspaces.ROOT = Path(temporary) / "workspace"
+                  app = FastAPI()
+                  app.mount(
+                      "/mcp/video",
+                      mcp_video.streamable_http_app(stateless_http=True, streamable_http_path="/"),
+                  )
+                  url = "http://testserver/mcp/video?user_id=ci-user&conversation_id=ci-conversation"
+                  async with mcp_video.session_manager.run():
+                      async with httpx.AsyncClient(
+                          transport=httpx.ASGITransport(app=app),
+                          base_url="http://testserver",
+                          headers={"Authorization": "Bearer test-only-video-mcp-secret"},
+                      ) as client:
+                          async with streamable_http_client(url, http_client=client) as (read, write):
+                              async with ClientSession(read, write) as session:
+                                  await session.initialize()
+                                  outils = (await session.list_tools()).tools
+                                  noms = {outil.name for outil in outils}
+                                  assert "video_lister_outils" in noms, f"Missing discovery tool: {sorted(noms)}"
+                                  assert "video_executer_outil" in noms, f"Missing execution tool: {sorted(noms)}"
+                                  resultat = await session.call_tool(
+                                      "video_lister_outils",
+                                      arguments={"recherche": "couper ce passage"},
+                                  )
+                                  assert not resultat.isError, f"MCP call returned an error: {resultat}"
+                                  texte = "\\n".join(
+                                      bloc.text for bloc in resultat.content if hasattr(bloc, "text")
+                                  )
+                                  assert "video_trim" in texte, f"French tool lookup missed video_trim: {texte}"
+                                  print(f"MCP HTTP protocol passed: {len(outils)} wrapper tools exposed and video_trim discovered.")
+          asyncio.run(verifier())
           PY
       - name: Execute a real FFmpeg trim in an isolated workspace
         run: |
