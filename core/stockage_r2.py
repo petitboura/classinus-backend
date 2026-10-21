@@ -114,6 +114,25 @@ class _BucketLogique:
             logging.error(f"ERREUR R2 STORAGE (download {self._bucket_logique}/{chemin}) : {e}")
             raise
 
+    def download_to_file(self, chemin: str, destination):
+        """Télécharge un objet R2 par morceaux vers un fichier local sans charger tout l'objet en mémoire."""
+        try:
+            reponse = _client.get_object(
+                Bucket=R2_BUCKET_NAME,
+                Key=_cle_objet(self._bucket_logique, chemin),
+            )
+            corps = reponse["Body"]
+            try:
+                with open(destination, "wb") as sortie:
+                    for morceau in corps.iter_chunks(chunk_size=1024 * 1024):
+                        if morceau:
+                            sortie.write(morceau)
+            finally:
+                corps.close()
+        except Exception as e:
+            logging.error(f"ERREUR R2 STORAGE (download vers fichier {self._bucket_logique}/{chemin}) : {e}")
+            raise
+
     def remove(self, chemins: list[str]):
         """Équivalent de supabase.storage.from_(BUCKET).remove([chemin, ...])."""
         if not chemins:
