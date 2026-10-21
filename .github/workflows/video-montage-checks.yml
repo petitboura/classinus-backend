@@ -1,0 +1,64 @@
+name: Video montage checks
+
+on:
+  push:
+    branches:
+      - wip/video-montage-non-verifie
+    paths:
+      - "api/chat.py"
+      - "api/main.py"
+      - "api/uploads.py"
+      - "core/main.py"
+      - "core/mcp_tools.py"
+      - "core/registre_outils.py"
+      - "core/serveur_mcp_video.py"
+      - "core/video_workspaces.py"
+      - "core/stockage_r2.py"
+      - "requirements.txt"
+      - "railpack.json"
+      - "tests/test_video_workspaces.py"
+      - ".github/workflows/video-montage-checks.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AWS_EC2_METADATA_DISABLED: "true"
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      R2_ENDPOINT: https://example.invalid
+      R2_BUCKET_NAME: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install video MCP and test dependencies
+        run: python -m pip install "mcp==2.0.0" "mcp-video[image,ai-scene]==1.2.1" boto3 pytest
+      - name: Compile changed Python modules
+        run: |
+          python -m py_compile \
+            api/chat.py api/main.py api/uploads.py \
+            core/main.py core/mcp_tools.py core/registre_outils.py \
+            core/serveur_mcp_video.py core/video_workspaces.py \
+            core/stockage_r2.py tests/test_video_workspaces.py
+      - name: Test workspace isolation and persistence
+        run: python -m pytest -q tests/test_video_workspaces.py
+      - name: Smoke-test upstream MCP tool discovery
+        run: |
+          python - <<'PY'
+          from core.serveur_mcp_video import _tools_dict, _schema
+          tools = _tools_dict()
+          assert len(tools) >= 50, f"Too few mcp-video tools discovered: {len(tools)}"
+          assert "video_trim" in tools, "video_trim was not registered"
+          assert "remotion_render" in tools, "Remotion render tool was not registered"
+          assert callable(getattr(tools["video_trim"], "fn", None)), "video_trim handler is not callable"
+          assert isinstance(_schema(tools["video_trim"]), dict), "video_trim schema is unavailable"
+          print(f"Discovered {len(tools)} mcp-video tools; trim and Remotion schemas are available.")
+          PY
