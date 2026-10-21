@@ -614,7 +614,7 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     )
     if langue_interface == "en":
         system_final += (
-            "\\n\\nLANGUAGE REQUIREMENT: Unless the user explicitly asks for another language, "
+            "\n\nLANGUAGE REQUIREMENT: Unless the user explicitly asks for another language, "
             "write all natural-language responses in clear, idiomatic English. This includes explanations, "
             "teaching, tool progress updates, summaries, follow-up questions, and user-facing labels in generated output. "
             "Preserve code, identifiers, quotations, source titles, and requested target languages where appropriate. "
