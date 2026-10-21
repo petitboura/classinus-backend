@@ -12,6 +12,20 @@ class TestLocalisation(unittest.TestCase):
     def test_chaque_code_erreur_a_une_traduction_anglaise(self):
         self.assertTrue(set(MESSAGES_FR).issubset(MESSAGES_EN))
 
+    def test_les_traductions_conservent_les_parametres(self):
+        def parametres(message):
+            return set(re.findall(r"(?<!\\{)\\{([A-Za-z_]\\w*)\\}(?!\\})", message))
+
+        divergences = {
+            code: {
+                "fr": sorted(parametres(message_fr)),
+                "en": sorted(parametres(MESSAGES_EN[code])),
+            }
+            for code, message_fr in MESSAGES_FR.items()
+            if parametres(message_fr) != parametres(MESSAGES_EN[code])
+        }
+        self.assertEqual(divergences, {})
+
     def test_entete_anglais_simple(self):
         self.assertTrue(_prefer_anglais({"headers": [(b"accept-language", b"en")]}))
 
