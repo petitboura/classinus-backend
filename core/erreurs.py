@@ -597,6 +597,7 @@ MESSAGES_EN: dict[str, str] = {
     "MINUTEUR_INTROUVABLE": "Timer not found.",
     "MINUTEUR_DEJA_TERMINE": "This timer has already ended or been stopped.",
     "MINUTEUR_ECHEC": "Unable to update this timer right now.",
+    "TYPE_DE_SIGNALEMENT_INVALIDE": "Invalid report type.",
 }
 
 def erreur_api(status_code: int, code: str, message: str | None = None, **kwargs) -> HTTPException:
