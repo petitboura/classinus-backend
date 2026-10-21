@@ -39,6 +39,30 @@ from client_http_supabase import nouveau_client_http_supabase
 from registre_outils import SERVEURS_MCP
 
 
+# 21/10/2026 (demande de Bourama) : la liste des outils de Higgsfield dépasse 1 Mo
+# en un seul message. La bibliothèque coupe alors la réponse sans rien renvoyer
+# (erreur "Server-sent event exceeded the 1048576 byte limit"), donc Classinus ne
+# voyait aucun outil Higgsfield. On relève cette limite pour le lecteur de flux
+# du client MCP. Valeur modifiable sans toucher au code via la variable
+# d'environnement MCP_TAILLE_MAX_EVENEMENT_OCTETS.
+TAILLE_MAX_EVENEMENT_MCP_OCTETS = int(os.getenv("MCP_TAILLE_MAX_EVENEMENT_OCTETS", str(32 * 1024 * 1024)))
+
+
+def _relever_limite_evenement_mcp():
+    import functools
+    import mcp.client.streamable_http as flux_mcp
+
+    lecteur_original = getattr(flux_mcp, "EventSource", None)
+    if lecteur_original is None or getattr(lecteur_original, "_limite_relevee", False):
+        return
+    lecteur_releve = functools.partial(lecteur_original, max_event_size=TAILLE_MAX_EVENEMENT_MCP_OCTETS)
+    lecteur_releve._limite_relevee = True
+    flux_mcp.EventSource = lecteur_releve
+
+
+_relever_limite_evenement_mcp()
+
+
 class _FiltreCausesFluxMcp(logging.Filter):
     """
     DIAGNOSTIC TEMPORAIRE (21/10/2026, demande de Bourama) : la bibliothèque MCP
