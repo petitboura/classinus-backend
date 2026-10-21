@@ -79,64 +79,76 @@ class MiddlewareLangueErreurs:
             return
 
         debut = None
-        morceaux = []
+        messages_corps = []
         intercepter = False
 
         async def envoyer(message):
-            nonlocal debut, morceaux, intercepter
+            nonlocal debut, messages_corps, intercepter
             if message["type"] == "http.response.start":
                 entetes = {
                     cle.lower(): valeur.lower()
                     for cle, valeur in message.get("headers", [])
-                    if cle.lower() == b"content-type"
                 }
                 type_contenu = entetes.get(b"content-type", b"")
                 intercepter = (
                     int(message.get("status", 200)) >= 400
                     and b"application/json" in type_contenu
                     and b"text/event-stream" not in type_contenu
+                    and b"content-encoding" not in entetes
                 )
                 if intercepter:
                     debut = message
-                    morceaux = []
+                    messages_corps = []
                     return
                 await send(message)
                 return
 
             if intercepter and message["type"] == "http.response.body":
-                morceaux.append(message.get("body", b""))
+                messages_corps.append(message)
                 if message.get("more_body", False):
                     return
 
-                corps = b"".join(morceaux)
+                corps_original = b"".join(partie.get("body", b"") for partie in messages_corps)
+                corps_final = corps_original
                 try:
-                    donnees = json.loads(corps.decode("utf-8"))
+                    donnees = json.loads(corps_original.decode("utf-8"))
                     modifie = _traduire_enveloppe(donnees)
                     if modifie:
-                        corps = json.dumps(donnees, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+                        corps_final = json.dumps(
+                            donnees, ensure_ascii=False, separators=(",", ":")
+                        ).encode("utf-8")
                 except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
                     # Une réponse atypique doit passer telle quelle.
                     modifie = False
 
-                entetes = [
-                    (cle, valeur)
-                    for cle, valeur in (debut.get("headers") or [])
-                    if cle.lower() not in (b"content-length", b"transfer-encoding")
-                ]
-                entetes.append((b"content-length", str(len(corps)).encode("ascii")))
                 if modifie:
-                    deja_vary = next((v for k, v in entetes if k.lower() == b"vary"), None)
-                    entetes = [(k, v) for k, v in entetes if k.lower() != b"vary"]
+                    entetes = [
+                        (cle, valeur)
+                        for cle, valeur in (debut.get("headers") or [])
+                        if cle.lower() not in (b"content-length", b"transfer-encoding", b"vary")
+                    ]
+                    entetes.append((b"content-length", str(len(corps_final)).encode("ascii")))
+                    deja_vary = next(
+                        (v for k, v in (debut.get("headers") or []) if k.lower() == b"vary"),
+                        None,
+                    )
                     valeur_vary = deja_vary.decode("latin-1") if deja_vary else ""
                     parties = [v.strip() for v in valeur_vary.split(",") if v.strip()]
                     if not any(v.lower() == "accept-language" for v in parties):
                         parties.append("Accept-Language")
                     entetes.append((b"vary", ", ".join(parties).encode("latin-1")))
-                debut["headers"] = entetes
-                await send(debut)
-                await send({"type": "http.response.body", "body": corps, "more_body": False})
+                    debut["headers"] = entetes
+                    await send(debut)
+                    await send({"type": "http.response.body", "body": corps_final, "more_body": False})
+                else:
+                    # Aucun code traduisible : renvoie exactement les en-têtes et
+                    # les fragments originaux, sans réécrire le corps JSON.
+                    await send(debut)
+                    for partie in messages_corps:
+                        await send(partie)
+
                 debut = None
-                morceaux = []
+                messages_corps = []
                 intercepter = False
                 return
 
