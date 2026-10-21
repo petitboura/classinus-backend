@@ -23,7 +23,13 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer as FastMCP, Context
 
-from core.video_workspaces import chemin_interne, workspace_dir
+from core.video_workspaces import (
+    chemin_interne,
+    chemin_video,
+    restaurer_workspace,
+    synchroniser_workspace,
+    workspace_dir,
+)
 
 try:
     from mcp_video import server as _source_server
@@ -207,7 +213,7 @@ def _sortie_par_defaut(nom_outil: str, arguments: dict, root: Path) -> None:
 def _cle_est_chemin(cle: str) -> bool:
     return (
         cle in PATH_KEYS
-        or cle.endswith(("_path", "_file", "_dir", "_paths", "_files"))
+        or cle.endswith(("_path", "_file", "_dir", "_paths", "_files", "_video"))
         or cle.startswith("output_")
         or cle in {
             "input", "video", "audio", "image", "clips", "images", "paths",
@@ -237,6 +243,32 @@ def _normaliser_arguments(nom_outil: str, arguments: dict, root: Path) -> dict:
     # exemple les clips d'une séquence. Aucun outil ne peut sortir du workspace.
     nettoyes = {key: normaliser(value, key) for key, value in nettoyes.items() if value is not None}
     return nettoyes
+
+
+def _restaurer_sources_dans_arguments(valeur: Any, user_id: str, conversation_id: str) -> None:
+    """Restaure les sources R2 référencées par leur chemin relatif uploads/<uuid>.<ext>."""
+    if isinstance(valeur, dict):
+        for item in valeur.values():
+            _restaurer_sources_dans_arguments(item, user_id, conversation_id)
+        return
+    if isinstance(valeur, list):
+        for item in valeur:
+            _restaurer_sources_dans_arguments(item, user_id, conversation_id)
+        return
+    if not isinstance(valeur, str):
+        return
+    normalise = valeur.replace("\\", "/")
+    morceaux = normalise.split("/")
+    if len(morceaux) != 2 or morceaux[0] != "uploads":
+        return
+    nom = Path(morceaux[1])
+    if nom.suffix.lower() not in {".mp4", ".webm", ".mov"}:
+        return
+    if len(nom.stem) != 32 or any(c not in "0123456789abcdef" for c in nom.stem.lower()):
+        return
+    # Vérifie la propriété de la source par utilisateur + conversation et la
+    # restaure sur l'instance Railway courante quand son cache local manque.
+    chemin_video(user_id, conversation_id, nom.stem)
 
 
 def _serialiser(value: Any) -> Any:
@@ -346,12 +378,20 @@ def video_executer_outil(ctx: Context, nom_outil: str, arguments: dict[str, Any]
             ),
         }
     try:
+        # Un appel MCP peut atterrir sur une autre instance Railway que le
+        # POST initial. Recharge les projets/résultats du workspace, puis la
+        # vidéo source nommée par ses identifiants opaques.
+        restaurer_workspace(user_id, _conversation_id, root=root)
+        _restaurer_sources_dans_arguments(arguments or {}, user_id, _conversation_id)
         args = _normaliser_arguments(nom_outil, arguments or {}, root)
         fonction = tool.fn
         result = fonction(**args)
         if inspect.isawaitable(result):
             result = asyncio.run(result)
         result = _serialiser(result)
+        # Persiste les versions intermédiaires AVANT de renvoyer le contrôle
+        # au modèle, pour qu'une opération suivante survive à un redémarrage.
+        synchroniser_workspace(user_id, _conversation_id, root=root)
         sorties = _chemins_sortie(result, root) + _sorties_depuis_arguments(args, root)
         urls = _publier_sorties(list(dict.fromkeys(sorties)), user_id)
         if isinstance(result, dict):
