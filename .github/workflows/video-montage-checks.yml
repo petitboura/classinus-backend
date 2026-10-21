@@ -70,12 +70,16 @@ jobs:
           assert "text" in _termes_recherche_video("ajouter un titre"), "French title request was not mapped"
           print(f"Discovered {len(tools)} mcp-video tools; schemas and French discovery terms are available.")
           PY
-      - name: Verify the mounted MCP HTTP interface end to end
+      - name: Verify the mounted MCP HTTP interface and video execution end to end
         run: |
           python - <<'PY'
           import asyncio
+          import hashlib
+          import json
           import os
+          import subprocess
           import tempfile
+          import uuid
           from pathlib import Path
 
           os.environ["SUPABASE_SECRET"] = "test-only-video-mcp-secret"
@@ -84,12 +88,52 @@ jobs:
           from fastapi import FastAPI
           from mcp import ClientSession
           from mcp.client.streamable_http import streamable_http_client
+          from core import stockage_r2
           from core.serveur_mcp_video import mcp_video
           import core.video_workspaces as video_workspaces
+
+          class FauxStockageR2:
+              def __init__(self):
+                  self.objets = {}
+
+              def upload(self, chemin, contenu, options=None):
+                  if hasattr(contenu, "read"):
+                      contenu = contenu.read()
+                  self.objets[chemin] = bytes(contenu)
+
+              def download(self, chemin):
+                  if chemin not in self.objets:
+                      raise FileNotFoundError(chemin)
+                  return self.objets[chemin]
+
+              def download_to_file(self, chemin, destination):
+                  Path(destination).write_bytes(self.download(chemin))
+
+              def remove(self, chemins):
+                  for chemin in chemins:
+                      self.objets.pop(chemin, None)
+
+              def get_public_url(self, chemin):
+                  return f"https://files.example.test/{chemin}"
 
           async def verifier():
               with tempfile.TemporaryDirectory(prefix="classinus-video-mcp-http-") as temporary:
                   video_workspaces.ROOT = Path(temporary) / "workspace"
+                  racine = video_workspaces.workspace_dir("ci-user", "ci-conversation")
+                  uploads = racine / "uploads"
+                  uploads.mkdir(parents=True, exist_ok=True)
+                  video_id = uuid.uuid4().hex
+                  source = uploads / f"{video_id}.mp4"
+                  subprocess.run([
+                      "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                      "-f", "lavfi", "-i", "color=c=blue:s=320x240:d=2:r=24",
+                      "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(source),
+                  ], check=True, timeout=30)
+                  empreinte_source = hashlib.sha256(source.read_bytes()).hexdigest()
+
+                  faux_stockage = FauxStockageR2()
+                  stockage_r2.from_ = lambda _bucket: faux_stockage
+
                   app = FastAPI()
                   app.mount(
                       "/mcp/video",
@@ -109,16 +153,52 @@ jobs:
                                   noms = {outil.name for outil in outils}
                                   assert "video_lister_outils" in noms, f"Missing discovery tool: {sorted(noms)}"
                                   assert "video_executer_outil" in noms, f"Missing execution tool: {sorted(noms)}"
-                                  resultat = await session.call_tool(
+
+                                  decouverte = await session.call_tool(
                                       "video_lister_outils",
                                       arguments={"recherche": "couper ce passage"},
                                   )
-                                  assert not resultat.is_error, f"MCP call returned an error: {resultat}"
-                                  texte = "\\n".join(
-                                      bloc.text for bloc in resultat.content if hasattr(bloc, "text")
+                                  assert not decouverte.is_error, f"MCP discovery call failed: {decouverte}"
+                                  texte_decouverte = "\\n".join(
+                                      bloc.text for bloc in decouverte.content if hasattr(bloc, "text")
                                   )
-                                  assert "video_trim" in texte, f"French tool lookup missed video_trim: {texte}"
-                                  print(f"MCP HTTP protocol passed: {len(outils)} wrapper tools exposed and video_trim discovered.")
+                                  assert "video_trim" in texte_decouverte, (
+                                      f"French tool lookup missed video_trim: {texte_decouverte}"
+                                  )
+
+                                  execution = await session.call_tool(
+                                      "video_executer_outil",
+                                      arguments={
+                                          "nom_outil": "video_trim",
+                                          "arguments": {
+                                              "input_path": f"uploads/{video_id}.mp4",
+                                              "start": "0",
+                                              "duration": "1",
+                                          },
+                                      },
+                                  )
+                                  assert not execution.is_error, f"MCP execution call failed: {execution}"
+                                  texte_execution = "\\n".join(
+                                      bloc.text for bloc in execution.content if hasattr(bloc, "text")
+                                  )
+                                  resultat = json.loads(texte_execution)
+                                  assert resultat.get("success") is True, f"Video operation failed: {resultat}"
+                                  details = resultat.get("resultat") or {}
+                                  liens = details.get("liens_telechargement", [])
+                                  assert any(lien.get("nom", "").endswith(".mp4") for lien in liens), (
+                                      f"Video output was not published: {resultat}"
+                                  )
+                                  assert hashlib.sha256(source.read_bytes()).hexdigest() == empreinte_source, (
+                                      "MCP video execution overwrote the original source."
+                                  )
+                                  assert any("manifest.json" in cle for cle in faux_stockage.objets), (
+                                      "Workspace was not persisted to R2."
+                                  )
+                                  print(
+                                      f"MCP HTTP end-to-end passed: {len(outils)} wrapper tools exposed; "
+                                      "French discovery, real FFmpeg trim, output publication, "
+                                      "workspace persistence and source preservation verified."
+                                  )
           asyncio.run(verifier())
           PY
       - name: Execute a real FFmpeg trim in an isolated workspace
