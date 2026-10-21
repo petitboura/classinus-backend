@@ -9,7 +9,7 @@ from core.localisation import MiddlewareLangueErreurs, _prefer_anglais, _traduir
 
 class TestLocalisation(unittest.TestCase):
     def test_chaque_code_erreur_a_une_traduction_anglaise(self):
-        self.assertEqual(set(MESSAGES_FR), set(MESSAGES_EN))
+        self.assertTrue(set(MESSAGES_FR).issubset(MESSAGES_EN))
 
     def test_entete_anglais_simple(self):
         self.assertTrue(_prefer_anglais({"headers": [(b"accept-language", b"en")]}))
@@ -118,6 +118,27 @@ class TestLocalisation(unittest.TestCase):
 
     def test_message_personnalise_est_preserve(self):
         enveloppe = {"detail": {"code": "AGENT_NOM_DEJA_PROCHE", "message": "Détail spécifique en français", "params": {"agent_id": "agent-123"}}}
+        avant = {"detail": dict(enveloppe["detail"])}
+        self.assertFalse(_traduire_enveloppe(enveloppe))
+        self.assertEqual(enveloppe, avant)
+
+    def test_erreur_historique_sans_entree_francaise_est_traduite(self):
+        enveloppe = {
+            "detail": {
+                "code": "URL_MANQUANTE",
+                "message": MESSAGES_FR["ERREUR_INCONNUE"],
+            }
+        }
+        self.assertTrue(_traduire_enveloppe(enveloppe))
+        self.assertEqual(enveloppe["detail"]["message"], MESSAGES_EN["URL_MANQUANTE"])
+
+    def test_erreur_historique_personnalisee_reste_inchangee(self):
+        enveloppe = {
+            "detail": {
+                "code": "URL_MANQUANTE",
+                "message": "Un message spécifique doit rester intact.",
+            }
+        }
         avant = {"detail": dict(enveloppe["detail"])}
         self.assertFalse(_traduire_enveloppe(enveloppe))
         self.assertEqual(enveloppe, avant)
