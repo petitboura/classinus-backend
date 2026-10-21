@@ -180,7 +180,7 @@ def _texte_editeur(etat):
         "- Les boutons de l'éditeur (Exécuter, Ouvrir, Enregistrer, Vers le chat, plein écran) sont dans la liste des éléments à l'écran.\n"
     )
 
-def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None, reponses_qcm_recentes=None, etat_editeur=None, configuration_etudiant=None, sommaire_memoire=None, client=None, libelles_client=None, origine=None):
+def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None, reponses_qcm_recentes=None, etat_editeur=None, configuration_etudiant=None, sommaire_memoire=None, client=None, libelles_client=None, origine=None, langue_interface="fr"):
     # Restauré le 14/08 (voir commentaire des constantes plus haut) : la
     # page Notion de l'agent (get_system_prompt) ne doit plus contenir QUE
     # la personnalité/le comportement propre à l'agent -- les 3 blocs fixes
@@ -612,6 +612,15 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
         f"longueur_reponse:{longueur_reponse}, "
         f"recherche_forcee:{'oui' if recherche_forcee else 'NON'}"
     )
+    if langue_interface == "en":
+        system_final += (
+            "\\n\\nLANGUAGE REQUIREMENT: Unless the user explicitly asks for another language, "
+            "write all natural-language responses in clear, idiomatic English. This includes explanations, "
+            "teaching, tool progress updates, summaries, follow-up questions, and user-facing labels in generated output. "
+            "Preserve code, identifiers, quotations, source titles, and requested target languages where appropriate. "
+            "Do not translate content written by the user or stored documents; answer in English."
+        )
+
     return system_final
 
 
