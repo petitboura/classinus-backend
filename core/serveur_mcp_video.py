@@ -208,7 +208,11 @@ def _cle_est_chemin(cle: str) -> bool:
     return (
         cle in PATH_KEYS
         or cle.endswith(("_path", "_file", "_dir", "_paths", "_files"))
-        or cle in {"input", "video", "audio", "image", "clips", "images", "paths"}
+        or cle.startswith("output_")
+        or cle in {
+            "input", "video", "audio", "image", "clips", "images", "paths",
+            "project_root", "working_directory", "work_dir", "workspace_dir",
+        }
     )
 
 
@@ -271,9 +275,8 @@ def _chemins_sortie(value: Any, root: Path) -> list[Path]:
 def _sorties_depuis_arguments(arguments: dict, root: Path) -> list[Path]:
     """Récupère aussi les sorties explicites même si l'outil omet leur chemin dans son résultat."""
     candidates: list[Path] = []
-    for key in ("output_path", "output_file"):
-        value = arguments.get(key)
-        if not isinstance(value, str):
+    for key, value in arguments.items():
+        if not key.startswith("output_") or key == "output_dir" or not isinstance(value, str):
             continue
         try:
             path = Path(value).resolve()
