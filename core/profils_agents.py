@@ -8,7 +8,7 @@ from datetime import datetime
 from groq import Groq
 from constantes_agent import get_secret, supabase, MODELE_PROFIL, SEUIL_PROFIL_MESSAGES, DELAI_MAX_PAR_APPEL
 from filtre_texte_streaming import NOMS_OUTILS_LISIBLES
-from registre_outils import VERBES_ACTIONS, verbe_de_action
+from registre_outils import VERBES_ACTIONS, verbe_de_action, libelle_outil_plateforme
 
 def _nom_agent(agent_id):
     """
@@ -46,8 +46,11 @@ def _nom_lisible(nom_outil, action=None):
         base = NOMS_OUTILS_LISIBLES[cle_composite]
         connu = True
     else:
-        base = NOMS_OUTILS_LISIBLES.get(nom_outil, nom_outil)
         connu = nom_outil in NOMS_OUTILS_LISIBLES
+        # 21/10/2026 : outil d'une plateforme connectée (Vercel, Railway,
+        # Supabase, Higgsfield) absent du registre : texte composé depuis son
+        # nom plutôt que le nom technique brut.
+        base = NOMS_OUTILS_LISIBLES.get(nom_outil) or libelle_outil_plateforme(nom_outil) or nom_outil
     # 24/09/2026 (demande Bourama, regroupement des outils qui s'enchaînent) :
     # pour un outil à actions (bibliothèque, dossiers, skills...), le libellé
     # porte aussi le verbe de l'action, sinon "chercher" et "supprimer"
