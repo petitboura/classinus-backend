@@ -26,7 +26,7 @@ def _prefer_anglais(scope: dict[str, Any]) -> bool:
             poids = 1.0
         if code and poids > 0:
             langues.append((poids, code))
-    langues.sort(reverse=True)
+    langues.sort(key=lambda langue: langue[0], reverse=True)
     return bool(langues and (langues[0][1] == "en" or langues[0][1].startswith("en-")))
 
 
