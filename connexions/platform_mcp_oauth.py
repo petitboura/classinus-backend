@@ -165,6 +165,18 @@ def _client_oauth(service, metadata, redirect_uri):
             },
             timeout=10,
         )
+        if response.status_code >= 400:
+            # Diagnostic : le corps renvoyé par le fournisseur nomme le motif du refus
+            # (par ex. adresse de retour non approuvée). Aucun secret n'est envoyé ni journalisé ici.
+            logging.error(
+                "Enregistrement OAuth %s refusé par %s : statut %s, méthode demandée %s, adresse de retour %s, réponse : %s",
+                service,
+                registration_endpoint,
+                response.status_code,
+                methode_demandee,
+                redirect_uri,
+                (response.text or "")[:500],
+            )
         response.raise_for_status()
         client = response.json()
         if not client.get("client_id"):
