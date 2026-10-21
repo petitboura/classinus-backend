@@ -618,7 +618,9 @@ async def uploader_video_espace(
     if fichier.content_type not in TYPES_VIDEO_AUTORISES:
         raise erreur_api(400, "FORMAT_NON_SUPPORTE_MP4_WEBM_OU")
 
-    contenu = await fichier.read()
+    # Lire au plus la limite + 1 octet évite de charger un upload arbitrairement
+    # volumineux en mémoire avant de pouvoir le refuser.
+    contenu = await fichier.read(TAILLE_MAX_VIDEO_OCTETS + 1)
     if not contenu:
         raise erreur_api(400, "FICHIER_VIDE")
     if len(contenu) > TAILLE_MAX_VIDEO_OCTETS:
