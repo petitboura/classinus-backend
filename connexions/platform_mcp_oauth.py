@@ -37,7 +37,7 @@ FOURNISSEURS = {
         "token_endpoint": "https://backboard.railway.com/oauth/token",
         "client_id_env": "RAILWAY_OAUTH_CLIENT_ID",
         "client_secret_env": "RAILWAY_OAUTH_CLIENT_SECRET",
-        "scopes": ["openid", "email", "profile", "offline_access"],
+        "scopes": ["openid", "email", "profile", "offline_access", "workspace:admin"],
         "extra_auth_params": {"prompt": "consent"},
         "token_auth_method": "client_secret_basic",
         "send_resource": False,
