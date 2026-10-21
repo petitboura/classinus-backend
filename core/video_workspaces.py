@@ -213,6 +213,17 @@ def chemin_interne(root: Path, valeur: str, *, sortie: bool = False, projet: boo
             bases.append(root / "projects")
         if not any(base.resolve() == candidat or base.resolve() in candidat.parents for base in bases):
             raise ValueError("Les fichiers produits doivent rester dans outputs/ ou projects/.")
+        # Un outil tiers peut utiliser FFmpeg avec -y : si le modèle demande
+        # le nom d'une sortie qui existe déjà, crée une nouvelle version au
+        # lieu de laisser l'outil écraser le résultat précédent.
+        if candidat.exists():
+            original = candidat
+            version = 2
+            while True:
+                candidat = original.with_name(f"{original.stem}_v{version}{original.suffix}")
+                if not candidat.exists():
+                    break
+                version += 1
         candidat.parent.mkdir(parents=True, exist_ok=True)
     elif not candidat.exists():
         raise FileNotFoundError(f"Fichier introuvable dans l'espace de travail : {candidat.name}")
