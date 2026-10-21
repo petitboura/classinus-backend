@@ -10,11 +10,13 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import inspect
+import importlib.util
 import json
 import logging
 import mimetypes
 import os
 import secrets
+import shutil
 import uuid
 from pathlib import Path
 from typing import Any
@@ -41,6 +43,39 @@ PATH_KEYS = {
 EXTENSIONS_IMAGES = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 EXTENSIONS_AUDIO = {".wav", ".mp3", ".m4a", ".ogg", ".flac"}
 EXTENSIONS_SORTIE = {".mp4", ".webm", ".mov", ".gif", ".png", ".jpg", ".jpeg", ".webp", ".wav", ".mp3", ".srt", ".vtt", ".json"}
+
+# Les capacités optionnelles très lourdes restent hors de l'image principale
+# pour ne pas fragiliser le chat/Classinus lors d'un déploiement ordinaire.
+# Elles sont activables via requirements-video-ai.txt après validation worker.
+DEPENDANCES_OPTIONNELLES = {
+    "video_ai_transcribe": [("whisper", "openai-whisper")],
+    "video_ai_stem_separation": [
+        ("demucs", "demucs"),
+        ("torch", "torch"),
+        ("torchaudio", "torchaudio"),
+    ],
+    "video_ai_upscale": [
+        ("realesrgan", "realesrgan"),
+        ("torch", "torch"),
+        ("cv2", "opencv-contrib-python"),
+    ],
+}
+
+
+def _dependances_manquantes(nom_outil: str) -> list[str]:
+    manquantes = []
+    for module, paquet in DEPENDANCES_OPTIONNELLES.get(nom_outil, []):
+        try:
+            present = importlib.util.find_spec(module) is not None
+        except (ImportError, ValueError):
+            present = False
+        if not present:
+            manquantes.append(paquet)
+    if nom_outil.startswith("remotion_"):
+        for executable in ("node", "npm", "npx"):
+            if shutil.which(executable) is None:
+                manquantes.append(executable)
+    return manquantes
 
 
 def _context_owner(ctx: Context) -> tuple[str, str, Path]:
@@ -128,10 +163,20 @@ def video_lister_outils(ctx: Context, recherche: str = "") -> dict[str, Any]:
         "total_outils": len(tools),
         "recherche": recherche,
         "outils": [
-            {"nom": name, "description": _description(tool)[:1200], "schema": _schema(tool)}
+            {
+                "nom": name,
+                "description": _description(tool)[:1200],
+                "schema": _schema(tool),
+                "disponible": not _dependances_manquantes(name),
+                "dependances_manquantes": _dependances_manquantes(name),
+            }
             for _, name, tool in hits[:12]
         ],
         "suite_possible": len(hits) > 12,
+        "note": (
+            "Les outils avec disponible=false exigent les dependances indiquées. "
+            "Ne les lance pas avant qu'elles soient installées."
+        ),
     }
 
 
@@ -223,6 +268,39 @@ def _chemins_sortie(value: Any, root: Path) -> list[Path]:
     return list(dict.fromkeys(trouves))
 
 
+def _sorties_depuis_arguments(arguments: dict, root: Path) -> list[Path]:
+    """Récupère aussi les sorties explicites même si l'outil omet leur chemin dans son résultat."""
+    candidates: list[Path] = []
+    for key in ("output_path", "output_file"):
+        value = arguments.get(key)
+        if not isinstance(value, str):
+            continue
+        try:
+            path = Path(value).resolve()
+            outputs = (root / "outputs").resolve()
+            if outputs in path.parents and path.is_file() and path.suffix.lower() in EXTENSIONS_SORTIE:
+                candidates.append(path)
+        except OSError:
+            continue
+
+    for key in ("output_dir",):
+        value = arguments.get(key)
+        if not isinstance(value, str):
+            continue
+        try:
+            folder = Path(value).resolve()
+            outputs = (root / "outputs").resolve()
+            if outputs in folder.parents and folder.is_dir():
+                for path in folder.rglob("*"):
+                    if path.is_file() and path.suffix.lower() in EXTENSIONS_SORTIE:
+                        candidates.append(path)
+                        if len(candidates) >= 25:
+                            break
+        except OSError:
+            continue
+    return list(dict.fromkeys(candidates))
+
+
 def _publier_sorties(paths: list[Path], user_id: str) -> list[dict[str, str]]:
     publiees = []
     for path in paths:
@@ -251,6 +329,19 @@ def video_executer_outil(ctx: Context, nom_outil: str, arguments: dict[str, Any]
     tool = _tools_dict().get(nom_outil)
     if tool is None or not callable(getattr(tool, "fn", None)):
         return {"success": False, "error": f"Outil vidéo inconnu : {nom_outil}"}
+    manquantes = _dependances_manquantes(nom_outil)
+    if manquantes:
+        return {
+            "success": False,
+            "outil": nom_outil,
+            "dependances_manquantes": manquantes,
+            "error": (
+                "Cette capacité n'est pas activée sur le backend principal. "
+                "Dépendances manquantes : " + ", ".join(manquantes)
+                + ". Elles sont isolées dans requirements-video-ai.txt pour éviter "
+                "de rendre le service principal instable."
+            ),
+        }
     try:
         args = _normaliser_arguments(nom_outil, arguments or {}, root)
         fonction = tool.fn
@@ -258,7 +349,8 @@ def video_executer_outil(ctx: Context, nom_outil: str, arguments: dict[str, Any]
         if inspect.isawaitable(result):
             result = asyncio.run(result)
         result = _serialiser(result)
-        urls = _publier_sorties(_chemins_sortie(result, root), user_id)
+        sorties = _chemins_sortie(result, root) + _sorties_depuis_arguments(args, root)
+        urls = _publier_sorties(list(dict.fromkeys(sorties)), user_id)
         if isinstance(result, dict):
             result["liens_telechargement"] = urls
         return {"success": True, "outil": nom_outil, "resultat": result}
