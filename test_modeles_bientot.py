@@ -166,7 +166,7 @@ class ModelesGrok(unittest.TestCase):
         with patch.dict(os.environ, {"XAI_API_KEY": "x", "DEEPSEEK_API_KEY": "x"}, clear=True):
             bientot = modeles_bientot_pour_agent("claude", "pro")
             grok = [m["modele_id"] for m in bientot if m["distributeur"] == "grok"]
-            self.assertEqual(grok, ["grok-4.3", "grok-4.7", "grok-build-0.1"])
+            self.assertEqual(grok, ["grok-build-0.1", "grok-4.7", "grok-4.3"])
             self.assertFalse(modele_id_est_autorise("grok-4.7", "claude", "pro"))
 
     def test_grok_utilisable_quand_bientot_retire_et_cle_presente(self):
@@ -174,7 +174,7 @@ class ModelesGrok(unittest.TestCase):
             with patch.dict(os.environ, {"XAI_API_KEY": "x"}, clear=True):
                 disponibles = modeles_disponibles_pour_agent("gemini", "pro")
                 ids = [m["modele_id"] for m in disponibles]
-                self.assertEqual(ids, ["grok-4.3", "grok-4.7"])
+                self.assertEqual(ids, ["grok-4.7", "grok-4.3"])
                 self.assertTrue(modele_id_est_autorise("grok-4.7", "gemini", "pro"))
                 # Grok est le dernier de la hierarchie : un agent debloque a DeepSeek le voit aussi.
                 self.assertIn("grok-4.7", [m["modele_id"] for m in modeles_disponibles_pour_agent("deepseek", "pro")])

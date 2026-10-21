@@ -350,6 +350,7 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque):
             continue
         if not _distributeur_disponible(distributeur, config):
             continue
+        modeles_du_distributeur = []
         for palier in paliers_autorises:
             info = config["modeles"].get(distributeur, {}).get(palier)
             if not info:
@@ -364,7 +365,7 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque):
             # core/efforts_modeles.py) : le frontend n'affiche que ceux-là, et aucun réglage
             # d'effort si la liste est vide.
             efforts = efforts_pour_modele(info["id"], distributeur)
-            resultats.append({
+            modeles_du_distributeur.append({
                 "modele_id": info["id"],
                 "label": info["label"],
                 "distributeur": distributeur,
@@ -372,6 +373,10 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque):
                 "efforts": efforts,
                 "effort_defaut": effort_defaut(efforts),
             })
+        # Dans chaque fournisseur, du plus puissant au moins puissant (21/10/2026, demande
+        # Bourama). Le déblocage reste cumulatif du plus faible au plus fort ci-dessus : seul
+        # l'ordre d'affichage est inversé, après le dédoublonnage.
+        resultats.extend(reversed(modeles_du_distributeur))
     return resultats
 
 
@@ -401,18 +406,21 @@ def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque):
     for distributeur in config["distributeurs"]:
         if not config["fournisseurs"][distributeur]["bientot"]:
             continue
+        modeles_du_distributeur = []
         for palier in config["paliers"]:
             info = config["modeles"].get(distributeur, {}).get(palier)
             if not info or info["id"] in ids_a_exclure:
                 continue
             ids_a_exclure.add(info["id"])
-            resultats.append({
+            modeles_du_distributeur.append({
                 "modele_id": info["id"],
                 "label": info["label"],
                 "distributeur": distributeur,
                 "palier": palier,
                 "libelles_bientot": dict(libelles),
             })
+        # Même ordre que les modèles disponibles : du plus puissant au moins puissant.
+        resultats.extend(reversed(modeles_du_distributeur))
     return resultats
 
 
