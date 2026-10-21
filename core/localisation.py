@@ -8,7 +8,7 @@ l'utilisateur et les flux SSE restent inchangés.
 import json
 from typing import Any
 
-from core.erreurs import MESSAGES_EN
+from core.erreurs import MESSAGES_EN, MESSAGES_FR
 
 
 def _prefer_anglais(scope: dict[str, Any]) -> bool:
@@ -41,15 +41,23 @@ def _traduire_enveloppe(erreur: Any) -> bool:
     if not isinstance(code, str):
         return False
     modele = MESSAGES_EN.get(code)
-    if not modele:
+    modele_fr = MESSAGES_FR.get(code)
+    if not modele or not modele_fr:
         return False
     parametres = detail.get("params")
     try:
-        message = modele.format(**parametres) if isinstance(parametres, dict) else modele
+        message_fr_attendu = (
+            modele_fr.format(**parametres) if isinstance(parametres, dict) else modele_fr
+        )
+        message_en = modele.format(**parametres) if isinstance(parametres, dict) else modele
     except (KeyError, IndexError, ValueError):
         # Une traduction mal paramétrée ne doit jamais casser une réponse API.
         return False
-    detail["message"] = message
+    # Ne remplace pas un message métier explicitement fourni par un appelant :
+    # seules les erreurs fondées sur le catalogue stable sont traduites.
+    if detail.get("message") != message_fr_attendu:
+        return False
+    detail["message"] = message_en
     erreur["detail"] = detail
     return True
 
