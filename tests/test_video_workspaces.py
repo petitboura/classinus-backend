@@ -158,6 +158,13 @@ class TestEspacesVideo(unittest.TestCase):
                 root, "outputs/version-1.mp4", sortie=True
             )
             self.assertEqual(Path(sortie), root / "outputs" / "version-1.mp4")
+            Path(sortie).write_bytes(b"version originale")
+            nouvelle_sortie = video_workspaces.chemin_interne(
+                root, "outputs/version-1.mp4", sortie=True
+            )
+            self.assertEqual(Path(nouvelle_sortie), root / "outputs" / "version-1_v2.mp4")
+            self.assertEqual(Path(sortie).read_bytes(), b"version originale")
+            self.assertFalse(Path(nouvelle_sortie).exists())
 
 
 if __name__ == "__main__":
