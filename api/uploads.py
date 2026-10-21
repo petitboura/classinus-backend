@@ -642,14 +642,18 @@ async def uploader_video_espace(
         if duree > DUREE_MAX_VIDEO_SECONDES:
             raise erreur_api(400, "VIDEO_TROP_LONGUE", duree=int(duree), maximum=DUREE_MAX_VIDEO_SECONDES)
 
-        enregistrement = enregistrer_video(
-            user_id=str(utilisateur.id),
-            conversation_id=conversation_id,
-            nom=fichier.filename or f"video.{extension}",
-            mime=fichier.content_type,
-            contenu=contenu,
-            duree_secondes=duree,
-        )
+        try:
+            enregistrement = enregistrer_video(
+                user_id=str(utilisateur.id),
+                conversation_id=conversation_id,
+                nom=fichier.filename or f"video.{extension}",
+                mime=fichier.content_type,
+                contenu=contenu,
+                duree_secondes=duree,
+            )
+        except RuntimeError as e:
+            logging.error("Stockage R2 indisponible pour l'atelier vidéo : %s", e)
+            raise erreur_api(503, "STOCKAGE_VIDEO_TEMPORAIREMENT_INDISPONIBLE") from e
         enregistrement["source_path"] = f"uploads/{enregistrement['video_id']}.{extension}"
         enregistrement["duree_secondes"] = round(duree, 3)
         return enregistrement
