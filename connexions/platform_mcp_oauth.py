@@ -243,6 +243,18 @@ def _poster_token(pending, payload):
     response = httpx.post(
         pending["token_endpoint"], data=payload, headers=headers, auth=auth, timeout=15
     )
+    if response.status_code >= 400:
+        # Diagnostic : on garde le corps renvoyé par le fournisseur (il nomme
+        # en général le champ refusé) et les NOMS des champs envoyés, jamais
+        # leurs valeurs (code, verifier et secret restent hors des logs).
+        logging.error(
+            "Jeton OAuth refusé par %s : statut %s, méthode %s, champs envoyés %s, réponse : %s",
+            pending["token_endpoint"],
+            response.status_code,
+            auth_method,
+            sorted(payload.keys()),
+            (response.text or "")[:500],
+        )
     response.raise_for_status()
     return response.json()
 
