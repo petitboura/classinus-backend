@@ -2,10 +2,14 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+# Clé éphémère uniquement pour ces tests unitaires ; aucune valeur réelle de production.
+os.environ.setdefault("SUPABASE_SECRET", "test-only-video-workspace-secret")
 
 import core.video_workspaces as video_workspaces
 
