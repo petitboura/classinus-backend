@@ -247,7 +247,7 @@ def _resoudre_modele_force(agent_id, modele_demande):
     return None
 
 
-def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
+def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], langue_interface: str = "fr"):
     """
     Convertit le générateur Python de chat() en flux SSE (`data: {...}\n\n`
     par événement), le format que `fetch` + `ReadableStream` côté Next.js
@@ -272,6 +272,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
                     "approuve": payload.reprise.approuve,
                 },
                 arret_tour=arret,
+                langue_interface=langue_interface,
             )
         else:
             generateur = chat_generateur(
@@ -304,6 +305,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
                 client=payload.client,
                 libelles_client=payload.libelles_client,
                 origine=payload.origine,
+                langue_interface=langue_interface,
             )
         for evenement in generateur:
             yield f"data: {json.dumps(evenement)}\n\n"
@@ -373,6 +375,8 @@ def envoyer_message(request: Request, payload: EnvoyerMessagePayload, utilisateu
     façon rejetée.
     """
     user_id = utilisateur.id if utilisateur else None
+    valeur_langue = request.headers.get("accept-language", "fr").split(",", 1)[0].strip().lower()
+    langue_interface = "en" if valeur_langue == "en" or valeur_langue.startswith("en-") else "fr"
     if user_id and acces_chat_bloque_pour_mineur(user_id):
         return StreamingResponse(
             _evenement_bloque(
@@ -382,7 +386,7 @@ def envoyer_message(request: Request, payload: EnvoyerMessagePayload, utilisateu
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
     return StreamingResponse(
-        _evenements_sse(payload, user_id),
+        _evenements_sse(payload, user_id, langue_interface),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
