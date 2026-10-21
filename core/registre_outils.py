@@ -74,7 +74,7 @@ def _url_video(get_secret, user_id, agent_id, conversation_id=None):
     port = os.environ.get("PORT", "8000")
     from urllib.parse import urlencode
     params = urlencode({"user_id": user_id or "", "conversation_id": conversation_id or ""})
-    return f"http://localhost:{port}/mcp/video?{params}"
+    return f"http://localhost:{port}/mcp/video/?{params}"
 
 
 def _headers_video(get_secret, user_id, agent_id):
