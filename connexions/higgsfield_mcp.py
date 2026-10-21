@@ -141,9 +141,8 @@ def demarrer_connexion(user_id, agent_id=None):
             "state": state,
             "resource": MCP_URL,
         }
-        # Higgsfield refuse les permissions supplementaires (ex. private_metadata).
-        # Garder uniquement les scopes necessaires au flux OAuth utilisateur.
-        params["scope"] = "openid email offline_access"
+        scopes = metadata.get("_scopes") or ["openid", "email", "offline_access"]
+        params["scope"] = " ".join(scopes)
         return f'{metadata["authorization_endpoint"]}?{urlencode(params)}'
     except Exception as exc:
         logging.error("Démarrage OAuth Higgsfield échoué: %s", exc)
