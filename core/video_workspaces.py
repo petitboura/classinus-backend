@@ -7,6 +7,7 @@ Les identifiants utilisateur/conversation sont hachés avant de devenir des chem
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import mimetypes
 import os
@@ -29,7 +30,13 @@ EXTENSIONS_MIME = {
 def _segment(value: str) -> str:
     if not value or len(value) > 256:
         raise ValueError("Identifiant utilisateur ou conversation invalide.")
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:32]
+    # Les URLs de fichiers R2 sont servies par le relais backend. Un simple
+    # SHA d'un user_id/conversation_id connu rendrait les chemins privés
+    # calculables. HMAC avec le secret serveur rend les préfixes non devinables.
+    secret = os.environ.get("CLASSINUS_VIDEO_WORKSPACE_SECRET") or os.environ.get("SUPABASE_SECRET")
+    if not secret:
+        raise RuntimeError("Le secret serveur est requis pour isoler les espaces vidéo.")
+    return hmac.new(secret.encode("utf-8"), value.encode("utf-8"), hashlib.sha256).hexdigest()[:32]
 
 
 def workspace_dir(user_id: str, conversation_id: str, *, create: bool = True) -> Path:
