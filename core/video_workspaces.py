@@ -247,11 +247,21 @@ def _lire_manifest_workspace(stockage, user_id: str, conversation_id: str) -> di
         if not isinstance(manifest, dict) or not isinstance(manifest.get("files", []), list):
             raise ValueError("Manifest workspace invalide.")
         return manifest
-    except Exception:
-        # Un workspace sans manifeste est un nouveau workspace. Toute erreur
-        # de persistance sera remontée par synchroniser_workspace au moment
-        # d'écrire le manifeste, pas masquée comme un succès de montage.
+    except FileNotFoundError:
         return {"version": 1, "files": []}
+    except Exception as exc:
+        # Ne jamais remplacer un manifeste valide par une liste vide si R2
+        # est temporairement indisponible : cela ferait perdre la référence
+        # vers des versions antérieures du montage.
+        try:
+            from botocore.exceptions import ClientError
+            if isinstance(exc, ClientError):
+                code = str((exc.response or {}).get("Error", {}).get("Code", ""))
+                if code in {"NoSuchKey", "NotFound", "404"}:
+                    return {"version": 1, "files": []}
+        except ImportError:
+            pass
+        raise RuntimeError("Impossible de lire le manifeste du workspace vidéo dans R2.") from exc
 
 
 def restaurer_workspace(user_id: str, conversation_id: str, *, root: Path | None = None) -> dict:
