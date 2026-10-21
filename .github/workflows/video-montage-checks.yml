@@ -95,7 +95,7 @@ jobs:
                       "/mcp/video",
                       mcp_video.streamable_http_app(stateless_http=True, streamable_http_path="/"),
                   )
-                  url = "http://testserver/mcp/video?user_id=ci-user&conversation_id=ci-conversation"
+                  url = "http://testserver/mcp/video/?user_id=ci-user&conversation_id=ci-conversation"
                   async with mcp_video.session_manager.run():
                       async with httpx.AsyncClient(
                           transport=httpx.ASGITransport(app=app),
