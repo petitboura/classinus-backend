@@ -7,6 +7,7 @@ Les identifiants utilisateur/conversation sont hachés avant de devenir des chem
 from __future__ import annotations
 
 import hashlib
+import json
 import mimetypes
 import os
 import tempfile
@@ -44,7 +45,7 @@ def workspace_dir(user_id: str, conversation_id: str, *, create: bool = True) ->
     return root
 
 
-def enregistrer_video(user_id: str, conversation_id: str, nom: str, mime: str, contenu: bytes) -> dict:
+def enregistrer_video(user_id: str, conversation_id: str, nom: str, mime: str, contenu: bytes, duree_secondes: float | None = None) -> dict:
     """Stocke temporairement une source originale, avec un identifiant opaque."""
     extension = EXTENSIONS_MIME.get(mime)
     if not extension:
@@ -57,12 +58,33 @@ def enregistrer_video(user_id: str, conversation_id: str, nom: str, mime: str, c
     temporaire = destination.with_suffix(destination.suffix + ".part")
     temporaire.write_bytes(contenu)
     temporaire.replace(destination)
-    return {
+    metadonnees = {
         "video_id": video_id,
         "nom_fichier": Path(nom or f"video{extension}").name,
         "taille_octets": len(contenu),
         "type_mime": mime,
+        "duree_secondes": round(float(duree_secondes), 3) if duree_secondes is not None else None,
     }
+    fichier_meta = root / "uploads" / f"{video_id}.json"
+    fichier_meta.write_text(json.dumps(metadonnees, ensure_ascii=False), encoding="utf-8")
+    return metadonnees
+
+
+def lire_metadonnees_video(user_id: str, conversation_id: str, video_id: str) -> dict:
+    """Retourne les métadonnées uniquement si la source appartient à cette conversation."""
+    try:
+        identifiant = uuid.UUID(hex=video_id).hex
+    except (ValueError, AttributeError, TypeError):
+        raise ValueError("Identifiant de vidéo invalide.") from None
+    root = workspace_dir(user_id, conversation_id, create=False)
+    source = chemin_video(user_id, conversation_id, identifiant)
+    meta_path = (root / "uploads" / f"{identifiant}.json").resolve()
+    if root not in meta_path.parents or not meta_path.is_file() or not source.is_file():
+        raise FileNotFoundError("Métadonnées de vidéo introuvables dans cette conversation.")
+    data = json.loads(meta_path.read_text(encoding="utf-8"))
+    if data.get("video_id") != identifiant:
+        raise ValueError("Métadonnées de vidéo invalides.")
+    return data
 
 
 def chemin_video(user_id: str, conversation_id: str, video_id: str) -> Path:
