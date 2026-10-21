@@ -35,6 +35,20 @@ def _traduire_enveloppe(erreur: Any) -> bool:
     if not isinstance(erreur, dict):
         return False
     detail = erreur.get("detail")
+    if isinstance(detail, str):
+        # Compatibilité avec les anciennes routes FastAPI qui renvoient
+        # HTTPException(detail="...") sans code stable. On ne traduit que
+        # les messages strictement identiques au catalogue et seulement si
+        # toutes les entrées correspondantes convergent vers la même phrase.
+        traductions = {
+            MESSAGES_EN[code]
+            for code, message_fr in MESSAGES_FR.items()
+            if message_fr == detail and code in MESSAGES_EN
+        }
+        if len(traductions) == 1:
+            erreur["detail"] = next(iter(traductions))
+            return True
+        return False
     if not isinstance(detail, dict):
         return False
     code = detail.get("code")
