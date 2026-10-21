@@ -20,12 +20,13 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "core"))
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Literal
 
 from api.auth import utilisateur_optionnel, supabase
+from core.video_workspaces import chemin_video, lire_metadonnees_video, workspace_dir
 from core.arret_tour import demander_arret_utilisateur, fermer_arret, ouvrir_arret
 from core.canal_agent_applicatif import (
     annuler_attentes, debuter_tour, definir_lecture_editeur_chat, diffuser_arret, renvoyer_messages_non_lus,
@@ -73,6 +74,26 @@ class RepriseConfirmation(BaseModel):
     approuve: bool
 
 
+class ZoneSelectionVideo(BaseModel):
+    """Zone normalisée en coordonnées relatives à l'image vidéo (0 à 1)."""
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    largeur: float = Field(gt=0, le=1)
+    hauteur: float = Field(gt=0, le=1)
+
+
+class ContexteVideoPayload(BaseModel):
+    """Contexte de montage associé à une source déjà déposée dans la conversation."""
+    video_id: str = Field(min_length=32, max_length=32)
+    nom_fichier: Optional[str] = None
+    duree_secondes: Optional[float] = Field(default=None, ge=0, le=120)
+    debut: Optional[float] = Field(default=None, ge=0)
+    fin: Optional[float] = Field(default=None, ge=0)
+    zone: Optional[ZoneSelectionVideo] = None
+    # Champs renseignés côté serveur uniquement après contrôle de propriété.
+    source_path: Optional[str] = None
+
+
 class EnvoyerMessagePayload(BaseModel):
     # message/agent_id optionnels : sur un appel de reprise (après
     # confirmation_requise), seul `reprise` est fourni -- chat_generateur
@@ -109,6 +130,9 @@ class EnvoyerMessagePayload(BaseModel):
     # api/uploads.py:uploader_video_chat). Combinable avec image_url mais
     # rarement les deux en même temps en pratique.
     images_base64: Optional[List[str]] = None
+    # Atelier vidéo contextuel : la source est vérifiée par utilisateur+conversation
+    # avant d'être transmise à core/main.py. Absent = comportement historique.
+    contexte_video: Optional[ContexteVideoPayload] = None
     # Zip(s) joint(s) au message (26/09/2026, chantier "zip en
     # conversation") : job_id(s) renvoyé(s) par
     # POST /api/uploads/zip-chat/demarrer, appelé DÈS l'upload (avant
@@ -304,6 +328,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
                 client=payload.client,
                 libelles_client=payload.libelles_client,
                 origine=payload.origine,
+                contexte_video=payload.contexte_video.model_dump() if payload.contexte_video else None,
             )
         for evenement in generateur:
             yield f"data: {json.dumps(evenement)}\n\n"
@@ -373,6 +398,33 @@ def envoyer_message(request: Request, payload: EnvoyerMessagePayload, utilisateu
     façon rejetée.
     """
     user_id = utilisateur.id if utilisateur else None
+
+    # Le montage vidéo est réservé aux comptes connectés et aux sources déposées
+    # dans CETTE conversation. Ne jamais accepter le chemin absolu fourni par le client.
+    if payload.contexte_video is not None:
+        contexte = payload.contexte_video
+        if not user_id or not payload.conversation_id:
+            raise HTTPException(status_code=401, detail="Connecte-toi pour modifier une vidéo.")
+        if (contexte.debut is None) != (contexte.fin is None):
+            raise HTTPException(status_code=422, detail="L'intervalle vidéo doit avoir un début et une fin.")
+        if contexte.debut is None and contexte.zone is None:
+            raise HTTPException(status_code=422, detail="Sélectionne un intervalle ou une zone de l'image.")
+        try:
+            metadata = lire_metadonnees_video(user_id, payload.conversation_id, contexte.video_id)
+            source = chemin_video(user_id, payload.conversation_id, contexte.video_id)
+            duree_reelle = float(metadata.get("duree_secondes") or 0)
+        except (ValueError, FileNotFoundError, OSError):
+            raise HTTPException(status_code=404, detail="Cette vidéo n'est pas disponible dans cette conversation.") from None
+        if contexte.debut is not None and contexte.fin is not None:
+            if contexte.fin <= contexte.debut:
+                raise HTTPException(status_code=422, detail="La fin doit être après le début de la sélection.")
+            if duree_reelle > 0 and contexte.fin > duree_reelle + 0.05:
+                raise HTTPException(status_code=422, detail="La sélection dépasse la durée de la vidéo.")
+        racine = workspace_dir(user_id, payload.conversation_id, create=False)
+        contexte.nom_fichier = metadata.get("nom_fichier") or contexte.nom_fichier
+        contexte.duree_secondes = duree_reelle
+        contexte.source_path = source.relative_to(racine).as_posix()
+
     if user_id and acces_chat_bloque_pour_mineur(user_id):
         return StreamingResponse(
             _evenement_bloque(
