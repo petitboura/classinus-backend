@@ -463,6 +463,11 @@ async def _lifespan(app: FastAPI):
 
 app = FastAPI(title="Classinus API", version="0.1.0", lifespan=_lifespan)
 
+# Traduction optionnelle des erreurs HTTP structurées selon Accept-Language ;
+# ne modifie pas les réponses métier ni les flux SSE.
+from core.localisation import MiddlewareLangueErreurs
+app.add_middleware(MiddlewareLangueErreurs)
+
 # Limitation de débit (rate limiting) -- voir core/limitation_debit.py.
 # Empêche qu'un utilisateur (ou un spam anonyme) puisse envoyer un nombre
 # illimité de requêtes/minute sur les endpoints coûteux (chat, génération),
