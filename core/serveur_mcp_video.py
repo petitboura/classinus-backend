@@ -136,7 +136,12 @@ def video_lister_outils(ctx: Context, recherche: str = "") -> dict[str, Any]:
 
 
 def _sortie_par_defaut(nom_outil: str, arguments: dict, root: Path) -> None:
-    if "output_path" in arguments and not arguments.get("output_path"):
+    schema = _schema(_tools_dict().get(nom_outil))
+    proprietes = schema.get("properties", {}) if isinstance(schema, dict) else {}
+    if not isinstance(proprietes, dict):
+        proprietes = {}
+    cle_sortie = next((key for key in ("output_path", "output_file") if key in proprietes), None)
+    if cle_sortie and not arguments.get(cle_sortie):
         if nom_outil in {"video_thumbnail", "video_extract_frame", "video_still", "remotion_still", "video_export_frames"} or nom_outil.startswith("image_"):
             extension = ".png"
         elif nom_outil.startswith("audio_") or nom_outil == "video_extract_audio":
@@ -145,32 +150,43 @@ def _sortie_par_defaut(nom_outil: str, arguments: dict, root: Path) -> None:
             extension = ".srt"
         else:
             extension = ".mp4"
-        (root / "outputs").mkdir(parents=True, exist_ok=True)
-        arguments["output_path"] = str(root / "outputs" / f"{nom_outil}_{uuid.uuid4().hex}{extension}")
-    if "output_dir" in arguments and not arguments.get("output_dir"):
+        dossier_sortie = root / "outputs"
+        dossier_sortie.mkdir(parents=True, exist_ok=True)
+        arguments[cle_sortie] = str(dossier_sortie / f"{nom_outil}_{uuid.uuid4().hex}{extension}")
+    if "output_dir" in proprietes and not arguments.get("output_dir"):
         dossier = root / ("projects" if nom_outil == "remotion_create_project" else "outputs")
+        dossier.mkdir(parents=True, exist_ok=True)
         arguments["output_dir"] = str(dossier / f"{nom_outil}_{uuid.uuid4().hex}")
-    if nom_outil == "remotion_create_project" and not arguments.get("output_dir"):
-        arguments["output_dir"] = str(root / "projects")
+
+
+def _cle_est_chemin(cle: str) -> bool:
+    return (
+        cle in PATH_KEYS
+        or cle.endswith(("_path", "_file", "_dir", "_paths", "_files"))
+        or cle in {"input", "video", "audio", "image", "clips", "images", "paths"}
+    )
 
 
 def _normaliser_arguments(nom_outil: str, arguments: dict, root: Path) -> dict:
     nettoyes = dict(arguments)
     _sortie_par_defaut(nom_outil, nettoyes, root)
-    for key, value in list(nettoyes.items()):
-        if key not in PATH_KEYS or value is None:
-            continue
-        est_sortie = key in {"output_path", "output_dir"}
-        est_projet = key in {"output_dir", "project_path", "project_dir"} or nom_outil.startswith("remotion_")
-        if isinstance(value, list):
-            nettoyes[key] = [
-                chemin_interne(root, item, sortie=est_sortie, projet=est_projet) if isinstance(item, str) else item
-                for item in value
-            ]
-        elif isinstance(value, str):
-            nettoyes[key] = chemin_interne(root, value, sortie=est_sortie, projet=est_projet)
-    # Un chemin de projet Remotion doit être sous projects/, les sorties vidéo
-    # ne peuvent jamais écraser la source sous uploads/.
+
+    def normaliser(valeur: Any, cle: str = "") -> Any:
+        if isinstance(valeur, str) and _cle_est_chemin(cle):
+            est_sortie = cle.startswith("output_")
+            est_projet = cle in {"output_dir", "project_path", "project_dir", "project_root"} or (
+                nom_outil.startswith("remotion_") and est_sortie
+            )
+            return chemin_interne(root, valeur, sortie=est_sortie, projet=est_projet)
+        if isinstance(valeur, list):
+            return [normaliser(item, cle) for item in valeur]
+        if isinstance(valeur, dict):
+            return {key: normaliser(item, str(key)) for key, item in valeur.items()}
+        return valeur
+
+    # Valide aussi les chemins dans les listes/dictionnaires imbriqués, par
+    # exemple les clips d'une séquence. Aucun outil ne peut sortir du workspace.
+    nettoyes = {key: normaliser(value, key) for key, value in nettoyes.items() if value is not None}
     return nettoyes
 
 
