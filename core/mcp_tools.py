@@ -174,6 +174,28 @@ def _lister_outils_serveur_avec_cache(nom, url, headers):
     return outils
 
 
+def _details_erreur(erreur, profondeur=0):
+    """
+    Aplatit une erreur en liste de lignes lisibles. Un groupe d'erreurs
+    (TaskGroup, ExceptionGroup) est déplié jusqu'aux vraies causes, avec le
+    type de chaque erreur et sa cause d'origine si elle existe. Sert
+    uniquement aux journaux : ne change jamais le comportement.
+    """
+    if profondeur > 5:
+        return [repr(erreur)]
+    sous_erreurs = getattr(erreur, "exceptions", None)
+    if sous_erreurs:
+        lignes = []
+        for sous_erreur in sous_erreurs:
+            lignes.extend(_details_erreur(sous_erreur, profondeur + 1))
+        return lignes
+    ligne = f"{type(erreur).__name__}: {erreur}"
+    cause = erreur.__cause__ or erreur.__context__
+    if cause is not None and cause is not erreur:
+        ligne += f" (cause d'origine : {type(cause).__name__}: {cause})"
+    return [ligne]
+
+
 async def _lister_outils_async(url, headers=None):
     # CORRECTION (29/07) : mcp 2.0.0 a renomme streamablehttp_client en
     # streamable_http_client ET retire le parametre headers= direct -- les
@@ -312,6 +334,11 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
                 table_routage[f"{prefixe}{outil.name}"] = route
         except Exception as e:
             logging.error(f"ERREUR MCP listing ({nom}): {e}")
+            # 21/10/2026 (demande de Bourama) : le message ci-dessus reste vague quand
+            # l'erreur vient d'un groupe d'erreurs (ex. "unhandled errors in a
+            # TaskGroup"). On note ici la vraie cause de chaque sous-erreur.
+            for detail in _details_erreur(e):
+                logging.error(f"ERREUR MCP listing ({nom}) cause réelle : {detail}")
 
     # Origine de l'appareil (20/10/2026, demande de Bourama) : les outils d'écran qui n'existent pas
     # sur l'appareil utilisé ne sont jamais proposés. Origine inconnue : rien n'est retiré.
