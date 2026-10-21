@@ -24,6 +24,7 @@ from routage_outils import (
     NOM_OUTIL_DEMANDER_OUTILS,
 )
 from recherche_outils import rechercher_outils_pertinents
+from completion_outils import completer_outils_trouves, prerequis_parmi
 from registre_outils import REGISTRE_AFFICHAGE_OUTILS, outils_de_la_categorie
 
 # Libellés français (déjà maintenus pour l'affichage à l'écran) réutilisés
@@ -686,13 +687,29 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     candidats = [o for o in catalogue_complet if o["function"]["name"] not in deja_en_main]
                     if recherche["categorie"]:
                         candidats = outils_de_la_categorie(recherche["categorie"], candidats)
-                    trouves = rechercher_outils_pertinents(recherche["besoin"], candidats, libelles_supplementaires=_LIBELLES_POUR_RECHERCHE_OUTILS)
+                    # completer_hors_score seulement avec une categorie : le minimum
+                    # de 5 outils se complete alors dans cette categorie, jamais au
+                    # hasard sur tout le catalogue (voir recherche_outils.py).
+                    trouves = rechercher_outils_pertinents(
+                        recherche["besoin"], candidats,
+                        libelles_supplementaires=_LIBELLES_POUR_RECHERCHE_OUTILS,
+                        completer_hors_score=bool(recherche["categorie"]),
+                    )
+                    # Groupes et dependances (21/10/2026, demande Bourama) : les
+                    # outils qui vont avec ceux trouves, ex. l'outil qui fournit un
+                    # projectId. Voir completion_outils.py.
+                    liens = completer_outils_trouves(
+                        trouves, catalogue_complet,
+                        deja_en_main | {o["function"]["name"] for o in trouves_total} | {o["function"]["name"] for o in trouves},
+                    )
                     trouves_total.extend(trouves)
+                    trouves_total.extend(lien["outil"] for lien in liens)
                     etiquette_categorie = f" [{recherche['categorie']}]" if recherche["categorie"] else ""
                     if trouves:
                         lignes_detail.append(
                             f"- \"{recherche['besoin']}\"{etiquette_categorie} -> "
                             + ", ".join(o["function"]["name"] for o in trouves)
+                            + (f" (avec : {', '.join(l['outil']['function']['name'] for l in liens)})" if liens else "")
                         )
                     else:
                         lignes_detail.append(f"- \"{recherche['besoin']}\"{etiquette_categorie} -> rien trouvé")
@@ -721,6 +738,15 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                         f"Trouvé et ajouté à tes outils disponibles : {noms_trouves}. "
                         "Tu peux les appeler dès maintenant pour continuer."
                     )
+                    # Ordre d'appel : si un outil donne ici en exige un autre pour obtenir
+                    # un identifiant (projectId...), on le dit au modele.
+                    prerequis = prerequis_parmi(trouves_total)
+                    if prerequis:
+                        a_appeler_d_abord = ", ".join(f"{nom} (pour {', '.join(exigeants)})" for nom, exigeants in prerequis.items())
+                        contenu_reponse += (
+                            " Certains de ces outils exigent un identifiant obtenu avec un autre : "
+                            f"appelle d'abord {a_appeler_d_abord}, puis reprends les identifiants renvoyés."
+                        )
                     # Texte de fin identique aux autres outils (19/09/2026, demande
                     # Bourama : les noms techniques des outils trouves ne doivent
                     # plus s'afficher ici). Le detail, lui, reste visible en

@@ -37,6 +37,16 @@ _BM25_B = 0.75
 # rechercher_outils_pertinents().
 SEUIL_PERTINENCE_DEFAUT = 0.15
 
+# 21/10/2026 (demande Bourama) : demander_outils doit toujours presenter un
+# minimum d'outils (5), meme quand peu d'outils depassent le seuil, pour que le
+# modele ne reste pas bloque sur un "rien trouve". Plus de maximum a 5 : le
+# plafond ci-dessous n'est qu'un garde-fou pour qu'un besoin vague ne deverse
+# pas des dizaines d'outils dans le contexte. Les outils ajoutes ensuite par
+# les groupes et les dependances (completion_outils.py) ne comptent dans aucun
+# des deux.
+MINIMUM_OUTILS_DEFAUT = 5
+PLAFOND_OUTILS_DEFAUT = 15
+
 # Mots trop courants en français pour aider à distinguer un outil d'un
 # autre (déterminants, prépositions...). Liste volontairement courte :
 # le but est juste d'éviter que ces mots dominent le score, pas de faire
@@ -87,7 +97,33 @@ def _texte_outil(outil, libelle_supplementaire=""):
     return f"{nom} {nom} {description} {libelle_supplementaire}".strip()
 
 
-def rechercher_outils_pertinents(texte_requete, outils_candidats, seuil_pertinence=SEUIL_PERTINENCE_DEFAUT, max_resultats=5, libelles_supplementaires=None):
+def _selectionner(classes, outils_candidats, seuil_pertinence, max_resultats, minimum_resultats, completer_hors_score):
+    """
+    `classes` : [(outil, score entre 0 et 1)] des outils avec un score au dessus
+    de zéro, du plus au moins pertinent (liste vide si aucun mot en commun).
+    Garde ceux au dessus du seuil (plafond max_resultats), puis complète
+    jusqu'au minimum, voir rechercher_outils_pertinents.
+    """
+    if not classes and not completer_hors_score:
+        return []
+    retenus = [outil for outil, score in classes if score >= seuil_pertinence][:max_resultats]
+    minimum = min(minimum_resultats, len(outils_candidats))
+    if len(retenus) < minimum:
+        for outil, _score in classes:
+            if len(retenus) >= minimum:
+                break
+            if not any(outil is deja for deja in retenus):
+                retenus.append(outil)
+    if completer_hors_score and len(retenus) < minimum:
+        for outil in outils_candidats:
+            if len(retenus) >= minimum:
+                break
+            if not any(outil is deja for deja in retenus):
+                retenus.append(outil)
+    return retenus
+
+
+def rechercher_outils_pertinents(texte_requete, outils_candidats, seuil_pertinence=SEUIL_PERTINENCE_DEFAUT, max_resultats=PLAFOND_OUTILS_DEFAUT, libelles_supplementaires=None, minimum_resultats=MINIMUM_OUTILS_DEFAUT, completer_hors_score=False):
     """
     Compare `texte_requete` (la phrase libre écrite par le grand modèle,
     ex. "il me faudrait un outil pour lire un fichier PDF") aux
@@ -103,8 +139,17 @@ def rechercher_outils_pertinents(texte_requete, outils_candidats, seuil_pertinen
             tri là dessus, ce n'est pas son rôle.
         seuil_pertinence: score BM25 normalisé minimum (entre 0 et 1) pour
             qu'un outil soit retenu. Par défaut SEUIL_PERTINENCE_DEFAUT.
-        max_resultats: nombre maximum d'outils renvoyés, même si plus
-            d'outils dépassent le seuil.
+        max_resultats: plafond de sécurité d'outils renvoyés, même si plus
+            d'outils dépassent le seuil (voir PLAFOND_OUTILS_DEFAUT).
+        minimum_resultats: nombre minimum d'outils renvoyés (voir
+            MINIMUM_OUTILS_DEFAUT). Si moins d'outils dépassent le seuil, on
+            complète avec les suivants les mieux classés (score au dessus de
+            zéro). Jamais plus que le nombre d'outils candidats.
+        completer_hors_score: si Vrai et que le minimum n'est toujours pas
+            atteint (aucun mot en commun, ou trop peu d'outils avec un score),
+            complète avec les autres candidats dans leur ordre d'origine.
+            À n'activer que lorsque les candidats ont déjà été limités à une
+            catégorie : sur tout le catalogue, ce serait arbitraire.
         libelles_supplementaires: dict optionnel {nom_outil: texte français}
             utilisé seulement pour la comparaison (voir _texte_outil), pas
             renvoyé dans le résultat. Sert à combler les outils externes
@@ -112,15 +157,16 @@ def rechercher_outils_pertinents(texte_requete, outils_candidats, seuil_pertinen
 
     Returns:
         Liste de dicts, sous-ensemble de `outils_candidats`, triée du plus
-        au moins pertinent. Liste vide si rien ne dépasse le seuil (y
-        compris si `outils_candidats` est vide ou `texte_requete` vide).
+        au moins pertinent. Liste vide si `outils_candidats` est vide ou
+        `texte_requete` vide, ou si aucun candidat n'a de score et que
+        `completer_hors_score` est faux.
     """
     if not texte_requete or not outils_candidats:
         return []
 
     tokens_requete = _tokeniser(texte_requete)
     if not tokens_requete:
-        return []
+        return _selectionner([], outils_candidats, seuil_pertinence, max_resultats, minimum_resultats, completer_hors_score)
 
     libelles_supplementaires = libelles_supplementaires or {}
     documents = [
@@ -152,13 +198,13 @@ def rechercher_outils_pertinents(texte_requete, outils_candidats, seuil_pertinen
 
     score_max = max(scores_bruts) if scores_bruts else 0.0
     if score_max <= 0:
-        return []
+        return _selectionner([], outils_candidats, seuil_pertinence, max_resultats, minimum_resultats, completer_hors_score)
 
-    resultats = [
+    classes = [
         (outil, score / score_max)
         for outil, score in zip(outils_candidats, scores_bruts)
-        if score / score_max >= seuil_pertinence
+        if score > 0
     ]
-    resultats.sort(key=lambda paire: paire[1], reverse=True)
+    classes.sort(key=lambda paire: paire[1], reverse=True)
 
-    return [outil for outil, _score in resultats[:max_resultats]]
+    return _selectionner(classes, outils_candidats, seuil_pertinence, max_resultats, minimum_resultats, completer_hors_score)

@@ -1125,3 +1125,74 @@ def outils_de_la_categorie(nom_categorie, outils_candidats):
         or (prefixe and o["function"]["name"].startswith(prefixe))
     ]
 
+
+
+# ---------------------------------------------------------------------------
+# Groupes et dependances d'outils pour demander_outils (21/10/2026, demande
+# Bourama). Donnees pures, lues par core/completion_outils.py : ajouter une
+# ligne ici suffit, aucun code a toucher.
+#
+# GROUPES_OUTILS : outils qui doivent toujours etre donnes ENSEMBLE. Si
+# demander_outils en trouve un, il donne aussi tous les autres du groupe
+# (dans les deux sens). Seuls les outils reellement presents dans le
+# catalogue autorise du tour sont ajoutes : un nom absent est ignore sans
+# erreur. Les outils de memoire ne sont pas ici : ils sont deja donnes a
+# chaque tour (voir NOMS_OUTILS_MEMOIRE_TOUJOURS_DISPONIBLES, routage_outils.py).
+# marquer_sujet_clos et rappeler_* ne sont volontairement dans aucun groupe :
+# main.py les force lui-meme selon la taille de l'historique.
+# ---------------------------------------------------------------------------
+GROUPES_OUTILS = {
+    "ecran_pc": [
+        "lire_ecran", "pointer_ecran", "marquer_ecran", "cliquer_ecran",
+        "taper_clavier", "appuyer_touches", "ouvrir_application",
+    ],
+    "ecran_telephone": ["lire_ecran_telephone", "marquer_ecran_telephone"],
+    "editeur": ["lire_editeur", "montrer_dans_editeur", "ecrire_dans_editeur"],
+    "actions_application": [
+        "executer_action_application", "executer_clic_generique",
+        "montrer_element_application", "ecrire_dans_champ",
+    ],
+    "documents_externes": [
+        "rechercher_document_externe", "lire_document_externe", "lire_document_internet_archive",
+    ],
+    "video": ["rechercher_video", "lire_video"],
+    "conversations_passees": ["lister_conversations_historique", "lire_conversation_historique"],
+    "bibliotheque": [
+        "gerer_document_bibliotheque", "gerer_dossier_bibliotheque", "gerer_fichier_conversation",
+    ],
+    "telephone": ["gerer_dossier_telephone", "explorer_dossier", "gerer_session_concentration"],
+    "comportements": ["gerer_comportement", "gerer_comportement_public"],
+    "site": ["generer_site_zip", "deployer_site"],
+}
+
+# DEPENDANCES_OUTILS : un outil qui exige qu'un autre soit appele AVANT lui
+# (sens unique). {outil: [outils a donner avec lui]}. Pour les serveurs MCP
+# dont le catalogue est trop grand pour une liste a la main, voir
+# FOURNISSEURS_PARAMETRES_PAR_PREFIXE juste en dessous.
+DEPENDANCES_OUTILS = {
+    # Notion : la description de cet outil impose de lire d'abord la source
+    # de donnees avec notion-fetch pour en obtenir le schema et l'adresse.
+    "notion-query-multiple-data-sources": ["notion-fetch"],
+}
+
+# FOURNISSEURS_PARAMETRES_PAR_PREFIXE : pour les serveurs MCP personnels, un
+# outil dont un parametre OBLIGATOIRE est un identifiant (projectId,
+# serviceId...) a besoin de l'outil qui fournit cet identifiant. Regle par
+# parametre et non par outil : elle couvre aussi les outils ajoutes plus tard
+# par le serveur (schemas lus en direct, voir mcp_tools.py). Verifie le
+# 21/10/2026 sur les schemas reels de Railway, Vercel et Supabase.
+# {prefixe de nom: {parametre obligatoire: outil qui le fournit}}
+FOURNISSEURS_PARAMETRES_PAR_PREFIXE = {
+    "railway_": {
+        "projectId": "railway_list-projects",
+        "serviceId": "railway_list-services",
+        "environmentId": "railway_list-services",
+    },
+    "vercel_": {
+        "teamId": "vercel_list_teams",
+        "projectId": "vercel_list_projects",
+    },
+    "supabase_": {
+        "project_id": "supabase_list_projects",
+    },
+}
