@@ -210,3 +210,157 @@ def chemin_interne(root: Path, valeur: str, *, sortie: bool = False, projet: boo
     elif not candidat.exists():
         raise FileNotFoundError(f"Fichier introuvable dans l'espace de travail : {candidat.name}")
     return str(candidat)
+
+
+# Seuls les résultats et les sources de projet sont synchronisés. Les caches
+# installés par npm/Remotion ne sont ni utiles ni adaptés au stockage objet.
+_REPERTOIRES_PERSISTANTS = ("outputs", "projects")
+_REPERTOIRES_IGNORES = {
+    "node_modules", ".git", ".next", ".venv", "venv", "__pycache__",
+    ".cache", ".remotion", "dist", "build", "coverage",
+}
+_MAX_FICHIERS_WORKSPACE = 2000
+
+
+def _prefix_workspace(user_id: str, conversation_id: str) -> str:
+    return (
+        f"montages-video/workspaces/{_segment(user_id)}/"
+        f"{_segment(conversation_id)}"
+    )
+
+
+def _cle_workspace(user_id: str, conversation_id: str, relative: str) -> str:
+    chemin = Path(relative)
+    if chemin.is_absolute() or any(part in ("", ".", "..") for part in chemin.parts):
+        raise ValueError("Chemin de workspace invalide.")
+    if not chemin.parts or chemin.parts[0] not in _REPERTOIRES_PERSISTANTS:
+        raise ValueError("Seuls outputs/ et projects/ sont persistés.")
+    return f"{_prefix_workspace(user_id, conversation_id)}/{chemin.as_posix()}"
+
+
+def _lire_manifest_workspace(stockage, user_id: str, conversation_id: str) -> dict:
+    try:
+        donnees = stockage.download(
+            f"{_prefix_workspace(user_id, conversation_id)}/manifest.json"
+        )
+        manifest = json.loads(donnees.decode("utf-8"))
+        if not isinstance(manifest, dict) or not isinstance(manifest.get("files", []), list):
+            raise ValueError("Manifest workspace invalide.")
+        return manifest
+    except Exception:
+        # Un workspace sans manifeste est un nouveau workspace. Toute erreur
+        # de persistance sera remontée par synchroniser_workspace au moment
+        # d'écrire le manifeste, pas masquée comme un succès de montage.
+        return {"version": 1, "files": []}
+
+
+def restaurer_workspace(user_id: str, conversation_id: str, *, root: Path | None = None) -> dict:
+    """Restaure les sorties/projets d'une conversation depuis R2, instance indépendante."""
+    root = (root or workspace_dir(user_id, conversation_id)).resolve()
+    for repertoire in _REPERTOIRES_PERSISTANTS:
+        (root / repertoire).mkdir(parents=True, exist_ok=True)
+
+    from core import stockage_r2
+
+    stockage = stockage_r2.from_("images-publiques")
+    manifest = _lire_manifest_workspace(stockage, user_id, conversation_id)
+    restaure = 0
+
+    for entree in manifest.get("files", []):
+        if not isinstance(entree, dict):
+            continue
+        relative = entree.get("path")
+        digest_attendu = entree.get("sha256")
+        try:
+            cle = _cle_workspace(user_id, conversation_id, relative)
+            destination = (root / relative).resolve()
+            if root not in destination.parents or not isinstance(digest_attendu, str):
+                continue
+            if destination.is_file() and _sha256_fichier(destination) == digest_attendu:
+                continue
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            temporaire = destination.with_suffix(destination.suffix + ".part")
+            try:
+                stockage.download_to_file(cle, temporaire)
+            except AttributeError:
+                contenu = stockage.download(cle)
+                temporaire.write_bytes(contenu)
+            temporaire.replace(destination)
+            if _sha256_fichier(destination) == digest_attendu:
+                restaure += 1
+            else:
+                destination.unlink(missing_ok=True)
+                raise ValueError(f"Empreinte invalide pour le fichier restauré : {Path(relative).name}")
+        except FileNotFoundError:
+            continue
+    return {"restaure": restaure, "fichiers_manifest": len(manifest.get("files", []))}
+
+
+def _sha256_fichier(chemin: Path) -> str:
+    digest = hashlib.sha256()
+    with chemin.open("rb") as fichier:
+        for morceau in iter(lambda: fichier.read(1024 * 1024), b""):
+            digest.update(morceau)
+    return digest.hexdigest()
+
+
+def synchroniser_workspace(user_id: str, conversation_id: str, *, root: Path | None = None) -> dict:
+    """Persiste par delta les résultats et sources Remotion, en excluant les caches lourds."""
+    root = (root or workspace_dir(user_id, conversation_id)).resolve()
+    from core import stockage_r2
+
+    stockage = stockage_r2.from_("images-publiques")
+    manifest_ancien = _lire_manifest_workspace(stockage, user_id, conversation_id)
+    anciens = {
+        entree.get("path"): entree
+        for entree in manifest_ancien.get("files", [])
+        if isinstance(entree, dict) and isinstance(entree.get("path"), str)
+    }
+    nouveaux: list[dict] = []
+
+    for repertoire in _REPERTOIRES_PERSISTANTS:
+        base = (root / repertoire).resolve()
+        if root not in base.parents or not base.is_dir():
+            continue
+        for dossier, sous_dossiers, noms_fichiers in os.walk(base, followlinks=False):
+            sous_dossiers[:] = [
+                nom for nom in sous_dossiers
+                if nom not in _REPERTOIRES_IGNORES
+                and not (Path(dossier) / nom).is_symlink()
+            ]
+            for nom in noms_fichiers:
+                fichier = (Path(dossier) / nom).resolve()
+                if fichier.is_symlink() or not fichier.is_file() or fichier.name.endswith(".part"):
+                    continue
+                relative = fichier.relative_to(root).as_posix()
+                cle = _cle_workspace(user_id, conversation_id, relative)
+                taille = fichier.stat().st_size
+                digest = _sha256_fichier(fichier)
+                entree = {
+                    "path": relative,
+                    "sha256": digest,
+                    "size": taille,
+                    "type_mime": mimetypes.guess_type(fichier.name)[0] or "application/octet-stream",
+                }
+                ancien = anciens.get(relative)
+                if ancien and ancien.get("sha256") == digest and ancien.get("size") == taille:
+                    nouveaux.append(entree)
+                    continue
+                with fichier.open("rb") as contenu:
+                    stockage.upload(cle, contenu, {"content-type": entree["type_mime"]})
+                nouveaux.append(entree)
+                if len(nouveaux) > _MAX_FICHIERS_WORKSPACE:
+                    raise ValueError(
+                        f"Le workspace dépasse la limite de {_MAX_FICHIERS_WORKSPACE} fichiers persistants."
+                    )
+
+    manifeste = {"version": 1, "files": sorted(nouveaux, key=lambda item: item["path"])}
+    stockage.upload(
+        f"{_prefix_workspace(user_id, conversation_id)}/manifest.json",
+        json.dumps(manifeste, ensure_ascii=False).encode("utf-8"),
+        {"content-type": "application/json"},
+    )
+    return {"persistes": len(nouveaux), "nouveaux_ou_modifies": sum(
+        1 for entree in nouveaux
+        if entree.get("sha256") != anciens.get(entree["path"], {}).get("sha256")
+    )}
