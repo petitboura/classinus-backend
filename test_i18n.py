@@ -36,7 +36,7 @@ class TestLocalisation(unittest.TestCase):
         corps = {
             "detail": {
                 "code": "AGENT_NOM_DEJA_PROCHE",
-                "message": "Texte français",
+                "message": MESSAGES_FR["AGENT_NOM_DEJA_PROCHE"].format(agent_id="agent-456"),
                 "params": {"agent_id": "agent-456"},
             }
         }
@@ -108,13 +108,19 @@ class TestLocalisation(unittest.TestCase):
         enveloppe = {
             "detail": {
                 "code": "AGENT_NOM_DEJA_PROCHE",
-                "message": "Texte français",
+                "message": MESSAGES_FR["AGENT_NOM_DEJA_PROCHE"].format(agent_id="agent-123"),
                 "params": {"agent_id": "agent-123"},
             }
         }
         self.assertTrue(_traduire_enveloppe(enveloppe))
         self.assertIn("agent-123", enveloppe["detail"]["message"])
         self.assertIn("already exists", enveloppe["detail"]["message"])
+
+    def test_message_personnalise_est_preserve(self):
+        enveloppe = {"detail": {"code": "AGENT_NOM_DEJA_PROCHE", "message": "Détail spécifique en français", "params": {"agent_id": "agent-123"}}}
+        avant = {"detail": dict(enveloppe["detail"])}
+        self.assertFalse(_traduire_enveloppe(enveloppe))
+        self.assertEqual(enveloppe, avant)
 
     def test_code_inconnu_est_inchange(self):
         enveloppe = {"detail": {"code": "CODE_INCONNU", "message": "message français"}}
