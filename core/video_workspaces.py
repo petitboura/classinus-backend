@@ -45,19 +45,32 @@ def workspace_dir(user_id: str, conversation_id: str, *, create: bool = True) ->
     return root
 
 
-def enregistrer_video(user_id: str, conversation_id: str, nom: str, mime: str, contenu: bytes, duree_secondes: float | None = None) -> dict:
-    """Stocke temporairement une source originale, avec un identifiant opaque."""
+def _cle_stockage(user_id: str, conversation_id: str, video_id: str, extension: str) -> str:
+    """Chemin interne de stockage R2. La source originale n'est jamais publiée par URL."""
+    identifiant = uuid.UUID(hex=video_id).hex
+    return (
+        f"montages-video/originaux/{_segment(user_id)}/"
+        f"{_segment(conversation_id)}/{identifiant}{extension}"
+    )
+
+
+def enregistrer_video(
+    user_id: str,
+    conversation_id: str,
+    nom: str,
+    mime: str,
+    contenu: bytes,
+    duree_secondes: float | None = None,
+) -> dict:
+    """Stocke une source originale durablement dans R2 et en cache temporaire local."""
     extension = EXTENSIONS_MIME.get(mime)
     if not extension:
         raise ValueError("Format vidéo non pris en charge.")
     if not contenu:
         raise ValueError("Fichier vidéo vide.")
+
     root = workspace_dir(user_id, conversation_id)
     video_id = uuid.uuid4().hex
-    destination = root / "uploads" / f"{video_id}{extension}"
-    temporaire = destination.with_suffix(destination.suffix + ".part")
-    temporaire.write_bytes(contenu)
-    temporaire.replace(destination)
     metadonnees = {
         "video_id": video_id,
         "nom_fichier": Path(nom or f"video{extension}").name,
@@ -65,40 +78,113 @@ def enregistrer_video(user_id: str, conversation_id: str, nom: str, mime: str, c
         "type_mime": mime,
         "duree_secondes": round(float(duree_secondes), 3) if duree_secondes is not None else None,
     }
-    fichier_meta = root / "uploads" / f"{video_id}.json"
-    fichier_meta.write_text(json.dumps(metadonnees, ensure_ascii=False), encoding="utf-8")
+    cle_source = _cle_stockage(user_id, conversation_id, video_id, extension)
+    cle_meta = _cle_stockage(user_id, conversation_id, video_id, ".json")
+
+    # L'upload ne réussit que si la source et ses métadonnées sont durables.
+    # Cela évite que la sélection disparaisse si Railway réattribue la
+    # requête SSE à une autre instance ou redémarre après l'upload.
+    from core import stockage_r2
+
+    stockage = stockage_r2.from_("images-publiques")
+    try:
+        stockage.upload(cle_source, contenu, {"content-type": mime})
+        stockage.upload(
+            cle_meta,
+            json.dumps(metadonnees, ensure_ascii=False).encode("utf-8"),
+            {"content-type": "application/json"},
+        )
+    except Exception as exc:
+        try:
+            stockage.remove([cle_source, cle_meta])
+        except Exception:
+            pass
+        raise RuntimeError("Le stockage sécurisé de la vidéo est indisponible. Réessaie dans un instant.") from exc
+
+    # Cache temporaire optimisé : en cas d'échec local, la source reste
+    # restaurable depuis R2 par video_id et les identifiants validés.
+    destination = root / "uploads" / f"{video_id}{extension}"
+    temporaire = destination.with_suffix(destination.suffix + ".part")
+    try:
+        temporaire.write_bytes(contenu)
+        temporaire.replace(destination)
+        (root / "uploads" / f"{video_id}.json").write_text(
+            json.dumps(metadonnees, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except OSError:
+        try:
+            temporaire.unlink(missing_ok=True)
+        except OSError:
+            pass
+
     return metadonnees
 
 
 def lire_metadonnees_video(user_id: str, conversation_id: str, video_id: str) -> dict:
-    """Retourne les métadonnées uniquement si la source appartient à cette conversation."""
+    """Lit les métadonnées de R2, avec cache local uniquement en mode dégradé."""
     try:
         identifiant = uuid.UUID(hex=video_id).hex
     except (ValueError, AttributeError, TypeError):
         raise ValueError("Identifiant de vidéo invalide.") from None
+
     root = workspace_dir(user_id, conversation_id, create=False)
-    source = chemin_video(user_id, conversation_id, identifiant)
     meta_path = (root / "uploads" / f"{identifiant}.json").resolve()
-    if root not in meta_path.parents or not meta_path.is_file() or not source.is_file():
-        raise FileNotFoundError("Métadonnées de vidéo introuvables dans cette conversation.")
-    data = json.loads(meta_path.read_text(encoding="utf-8"))
-    if data.get("video_id") != identifiant:
-        raise ValueError("Métadonnées de vidéo invalides.")
+    if root not in meta_path.parents:
+        raise ValueError("Chemin de métadonnées invalide.")
+
+    data = None
+    try:
+        from core import stockage_r2
+
+        contenu = stockage_r2.from_("images-publiques").download(
+            _cle_stockage(user_id, conversation_id, identifiant, ".json")
+        )
+        data = json.loads(contenu.decode("utf-8"))
+    except Exception:
+        # Un cache local est utile en développement et pendant une panne
+        # passagère de stockage, mais une source absente ne sera pas autorisée.
+        if meta_path.is_file():
+            data = json.loads(meta_path.read_text(encoding="utf-8"))
+
+    if not isinstance(data, dict) or data.get("video_id") != identifiant:
+        raise FileNotFoundError("Cette vidéo n'existe pas dans cette conversation ou a expiré.")
+    if data.get("type_mime") not in EXTENSIONS_MIME:
+        raise ValueError("Type MIME des métadonnées vidéo invalide.")
     return data
 
 
 def chemin_video(user_id: str, conversation_id: str, video_id: str) -> Path:
-    """Résout seulement une vidéo uploadée dans l'espace propriétaire."""
+    """Résout ou restaure la source originale autorisée pour cette conversation."""
     try:
         identifiant = uuid.UUID(hex=video_id).hex
     except (ValueError, AttributeError, TypeError):
         raise ValueError("Identifiant de vidéo invalide.") from None
+
     root = workspace_dir(user_id, conversation_id, create=False)
     for extension in EXTENSIONS_MIME.values():
         chemin = (root / "uploads" / f"{identifiant}{extension}").resolve()
         if root in chemin.parents and chemin.is_file():
             return chemin
-    raise FileNotFoundError("Cette vidéo n'existe pas dans cette conversation ou a expiré.")
+
+    metadonnees = lire_metadonnees_video(user_id, conversation_id, identifiant)
+    extension = EXTENSIONS_MIME[metadonnees["type_mime"]]
+    cle_source = _cle_stockage(user_id, conversation_id, identifiant, extension)
+    chemin = (root / "uploads" / f"{identifiant}{extension}").resolve()
+    if root not in chemin.parents:
+        raise ValueError("Chemin de source vidéo invalide.")
+    try:
+        from core import stockage_r2
+
+        contenu = stockage_r2.from_("images-publiques").download(cle_source)
+        temporaire = chemin.with_suffix(chemin.suffix + ".part")
+        temporaire.write_bytes(contenu)
+        temporaire.replace(chemin)
+        return chemin
+    except Exception as exc:
+        raise FileNotFoundError(
+            "Cette vidéo n'existe pas dans cette conversation ou a expiré."
+        ) from exc
 
 
 def chemin_interne(root: Path, valeur: str, *, sortie: bool = False, projet: bool = False) -> str:
