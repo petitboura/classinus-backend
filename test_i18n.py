@@ -15,7 +15,8 @@ class TestLocalisation(unittest.TestCase):
 
     def test_les_traductions_conservent_les_parametres(self):
         def parametres(message):
-            return set(re.findall(r"(?<!\\{)\\{([A-Za-z_]\\w*)\\}(?!\\})", message))
+            return set(re.findall(r"(?<!\{)\{([A-Za-z_]\w*)\}(?!\})", message))
+            return set(re.findall(r"(?<!\{)\{([A-Za-z_]\w*)\}(?!\})", message))
 
         divergences = {
             code: {
