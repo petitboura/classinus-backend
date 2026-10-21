@@ -17,6 +17,7 @@ on:
       - "requirements.txt"
       - "railpack.json"
       - "tests/test_video_workspaces.py"
+      - "core/stockage_r2.py"
       - ".github/workflows/video-montage-checks.yml"
   workflow_dispatch:
 
@@ -39,6 +40,10 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
       - name: Install video MCP and test dependencies
         run: python -m pip install "mcp==2.0.0" "mcp-video[image,ai-scene]==1.2.1" boto3 pytest
       - name: Compile changed Python modules
@@ -61,4 +66,39 @@ jobs:
           assert callable(getattr(tools["video_trim"], "fn", None)), "video_trim handler is not callable"
           assert isinstance(_schema(tools["video_trim"]), dict), "video_trim schema is unavailable"
           print(f"Discovered {len(tools)} mcp-video tools; trim and Remotion schemas are available.")
+          PY
+      - name: Execute a real FFmpeg trim in an isolated workspace
+        run: |
+          python - <<'PY'
+          import hashlib
+          import subprocess
+          import tempfile
+          from pathlib import Path
+
+          from core.serveur_mcp_video import _normaliser_arguments, _tools_dict
+
+          with tempfile.TemporaryDirectory(prefix="classinus-video-smoke-") as temporary:
+              root = Path(temporary).resolve()
+              (root / "uploads").mkdir()
+              (root / "outputs").mkdir()
+              source = root / "uploads" / "source.mp4"
+              subprocess.run([
+                  "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                  "-f", "lavfi", "-i", "color=c=blue:s=320x240:d=2:r=24",
+                  "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(source),
+              ], check=True, timeout=30)
+              source_digest = hashlib.sha256(source.read_bytes()).hexdigest()
+              outil = _tools_dict()["video_trim"]
+              arguments = _normaliser_arguments(
+                  "video_trim",
+                  {"input_path": "uploads/source.mp4", "start": "0", "duration": "1"},
+                  root,
+              )
+              assert str(root / "outputs") in arguments["output_path"], "Output path escaped outputs/"
+              resultat = outil.fn(**arguments)
+              assert isinstance(resultat, dict) and resultat.get("success") is True, f"Trim failed: {resultat}"
+              sortie = Path(arguments["output_path"])
+              assert sortie.is_file() and sortie.stat().st_size > 0, "Trim produced no output file"
+              assert hashlib.sha256(source.read_bytes()).hexdigest() == source_digest, "Source video was overwritten"
+              print(f"FFmpeg trim passed: {source.stat().st_size} source bytes -> {sortie.stat().st_size} output bytes.")
           PY
