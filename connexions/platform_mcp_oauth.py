@@ -147,6 +147,13 @@ def _client_oauth(service, metadata, redirect_uri):
             metadata.update(auth_meta)
             registration_endpoint = metadata.get("registration_endpoint")
     if registration_endpoint:
+        # Le fournisseur annonce les méthodes d'authentification qu'il accepte au jeton.
+        # Si "none" n'y figure pas (cas de Supabase : seulement des méthodes à secret),
+        # on demande une méthode à secret au lieu d'un client public.
+        methodes_annoncees = metadata.get("token_endpoint_auth_methods_supported") or []
+        methode_demandee = "none"
+        if methodes_annoncees and "none" not in methodes_annoncees:
+            methode_demandee = "client_secret_post" if "client_secret_post" in methodes_annoncees else methodes_annoncees[0]
         response = httpx.post(
             registration_endpoint,
             json={
@@ -154,7 +161,7 @@ def _client_oauth(service, metadata, redirect_uri):
                 "redirect_uris": [redirect_uri],
                 "grant_types": ["authorization_code", "refresh_token"],
                 "response_types": ["code"],
-                "token_endpoint_auth_method": "none",
+                "token_endpoint_auth_method": methode_demandee,
             },
             timeout=10,
         )
@@ -162,7 +169,25 @@ def _client_oauth(service, metadata, redirect_uri):
         client = response.json()
         if not client.get("client_id"):
             raise RuntimeError("Enregistrement OAuth sans client_id.")
-        return client.get("client_id"), client.get("client_secret"), "none"
+        client_secret = client.get("client_secret")
+        # Un secret reçu à l'enregistrement doit être renvoyé à l'échange du code :
+        # annoncer "none" dans ce cas fait refuser le jeton (« Required parameter: client_secret »).
+        if client_secret:
+            methode_enregistree = client.get("token_endpoint_auth_method")
+            if methode_enregistree in ("client_secret_post", "client_secret_basic"):
+                methode = methode_enregistree
+            elif methodes_annoncees and "client_secret_post" not in methodes_annoncees and "client_secret_basic" in methodes_annoncees:
+                methode = "client_secret_basic"
+            else:
+                methode = "client_secret_post"
+        else:
+            methode = "none"
+        # Booléen seulement : jamais la valeur du secret dans les journaux.
+        logging.info(
+            "Enregistrement OAuth %s : méthode demandée %s, secret reçu %s, méthode retenue %s",
+            service, methode_demandee, bool(client_secret), methode,
+        )
+        return client.get("client_id"), client_secret, methode
     client_id = os.environ.get(config.get("client_id_env", ""))
     client_secret = os.environ.get(config.get("client_secret_env", ""))
     if not client_id:
