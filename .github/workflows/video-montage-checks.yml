@@ -113,7 +113,7 @@ jobs:
                                       "video_lister_outils",
                                       arguments={"recherche": "couper ce passage"},
                                   )
-                                  assert not resultat.isError, f"MCP call returned an error: {resultat}"
+                                  assert not resultat.is_error, f"MCP call returned an error: {resultat}"
                                   texte = "\\n".join(
                                       bloc.text for bloc in resultat.content if hasattr(bloc, "text")
                                   )
