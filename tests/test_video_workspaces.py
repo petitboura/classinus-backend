@@ -14,13 +14,18 @@ class FauxStockageR2:
     def __init__(self):
         self.objets: dict[str, bytes] = {}
 
-    def upload(self, chemin: str, contenu: bytes, options: dict | None = None):
+    def upload(self, chemin: str, contenu, options: dict | None = None):
+        if hasattr(contenu, "read"):
+            contenu = contenu.read()
         self.objets[chemin] = bytes(contenu)
 
     def download(self, chemin: str) -> bytes:
         if chemin not in self.objets:
             raise FileNotFoundError(chemin)
         return self.objets[chemin]
+
+    def download_to_file(self, chemin: str, destination):
+        Path(destination).write_bytes(self.download(chemin))
 
     def remove(self, chemins: list[str]):
         for chemin in chemins:
@@ -90,6 +95,47 @@ class TestEspacesVideo(unittest.TestCase):
         self.assertEqual(donnees["video_id"], meta["video_id"])
         self.assertEqual(restauree.read_bytes(), contenu)
         self.assertTrue(restauree.is_file())
+
+    def test_resultats_et_projets_survivent_a_un_changement_d_instance(self):
+        root_a = video_workspaces.workspace_dir("utilisateur-a", "conversation-a")
+        sortie = root_a / "outputs" / "version-1.mp4"
+        projet = root_a / "projects" / "projet" / "src" / "index.ts"
+        sortie.parent.mkdir(parents=True, exist_ok=True)
+        projet.parent.mkdir(parents=True, exist_ok=True)
+        sortie.write_bytes(b"video-final-v1")
+        projet.write_text("export const duree = 3;", encoding="utf-8")
+
+        resultat = video_workspaces.synchroniser_workspace(
+            "utilisateur-a", "conversation-a", root=root_a
+        )
+        self.assertEqual(resultat["persistes"], 2)
+
+        video_workspaces.ROOT = Path(self.tmp.name) / "instance-b"
+        root_b = video_workspaces.workspace_dir("utilisateur-a", "conversation-a")
+        restored = video_workspaces.restaurer_workspace(
+            "utilisateur-a", "conversation-a", root=root_b
+        )
+
+        self.assertEqual(restored["restaure"], 2)
+        self.assertEqual((root_b / "outputs" / "version-1.mp4").read_bytes(), b"video-final-v1")
+        self.assertEqual(
+            (root_b / "projects" / "projet" / "src" / "index.ts").read_text(encoding="utf-8"),
+            "export const duree = 3;",
+        )
+
+    def test_cache_ou_manifeste_isole_par_conversation(self):
+        root = video_workspaces.workspace_dir("utilisateur-a", "conversation-a")
+        fichier = root / "outputs" / "secret.mp4"
+        fichier.parent.mkdir(parents=True, exist_ok=True)
+        fichier.write_bytes(b"prive")
+        video_workspaces.synchroniser_workspace("utilisateur-a", "conversation-a", root=root)
+
+        root_autre = video_workspaces.workspace_dir("utilisateur-a", "conversation-b")
+        autre = video_workspaces.restaurer_workspace(
+            "utilisateur-a", "conversation-b", root=root_autre
+        )
+        self.assertEqual(autre["fichiers_manifest"], 0)
+        self.assertFalse((root_autre / "outputs" / "secret.mp4").exists())
 
     def test_chemins_externes_et_sorties_dans_uploads_refuses(self):
         with tempfile.TemporaryDirectory() as tmp:
