@@ -1,6 +1,7 @@
 """Tests de non-régression pour la localisation FR/EN."""
 import asyncio
 import json
+import re
 import unittest
 
 from core.erreurs import MESSAGES_EN, MESSAGES_FR
