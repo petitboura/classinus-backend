@@ -35,6 +35,7 @@ from core.plafond_outils_tour import retirer_plafond_tour
 from core.limitation_debit import limiteur
 from core.restriction_mineur import acces_chat_bloque_pour_mineur
 from main import chat as chat_generateur  # core/main.py:chat()
+from core.libelles_outils_anglais import traduire_libelle_outil
 from fournisseurs_llm import modele_id_est_autorise
 
 logging.basicConfig(level=logging.INFO)
@@ -308,7 +309,20 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
                 langue_interface=langue_interface,
             )
         for evenement in generateur:
-            yield f"data: {json.dumps(evenement)}\n\n"
+            evenement_affiche = evenement
+            if langue_interface == "en" and isinstance(evenement, dict):
+                type_evenement = evenement.get("type")
+                if type_evenement in ("statut", "statut_termine", "outil_resultat"):
+                    evenement_affiche = dict(evenement)
+                    if isinstance(evenement_affiche.get("nom_lisible"), str):
+                        evenement_affiche["nom_lisible"] = traduire_libelle_outil(
+                            evenement_affiche["nom_lisible"]
+                        )
+                    if type_evenement in ("statut", "statut_termine"):
+                        evenement_affiche["texte"] = traduire_libelle_outil(
+                            evenement_affiche.get("texte")
+                        )
+            yield f"data: {json.dumps(evenement_affiche)}\n\n"
     except Exception as e:
         logging.error(f"ERREUR chat() en streaming (agent_id={payload.agent_id}) : {e}")
         texte_erreur = "Something went wrong. Please try again shortly." if langue_interface == "en" else "Une erreur est survenue, réessaie dans un instant."
