@@ -58,14 +58,17 @@ jobs:
       - name: Smoke-test upstream MCP tool discovery
         run: |
           python - <<'PY'
-          from core.serveur_mcp_video import _tools_dict, _schema
+          from core.serveur_mcp_video import _termes_recherche_video, _tools_dict, _schema
           tools = _tools_dict()
           assert len(tools) >= 50, f"Too few mcp-video tools discovered: {len(tools)}"
           assert "video_trim" in tools, "video_trim was not registered"
           assert "remotion_render" in tools, "Remotion render tool was not registered"
           assert callable(getattr(tools["video_trim"], "fn", None)), "video_trim handler is not callable"
           assert isinstance(_schema(tools["video_trim"]), dict), "video_trim schema is unavailable"
-          print(f"Discovered {len(tools)} mcp-video tools; trim and Remotion schemas are available.")
+          assert "trim" in _termes_recherche_video("couper ce passage"), "French edit request did not map to trim"
+          assert "subtitle" in _termes_recherche_video("ajouter un sous-titre"), "French subtitle request was not mapped"
+          assert "text" in _termes_recherche_video("ajouter un titre"), "French title request was not mapped"
+          print(f"Discovered {len(tools)} mcp-video tools; schemas and French discovery terms are available.")
           PY
       - name: Execute a real FFmpeg trim in an isolated workspace
         run: |
