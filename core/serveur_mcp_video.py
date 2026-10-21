@@ -1,0 +1,251 @@
+"""Passerelle Classinus vers mcp-video, sécurisée par conversation.
+
+Les 83 outils amont restent accessibles via video_lister_outils et
+video_executer_outil : cela évite d'envoyer 83 schémas au modèle à chaque tour.
+Tous les chemins sont bornés à l'espace de travail du propriétaire. Les résultats
+vidéo sont publiés dans le stockage existant pour fournir un lien lisible par le web.
+"""
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import inspect
+import json
+import logging
+import mimetypes
+import os
+import secrets
+import uuid
+from pathlib import Path
+from typing import Any
+
+from mcp.server.mcpserver import MCPServer as FastMCP, Context
+
+from core.video_workspaces import chemin_interne, workspace_dir
+
+try:
+    from mcp_video import server as _source_server
+    _SOURCE_TOOLS = getattr(getattr(_source_server.mcp, "_tool_manager", None), "_tools", {})
+except Exception as exc:  # le backend peut démarrer même si la dépendance est absente en dev
+    logging.exception("Initialisation de mcp-video impossible.")
+    _SOURCE_TOOLS = {}
+
+
+mcp_video = FastMCP(name="classinus-video")
+PATH_KEYS = {
+    "input_path", "video_path", "audio_path", "image_path", "mask_path",
+    "subtitle_path", "subtitle_file", "project_path", "project_dir",
+    "font_path", "file_path", "source_path", "input", "video", "audio",
+    "image", "clips", "images", "paths", "output_path", "output_dir",
+}
+EXTENSIONS_IMAGES = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+EXTENSIONS_AUDIO = {".wav", ".mp3", ".m4a", ".ogg", ".flac"}
+EXTENSIONS_SORTIE = {".mp4", ".webm", ".mov", ".gif", ".png", ".jpg", ".jpeg", ".webp", ".wav", ".mp3", ".srt", ".vtt", ".json"}
+
+
+def _context_owner(ctx: Context) -> tuple[str, str, Path]:
+    request = ctx.request_context.request
+    headers = request.headers
+    attendu = os.environ.get("SUPABASE_SECRET", "")
+    recu = (headers.get("authorization") or "").removeprefix("Bearer ").strip()
+    if not attendu or not secrets.compare_digest(recu, attendu):
+        raise PermissionError("Accès interne MCP refusé.")
+    params = request.query_params
+    user_id = params.get("user_id", "")
+    conversation_id = params.get("conversation_id", "")
+    if not user_id or not conversation_id:
+        raise PermissionError("Montage vidéo disponible seulement dans une conversation authentifiée.")
+    return user_id, conversation_id, workspace_dir(user_id, conversation_id)
+
+
+def _tools_dict() -> dict:
+    if isinstance(_SOURCE_TOOLS, dict):
+        return _SOURCE_TOOLS
+    return {getattr(tool, "name", ""): tool for tool in _SOURCE_TOOLS}
+
+
+def _schema(tool: Any) -> dict:
+    schema = getattr(tool, "parameters", None)
+    if isinstance(schema, dict):
+        return schema
+    schema = getattr(tool, "inputSchema", None)
+    if isinstance(schema, dict):
+        return schema
+    metadata = getattr(tool, "fn_metadata", None)
+    model = getattr(metadata, "arg_model", None)
+    if model is not None:
+        try:
+            return model.model_json_schema()
+        except Exception:
+            pass
+    return {"type": "object", "properties": {}}
+
+
+def _description(tool: Any) -> str:
+    return str(getattr(tool, "description", None) or getattr(tool, "__doc__", None) or "").strip()
+
+
+@mcp_video.tool()
+def video_lister_outils(ctx: Context, recherche: str = "") -> dict[str, Any]:
+    """Découvre les capacités vidéo disponibles (montage, audio, effets, analyse, Remotion).
+
+    recherche: mots décrivant la capacité recherchée (ex. 'crop zone', 'sous-titres',
+    'transcription audio', 'Remotion motion graphics'). Vide pour lister les catégories.
+    """
+    _context_owner(ctx)
+    tools = _tools_dict()
+    if not tools:
+        return {"success": False, "error": "mcp-video n'est pas installé ou ses outils n'ont pas pu être chargés."}
+    query = (recherche or "").strip().lower()
+    categories: dict[str, int] = {}
+    for name, tool in tools.items():
+        if name.startswith("remotion_"):
+            category = "remotion"
+        elif name.startswith(("audio_", "video_add_audio", "video_audio_")):
+            category = "audio"
+        elif name.startswith(("effect_", "transition_", "video_text_", "video_mograph_", "video_layout_")):
+            category = "effets-et-motion-design"
+        elif name.startswith(("image_",)):
+            category = "image"
+        elif name.startswith(("video_ai_", "video_analyze", "video_quality", "video_design", "video_fix")):
+            category = "analyse-et-qualité-IA"
+        else:
+            category = "montage-video"
+        categories[category] = categories.get(category, 0) + 1
+    if not query:
+        return {"success": True, "total_outils": len(tools), "categories": categories,
+                "consigne": "Utilise recherche pour obtenir les outils et leurs schémas adaptés à la demande."}
+    tokens = [word for word in query.split() if word]
+    hits = []
+    for name, tool in tools.items():
+        text = f"{name} {_description(tool)}".lower()
+        score = sum(1 for token in tokens if token in text)
+        if score:
+            hits.append((score, name, tool))
+    hits.sort(key=lambda item: (-item[0], item[1]))
+    return {
+        "success": True,
+        "total_outils": len(tools),
+        "recherche": recherche,
+        "outils": [
+            {"nom": name, "description": _description(tool)[:1200], "schema": _schema(tool)}
+            for _, name, tool in hits[:12]
+        ],
+        "suite_possible": len(hits) > 12,
+    }
+
+
+def _sortie_par_defaut(nom_outil: str, arguments: dict, root: Path) -> None:
+    if "output_path" in arguments and not arguments.get("output_path"):
+        if nom_outil in {"video_thumbnail", "video_extract_frame", "video_still", "remotion_still", "video_export_frames"} or nom_outil.startswith("image_"):
+            extension = ".png"
+        elif nom_outil.startswith("audio_") or nom_outil == "video_extract_audio":
+            extension = ".wav"
+        elif nom_outil in {"video_generate_subtitles", "video_text_subtitles"}:
+            extension = ".srt"
+        else:
+            extension = ".mp4"
+        (root / "outputs").mkdir(parents=True, exist_ok=True)
+        arguments["output_path"] = str(root / "outputs" / f"{nom_outil}_{uuid.uuid4().hex}{extension}")
+    if "output_dir" in arguments and not arguments.get("output_dir"):
+        dossier = root / ("projects" if nom_outil == "remotion_create_project" else "outputs")
+        arguments["output_dir"] = str(dossier / f"{nom_outil}_{uuid.uuid4().hex}")
+    if nom_outil == "remotion_create_project" and not arguments.get("output_dir"):
+        arguments["output_dir"] = str(root / "projects")
+
+
+def _normaliser_arguments(nom_outil: str, arguments: dict, root: Path) -> dict:
+    nettoyes = dict(arguments)
+    _sortie_par_defaut(nom_outil, nettoyes, root)
+    for key, value in list(nettoyes.items()):
+        if key not in PATH_KEYS or value is None:
+            continue
+        est_sortie = key in {"output_path", "output_dir"}
+        est_projet = key in {"output_dir", "project_path", "project_dir"} or nom_outil.startswith("remotion_")
+        if isinstance(value, list):
+            nettoyes[key] = [
+                chemin_interne(root, item, sortie=est_sortie, projet=est_projet) if isinstance(item, str) else item
+                for item in value
+            ]
+        elif isinstance(value, str):
+            nettoyes[key] = chemin_interne(root, value, sortie=est_sortie, projet=est_projet)
+    # Un chemin de projet Remotion doit être sous projects/, les sorties vidéo
+    # ne peuvent jamais écraser la source sous uploads/.
+    return nettoyes
+
+
+def _serialiser(value: Any) -> Any:
+    if hasattr(value, "model_dump"):
+        return value.model_dump()
+    if isinstance(value, dict):
+        return {str(k): _serialiser(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_serialiser(v) for v in value]
+    if isinstance(value, Path):
+        return str(value)
+    return value
+
+
+def _chemins_sortie(value: Any, root: Path) -> list[Path]:
+    trouves: list[Path] = []
+    def parcourir(item: Any, cle: str = ""):
+        if isinstance(item, dict):
+            for k, v in item.items():
+                parcourir(v, str(k))
+        elif isinstance(item, (list, tuple)):
+            for v in item:
+                parcourir(v, cle)
+        elif isinstance(item, str) and (cle in {"output_path", "output_file", "rendered_path"}):
+            try:
+                path = Path(item).resolve()
+                sorties = (root / "outputs").resolve()
+                if sorties in path.parents and path.is_file() and path.suffix.lower() in EXTENSIONS_SORTIE:
+                    trouves.append(path)
+            except Exception:
+                pass
+    parcourir(_serialiser(value))
+    return list(dict.fromkeys(trouves))
+
+
+def _publier_sorties(paths: list[Path], user_id: str) -> list[dict[str, str]]:
+    publiees = []
+    for path in paths:
+        try:
+            from core import stockage_r2
+            mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+            user_key = hashlib.sha256(user_id.encode("utf-8")).hexdigest()[:20]
+            key = f"montages-video/{user_key}/{uuid.uuid4().hex}-{path.name}"
+            bucket = stockage_r2.from_("images-publiques")
+            bucket.upload(key, path.read_bytes(), {"content-type": mime})
+            publiees.append({"nom": path.name, "url": bucket.get_public_url(key), "type_mime": mime})
+        except Exception:
+            logging.exception("Publication R2 échouée pour une sortie vidéo.")
+    return publiees
+
+
+@mcp_video.tool()
+def video_executer_outil(ctx: Context, nom_outil: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    """Exécute un outil précis de mcp-video après découverte via video_lister_outils.
+
+    nom_outil: nom exact renvoyé par video_lister_outils.
+    arguments: paramètres de l'outil découverts. Les chemins doivent référencer
+    la vidéo de la conversation ou un fichier produit dans son espace de travail.
+    """
+    user_id, _conversation_id, root = _context_owner(ctx)
+    tool = _tools_dict().get(nom_outil)
+    if tool is None or not callable(getattr(tool, "fn", None)):
+        return {"success": False, "error": f"Outil vidéo inconnu : {nom_outil}"}
+    try:
+        args = _normaliser_arguments(nom_outil, arguments or {}, root)
+        fonction = tool.fn
+        result = fonction(**args)
+        if inspect.isawaitable(result):
+            result = asyncio.run(result)
+        result = _serialiser(result)
+        urls = _publier_sorties(_chemins_sortie(result, root), user_id)
+        if isinstance(result, dict):
+            result["liens_telechargement"] = urls
+        return {"success": True, "outil": nom_outil, "resultat": result}
+    except Exception as exc:
+        logging.exception("Échec outil mcp-video %s", nom_outil)
+        return {"success": False, "outil": nom_outil, "error": str(exc)}
