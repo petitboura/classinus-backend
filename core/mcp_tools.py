@@ -38,6 +38,25 @@ from client_http_supabase import nouveau_client_http_supabase
 
 from registre_outils import SERVEURS_MCP
 
+
+class _FiltreCausesFluxMcp(logging.Filter):
+    """
+    DIAGNOSTIC TEMPORAIRE (21/10/2026, demande de Bourama) : la bibliothèque MCP
+    cache la vraie cause quand un flux de réponse se termine sans réponse (elle
+    la note seulement en mode détaillé). Ce filtre laisse passer uniquement les
+    messages normaux et ceux qui portent une erreur, pour la voir dans les
+    journaux sans noyer les journaux de tous les messages détaillés.
+    À RETIRER dès que le problème Higgsfield est réglé.
+    """
+
+    def filter(self, record):
+        return record.levelno >= logging.INFO or bool(record.exc_info)
+
+
+_logger_flux_mcp = logging.getLogger("mcp.client.streamable_http")
+_logger_flux_mcp.addFilter(_FiltreCausesFluxMcp())
+_logger_flux_mcp.setLevel(logging.DEBUG)
+
 logging.basicConfig(level=logging.INFO)
 
 
