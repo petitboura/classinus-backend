@@ -904,6 +904,11 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "consulter_signalement": {"label": "Consultation d'un signalement", "icone": "Flag", "onglet": None},
     "enregistrer_note_signalement": {"label": "Note sur un signalement", "icone": "NotebookPen", "onglet": None},
     "rattacher_signalement_notion": {"label": "Rattacher un signalement", "icone": "Link", "onglet": None},
+
+    # Atelier vidéo contextuel : les outils sont pilotés par Clovis, jamais
+    # sélectionnés manuellement dans le menu d'outils.
+    "video_lister_outils": {"label": "Recherche des capacités vidéo", "icone": "Clapperboard", "onglet": None},
+    "video_executer_outil": {"label": "Montage vidéo", "icone": "Film", "onglet": None},
 }
 
 # --- Verbes des actions (24/09/2026, demande Bourama : regroupement des
