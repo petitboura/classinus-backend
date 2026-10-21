@@ -67,6 +67,7 @@ from api.outils_registre import router as outils_registre_router
 from api.appareils_mobiles import router as appareils_mobiles_router
 from api.connexions import router as connexions_router
 from api.connexions_notion import router as connexions_notion_router
+from api.connexions_github import router as connexions_github_router
 from api.canal_temps_reel import router as canal_temps_reel_router
 from api.canal_agent_applicatif import router as canal_agent_applicatif_router
 from api.gemini_live import router as gemini_live_router
@@ -874,6 +875,7 @@ app.include_router(outils_registre_router)
 app.include_router(appareils_mobiles_router)
 app.include_router(connexions_router)
 app.include_router(connexions_notion_router)
+app.include_router(connexions_github_router)
 app.include_router(canal_temps_reel_router)
 app.include_router(canal_agent_applicatif_router)
 app.include_router(gemini_live_router)
