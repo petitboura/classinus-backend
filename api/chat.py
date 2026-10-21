@@ -409,6 +409,11 @@ def envoyer_message(request: Request, payload: EnvoyerMessagePayload, utilisateu
             raise HTTPException(status_code=422, detail="L'intervalle vidéo doit avoir un début et une fin.")
         if contexte.debut is None and contexte.zone is None:
             raise HTTPException(status_code=422, detail="Sélectionne un intervalle ou une zone de l'image.")
+        if contexte.zone and (
+            contexte.zone.x + contexte.zone.largeur > 1.000001
+            or contexte.zone.y + contexte.zone.hauteur > 1.000001
+        ):
+            raise HTTPException(status_code=422, detail="La zone sélectionnée dépasse les limites de l'image.")
         try:
             metadata = lire_metadonnees_video(user_id, payload.conversation_id, contexte.video_id)
             source = chemin_video(user_id, payload.conversation_id, contexte.video_id)
