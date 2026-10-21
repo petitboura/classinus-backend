@@ -430,7 +430,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             )
         except Exception as e:
             logging.error(f"ERREUR GROQ (reprise apres limite/répétition) {modele_reprise}: {e}")
-            yield {"type": "reponse", "texte": MESSAGE_ERREUR}
+            yield {"type": "reponse", "texte": ("Something went wrong. Please try again shortly." if langue_interface == "en" else MESSAGE_ERREUR)}
         return
 
     if reprise is not None:
@@ -528,7 +528,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             )
         except Exception as e:
             logging.error(f"ERREUR GROQ (reprise apres confirmation) {modele_reprise}: {e}")
-            yield {"type": "reponse", "texte": MESSAGE_ERREUR}
+            yield {"type": "reponse", "texte": ("Something went wrong. Please try again shortly." if langue_interface == "en" else MESSAGE_ERREUR)}
         return
 
     # --- Chemin normal : nouvelle question --------------------------------
@@ -1545,7 +1545,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             except Exception as e:
                 logging.error(f"ERREUR MODELE PREMIUM AVEC OUTILS ({modele_force}) : {e}")
                 if not reponse_accumulee:
-                    yield {"type": "reponse", "texte": MESSAGE_ERREUR}
+                    yield {"type": "reponse", "texte": ("Something went wrong. Please try again shortly." if langue_interface == "en" else MESSAGE_ERREUR)}
             return
 
         messages_premium = [
@@ -1575,7 +1575,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         except Exception as e:
             logging.error(f"ERREUR MODELE PREMIUM ({modele_force}) : {e}")
             if not reponse_accumulee:
-                yield {"type": "reponse", "texte": MESSAGE_ERREUR}
+                yield {"type": "reponse", "texte": ("Something went wrong. Please try again shortly." if langue_interface == "en" else MESSAGE_ERREUR)}
         return
 
     client_groq = Groq(api_key=get_secret("GROQ_API_KEY"), max_retries=0)
@@ -1866,5 +1866,5 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
 
     # Echec complet : on ne persiste jamais un message d'erreur technique
     # en memoire (polluerait le resume avec du bruit sans valeur).
-    yield {"type": "reponse", "texte": MESSAGE_ERREUR}
+    yield {"type": "reponse", "texte": ("Something went wrong. Please try again shortly." if langue_interface == "en" else MESSAGE_ERREUR)}
 
