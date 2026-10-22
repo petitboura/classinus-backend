@@ -20,12 +20,13 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "core"))
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Literal
 
 from api.auth import utilisateur_optionnel, supabase
+from core.erreurs import erreur_api
 from core.video_workspaces import chemin_video, lire_metadonnees_video, workspace_dir
 from core.arret_tour import demander_arret_utilisateur, fermer_arret, ouvrir_arret
 from core.canal_agent_applicatif import (
@@ -36,6 +37,7 @@ from core.plafond_outils_tour import retirer_plafond_tour
 from core.limitation_debit import limiteur
 from core.restriction_mineur import acces_chat_bloque_pour_mineur
 from main import chat as chat_generateur  # core/main.py:chat()
+from core.libelles_outils_anglais import traduire_libelle_outil
 from fournisseurs_llm import modele_id_est_autorise
 
 logging.basicConfig(level=logging.INFO)
@@ -271,7 +273,7 @@ def _resoudre_modele_force(agent_id, modele_demande):
     return None
 
 
-def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
+def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], langue_interface: str = "fr"):
     """
     Convertit le générateur Python de chat() en flux SSE (`data: {...}\n\n`
     par événement), le format que `fetch` + `ReadableStream` côté Next.js
@@ -296,6 +298,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
                     "approuve": payload.reprise.approuve,
                 },
                 arret_tour=arret,
+                langue_interface=langue_interface,
             )
         else:
             generateur = chat_generateur(
@@ -329,12 +332,40 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str]):
                 libelles_client=payload.libelles_client,
                 origine=payload.origine,
                 contexte_video=payload.contexte_video.model_dump() if payload.contexte_video else None,
+                langue_interface=langue_interface,
             )
         for evenement in generateur:
-            yield f"data: {json.dumps(evenement)}\n\n"
+            evenement_affiche = evenement
+            if langue_interface == "en" and isinstance(evenement, dict):
+                type_evenement = evenement.get("type")
+                if type_evenement in ("statut", "statut_termine", "outil_resultat", "confirmation_requise"):
+                    evenement_affiche = dict(evenement)
+                    if isinstance(evenement_affiche.get("nom_lisible"), str):
+                        evenement_affiche["nom_lisible"] = traduire_libelle_outil(
+                            evenement_affiche["nom_lisible"]
+                        )
+                    if type_evenement in ("statut", "statut_termine"):
+                        evenement_affiche["texte"] = traduire_libelle_outil(
+                            evenement_affiche.get("texte")
+                        )
+                    elif type_evenement == "confirmation_requise":
+                        # Ne pas traduire le nom d'agent ni les arguments de l'action :
+                        # ce sont des données choisies par l'utilisateur.
+                        nom_agent = evenement_affiche.get("agent_nom")
+                        nom_agent_affiche = (
+                            nom_agent.strip()
+                            if isinstance(nom_agent, str) and nom_agent.strip()
+                            else "This agent"
+                        )
+                        libelle_action = str(evenement_affiche.get("nom_lisible") or "")
+                        evenement_affiche["message"] = (
+                            f"{nom_agent_affiche} wants to do this: {libelle_action.rstrip('.')}."
+                        )
+            yield f"data: {json.dumps(evenement_affiche)}\n\n"
     except Exception as e:
         logging.error(f"ERREUR chat() en streaming (agent_id={payload.agent_id}) : {e}")
-        yield f"data: {json.dumps({'type': 'reponse', 'texte': 'Une erreur est survenue, réessaie dans un instant.'})}\n\n"
+        texte_erreur = "Something went wrong. Please try again shortly." if langue_interface == "en" else "Une erreur est survenue, réessaie dans un instant."
+        yield f"data: {json.dumps({'type': 'reponse', 'texte': texte_erreur})}\n\n"
     finally:
         fermer_arret(arret)
         if user_id:
@@ -398,33 +429,35 @@ def envoyer_message(request: Request, payload: EnvoyerMessagePayload, utilisateu
     façon rejetée.
     """
     user_id = utilisateur.id if utilisateur else None
+    valeur_langue = request.headers.get("accept-language", "fr").split(",", 1)[0].strip().lower()
+    langue_interface = "en" if valeur_langue == "en" or valeur_langue.startswith("en-") else "fr"
 
     # Le montage vidéo est réservé aux comptes connectés et aux sources déposées
     # dans CETTE conversation. Ne jamais accepter le chemin absolu fourni par le client.
     if payload.contexte_video is not None:
         contexte = payload.contexte_video
         if not user_id or not payload.conversation_id:
-            raise HTTPException(status_code=401, detail="Connecte-toi pour modifier une vidéo.")
+            raise erreur_api(401, "MONTAGE_VIDEO_CONNEXION_REQUISE")
         if (contexte.debut is None) != (contexte.fin is None):
-            raise HTTPException(status_code=422, detail="L'intervalle vidéo doit avoir un début et une fin.")
+            raise erreur_api(422, "MONTAGE_VIDEO_INTERVALLE_INCOMPLET")
         if contexte.debut is None and contexte.zone is None:
-            raise HTTPException(status_code=422, detail="Sélectionne un intervalle ou une zone de l'image.")
+            raise erreur_api(422, "MONTAGE_VIDEO_SELECTION_REQUISE")
         if contexte.zone and (
             contexte.zone.x + contexte.zone.largeur > 1.000001
             or contexte.zone.y + contexte.zone.hauteur > 1.000001
         ):
-            raise HTTPException(status_code=422, detail="La zone sélectionnée dépasse les limites de l'image.")
+            raise erreur_api(422, "MONTAGE_VIDEO_ZONE_HORS_IMAGE")
         try:
             metadata = lire_metadonnees_video(user_id, payload.conversation_id, contexte.video_id)
             source = chemin_video(user_id, payload.conversation_id, contexte.video_id)
             duree_reelle = float(metadata.get("duree_secondes") or 0)
         except (ValueError, FileNotFoundError, OSError):
-            raise HTTPException(status_code=404, detail="Cette vidéo n'est pas disponible dans cette conversation.") from None
+            raise erreur_api(404, "MONTAGE_VIDEO_INTROUVABLE") from None
         if contexte.debut is not None and contexte.fin is not None:
             if contexte.fin <= contexte.debut:
-                raise HTTPException(status_code=422, detail="La fin doit être après le début de la sélection.")
+                raise erreur_api(422, "MONTAGE_VIDEO_FIN_AVANT_DEBUT")
             if duree_reelle > 0 and contexte.fin > duree_reelle + 0.05:
-                raise HTTPException(status_code=422, detail="La sélection dépasse la durée de la vidéo.")
+                raise erreur_api(422, "MONTAGE_VIDEO_SELECTION_TROP_LONGUE")
         racine = workspace_dir(user_id, payload.conversation_id, create=False)
         contexte.nom_fichier = metadata.get("nom_fichier") or contexte.nom_fichier
         contexte.duree_secondes = duree_reelle
@@ -433,13 +466,13 @@ def envoyer_message(request: Request, payload: EnvoyerMessagePayload, utilisateu
     if user_id and acces_chat_bloque_pour_mineur(user_id):
         return StreamingResponse(
             _evenement_bloque(
-                "L'accès au chat est réservé aux comptes mineurs ayant reçu un code de leur professeur ou établissement. Entre un code dans \"Mon espace\" pour continuer."
+                ("Chat access is reserved for minor accounts that have received a code from their teacher or institution. Enter a code in My space to continue." if langue_interface == "en" else "L'accès au chat est réservé aux comptes mineurs ayant reçu un code de leur professeur ou établissement. Entre un code dans \"Mon espace\" pour continuer."),
             ),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
     return StreamingResponse(
-        _evenements_sse(payload, user_id),
+        _evenements_sse(payload, user_id, langue_interface),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

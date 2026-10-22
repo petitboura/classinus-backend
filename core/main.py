@@ -167,7 +167,32 @@ def _texte_a_enregistrer(message_utilisateur, message_enregistre):
     return message_enregistre if message_enregistre else message_utilisateur
 
 
-def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None, effort_reflexion=None, arret_tour=None, message_enregistre=None, client=None, libelles_client=None, origine=None, contexte_video=None):
+INSTRUCTION_LANGUE_EN = (
+    "LANGUAGE REQUIREMENT: Unless the user explicitly asks for another language, "
+    "write all natural-language responses in clear, idiomatic English. This includes explanations, "
+    "teaching, tool progress updates, summaries, follow-up questions, and user-facing labels in generated output. "
+    "Preserve code, identifiers, quotations, source titles, and requested target languages where appropriate. "
+    "Do not translate content written by the user or stored documents; answer in English."
+)
+
+
+def _messages_agent_avec_locale(messages_agent, langue_interface):
+    """Apply the current UI language to a resumed turn without changing saved state."""
+    messages = [dict(message) for message in messages_agent]
+    for message in messages:
+        if message.get("role") != "system" or not isinstance(message.get("content"), str):
+            continue
+        contenu = message["content"].replace("\n\n" + INSTRUCTION_LANGUE_EN, "")
+        if langue_interface == "en" and INSTRUCTION_LANGUE_EN not in contenu:
+            contenu = contenu.rstrip() + "\n\n" + INSTRUCTION_LANGUE_EN
+        message["content"] = contenu
+        return messages
+    if langue_interface == "en":
+        messages.insert(0, {"role": "system", "content": INSTRUCTION_LANGUE_EN})
+    return messages
+
+
+def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None, effort_reflexion=None, arret_tour=None, message_enregistre=None, client=None, libelles_client=None, origine=None, langue_interface="fr", contexte_video=None):
     """
     Generateur d'evenements. Chaque element produit est un dictionnaire :
     - {"type": "statut", "texte": "..."}         -> un outil MCP est en cours d'utilisation (ou, depuis le 11/09/2026, Gemini en train de lire une image/video jointe)
@@ -363,7 +388,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         source_relative = str(contexte_video.get("source_path") or "").replace("\\", "/")
         segments_source = source_relative.split("/")
         if len(segments_source) != 2 or segments_source[0] != "uploads" or any(p in ("", ".", "..") for p in segments_source):
-            yield {"type": "reponse", "texte": "La source vidéo n'est plus disponible dans cette conversation. Réimporte-la pour continuer."}
+            yield {"type": "reponse", "texte": ("The video source is no longer available in this conversation. Import it again to continue." if langue_interface == "en" else "La source vidéo n'est plus disponible dans cette conversation. Réimporte-la pour continuer.")}
             return
         if not message_enregistre:
             message_enregistre = message_utilisateur
@@ -417,7 +442,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # modele de decider quoi en faire (continuer, s'arreter,
         # s'ajuster), pas au frontend de trancher en amont.
         etat = reprise["etat_reprise"]
-        messages_agent = etat["messages_agent"]
+        messages_agent = _messages_agent_avec_locale(etat["messages_agent"], langue_interface)
         outils_mcp = etat["outils_mcp"]
         table_routage = etat["table_routage"]
         modele_reprise = etat.get("modele", GROQ_PRIMARY)
@@ -440,13 +465,13 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             )
         except Exception as e:
             logging.error(f"ERREUR GROQ (reprise apres limite/répétition) {modele_reprise}: {e}")
-            yield {"type": "reponse", "texte": MESSAGE_ERREUR}
+            yield {"type": "reponse", "texte": ("Something went wrong. Please try again shortly." if langue_interface == "en" else MESSAGE_ERREUR)}
         return
 
     if reprise is not None:
         etat = reprise["etat_reprise"]
         approuve = reprise["approuve"]
-        messages_agent = etat["messages_agent"]
+        messages_agent = _messages_agent_avec_locale(etat["messages_agent"], langue_interface)
         outils_mcp = etat["outils_mcp"]
         table_routage = etat["table_routage"]
         appel = etat["appel"]
@@ -538,7 +563,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             )
         except Exception as e:
             logging.error(f"ERREUR GROQ (reprise apres confirmation) {modele_reprise}: {e}")
-            yield {"type": "reponse", "texte": MESSAGE_ERREUR}
+            yield {"type": "reponse", "texte": ("Something went wrong. Please try again shortly." if langue_interface == "en" else MESSAGE_ERREUR)}
         return
 
     # --- Chemin normal : nouvelle question --------------------------------
@@ -1020,7 +1045,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 lecture_ecran_anticipee.append(lancer_lecture_anticipee(user_id, conversation_id, table_routage_complet))
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force_contexte_seul)
             outil_force_verifie_optimiste = [o["function"]["name"] for o in outils_mcp] if outil_force_contexte_seul else None
-            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire, client=client, libelles_client=libelles_client, origine=origine)
+            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire, client=client, libelles_client=libelles_client, origine=origine, langue_interface=langue_interface)
             return outils_mcp, table_routage, system_final, catalogue_complet, table_routage_complet
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -1139,7 +1164,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id, origine=origine, contexte_video=bool(contexte_video))
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force)
             outil_force_verifie = [o["function"]["name"] for o in outils_mcp] if outil_force else outil_force
-        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire, client=client, libelles_client=libelles_client, origine=origine)
+        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire, client=client, libelles_client=libelles_client, origine=origine, langue_interface=langue_interface)
 
         # PERF (10/08) : second (et dernier) point de vérification --
         # couvre tous les chemins qui ne passent PAS par le premier
@@ -1557,7 +1582,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             except Exception as e:
                 logging.error(f"ERREUR MODELE PREMIUM AVEC OUTILS ({modele_force}) : {e}")
                 if not reponse_accumulee:
-                    yield {"type": "reponse", "texte": MESSAGE_ERREUR}
+                    yield {"type": "reponse", "texte": ("Something went wrong. Please try again shortly." if langue_interface == "en" else MESSAGE_ERREUR)}
             return
 
         messages_premium = [
@@ -1587,7 +1612,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         except Exception as e:
             logging.error(f"ERREUR MODELE PREMIUM ({modele_force}) : {e}")
             if not reponse_accumulee:
-                yield {"type": "reponse", "texte": MESSAGE_ERREUR}
+                yield {"type": "reponse", "texte": ("Something went wrong. Please try again shortly." if langue_interface == "en" else MESSAGE_ERREUR)}
         return
 
     client_groq = Groq(api_key=get_secret("GROQ_API_KEY"), max_retries=0)
@@ -1878,5 +1903,5 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
 
     # Echec complet : on ne persiste jamais un message d'erreur technique
     # en memoire (polluerait le resume avec du bruit sans valeur).
-    yield {"type": "reponse", "texte": MESSAGE_ERREUR}
+    yield {"type": "reponse", "texte": ("Something went wrong. Please try again shortly." if langue_interface == "en" else MESSAGE_ERREUR)}
 
