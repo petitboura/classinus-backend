@@ -5,7 +5,7 @@
 # repetes en boucle.
 import json
 import logging
-from mcp_tools import parametres_outils
+from mcp_tools import parametres_outils, PARAMETRE_DELAI_OUTIL
 # Meme chemin d'import que api/ et core/outils_action_agent.py : un seul module, donc un seul etat partage.
 from core.canal_agent_applicatif import retirer_messages_etudiant
 from core.plafond_outils_tour import plafond_tour
@@ -52,6 +52,8 @@ def _evenement_confirmation(attente, messages_agent, outils_mcp, table_routage, 
         arguments_dict = json.loads(appel["arguments"] or "{}")
     except Exception:
         arguments_dict = {}
+    # Le délai choisi par le modèle est un réglage technique, pas une donnée à approuver.
+    arguments_dict.pop(PARAMETRE_DELAI_OUTIL, None)
     return {
         "type": "confirmation_requise",
         "nom_outil": appel["name"],
