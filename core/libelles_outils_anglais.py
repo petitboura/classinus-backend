@@ -201,6 +201,10 @@ def _base_vers_anglais(texte: str) -> str:
     exact = STATUTS_EN.get(texte) or LIBELLES_OUTILS_EN.get(texte) or VERBES_STATUT_EN.get(texte)
     if exact:
         return exact
+    plateforme = re.fullmatch(r"(Action sur|Consultation de)\s+(.+)", texte)
+    if plateforme:
+        debut, nom = plateforme.groups()
+        return f"Action on {nom}" if debut == "Action sur" else f"Viewing {nom}"
     composite = re.fullmatch(r"(.+?)\s+\((.+)\)", texte)
     if composite:
         verbe, libelle = composite.groups()

@@ -8,7 +8,7 @@ from datetime import datetime
 from groq import Groq
 from constantes_agent import get_secret, supabase, MODELE_PROFIL, SEUIL_PROFIL_MESSAGES, DELAI_MAX_PAR_APPEL
 from filtre_texte_streaming import NOMS_OUTILS_LISIBLES
-from registre_outils import VERBES_ACTIONS, verbe_de_action
+from registre_outils import VERBES_ACTIONS, verbe_de_action, plateforme_outil_personnel, est_outil_sensible_serveur_personnel
 
 def _nom_agent(agent_id):
     """
@@ -48,6 +48,17 @@ def _nom_lisible(nom_outil, action=None):
     else:
         base = NOMS_OUTILS_LISIBLES.get(nom_outil, nom_outil)
         connu = nom_outil in NOMS_OUTILS_LISIBLES
+    # Outils des plateformes personnelles (Vercel, Railway, Supabase, Higgsfield) :
+    # leur catalogue est trop grand pour un libellé par outil. Sans entrée dans le
+    # registre, l'élève voyait le nom technique brut (ex: vercel_create_project).
+    # On affiche à la place « Action sur <plateforme> » ou « Consultation de
+    # <plateforme> » ; le nom exact reste visible dans les détails de la carte.
+    if not connu:
+        plateforme = plateforme_outil_personnel(nom_outil)
+        if plateforme:
+            if est_outil_sensible_serveur_personnel(nom_outil):
+                return f"Action sur {plateforme}"
+            return f"Consultation de {plateforme}"
     # 24/09/2026 (demande Bourama, regroupement des outils qui s'enchaînent) :
     # pour un outil à actions (bibliothèque, dossiers, skills...), le libellé
     # porte aussi le verbe de l'action, sinon "chercher" et "supprimer"
