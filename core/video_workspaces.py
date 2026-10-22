@@ -1,16 +1,26 @@
-"""Espaces de travail temporaires et isolés pour le montage vidéo Clovis.
+"""Espaces de travail isolés pour le montage vidéo Clovis.
 
 Les sources restent dans uploads/ et ne sont jamais utilisées comme sortie.
 Les transformations sont écrites dans outputs/ (ou projects/ pour Remotion).
 Les identifiants utilisateur/conversation sont hachés avant de devenir des chemins.
+
+Conservation (décision de Bourama, 22/10/2026) : les vidéos importées et les
+fichiers produits sont gardés sans limite de durée dans le compte de
+l'utilisateur, dans R2. Le disque du serveur n'est qu'un cache, restauré depuis
+R2 au besoin : aucun nettoyage automatique n'existe ni ne doit être ajouté.
+Seule la suppression du compte les efface (supprimer_videos_utilisateur,
+appelée par core/purge_compte.py), et l'export de compte les liste
+(lister_videos_utilisateur).
 """
 from __future__ import annotations
 
 import hashlib
 import hmac
 import json
+import logging
 import mimetypes
 import os
+import shutil
 import tempfile
 import uuid
 from pathlib import Path
@@ -155,7 +165,7 @@ def lire_metadonnees_video(user_id: str, conversation_id: str, video_id: str) ->
             data = json.loads(meta_path.read_text(encoding="utf-8"))
 
     if not isinstance(data, dict) or data.get("video_id") != identifiant:
-        raise FileNotFoundError("Cette vidéo n'existe pas dans cette conversation ou a expiré.")
+        raise FileNotFoundError("Cette vidéo n'existe pas dans cette conversation.")
     if data.get("type_mime") not in EXTENSIONS_MIME:
         raise ValueError("Type MIME des métadonnées vidéo invalide.")
     return data
@@ -191,7 +201,7 @@ def chemin_video(user_id: str, conversation_id: str, video_id: str) -> Path:
         return chemin
     except Exception as exc:
         raise FileNotFoundError(
-            "Cette vidéo n'existe pas dans cette conversation ou a expiré."
+            "Cette vidéo n'existe pas dans cette conversation."
         ) from exc
 
 
@@ -392,3 +402,80 @@ def synchroniser_workspace(user_id: str, conversation_id: str, *, root: Path | N
         1 for entree in nouveaux
         if entree.get("sha256") != anciens.get(entree["path"], {}).get("sha256")
     )}
+
+
+# --- Compte : export et suppression -------------------------------------
+
+_PREFIXE_ORIGINAUX = "montages-video/originaux"
+_PREFIXE_WORKSPACES = "montages-video/workspaces"
+_CHAMPS_EXPORT_VIDEO = ("video_id", "nom_fichier", "taille_octets", "type_mime", "duree_secondes")
+_LOT_SUPPRESSION_R2 = 1000  # limite d'une requête de suppression groupée
+
+
+def lister_videos_utilisateur(user_id: str) -> dict:
+    """Résumé des vidéos du compte, pour « Exporter mes données ».
+
+    Les vidéos importées sont décrites une par une (nom, taille, type, durée) ;
+    les fichiers produits par le montage sont comptés. Les contenus eux-mêmes
+    ne sont pas inclus dans le fichier JSON de l'export.
+    """
+    from core import stockage_r2
+
+    segment = _segment(user_id)
+    stockage = stockage_r2.from_("images-publiques")
+
+    importees = []
+    for chemin in stockage.lister(f"{_PREFIXE_ORIGINAUX}/{segment}/"):
+        if not chemin.endswith(".json"):
+            continue
+        try:
+            donnees = json.loads(stockage.download(chemin).decode("utf-8"))
+        except Exception as e:
+            logging.error(f"ERREUR export vidéos ({chemin} pour {user_id}) : {e}")
+            continue
+        if isinstance(donnees, dict):
+            importees.append({cle: donnees.get(cle) for cle in _CHAMPS_EXPORT_VIDEO})
+
+    produits = [
+        chemin
+        for chemin in stockage.lister(f"{_PREFIXE_WORKSPACES}/{segment}/")
+        if not chemin.endswith("/manifest.json")
+    ]
+    return {"videos_importees": importees, "fichiers_produits": len(produits)}
+
+
+def supprimer_videos_utilisateur(user_id: str) -> dict:
+    """Supprime toutes les vidéos d'un compte : R2 puis cache local.
+
+    Appelée à la suppression du compte. Va jusqu'au bout même si un lot échoue
+    (chaque erreur est loguée avec l'utilisateur, pour reprise à la main) et
+    renvoie le nombre d'objets supprimés et d'objets en échec.
+    """
+    from core import stockage_r2
+
+    segment = _segment(user_id)
+    stockage = stockage_r2.from_("images-publiques")
+    supprimes = 0
+    en_echec = 0
+
+    for prefixe in (_PREFIXE_ORIGINAUX, _PREFIXE_WORKSPACES):
+        try:
+            chemins = stockage.lister(f"{prefixe}/{segment}/")
+        except Exception as e:
+            logging.error(f"ERREUR purge vidéos (liste {prefixe} pour {user_id}) : {e}")
+            en_echec += 1
+            continue
+        for debut in range(0, len(chemins), _LOT_SUPPRESSION_R2):
+            lot = chemins[debut:debut + _LOT_SUPPRESSION_R2]
+            try:
+                stockage.remove(lot)
+                supprimes += len(lot)
+            except Exception as e:
+                logging.error(f"ERREUR purge vidéos ({len(lot)} objets {prefixe} pour {user_id}) : {e}")
+                en_echec += len(lot)
+
+    racine_utilisateur = (ROOT / segment).resolve()
+    if ROOT in racine_utilisateur.parents:
+        shutil.rmtree(racine_utilisateur, ignore_errors=True)
+
+    return {"supprimes": supprimes, "en_echec": en_echec}

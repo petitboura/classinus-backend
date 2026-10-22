@@ -17,6 +17,9 @@ on:
       - "tests/test_video_workspaces.py"
       - "tests/test_video_passerelle.py"
       - "tests/test_video_reessayer.py"
+      - "tests/test_video_compte.py"
+      - "core/purge_compte.py"
+      - "api/profiles.py"
       - ".github/workflows/video-montage-checks.yml"
   workflow_dispatch:
 
@@ -52,9 +55,9 @@ jobs:
             core/main.py core/mcp_tools.py core/registre_outils.py \
             core/serveur_mcp_video.py core/video_workspaces.py \
             core/stockage_r2.py tests/test_video_workspaces.py tests/test_video_passerelle.py \
-            tests/test_video_reessayer.py
+            tests/test_video_reessayer.py tests/test_video_compte.py core/purge_compte.py api/profiles.py
       - name: Test workspace isolation, persistence and gateway path guard
-        run: python -m pytest -q tests/test_video_workspaces.py tests/test_video_passerelle.py tests/test_video_reessayer.py
+        run: python -m pytest -q tests/test_video_workspaces.py tests/test_video_passerelle.py tests/test_video_reessayer.py tests/test_video_compte.py
       - name: Smoke-test upstream MCP tool discovery
         run: |
           python - <<'PY'

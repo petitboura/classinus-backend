@@ -144,6 +144,33 @@ class _BucketLogique:
             logging.error(f"ERREUR R2 STORAGE (remove {self._bucket_logique}/{chemins}) : {e}")
             raise
 
+    def lister(self, prefixe: str) -> list[str]:
+        """
+        Chemins logiques (sans le nom du bucket logique) de tous les objets dont
+        le chemin commence par `prefixe`. Parcourt toutes les pages de résultats
+        (R2 en renvoie 1000 au maximum à la fois).
+        """
+        racine = _cle_objet(self._bucket_logique, "")
+        chemins: list[str] = []
+        jeton = None
+        try:
+            while True:
+                arguments = {
+                    "Bucket": R2_BUCKET_NAME,
+                    "Prefix": _cle_objet(self._bucket_logique, prefixe),
+                }
+                if jeton:
+                    arguments["ContinuationToken"] = jeton
+                reponse = _client.list_objects_v2(**arguments)
+                for objet in reponse.get("Contents", []):
+                    chemins.append(objet["Key"][len(racine):])
+                if not reponse.get("IsTruncated"):
+                    return chemins
+                jeton = reponse.get("NextContinuationToken")
+        except Exception as e:
+            logging.error(f"ERREUR R2 STORAGE (lister {self._bucket_logique}/{prefixe}) : {e}")
+            raise
+
     def get_public_url(self, chemin: str) -> str:
         """
         Équivalent de supabase.storage.from_(BUCKET).get_public_url(chemin) :
