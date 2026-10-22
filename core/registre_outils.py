@@ -394,6 +394,18 @@ def est_outil_sensible_serveur_personnel(nom_outil):
     return False
 
 
+def plateforme_outil_personnel(nom_outil):
+    """
+    Nom d'affichage de la plateforme (Vercel, Railway...) dont vient `nom_outil`
+    s'il porte le prefixe d'un serveur MCP personnel, sinon None. Deduit du
+    prefixe, donc aucune liste a tenir a jour quand une plateforme s'ajoute.
+    """
+    for prefixe in PREFIXES_SERVEURS_PERSONNELS:
+        if nom_outil.startswith(prefixe):
+            return prefixe.rstrip("_").capitalize()
+    return None
+
+
 # Outils qui MODIFIENT reellement quelque chose chez l'utilisateur (creation,
 # edition, suppression, deplacement...). main.py interrompt le flux et
 # demande une confirmation explicite avant d'executer l'un de ces outils,
