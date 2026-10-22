@@ -518,7 +518,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # rien n'était renvoyé à la personne, pas même une erreur générique.
             deja_ajoute_a_messages_agent = False
             try:
-                resultat = appeler_outil(appel["name"], arguments, table_routage)
+                resultat = appeler_outil(appel["name"], arguments, table_routage, arret=arret_tour)
             except Exception as e:
                 logging.error(f"ERREUR OUTIL APPROUVÉ ({appel['name']}) : {e}")
                 resultat = f"Erreur : {_nom_lisible_appel(appel)} a échoué ({e})."

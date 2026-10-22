@@ -234,6 +234,84 @@ async def _lister_outils_async(url, headers=None):
                 return reponse.tools
 
 
+def _entier_env(nom, defaut):
+    try:
+        valeur = int(os.getenv(nom, defaut))
+        return valeur if valeur > 0 else defaut
+    except (TypeError, ValueError):
+        return defaut
+
+
+# 22/10/2026 (demande de Bourama : outils approuvés qui tournaient à l'infini) : délai
+# normal appliqué à tout appel d'outil, que le modèle peut allonger lui-même avec le
+# paramètre optionnel ci-dessous quand il sait l'action longue. 60 s est la valeur par
+# défaut des clients MCP courants. Réglables sans toucher au code par variables
+# d'environnement.
+DELAI_OUTIL_DEFAUT_SECONDES = _entier_env("DELAI_OUTIL_DEFAUT_SECONDES", 60)
+DELAI_OUTIL_MAX_SECONDES = max(DELAI_OUTIL_DEFAUT_SECONDES, _entier_env("DELAI_OUTIL_MAX_SECONDES", 600))
+PARAMETRE_DELAI_OUTIL = "delai_max_secondes"
+
+
+class _AppelAnnule(Exception):
+    pass
+
+
+def _delai_demande(valeur):
+    """Délai choisi par le modèle, ramené entre le délai normal et le maximum."""
+    try:
+        demande = int(valeur)
+    except (TypeError, ValueError):
+        return DELAI_OUTIL_DEFAUT_SECONDES
+    return max(DELAI_OUTIL_DEFAUT_SECONDES, min(demande, DELAI_OUTIL_MAX_SECONDES))
+
+
+def _schema_avec_delai(schema):
+    """Ajoute le paramètre optionnel de délai au schéma d'un outil (sans toucher à l'original)."""
+    if not isinstance(schema, dict) or schema.get("type") != "object":
+        return schema
+    proprietes = schema.get("properties") or {}
+    if not isinstance(proprietes, dict) or PARAMETRE_DELAI_OUTIL in proprietes:
+        return schema
+    return {
+        **schema,
+        "properties": {
+            **proprietes,
+            PARAMETRE_DELAI_OUTIL: {
+                "type": "integer",
+                "description": (
+                    f"Optionnel. Attente maximale en secondes (défaut {DELAI_OUTIL_DEFAUT_SECONDES}, "
+                    f"maximum {DELAI_OUTIL_MAX_SECONDES}). À augmenter seulement pour une action connue pour être longue."
+                ),
+            },
+        },
+    }
+
+
+async def _appeler_avec_delai_et_arret(coroutine, delai, arret):
+    """
+    Attend l'appel en regardant toutes les 0,25 s le bouton Arrêter et l'échéance. Dans les deux
+    cas la tâche est annulée proprement (la connexion au service est fermée).
+    """
+    tache = asyncio.ensure_future(coroutine)
+    echeance = time.monotonic() + delai
+    try:
+        while not tache.done():
+            if arret is not None and arret.est_demande():
+                raise _AppelAnnule()
+            if time.monotonic() >= echeance:
+                raise TimeoutError()
+            await asyncio.wait({tache}, timeout=0.25)
+        return tache.result()
+    finally:
+        if not tache.done():
+            tache.cancel()
+            try:
+                await tache
+            except BaseException as e:
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                    raise
+
+
 async def _appeler_outil_async(url, nom_outil, arguments, headers=None):
     async with create_mcp_http_client(headers=headers) as http_client:
         async with streamable_http_client(url, http_client=http_client) as (read, write):
@@ -351,7 +429,7 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
                         # silencieusement (AttributeError attrape par le except plus
                         # bas) et la liste d'outils envoyee au LLM restait vide, quel
                         # que soit l'outil selectionne via le bouton Outils.
-                        "parameters": outil.input_schema,
+                        "parameters": _schema_avec_delai(outil.input_schema),
                     },
                 })
                 route = {"url": url, "headers": headers}
@@ -447,12 +525,18 @@ def _message_erreur_technique_outil(nom_outil: str) -> str:
     )
 
 
-def appeler_outil(nom_outil, arguments, table_routage):
+def appeler_outil(nom_outil, arguments, table_routage, arret=None):
     """
     Execute un outil par son nom, quel que soit le serveur MCP qui
     l'expose. Le routage (URL + headers) se fait automatiquement via
     table_routage, construite par lister_tous_les_outils().
+
+    22/10/2026 : l'appel est borné par un délai (60 s par défaut, que le modèle peut
+    allonger avec delai_max_secondes) et s'interrompt dès que le bouton Arrêter est
+    pressé (`arret`). Avant, il pouvait attendre indéfiniment.
     """
+    arguments = dict(arguments or {})
+    delai = _delai_demande(arguments.pop(PARAMETRE_DELAI_OUTIL, None))
     logging.info(f"Appel outil demandé par le LLM : {nom_outil}({arguments})")
     route = table_routage.get(nom_outil)
     if not route:
@@ -460,10 +544,24 @@ def appeler_outil(nom_outil, arguments, table_routage):
         return f"Erreur : outil '{nom_outil}' inconnu."
     try:
         resultat = asyncio.run(
-            _appeler_outil_async(route["url"], route.get("nom_reel", nom_outil), arguments, route.get("headers"))
+            _appeler_avec_delai_et_arret(
+                _appeler_outil_async(route["url"], route.get("nom_reel", nom_outil), arguments, route.get("headers")),
+                delai,
+                arret,
+            )
         )
         logging.info(f"Résultat outil '{nom_outil}' : {len(resultat or '')} caractères")
         return resultat
+    except _AppelAnnule:
+        logging.info(f"Appel à {nom_outil} interrompu par le bouton Arrêter")
+        return "Action annulée par l'utilisateur : l'appel a été interrompu, le résultat est inconnu."
+    except TimeoutError:
+        logging.warning(f"Délai dépassé ({delai} s) pour l'outil {nom_outil}")
+        return (
+            f"Délai dépassé : {nom_outil} n'a pas répondu en {delai} s. L'action a peut-être quand même "
+            f"abouti côté service : vérifie son état avant de la relancer. Si l'outil est connu pour être "
+            f"long, tu peux le relancer avec {PARAMETRE_DELAI_OUTIL} plus grand (maximum {DELAI_OUTIL_MAX_SECONDES} s)."
+        )
     except BaseExceptionGroup as eg:
         # Correctif 13/09/2026, Bourama : "unhandled errors in a TaskGroup
         # (N sub-exception(s))" est le message par defaut d'un

@@ -45,12 +45,12 @@ def _attendre_termines(futures, arret):
             return
 
 
-def _executer_un_appel(appel, table_routage):
+def _executer_un_appel(appel, table_routage, arret=None):
     try:
         arguments = json.loads(appel["arguments"] or "{}")
     except Exception:
         arguments = {}
-    return appeler_outil(appel["name"], arguments, table_routage)
+    return appeler_outil(appel["name"], arguments, table_routage, arret=arret)
 
 
 def _sources_depuis_json_generique(resultat_brut):
@@ -503,7 +503,7 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(appels_surs))
         try:
             futures = {
-                executor.submit(_executer_un_appel, appel, table_routage): appel
+                executor.submit(_executer_un_appel, appel, table_routage, arret): appel
                 for appel in appels_surs
             }
             finis = set()
