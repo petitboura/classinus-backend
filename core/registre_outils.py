@@ -879,8 +879,12 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # logo de la plateforme joue le rôle du nom, donc aucun nom de plateforme
     # dans le texte. Higgsfield : les deux outils internes de l'API vidéo ; les
     # outils du serveur MCP personnel passent par libelle_outil_plateforme.
-    "lancer_video_higgsfield": {"label": "Génération d'une vidéo", "icone": "Clapperboard", "onglet": None},
-    "consulter_video_higgsfield": {"label": "Suivi d'une vidéo", "icone": "Film", "onglet": None},
+    # "appli": le chat affiche alors le vrai logo Higgsfield (nom d'appli
+    # higgsfield_mcp, voir APPLIS_DISPONIBLES côté frontend) et la petite icône
+    # d'action tirée du verbe du nom (lancer, consulter). L'icône lucide reste
+    # le repli si le frontend ne connaît pas cette appli.
+    "lancer_video_higgsfield": {"label": "Génération d'une vidéo", "icone": "Clapperboard", "onglet": None, "appli": "higgsfield_mcp"},
+    "consulter_video_higgsfield": {"label": "Suivi d'une vidéo", "icone": "Film", "onglet": None, "appli": "higgsfield_mcp"},
     "gerer_programme_catalogue_public": {"label": "Programmes publics", "icone": "GraduationCap", "onglet": None},
     "ajouter_commentaire_catalogue_public": {"label": "Ajout d'un commentaire public", "icone": "MessageSquarePlus", "onglet": None},
     "supprimer_commentaire_catalogue_public": {"label": "Suppression d'un commentaire public", "icone": "MessageSquareX", "onglet": None},

@@ -9,6 +9,7 @@ from groq import Groq
 from constantes_agent import get_secret, supabase, MODELE_PROFIL, SEUIL_PROFIL_MESSAGES, DELAI_MAX_PAR_APPEL
 from filtre_texte_streaming import NOMS_OUTILS_LISIBLES
 from registre_outils import VERBES_ACTIONS, verbe_de_action, libelle_outil_plateforme
+from domaines_affichage import domaines_de_l_appel
 
 def _nom_agent(agent_id):
     """
@@ -71,6 +72,21 @@ def _action_appel(appel):
     except Exception:
         return None
     return arguments.get("action")
+
+
+def _champs_domaines_appel(appel):
+    """
+    Champ "domaines" des événements d'un outil (21/10/2026, demande Bourama) :
+    les sites visés par l'appel, pour que le chat montre leur logo. Dictionnaire
+    vide quand l'outil ne vise aucun site précis, à étaler dans l'événement
+    (`**_champs_domaines_appel(appel)`) : aucune clé vide n'est envoyée.
+    """
+    try:
+        arguments = json.loads(appel["arguments"] or "{}")
+    except Exception:
+        arguments = {}
+    domaines = domaines_de_l_appel(appel["name"], arguments)
+    return {"domaines": domaines} if domaines else {}
 
 
 def _nom_lisible_appel(appel):

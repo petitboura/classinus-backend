@@ -184,6 +184,13 @@ class TestLibellesManuelsAjoutes(unittest.TestCase):
             self.assertNotIn("higgsfield", label.lower(), nom)
             self.assertNotIn("-" * 2, label, nom)
 
+    def test_les_outils_higgsfield_portent_l_appli_du_logo(self):
+        noms_applis = {s["nom"] for s in r.SERVEURS_MCP}
+        for nom in ("lancer_video_higgsfield", "consulter_video_higgsfield"):
+            appli = r.REGISTRE_AFFICHAGE_OUTILS[nom]["appli"]
+            self.assertEqual(appli, "higgsfield_mcp", nom)
+            self.assertIn(appli, noms_applis, nom)
+
     def test_les_deux_outils_video_ont_des_libelles_distincts(self):
         self.assertNotEqual(
             r.REGISTRE_AFFICHAGE_OUTILS["lancer_video_higgsfield"]["label"],
