@@ -1,9 +1,7 @@
 name: Video montage checks
 
 on:
-  push:
-    branches:
-      - wip/video-montage-non-verifie
+  pull_request:
     paths:
       - "api/chat.py"
       - "api/main.py"

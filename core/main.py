@@ -415,6 +415,13 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             "Les outils publient les résultats accessibles et renvoient leurs liens de téléchargement. Donne à l'utilisateur le résultat réellement produit et signale toute dépendance ou étape impossible.",
         ])
         message_utilisateur = (message_utilisateur or "Modifie la vidéo selon ma sélection.") + "\n\n" + "\n".join(details_video)
+        # Enregistré avec la question (colonne meta) pour que "Réessayer" retrouve
+        # la même sélection, même après rechargement. Jamais de chemin de fichier.
+        meta_contexte_video = {
+            cle: contexte_video[cle]
+            for cle in ("video_id", "nom_fichier", "duree_secondes", "debut", "fin", "zone")
+            if contexte_video.get(cle) is not None
+        }
 
     # Correctif 12/09/2026 (Bourama) : fusion de image_url (singulier,
     # historique) et image_urls (liste, ce que ChatIA.tsx envoie reellement
@@ -1293,6 +1300,8 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # bas, qui remplace meta_utilisateur, ne le concerne donc jamais.
     if message_automatique:
         meta_utilisateur = {"automatique": True}
+    if contexte_video:
+        meta_utilisateur = {**(meta_utilisateur or {}), "contexte_video": meta_contexte_video}
 
     if toutes_les_urls_images or images_base64:
         # Chemin dédié image(s) : voir docstring ci-dessus. Pas de cascade

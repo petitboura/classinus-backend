@@ -96,6 +96,34 @@ class ContexteVideoPayload(BaseModel):
     source_path: Optional[str] = None
 
 
+def _contexte_video_depuis_message(user_id: str, conversation_id: str, message_id: int) -> Optional["ContexteVideoPayload"]:
+    """Réessayer : retrouve la sélection vidéo enregistrée avec la question d'origine.
+
+    Seule une ligne "user" de CET utilisateur et de CETTE conversation est lue ;
+    le résultat repasse ensuite par la même validation qu'un envoi normal
+    (propriété de la source, durée, zone). Retourne None s'il n'y a rien à reprendre.
+    """
+    try:
+        res = (
+            supabase.table("historique_conversations")
+            .select("meta")
+            .eq("id", message_id)
+            .eq("user_id", user_id)
+            .eq("conversation_id", conversation_id)
+            .eq("role", "user")
+            .limit(1)
+            .execute()
+        )
+        lignes = res.data or []
+        brut = ((lignes[0].get("meta") or {}) if lignes else {}).get("contexte_video")
+        if not isinstance(brut, dict):
+            return None
+        return ContexteVideoPayload(**{k: v for k, v in brut.items() if k != "source_path"})
+    except Exception:
+        logging.exception("Contexte vidéo introuvable pour réessayer le message %s", message_id)
+        return None
+
+
 class EnvoyerMessagePayload(BaseModel):
     # message/agent_id optionnels : sur un appel de reprise (après
     # confirmation_requise), seul `reprise` est fourni -- chat_generateur
@@ -434,6 +462,8 @@ def envoyer_message(request: Request, payload: EnvoyerMessagePayload, utilisateu
 
     # Le montage vidéo est réservé aux comptes connectés et aux sources déposées
     # dans CETTE conversation. Ne jamais accepter le chemin absolu fourni par le client.
+    if payload.contexte_video is None and payload.regenerer and payload.parent_id and user_id and payload.conversation_id:
+        payload.contexte_video = _contexte_video_depuis_message(user_id, payload.conversation_id, payload.parent_id)
     if payload.contexte_video is not None:
         contexte = payload.contexte_video
         if not user_id or not payload.conversation_id:
