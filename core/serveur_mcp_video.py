@@ -144,6 +144,10 @@ PATH_KEYS = {
     "subtitle_path", "subtitle_file", "project_path", "project_dir",
     "font_path", "file_path", "source_path", "input", "inputs", "video", "audio",
     "image", "clips", "images", "paths", "output_path", "output_dir",
+    # Clés rencontrées dans les objets imbriqués des outils amont (pistes audio,
+    # timelines, séquences) : sans elles, un chemin ou une URL y échappait à la
+    # validation (ex. audio_compose.tracks[].file, video_edit ... source).
+    "file", "files", "source", "sources", "src", "path",
 }
 EXTENSIONS_IMAGES = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 EXTENSIONS_AUDIO = {".wav", ".mp3", ".m4a", ".ogg", ".flac"}
@@ -299,7 +303,7 @@ def video_lister_outils(ctx: Context, recherche: str = "") -> dict[str, Any]:
     'transcription audio', 'Remotion motion graphics'). Vide pour lister les catégories.
     """
     _context_owner(ctx)
-    tools = _tools_dict()
+    tools = _outils_exposes()
     if not tools:
         return {"success": False, "error": "mcp-video n'est pas installé ou ses outils n'ont pas pu être chargés."}
     query = (recherche or "").strip().lower()
@@ -375,6 +379,50 @@ def _sortie_par_defaut(nom_outil: str, arguments: dict, root: Path) -> None:
         arguments["output_dir"] = str(dossier / f"{nom_outil}_{uuid.uuid4().hex}")
 
 
+# Outils amont volontairement non exposés : remotion_studio lance un serveur de
+# développement persistant dans le conteneur, inutilisable depuis le chat et qui
+# resterait actif après la requête.
+OUTILS_NON_EXPOSES = frozenset({"remotion_studio"})
+
+_ADRESSE_RESEAU = re.compile(r"^\s*[a-zA-Z][a-zA-Z0-9+.\-]*://")
+_PSEUDO_PROTOCOLE_FFMPEG = re.compile(
+    r"^\s*(concat|file|pipe|subfile|crypto|cache|data|async|md5|hls|tcp|udp|rtp|rtmp|"
+    r"rtsp|srt|ffconcat|http|https|ftp|ftps|sftp|gopher|tls|unix)[:,]\S",
+    re.IGNORECASE,
+)
+_REMONTEE_DE_DOSSIER = re.compile(r"(^|[\\/])\.\.([\\/]|$)")
+_CHEMIN_ABSOLU = re.compile(r"^\s*([\\/~]|[a-zA-Z]:[\\/])")
+
+
+def _controler_valeur_libre(valeur: str, root: Path) -> str:
+    """Empêche une chaîne libre de désigner une ressource hors de l'espace de travail.
+
+    Les clés de chemin connues passent par chemin_interne ; cette garde couvre
+    les autres (clés imbriquées inconnues, outils ajoutés plus tard). Elle ne
+    refuse que les chaînes qui, prises en entier, sont une adresse réseau, un
+    pseudo-protocole FFmpeg, un chemin absolu hors espace ou un chemin remontant :
+    un titre ou un sous-titre ordinaire n'est jamais touché.
+    """
+    brut = valeur.strip()
+    if not brut:
+        return valeur
+    if _ADRESSE_RESEAU.match(brut) or _PSEUDO_PROTOCOLE_FFMPEG.match(brut):
+        raise ValueError("Les outils vidéo ne peuvent utiliser que des fichiers de l'espace de travail de cette conversation.")
+    if _CHEMIN_ABSOLU.match(brut) or _REMONTEE_DE_DOSSIER.search(brut):
+        racine = root.resolve()
+        try:
+            candidat = Path(brut).resolve() if Path(brut).is_absolute() else None
+        except (OSError, ValueError):
+            candidat = None
+        if candidat is None or racine not in candidat.parents:
+            raise ValueError("Chemin refusé : hors de l'espace de travail de cette conversation.")
+    return valeur
+
+
+def _outils_exposes() -> dict:
+    return {nom: outil for nom, outil in _tools_dict().items() if nom not in OUTILS_NON_EXPOSES}
+
+
 def _cle_est_chemin(cle: str) -> bool:
     return (
         cle in PATH_KEYS
@@ -402,6 +450,8 @@ def _normaliser_arguments(nom_outil: str, arguments: dict, root: Path) -> dict:
             return [normaliser(item, cle) for item in valeur]
         if isinstance(valeur, dict):
             return {key: normaliser(item, str(key)) for key, item in valeur.items()}
+        if isinstance(valeur, str):
+            return _controler_valeur_libre(valeur, root)
         return valeur
 
     # Valide aussi les chemins dans les listes/dictionnaires imbriqués, par
@@ -530,7 +580,7 @@ def video_executer_outil(ctx: Context, nom_outil: str, arguments: dict[str, Any]
     la vidéo de la conversation ou un fichier produit dans son espace de travail.
     """
     user_id, _conversation_id, root = _context_owner(ctx)
-    tool = _tools_dict().get(nom_outil)
+    tool = _outils_exposes().get(nom_outil)
     if tool is None or not callable(getattr(tool, "fn", None)):
         return {"success": False, "error": f"Outil vidéo inconnu : {nom_outil}"}
     manquantes = _dependances_manquantes(nom_outil)
