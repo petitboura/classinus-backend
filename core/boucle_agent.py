@@ -6,6 +6,7 @@
 import json
 import logging
 from mcp_tools import parametres_outils, PARAMETRE_DELAI_OUTIL
+from libelles_activite_ia import PARAMETRE_LIBELLE_OUTIL, arguments_sans_libelle
 # Meme chemin d'import que api/ et core/outils_action_agent.py : un seul module, donc un seul etat partage.
 from core.canal_agent_applicatif import retirer_messages_etudiant
 from core.plafond_outils_tour import plafond_tour
@@ -54,6 +55,8 @@ def _evenement_confirmation(attente, messages_agent, outils_mcp, table_routage, 
         arguments_dict = {}
     # Le délai choisi par le modèle est un réglage technique, pas une donnée à approuver.
     arguments_dict.pop(PARAMETRE_DELAI_OUTIL, None)
+    # La phrase de la timeline est un texte d'affichage, pas une donnée à approuver.
+    arguments_dict.pop(PARAMETRE_LIBELLE_OUTIL, None)
     return {
         "type": "confirmation_requise",
         "nom_outil": appel["name"],
@@ -120,7 +123,7 @@ def _detecter_appel_repete(historique_appels, nouveaux_appels, tolerance):
             else:
                 break
     for appel in nouveaux_appels:
-        cle = (appel["name"], appel["arguments"])
+        cle = (appel["name"], arguments_sans_libelle(appel["arguments"]))
         if cle == dernier:
             compteur += 1
         else:
@@ -562,7 +565,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
         # (aucun tool_calls sans tool_result correspondant). Porte
         # uniquement sur appels_normaux (garder_outils exclu).
         appel_repete = _detecter_appel_repete(historique_appels_tour, appels_normaux, tolerance_repetition)
-        historique_appels_tour.extend((a["name"], a["arguments"]) for a in appels_normaux)
+        historique_appels_tour.extend((a["name"], arguments_sans_libelle(a["arguments"])) for a in appels_normaux)
         if appel_repete:
             logging.warning(
                 f"Répétition détectée sur {modele} -- même appel ({appel_repete['name']}) "

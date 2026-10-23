@@ -139,6 +139,17 @@ _desactive_programme/          ancien "programme d'études adaptatif" (api/core)
                                 voir LISEZ_MOI_NE_JAMAIS_REUTILISER.md, ne jamais réactiver sans consigne explicite
 ```
 
+## Timeline du chat : phrases écrites par l'IA
+
+Depuis le 23/10/2026, chaque outil proposé à l'IA porte un paramètre optionnel
+`libelle_activite` (voir `core/libelles_activite_ia.py`) : une courte phrase qui dit à
+l'utilisateur ce que l'IA fait, dans la langue de la conversation. Le serveur l'envoie
+dans les événements `statut`, `statut_termine` et `outil_resultat` (avec `libelle_ia: true`),
+sans passer par la table de traduction. Sans phrase valable, le texte fixe habituel
+(`_nom_lisible` dans `core/profils_agents.py`) s'affiche comme avant. Le paramètre n'est
+jamais transmis à l'outil, ne compte pas dans la détection d'appels répétés, et les
+confirmations d'actions sensibles gardent le texte fixe.
+
 ## Outils MCP externes : libellés de recherche
 
 Le 10/09/2026, la recherche interne d'outils (`core/recherche_outils.py`,

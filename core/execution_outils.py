@@ -11,6 +11,7 @@ import requests
 from mcp_tools import appeler_outil
 from registre_outils import OUTILS_SENSIBLES, est_outil_sensible_serveur_personnel
 from profils_agents import _nom_lisible_appel, _action_appel, _champs_domaines_appel
+from libelles_activite_ia import champs_timeline_appel
 
 class _AttenteConfirmation(Exception):
     """
@@ -51,6 +52,17 @@ def _executer_un_appel(appel, table_routage, arret=None):
     except Exception:
         arguments = {}
     return appeler_outil(appel["name"], arguments, table_routage, arret=arret)
+
+
+def _champs_timeline(appel):
+    """
+    Libellé de la timeline pour cet appel (23/10/2026) : la phrase écrite par l'IA si elle en
+    a donné une, sinon le texte fixe. Renvoie (nom_lisible, texte_en_cours, texte_termine,
+    marque), où `marque` est {"libelle_ia": True} quand la phrase vient de l'IA (le serveur
+    de chat ne la traduit alors pas), vide sinon.
+    """
+    nom, en_cours, termine, ia = champs_timeline_appel(appel, _nom_lisible_appel(appel))
+    return nom, en_cours, termine, ({"libelle_ia": True} if ia else {})
 
 
 def _sources_depuis_json_generique(resultat_brut):
@@ -483,16 +495,18 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
             # l'ordre de soumission). nom_outil permet aussi au frontend
             # d'afficher tout de suite la bonne icône de l'outil pendant
             # qu'il est encore "en cours", au lieu d'un rond générique.
+            nom_tl, texte_cours_tl, _, marque_tl = _champs_timeline(appel)
             yield {
                 "type": "statut",
-                "texte": f"{_nom_lisible_appel(appel)}...",
+                "texte": texte_cours_tl,
                 "id_appel": appel["id"],
                 "nom_outil": appel["name"],
+                **marque_tl,
                 # 24/09/2026 (demande Bourama, regroupement des outils qui
                 # s'enchaînent) : libellé et action connus dès le début, pour
                 # que la ligne "en cours" puisse déjà se regrouper avec les
                 # précédentes et afficher sa petite icône d'action.
-                "nom_lisible": _nom_lisible_appel(appel),
+                "nom_lisible": nom_tl,
                 "action": _action_appel(appel),
                 **_champs_domaines_appel(appel),
             }
@@ -534,11 +548,13 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                     # au lieu de changer de personnalite en silence.
                     logging.error(f"ERREUR OUTIL ({appel['name']}) : {e}")
                     resultat = f"Erreur : {_nom_lisible_appel(appel)} a échoué ({e})."
+                    nom_tl, _, _, marque_tl = _champs_timeline(appel)
                     yield {"type": "statut_termine", "texte": f"{_nom_lisible_appel(appel)} a échoué", "id_appel": appel["id"]}
                     yield {
                         "type": "outil_resultat",
                         "nom_outil": appel["name"],
-                        "nom_lisible": _nom_lisible_appel(appel),
+                        **marque_tl,
+                        "nom_lisible": nom_tl,
                         "action": _action_appel(appel),
                         **_champs_domaines_appel(appel),
                         "resultat": resultat,
@@ -550,14 +566,16 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                         "content": resultat,
                     })
                     continue
-                yield {"type": "statut_termine", "texte": f"{_nom_lisible_appel(appel)} effectuée", "id_appel": appel["id"]}
+                nom_tl, _, texte_fini_tl, marque_tl = _champs_timeline(appel)
+                yield {"type": "statut_termine", "texte": texte_fini_tl, "id_appel": appel["id"], **marque_tl}
                 # Généralisé (26/07, demande Bourama) : pour N'IMPORTE QUEL
                 # outil, présent ou futur -- pas de liste à maintenir, voir
                 # docstring de _resultat_pour_affichage.
                 yield {
                     "type": "outil_resultat",
                     "nom_outil": appel["name"],
-                    "nom_lisible": _nom_lisible_appel(appel),
+                    **marque_tl,
+                    "nom_lisible": nom_tl,
                     "action": _action_appel(appel),
                     **_champs_domaines_appel(appel),
                     "resultat": _resultat_pour_affichage(resultat),

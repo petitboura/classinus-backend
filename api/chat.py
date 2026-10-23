@@ -321,7 +321,9 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
             evenement_affiche = evenement
             if langue_interface == "en" and isinstance(evenement, dict):
                 type_evenement = evenement.get("type")
-                if type_evenement in ("statut", "statut_termine", "outil_resultat", "confirmation_requise"):
+                # Phrase de la timeline écrite par l'IA (23/10/2026) : déjà dans la langue de la
+                # conversation, la table de traduction ne doit pas y toucher.
+                if type_evenement in ("statut", "statut_termine", "outil_resultat", "confirmation_requise") and not evenement.get("libelle_ia"):
                     evenement_affiche = dict(evenement)
                     if isinstance(evenement_affiche.get("nom_lisible"), str):
                         evenement_affiche["nom_lisible"] = traduire_libelle_outil(
