@@ -22,6 +22,7 @@ avec le nom de la table pour pouvoir être reprises à la main.
 import logging
 import os
 
+from core import stockage_r2
 from core.dedoublonnage_stockage import supprimer_stockage_si_dernier_usage
 
 
@@ -188,6 +189,19 @@ def purger_donnees_compte(supabase, user_id: str) -> None:
     """Point d'entrée, à appeler avant la suppression du profil."""
     _purger_sandboxes_execution_code(supabase, user_id)
     _detacher_etablissements(supabase, user_id)
+    # Les objets R2 des skills sont indépendants des lignes Supabase.
+    try:
+        ids = [row["id"] for row in (supabase.table("skills").select("id").eq("owner_id", user_id).execute().data or [])]
+        if ids:
+            rows = supabase.table("skill_files").select("cle_stockage").in_("skill_id", ids).execute().data or []
+            for row in rows:
+                try:
+                    stockage_r2.from_("skills").remove([row["cle_stockage"]])
+                except Exception as e:
+                    logging.error(f"ERREUR purge compte (fichier skill R2 {user_id}) : {e}")
+            supabase.table("skills").delete().eq("owner_id", user_id).execute()
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (purge skills {user_id}) : {e}")
     _purger_fichiers(supabase, user_id)
 
     # Les activations de skills publics pointent vers le comportement de
