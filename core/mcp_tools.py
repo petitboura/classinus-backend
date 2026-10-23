@@ -467,6 +467,27 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
 
     # Origine de l'appareil (20/10/2026, demande de Bourama) : les outils d'écran qui n'existent pas
     # sur l'appareil utilisé ne sont jamais proposés. Origine inconnue : rien n'est retiré.
+    # MCP personnalisés ajoutés par l'utilisateur connecté : le module gère
+    # le catalogue par serveur, les jetons et un cache court séparé par compte.
+    if user_id:
+        try:
+            from connexions.mcp_personnalises import lister_outils_pour_utilisateur
+            for outil in lister_outils_pour_utilisateur(user_id):
+                nom_expose = outil["nom"]
+                if not nom_expose or nom_expose in table_routage:
+                    continue
+                outils_pour_llm.append({
+                    "type": "function",
+                    "function": {
+                        "name": nom_expose,
+                        "description": outil["description"],
+                        "parameters": _schema_avec_delai(outil["parameters"]),
+                    },
+                })
+                table_routage[nom_expose] = outil["route"]
+        except Exception as e:
+            logging.warning("Catalogue MCP personnalisé ignoré pour ce tour (%s).", type(e).__name__)
+
     from core.origine_appareil import filtrer_catalogue_par_origine
     return filtrer_catalogue_par_origine(outils_pour_llm, table_routage, origine)
 
@@ -585,6 +606,10 @@ def appeler_outil(nom_outil, arguments, table_routage, arret=None):
         logging.error(f"Outil '{nom_outil}' demandé par le LLM mais absent de la table de routage.")
         return f"Erreur : outil '{nom_outil}' inconnu."
     try:
+        if route.get("custom_mcp"):
+            # La destination est revérifiée juste avant l'appel réseau (anti-SSRF/DNS réassigné).
+            from connexions.mcp_personnalises import valider_url_mcp
+            valider_url_mcp(route["url"])
         resultat = asyncio.run(
             _appeler_avec_delai_et_arret(
                 _appeler_outil_async(route["url"], route.get("nom_reel", nom_outil), arguments, route.get("headers")),
