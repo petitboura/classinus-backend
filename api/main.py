@@ -83,6 +83,7 @@ from api.apercu_lien import router as apercu_lien_router
 from api.rendu_animation import router as rendu_animation_router  # 07/10/2026
 from core.rendu_animation_travaux import nettoyer_anciens_fichiers
 from core.serveur_mcp_generation import mcp_generation
+from core.outils_execution_code import mcp_execution_code, mettre_en_pause_sandboxes_inactifs
 from core.notifications_push import traiter_rappels_echus, un_canal_push_disponible
 from core.minuteurs import traiter_minuteurs_a_notifier
 from core.proactivite import verifier_relances_proactives
@@ -378,6 +379,16 @@ async def _boucle_vectorisation_documents_agent():
         await asyncio.sleep(2 if traites > 0 else 20)
 
 
+async def _boucle_pause_sandboxes_execution_code():
+    """Pause ou ferme les sandboxes inactifs selon leur état E2B."""
+    while True:
+        try:
+            await to_thread.run_sync(mettre_en_pause_sandboxes_inactifs)
+        except Exception as e:
+            logging.error("ERREUR boucle pause sandbox E2B: %s", type(e).__name__)
+        await asyncio.sleep(30)
+
+
 async def _lifespan(app: FastAPI):
     # Toutes les routes API sont en `def` sync (Supabase, Groq, Gemini :
     # SDKs synchrones) -- FastAPI les exécute correctement dans le
@@ -417,6 +428,7 @@ async def _lifespan(app: FastAPI):
 
     async with (
         mcp_generation.session_manager.run(),
+        mcp_execution_code.session_manager.run(),
         mcp_github.session_manager.run(),
         mcp_public.session_manager.run(),
         mcp_espace.session_manager.run(),
@@ -440,6 +452,7 @@ async def _lifespan(app: FastAPI):
         tache_reessai_echecs_description = asyncio.create_task(_boucle_reessai_echecs_description())
         tache_audit_corrections = asyncio.create_task(_boucle_planificateur_audit_corrections())
         tache_vectorisation_documents_agent = asyncio.create_task(_boucle_vectorisation_documents_agent())
+        tache_pause_sandboxes_execution_code = asyncio.create_task(_boucle_pause_sandboxes_execution_code())
         yield
         if tache_planificateur:
             tache_planificateur.cancel()
@@ -459,6 +472,7 @@ async def _lifespan(app: FastAPI):
         tache_reessai_echecs_description.cancel()
         tache_audit_corrections.cancel()
         tache_vectorisation_documents_agent.cancel()
+        tache_pause_sandboxes_execution_code.cancel()
 
 
 app = FastAPI(title="Classinus API", version="0.1.0", lifespan=_lifespan)
@@ -495,6 +509,7 @@ app.add_middleware(SlowAPIMiddleware)
 # les passent plus a la construction. streamable_http_path="/" fait que
 # le point d'entree final est bien /mcp/generation, sans /mcp en trop.
 app.mount("/mcp/generation", mcp_generation.streamable_http_app(stateless_http=True, streamable_http_path="/"))
+app.mount("/mcp/execution-code", mcp_execution_code.streamable_http_app(stateless_http=True, streamable_http_path="/"))
 
 # Serveur MCP interne (exploration/lecture/écriture GitHub) : voir
 # core/serveur_mcp_github.py, monté de la même façon que "generation"

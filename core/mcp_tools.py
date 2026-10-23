@@ -266,13 +266,15 @@ def _delai_demande(valeur):
     return max(DELAI_OUTIL_DEFAUT_SECONDES, min(demande, DELAI_OUTIL_MAX_SECONDES))
 
 
-def _schema_avec_delai(schema):
+def _schema_avec_delai(schema, delai_defaut=None, delai_max=None):
     """Ajoute le paramètre optionnel de délai au schéma d'un outil (sans toucher à l'original)."""
     if not isinstance(schema, dict) or schema.get("type") != "object":
         return schema
     proprietes = schema.get("properties") or {}
     if not isinstance(proprietes, dict) or PARAMETRE_DELAI_OUTIL in proprietes:
         return schema
+    delai_defaut = DELAI_OUTIL_DEFAUT_SECONDES if delai_defaut is None else delai_defaut
+    delai_max = DELAI_OUTIL_MAX_SECONDES if delai_max is None else delai_max
     return {
         **schema,
         "properties": {
@@ -280,8 +282,8 @@ def _schema_avec_delai(schema):
             PARAMETRE_DELAI_OUTIL: {
                 "type": "integer",
                 "description": (
-                    f"Optionnel. Attente maximale en secondes (défaut {DELAI_OUTIL_DEFAUT_SECONDES}, "
-                    f"maximum {DELAI_OUTIL_MAX_SECONDES}). À augmenter seulement pour une action connue pour être longue."
+                    f"Optionnel. Attente maximale en secondes (défaut {delai_defaut}, "
+                    f"maximum {delai_max}). À augmenter seulement pour une action connue pour être longue."
                 ),
             },
         },
@@ -323,6 +325,27 @@ async def _appeler_outil_async(url, nom_outil, arguments, headers=None):
                     if hasattr(bloc, "text"):
                         return bloc.text
     return ""
+
+
+def _execution_code_autorise_pour_utilisateur(user_id) -> bool:
+    """Le serveur d'exécution n'est jamais proposé à un mineur ou sans profil lisible."""
+    if not user_id:
+        return False
+    try:
+        resultat = (
+            _supabase.table("profiles")
+            .select("est_majeur")
+            .eq("user_id", user_id)
+            .maybe_single()
+            .execute()
+        )
+    except Exception as e:
+        logging.error("ERREUR vérification accès exécution code: %s", type(e).__name__)
+        return False
+    if not resultat or not resultat.data:
+        return False
+    # Le sandbox est plus restrictif que le chat : seule la valeur True explicite l'autorise.
+    return resultat.data.get("est_majeur") is True
 
 
 def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, conversation_id=None, origine=None):
@@ -371,6 +394,14 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
         s for s in SERVEURS_MCP
         if s["nom"] == "generation" or s["nom"] in noms_serveurs_actifs
     ]
+    # L'exécution de code est une capacité adulte uniquement. Le garde-fou est appliqué
+    # au catalogue avant même d'envoyer le schéma au modèle; le serveur re-vérifie aussi.
+    if "execution_code" in noms_serveurs_actifs and (
+        not os.environ.get("E2B_API_KEY")
+        or not conversation_id
+        or not _execution_code_autorise_pour_utilisateur(user_id)
+    ):
+        serveurs_actifs = [s for s in serveurs_actifs if s["nom"] != "execution_code"]
 
     logging.info(
         f"Serveurs MCP actifs : {noms_serveurs_actifs or '(aucun)'} "
@@ -428,7 +459,11 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
                         # silencieusement (AttributeError attrape par le except plus
                         # bas) et la liste d'outils envoyee au LLM restait vide, quel
                         # que soit l'outil selectionne via le bouton Outils.
-                        "parameters": schema_avec_libelle(_schema_avec_delai(outil.input_schema)),
+                        "parameters": schema_avec_libelle(_schema_avec_delai(
+                            outil.input_schema,
+                            delai_defaut=180 if nom == "execution_code" else None,
+                            delai_max=180 if nom == "execution_code" else None,
+                        )),
                     },
                 })
                 route = {"url": url, "headers": headers}
@@ -535,10 +570,29 @@ def appeler_outil(nom_outil, arguments, table_routage, arret=None):
     pressé (`arret`). Avant, il pouvait attendre indéfiniment.
     """
     arguments = dict(arguments or {})
-    delai = _delai_demande(arguments.pop(PARAMETRE_DELAI_OUTIL, None))
+    delai_demande = arguments.pop(PARAMETRE_DELAI_OUTIL, None)
     # Phrase de la timeline (23/10/2026) : réservée à l'affichage, jamais transmise à l'outil.
     arguments.pop(PARAMETRE_LIBELLE_OUTIL, None)
-    logging.info(f"Appel outil demandé par le LLM : {nom_outil}({arguments})")
+    if nom_outil == "gerer_execution_code":
+        # La création ou la reprise d'un sandbox peut dépasser 60 secondes.
+        # Ce délai transporte l'appel MCP, sans élargir la durée d'une commande.
+        delai = 180
+    else:
+        delai = _delai_demande(delai_demande)
+    if nom_outil == "gerer_execution_code":
+        # Le code source, les commandes et le contenu des fichiers des étudiants
+        # ne doivent jamais se retrouver dans les journaux d'application.
+        arguments_journal = {
+            "action": arguments.get("action"),
+            "language": arguments.get("language"),
+        }
+        for champ in ("code", "command", "content"):
+            valeur = arguments.get(champ)
+            if isinstance(valeur, str):
+                arguments_journal[f"{champ}_chars"] = len(valeur)
+    else:
+        arguments_journal = arguments
+    logging.info(f"Appel outil demandé par le LLM : {nom_outil}({arguments_journal})")
     route = table_routage.get(nom_outil)
     if not route:
         logging.error(f"Outil '{nom_outil}' demandé par le LLM mais absent de la table de routage.")
@@ -579,8 +633,15 @@ def appeler_outil(nom_outil, arguments, table_routage, arret=None):
             else:
                 yield exc
         detail = "; ".join(f"{type(sub).__name__}: {sub}" for sub in _aplatir(eg))
-        logging.error(f"ERREUR MCP appel a {nom_outil} (TaskGroup) : {detail}", exc_info=True)
+        if nom_outil == "gerer_execution_code":
+            # Les exceptions de commande peuvent contenir des fragments de code ou de sortie.
+            logging.error("ERREUR MCP exécution de code (TaskGroup) : %s", type(eg).__name__)
+        else:
+            logging.error(f"ERREUR MCP appel a {nom_outil} (TaskGroup) : {detail}", exc_info=True)
         return _message_erreur_technique_outil(nom_outil)
     except Exception as e:
-        logging.error(f"ERREUR MCP appel a {nom_outil}: {e}", exc_info=True)
+        if nom_outil == "gerer_execution_code":
+            logging.error("ERREUR MCP exécution de code : %s", type(e).__name__)
+        else:
+            logging.error(f"ERREUR MCP appel a {nom_outil}: {e}", exc_info=True)
         return _message_erreur_technique_outil(nom_outil)

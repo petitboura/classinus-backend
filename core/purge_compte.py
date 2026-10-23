@@ -20,6 +20,7 @@ avec le nom de la table pour pouvoir être reprises à la main.
 """
 
 import logging
+import os
 
 from core.dedoublonnage_stockage import supprimer_stockage_si_dernier_usage
 
@@ -48,6 +49,8 @@ _TABLES_SIMPLES = (
     ("appareils_mobiles_push_tokens", "user_id"),
     ("rappels", "user_id"),
     ("minuteurs", "user_id"),
+    ("execution_code_usage_events", "user_id"),
+    ("execution_code_sessions", "user_id"),
     ("relances_proactives", "user_id"),
     # Réglages et réponses liés aux conversations de l'élève.
     ("historique_reponses_qcm", "user_id"),
@@ -146,8 +149,42 @@ def _detacher_etablissements(supabase, user_id: str) -> None:
             logging.error(f"ERREUR SUPABASE (purge compte, détachement {table}.{colonne} pour {user_id}) : {e}")
 
 
+def _purger_sandboxes_execution_code(supabase, user_id: str) -> None:
+    """Arrête les sandboxes liées au compte avant de supprimer leur suivi."""
+    if not os.environ.get("E2B_API_KEY"):
+        return
+    try:
+        result = (
+            supabase.table("execution_code_sessions")
+            .select("sandbox_id")
+            .eq("user_id", user_id)
+            .execute()
+        )
+        sandbox_ids = list({
+            row.get("sandbox_id")
+            for row in (result.data or [])
+            if row.get("sandbox_id")
+        })
+    except Exception as e:
+        logging.error("ERREUR purge compte (liste sandboxes E2B): %s", type(e).__name__)
+        return
+    if not sandbox_ids:
+        return
+    try:
+        from e2b import Sandbox
+    except Exception as e:
+        logging.error("ERREUR purge compte (SDK E2B indisponible): %s", type(e).__name__)
+        return
+    for sandbox_id in sandbox_ids:
+        try:
+            Sandbox.kill(sandbox_id)
+        except Exception as e:
+            logging.warning("ERREUR arrêt sandbox pendant purge: %s", type(e).__name__)
+
+
 def purger_donnees_compte(supabase, user_id: str) -> None:
     """Point d'entrée, à appeler avant la suppression du profil."""
+    _purger_sandboxes_execution_code(supabase, user_id)
     _detacher_etablissements(supabase, user_id)
     _purger_fichiers(supabase, user_id)
 

@@ -647,6 +647,29 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
             logging.error(f"ERREUR SUPABASE (export {table} pour {user_id}) : {e}")
             export[cle_export] = {"erreur": "recuperation impossible, reessayer plus tard"}
 
+    # Exécution de code : exporter des métadonnées, jamais l'ID E2B ni le contenu du workspace.
+    try:
+        res = (
+            supabase.table("execution_code_sessions")
+            .select("conversation_id, status, created_at, updated_at, last_activity_at")
+            .eq("user_id", user_id).execute()
+        )
+        export["sessions_execution_code"] = res.data or []
+    except Exception as e:
+        logging.error("ERREUR SUPABASE (export sessions execution code): %s", type(e).__name__)
+        export["sessions_execution_code"] = {"erreur": "recuperation impossible, reessayer plus tard"}
+
+    try:
+        res = (
+            supabase.table("execution_code_usage_events")
+            .select("conversation_id, event_type, active_seconds, actual_cost_usd, started_at, finished_at")
+            .eq("user_id", user_id).execute()
+        )
+        export["usage_execution_code"] = res.data or []
+    except Exception as e:
+        logging.error("ERREUR SUPABASE (export usage execution code): %s", type(e).__name__)
+        export["usage_execution_code"] = {"erreur": "recuperation impossible, reessayer plus tard"}
+
     # Connexions personnelles aux plateformes (Vercel, Railway, Supabase) :
     # seulement le service et les dates, JAMAIS les jetons ni les secrets.
     try:
