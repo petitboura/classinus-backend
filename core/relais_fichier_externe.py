@@ -481,7 +481,7 @@ def _flux_verifie(reponse, type_attendu, plafond, debut_position):
                     continue
 
                 signature_reconnue = type_depuis_octets(bytes(prefixe), reponse.url) == type_attendu
-                zip_reconnu = type_attendu in _EXTENSIONS_ZIP and prefixe.startswith(b"PK\\x03\\x04")
+                zip_reconnu = type_attendu in _EXTENSIONS_ZIP and prefixe.startswith(b"PK\x03\x04")
                 if not (signature_reconnue or zip_reconnu):
                     logging.warning("RELAIS EXTERNE : le contenu ne correspond plus au type verifie, coupure")
                     return
@@ -503,7 +503,7 @@ def _flux_verifie(reponse, type_attendu, plafond, debut_position):
         # Les fichiers courts peuvent se terminer avant d'atteindre 4096 octets.
         if verifier_debut and prefixe:
             signature_reconnue = type_depuis_octets(bytes(prefixe), reponse.url) == type_attendu
-            zip_reconnu = type_attendu in _EXTENSIONS_ZIP and prefixe.startswith(b"PK\\x03\\x04")
+            zip_reconnu = type_attendu in _EXTENSIONS_ZIP and prefixe.startswith(b"PK\x03\x04")
             if not (signature_reconnue or zip_reconnu):
                 logging.warning("RELAIS EXTERNE : le contenu ne correspond plus au type verifie, coupure")
                 return
