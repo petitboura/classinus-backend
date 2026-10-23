@@ -63,10 +63,19 @@ def _prepare(payload: SkillPayload) -> list[dict]:
 def _upload(owner: str, skill_id: str, files: list[dict]) -> list[dict]:
     rows = []
     store = stockage_r2.from_(BUCKET)
-    for f in files:
-        key = f"{owner}/{skill_id}/{f['chemin']}"
-        store.upload(key, f["contenu"], {"content-type": f["type_mime"]})
-        rows.append({"skill_id": skill_id, "chemin": f["chemin"], "cle_stockage": key, "type_mime": f["type_mime"], "taille_octets": len(f["contenu"]), "updated_at": datetime.now(timezone.utc).isoformat()})
+    try:
+        for f in files:
+            key = f"{owner}/{skill_id}/{f['chemin']}"
+            store.upload(key, f["contenu"], {"content-type": f["type_mime"]})
+            rows.append({"skill_id": skill_id, "chemin": f["chemin"], "cle_stockage": key, "type_mime": f["type_mime"], "taille_octets": len(f["contenu"]), "updated_at": datetime.now(timezone.utc).isoformat()})
+    except Exception:
+        # Nettoie les objets déjà envoyés si un fichier du même skill échoue.
+        for row in rows:
+            try:
+                store.remove([row["cle_stockage"]])
+            except Exception:
+                pass
+        raise
     return rows
 
 def _files(skill_id: str, with_content: bool = False) -> list[dict]:
