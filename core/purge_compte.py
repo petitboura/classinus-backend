@@ -22,7 +22,7 @@ avec le nom de la table pour pouvoir être reprises à la main.
 import logging
 import os
 
-from core import stockage_r2
+from core import config_skills, stockage_r2
 from core.dedoublonnage_stockage import supprimer_stockage_si_dernier_usage
 
 
@@ -196,7 +196,7 @@ def purger_donnees_compte(supabase, user_id: str) -> None:
             rows = supabase.table("skill_files").select("cle_stockage").in_("skill_id", ids).execute().data or []
             for row in rows:
                 try:
-                    stockage_r2.from_("skills").remove([row["cle_stockage"]])
+                    stockage_r2.from_(config_skills.BUCKET).remove([row["cle_stockage"]])
                 except Exception as e:
                     logging.error(f"ERREUR purge compte (fichier skill R2 {user_id}) : {e}")
             supabase.table("skills").delete().eq("owner_id", user_id).execute()
