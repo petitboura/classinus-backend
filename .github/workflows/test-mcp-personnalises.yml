@@ -12,6 +12,7 @@ on:
       - "core/registre_outils.py"
       - "migrations/2026_10_23_mcp_personnalises.sql"
       - "test_mcp_plateformes.py"
+      - "test_mcp_personnalises_smoke.py"
       - ".github/workflows/test-mcp-personnalises.yml"
   workflow_dispatch:
 
