@@ -30,5 +30,7 @@ jobs:
         run: python -m unittest -v test_relais_pdf_archive
       - name: Test external file relay content validation
         run: python -m unittest -v test_relais_fichier_externe
+      - name: Test chat request size limit and adjustable limits
+        run: python -m unittest -v test_plafond_taille_requete
       - name: Test API localization
         run: python -m unittest -v test_i18n

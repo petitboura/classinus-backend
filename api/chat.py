@@ -22,7 +22,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Dict, List, Optional, Literal
 
 from api.auth import utilisateur_optionnel, supabase
@@ -33,6 +33,7 @@ from core.canal_agent_applicatif import (
 )
 from core.plafond_outils_tour import retirer_plafond_tour
 from core.limitation_debit import limiteur
+from core.plafonds_reglables import PLAFOND_IMAGES_JOINTES, PLAFOND_OUTILS_PAR_MESSAGE, PLAFOND_ZIPS_JOINTS
 from core.restriction_mineur import acces_chat_bloque_pour_mineur
 from main import chat as chat_generateur  # core/main.py:chat()
 from core.libelles_outils_anglais import traduire_libelle_outil
@@ -50,18 +51,18 @@ class OutilHistorique(BaseModel):
     sources/images : inutiles pour le modèle, uniquement pour l'UI)."""
     nomOutil: str = Field(max_length=120)
     nomLisible: str = Field(max_length=160)
-    resultat: str = Field(max_length=30000)
+    resultat: str
 
 
 class MessageHistorique(BaseModel):
     role: Literal["user", "assistant"]
-    content: str = Field(max_length=20000)
+    content: str
     # Ajouté 15/09/2026 (demande Bourama) : résultats des outils exécutés
     # pendant CE message assistant (voir ChatIA.tsx:historiquePourApi),
     # réinjectés au modèle au tour suivant -- voir
     # core/historique_outils.py. Absent/vide pour un message user ou un
     # message assistant sans outil, comportement inchangé dans ce cas.
-    outils: Optional[List[OutilHistorique]] = Field(default=None, max_length=20)
+    outils: Optional[List[OutilHistorique]] = Field(default=None, max_length=PLAFOND_OUTILS_PAR_MESSAGE)
 
 
 class Localisation(BaseModel):
@@ -78,9 +79,9 @@ class EnvoyerMessagePayload(BaseModel):
     # message/agent_id optionnels : sur un appel de reprise (après
     # confirmation_requise), seul `reprise` est fourni -- chat_generateur
     # les ignore dans ce cas (voir core/main.py:chat()).
-    message: Optional[str] = Field(default=None, max_length=50000)
+    message: Optional[str] = None
     agent_id: Optional[str] = Field(default=None, max_length=200)
-    historique: List[MessageHistorique] = Field(default_factory=list, max_length=200)
+    historique: List[MessageHistorique] = Field(default_factory=list)
     conversation_id: Optional[str] = Field(default=None, max_length=200)
     # Barre de saisie migrée : sélecteur Courte/Moyenne/Longue, modifiable à chaque message.
     longueur_reponse: Literal["courte", "moyenne", "longue"] = "moyenne"
@@ -98,7 +99,7 @@ class EnvoyerMessagePayload(BaseModel):
     # donc silencieusement ignorée par Pydantic et jamais decrite par
     # Gemini). Combinee avec image_url (garde par compatibilite) dans
     # core/main.py:chat().
-    image_urls: Optional[List[str]] = Field(default=None, max_length=8)
+    image_urls: Optional[List[str]] = Field(default=None, max_length=PLAFOND_IMAGES_JOINTES)
     # Position GPS transmise explicitement par l'étudiant via un bouton
     # dédié (jamais capturée automatiquement) -- voir core/main.py:chat(),
     # paramètre localisation, injecté en contexte de prompt système.
@@ -114,7 +115,7 @@ class EnvoyerMessagePayload(BaseModel):
     # conversation") : job_id(s) renvoyé(s) par
     # POST /api/uploads/zip-chat/demarrer, appelé DÈS l'upload (avant
     # l'envoi) -- voir core/zip_chat.py et core/main.py:chat().
-    zips_en_attente: Optional[List[str]] = Field(default=None, max_length=10)
+    zips_en_attente: Optional[List[str]] = Field(default=None, max_length=PLAFOND_ZIPS_JOINTS)
     # Icône de recherche web dans la barre de saisie (djiguigne-frontend,
     # 2026-07-23) -- forçage manuel EN PLUS de l'activation automatique
     # déjà possible : le modèle peut de toute façon décider seul
@@ -219,18 +220,6 @@ class EnvoyerMessagePayload(BaseModel):
         if valeurs is not None and sum(len(v) for v in valeurs) > 20 * 1024 * 1024:
             raise ValueError("Les images jointes dépassent la limite cumulée de 20 Mo.")
         return valeurs
-
-    @model_validator(mode="after")
-    def borner_taille_payload(self):
-        """Borne le contenu total transmis au modèle, pas seulement chaque champ."""
-        taille = len(self.message or "") + len(self.message_enregistre or "")
-        for message in self.historique:
-            taille += len(message.content)
-            taille += sum(len(outil.resultat) for outil in (message.outils or []))
-        taille += sum(len(image) for image in (self.images_base64 or []))
-        if taille > 25 * 1024 * 1024:
-            raise ValueError("La requête de chat dépasse la limite de 25 Mo.")
-        return self
 
 
 def _resoudre_modele_force(agent_id, modele_demande):

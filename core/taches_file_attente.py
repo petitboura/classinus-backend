@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
+
+from core.plafonds_reglables import AGE_TACHE_PERIMEE
 
 _INTERVALLE_RECUPERATION_S = 60.0
-_AGE_TACHE_PERIMEE = timedelta(hours=2)
+_AGE_TACHE_PERIMEE = AGE_TACHE_PERIMEE
 _derniere_recuperation: dict[str, float] = {}
 
 
