@@ -51,7 +51,8 @@ class TestValidationUrl(unittest.TestCase):
         from unittest.mock import patch
 
         resultat_dns = [(None, None, None, None, ("10.0.0.8", 443))]
-        with patch.object(mcp.socket, "getaddrinfo", return_value=resultat_dns):
+        from connexions import mcp_reseau_securise as reseau
+        with patch.object(reseau.socket, "getaddrinfo", return_value=resultat_dns):
             with self.assertRaises(ValueError):
                 mcp.valider_url_mcp("https://serveur-test.example/mcp")
 

@@ -701,6 +701,19 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
         logging.error(f"ERREUR SUPABASE (export higgsfield_oauth_connections pour {user_id}) : {e}")
         export["connexion_higgsfield_mcp"] = {"erreur": "recuperation impossible, reessayer plus tard"}
 
+    # Serveurs MCP ajoutés par l'élève : nom, adresse, mode d'authentification et dates,
+    # JAMAIS le jeton Bearer ni les jetons OAuth.
+    try:
+        res = (
+            supabase.table("mcp_personnalises")
+            .select("nom, url, auth_type, actif, created_at, updated_at")
+            .eq("user_id", user_id).execute()
+        )
+        export["serveurs_mcp_personnalises"] = res.data or []
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (export mcp_personnalises pour {user_id}) : {e}")
+        export["serveurs_mcp_personnalises"] = {"erreur": "recuperation impossible, reessayer plus tard"}
+
     # follows et messages_directs : deux colonnes possibles chacune (sens
     # de la relation), donc pas dans la boucle simple ci-dessus.
     try:

@@ -6,28 +6,33 @@ Les noms d'outils sont isolés du registre officiel et leur exécution exige
 une confirmation utilisateur.
 """
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as DelaiAttenteDepasse
 import hashlib
 import ipaddress
 import logging
 import os
 import re
 import secrets
-import socket
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from mcp import ClientSession
-from mcp.client.streamable_http import streamable_http_client, create_mcp_http_client
+from mcp.client.streamable_http import streamable_http_client
 from supabase import create_client, ClientOptions
 from client_http_supabase import nouveau_client_http_supabase
 
 from api.auth import utilisateur_courant
+from connexions.mcp_reseau_securise import (
+    creer_client_http_mcp,
+    requete_securisee,
+    resoudre_adresses_publiques,
+    verifier_ip_publique,
+)
 
 router = APIRouter(prefix="/api/mcp-personnalises", tags=["MCP personnalisés"])
 _SUPABASE = create_client(
@@ -37,11 +42,37 @@ _SUPABASE = create_client(
 )
 URL_RETOUR = os.environ.get("URL_RETOUR_APP")
 DUREE_ETAT_OAUTH = timedelta(minutes=15)
-DUREE_CACHE_OUTILS = 300
+
+
+def _nombre_env(nom: str, defaut: float) -> float:
+    try:
+        valeur = float(os.getenv(nom, defaut))
+        return valeur if valeur > 0 else defaut
+    except (TypeError, ValueError):
+        return defaut
+
+
+# Réglages modifiables sans toucher au code (variables d'environnement Railway).
+DUREE_CACHE_OUTILS = _nombre_env("MCP_PERSO_DUREE_CACHE_SECONDES", 300)
+# Un serveur en panne n'est pas recontacté à chaque message : l'échec est mémorisé un moment.
+DUREE_CACHE_ECHEC = _nombre_env("MCP_PERSO_DUREE_CACHE_ECHEC_SECONDES", 60)
+# Une liste d'outils périmée reste utilisable (le temps de la renouveler en arrière-plan).
+DUREE_TOLERANCE_PERIME = _nombre_env("MCP_PERSO_DUREE_TOLERANCE_SECONDES", 3600)
+# Attente maximale d'un serveur lent : pendant un message du chat, puis à l'ajout ou au test.
+DELAI_DECOUVERTE_CHAT = _nombre_env("MCP_PERSO_DELAI_DECOUVERTE_CHAT_SECONDES", 5)
+DELAI_DECOUVERTE_AJOUT = _nombre_env("MCP_PERSO_DELAI_DECOUVERTE_AJOUT_SECONDES", 15)
+# Temps pendant lequel l'envoi d'un message accepte d'attendre la découverte des outils.
+ATTENTE_MAX_CHAT = _nombre_env("MCP_PERSO_ATTENTE_CHAT_SECONDES", 1.5)
+ATTENTE_MAX_INTERFACE = _nombre_env("MCP_PERSO_ATTENTE_INTERFACE_SECONDES", 6)
 TAILLE_MAX_OUTILS_PAR_SERVEUR = 50
 NOMBRE_MAX_SERVEURS_PAR_COMPTE = 10
 _PREFIXE_OUTILS = "custommcp_"
 _CACHE_OUTILS: dict[tuple, dict] = {}
+_CACHE_ECHECS: dict[tuple, float] = {}
+_CHARGEMENTS_EN_COURS: dict[tuple, object] = {}
+_NOMS_SERVEURS_PAR_OUTIL: dict[str, str] = {}
+_VERROU_CATALOGUE = threading.Lock()
+_POOL_DECOUVERTE = ThreadPoolExecutor(max_workers=int(_nombre_env("MCP_PERSO_TACHES_DECOUVERTE", 8)), thread_name_prefix="mcp-perso")
 
 
 class ServeurPayload(BaseModel):
@@ -80,25 +111,17 @@ def valider_url_mcp(url: str) -> str:
     noms_secrets = {"token", "access_token", "api_key", "apikey", "key", "secret", "password", "authorization"}
     if any(cle.lower() in noms_secrets for cle, _ in parse_qsl(parsed.query, keep_blank_values=True)):
         raise ValueError("Retire les clés et jetons de l’URL ; utilise le champ d’authentification.")
+    # Premier contrôle, pour refuser tout de suite avec un message clair. Le vrai
+    # verrou est dans mcp_reseau_securise : l'adresse y est revérifiée au moment de
+    # la connexion, et la connexion se fait sur l'adresse vérifiée.
     try:
-        ip_directe = ipaddress.ip_address(hostname)
+        ip_directe = ipaddress.ip_address(hostname.strip("[]"))
     except ValueError:
-        try:
-            adresses = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
-        except OSError:
-            raise ValueError("Le nom d’hôte du serveur MCP ne peut pas être résolu.")
-        ips = {item[4][0].split("%", 1)[0] for item in adresses}
-        if not ips:
-            raise ValueError("Le nom d’hôte du serveur MCP ne possède aucune adresse publique.")
-        for valeur in ips:
-            try:
-                ip = ipaddress.ip_address(valeur)
-            except ValueError:
-                raise ValueError("L’adresse du serveur MCP est invalide.")
-            if not ip.is_global:
-                raise ValueError("Le serveur MCP pointe vers une adresse IP privée ou réservée.")
+        resoudre_adresses_publiques(hostname, port)
     else:
-        if not ip_directe.is_global:
+        try:
+            verifier_ip_publique(str(ip_directe))
+        except ValueError:
             raise ValueError("Les adresses IP privées ou réservées sont interdites.")
     return urlunparse((parsed.scheme.lower(), parsed.netloc, parsed.path or "/", parsed.params, parsed.query, ""))
 
@@ -131,7 +154,8 @@ def _headers_serveur(serveur: dict, user_id: str) -> dict | None:
 
 
 async def _lister_outils_async(url: str, headers: dict | None):
-    async with create_mcp_http_client(headers=headers) as client:
+    # Client sans redirection et à adresse vérifiée (voir mcp_reseau_securise).
+    async with creer_client_http_mcp(headers=headers) as client:
         async with streamable_http_client(url, http_client=client) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
@@ -139,13 +163,52 @@ async def _lister_outils_async(url: str, headers: dict | None):
                 return list(resultat.tools or [])
 
 
-def _lister_outils_reseau(url: str, headers: dict | None):
+def _lister_outils_reseau(url: str, headers: dict | None, delai: float = DELAI_DECOUVERTE_AJOUT):
     adresse = valider_url_mcp(url)
     try:
-        return asyncio.run(asyncio.wait_for(_lister_outils_async(adresse, headers), timeout=18))
+        return asyncio.run(asyncio.wait_for(_lister_outils_async(adresse, headers), timeout=delai))
     except Exception as exc:
         logging.info("Découverte MCP personnalisée impossible (hôte %s, type %s).", urlparse(adresse).hostname, type(exc).__name__)
         raise ValueError("Impossible de joindre ce serveur MCP. Vérifie son URL, son accessibilité et son authentification.")
+
+
+async def appeler_outil_personnalise_async(url: str, nom_outil: str, arguments: dict, headers: dict | None = None):
+    """Appelle un outil d'un serveur personnalisé, avec les mêmes protections réseau que la découverte."""
+    async with creer_client_http_mcp(headers=headers) as client:
+        async with streamable_http_client(url, http_client=client) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                resultat = await session.call_tool(nom_outil, arguments=arguments)
+                for bloc in resultat.content:
+                    if hasattr(bloc, "text"):
+                        return bloc.text
+    return ""
+
+
+def preparer_appel_personnalise(route: dict) -> tuple[str, dict]:
+    """Adresse et en-têtes à jour pour un appel d'outil ; à exécuter hors boucle asyncio.
+
+    Relit le serveur au moment de l'appel : il doit appartenir à l'utilisateur, être actif,
+    et l'adresse comme le jeton sont ceux d'aujourd'hui (jamais un jeton gardé en mémoire).
+    """
+    serveur_id, user_id = route.get("serveur_id"), route.get("user_id")
+    if not serveur_id or not user_id:
+        raise ValueError("Ce serveur MCP n’est plus disponible.")
+    try:
+        lignes = (
+            _SUPABASE.table("mcp_personnalises").select("*")
+            .eq("id", serveur_id).eq("user_id", user_id).limit(1).execute().data or []
+        )
+    except Exception as exc:
+        logging.error("Lecture d'un MCP personnalisé impossible avant appel (%s).", type(exc).__name__)
+        raise ValueError("Ce serveur MCP est momentanément indisponible. Réessaie dans un instant.")
+    if not lignes or not lignes[0].get("actif", True):
+        raise ValueError("Ce serveur MCP a été supprimé ou désactivé.")
+    serveur = lignes[0]
+    headers = _headers_serveur(serveur, user_id)
+    if headers is None:
+        raise ValueError("Ce serveur MCP n’est plus connecté. Reconnecte-le depuis Personnaliser Classinus.")
+    return valider_url_mcp(serveur["url"]), headers
 
 
 def _nom_outil_expose(serveur_id: str, nom_reel: str) -> str:
@@ -157,21 +220,25 @@ def _nom_outil_expose(serveur_id: str, nom_reel: str) -> str:
     return f"{_PREFIXE_OUTILS}{verbe}_{serveur_id.replace('-', '')[:6]}_{origine[:28]}_{empreinte}"[:64]
 
 
+def nom_serveur_pour_outil(nom_outil: str) -> str | None:
+    """Nom du serveur qui propose cet outil, pour les cartes de confirmation (None si inconnu)."""
+    return _NOMS_SERVEURS_PAR_OUTIL.get(nom_outil)
+
+
 def _invalider_cache_serveur(serveur_id: str):
-    for cle in list(_CACHE_OUTILS):
-        if cle and cle[0] == serveur_id:
-            _CACHE_OUTILS.pop(cle, None)
+    with _VERROU_CATALOGUE:
+        for table in (_CACHE_OUTILS, _CACHE_ECHECS, _CHARGEMENTS_EN_COURS):
+            for cle in list(table):
+                if cle and cle[0] == serveur_id:
+                    table.pop(cle, None)
 
 
-def _outils_bruts_serveur(serveur: dict, user_id: str, headers: dict | None) -> list[dict]:
-    url = valider_url_mcp(serveur["url"])
-    jeton_cache = hashlib.sha256((headers or {}).get("Authorization", "").encode()).hexdigest()[:12]
-    cle_cache = (serveur["id"], user_id, serveur.get("updated_at"), jeton_cache, url)
-    maintenant = time.time()
-    entree = _CACHE_OUTILS.get(cle_cache)
-    if entree and entree["expire_a"] > maintenant:
-        return entree["outils"]
-    outils_reseau = _lister_outils_reseau(url, headers)
+def _cle_cache(serveur: dict, user_id: str) -> tuple:
+    # Toute modification du serveur change updated_at : l'ancienne entrée n'est plus jamais lue.
+    return (serveur["id"], user_id, serveur.get("updated_at"), serveur["url"])
+
+
+def _construire_outils(serveur: dict, outils_reseau: list) -> list[dict]:
     resultat = []
     noms_exposes = set()
     for outil in outils_reseau[:TAILLE_MAX_OUTILS_PAR_SERVEUR]:
@@ -195,17 +262,106 @@ def _outils_bruts_serveur(serveur: dict, user_id: str, headers: dict | None) -> 
             "icone": "Server",
             "onglet": "action_app",
             "parameters": schema,
-            "url": url,
+            "url": serveur["url"],
         })
-    _CACHE_OUTILS[cle_cache] = {"outils": resultat, "expire_a": maintenant + DUREE_CACHE_OUTILS}
-    for cle, valeur in list(_CACHE_OUTILS.items()):
-        if valeur["expire_a"] <= maintenant:
-            _CACHE_OUTILS.pop(cle, None)
     return resultat
 
 
-def lister_outils_pour_utilisateur(user_id: str) -> list[dict]:
-    """Catalogue personnalisé et routes pour le chat. Les secrets restent côté serveur."""
+def _lire_cache(cle: tuple, tolere_perime: bool = False) -> list[dict] | None:
+    entree = _CACHE_OUTILS.get(cle)
+    if not entree:
+        return None
+    maintenant = time.time()
+    if entree["expire_a"] > maintenant:
+        return entree["outils"]
+    if tolere_perime and entree["expire_a"] + DUREE_TOLERANCE_PERIME > maintenant:
+        return entree["outils"]
+    return None
+
+
+def _ranger_cache(cle: tuple, outils: list[dict]):
+    maintenant = time.time()
+    with _VERROU_CATALOGUE:
+        _CACHE_OUTILS[cle] = {"outils": outils, "expire_a": maintenant + DUREE_CACHE_OUTILS}
+        _CACHE_ECHECS.pop(cle, None)
+        for ancienne, valeur in list(_CACHE_OUTILS.items()):
+            if valeur["expire_a"] + DUREE_TOLERANCE_PERIME <= maintenant:
+                _CACHE_OUTILS.pop(ancienne, None)
+        for ancienne, expire in list(_CACHE_ECHECS.items()):
+            if expire <= maintenant:
+                _CACHE_ECHECS.pop(ancienne, None)
+
+
+def _echec_recent(cle: tuple) -> bool:
+    expire = _CACHE_ECHECS.get(cle)
+    return bool(expire and expire > time.time())
+
+
+def _noter_echec(cle: tuple):
+    with _VERROU_CATALOGUE:
+        _CACHE_ECHECS[cle] = time.time() + DUREE_CACHE_ECHEC
+
+
+def _charger_serveur(serveur: dict, user_id: str, cle: tuple) -> list[dict]:
+    """Découverte réseau d'un serveur, exécutée en arrière-plan. Ne lève jamais d'exception."""
+    try:
+        headers = _headers_serveur(serveur, user_id)
+        if headers is None:
+            _noter_echec(cle)
+            return []
+        outils = _construire_outils(serveur, _lister_outils_reseau(serveur["url"], headers, DELAI_DECOUVERTE_CHAT))
+        _ranger_cache(cle, outils)
+        return outils
+    except Exception as exc:
+        logging.info("MCP personnalisé %s indisponible pour ce tour (%s).", serveur.get("id"), type(exc).__name__)
+        _noter_echec(cle)
+        return []
+
+
+def _retirer_chargement(cle: tuple):
+    with _VERROU_CATALOGUE:
+        _CHARGEMENTS_EN_COURS.pop(cle, None)
+
+
+def _demarrer_chargement(serveur: dict, user_id: str, cle: tuple):
+    """Lance (ou rejoint) la découverte d'un serveur : un seul chargement à la fois par serveur."""
+    with _VERROU_CATALOGUE:
+        futur = _CHARGEMENTS_EN_COURS.get(cle)
+        nouveau = futur is None
+        if nouveau:
+            futur = _POOL_DECOUVERTE.submit(_charger_serveur, serveur, user_id, cle)
+            _CHARGEMENTS_EN_COURS[cle] = futur
+    if nouveau:
+        # Hors du verrou : si la tâche est déjà finie, le rappel s'exécute tout de suite.
+        futur.add_done_callback(lambda _f, c=cle: _retirer_chargement(c))
+    return futur
+
+
+def _avec_routes(serveur: dict, user_id: str, outils: list[dict]) -> list[dict]:
+    """Ajoute à chaque outil sa route d'appel. Aucun secret n'y figure : le jeton est relu à l'appel."""
+    resultat = []
+    for outil in outils:
+        _NOMS_SERVEURS_PAR_OUTIL[outil["nom"]] = serveur["nom"]
+        resultat.append({
+            **outil,
+            "route": {
+                "url": outil["url"], "nom_reel": outil["nom_reel"], "custom_mcp": True,
+                "serveur_id": serveur["id"], "user_id": user_id,
+            },
+        })
+    return resultat
+
+
+def lister_outils_pour_utilisateur(user_id: str, attente_max: float = ATTENTE_MAX_CHAT) -> list[dict]:
+    """Catalogue personnalisé et routes pour le chat.
+
+    N'attend jamais longtemps : un serveur lent ou en panne ne retarde pas l'envoi d'un message.
+    - liste récente en mémoire : utilisée tout de suite ;
+    - échec récent : serveur ignoré sans le recontacter ;
+    - sinon la découverte part en arrière-plan et on l'attend au plus `attente_max` secondes ;
+      passé ce délai, on utilise l'ancienne liste si elle existe, sinon le serveur est
+      absent de ce message et présent dès que la découverte aura abouti.
+    """
     if not user_id:
         return []
     try:
@@ -216,42 +372,39 @@ def lister_outils_pour_utilisateur(user_id: str) -> list[dict]:
     except Exception as exc:
         logging.error("Lecture des MCP personnels impossible pour l’assistant (%s).", type(exc).__name__)
         return []
-
-    def charger_serveur(serveur: dict) -> list[dict]:
-        try:
-            headers = _headers_serveur(serveur, user_id)
-            if headers is None:
-                return []
-            return [
-                {
-                    **outil,
-                    "route": {"url": outil["url"], "headers": headers, "nom_reel": outil["nom_reel"], "custom_mcp": True},
-                }
-                for outil in _outils_bruts_serveur(serveur, user_id, headers)
-            ]
-        except Exception as exc:
-            logging.info("MCP personnalisé %s indisponible pour ce tour (%s).", serveur.get("id"), type(exc).__name__)
-            return []
-
-    # Lister en parallèle (4 connexions max) : un serveur injoignable ne doit
-    # pas bloquer le démarrage du catalogue de tous les autres serveurs.
+    serveurs = serveurs[:NOMBRE_MAX_SERVEURS_PAR_COMPTE]
+    if not serveurs:
+        return []
+    fin = time.monotonic() + attente_max
     resultat = []
-    serveurs_actifs = serveurs[:NOMBRE_MAX_SERVEURS_PAR_COMPTE]
-    if not serveurs_actifs:
-        return resultat
-    with ThreadPoolExecutor(max_workers=min(4, len(serveurs_actifs))) as pool:
-        for outils in pool.map(charger_serveur, serveurs_actifs):
-            resultat.extend(outils)
+    en_attente = []
+    for serveur in serveurs:
+        cle = _cle_cache(serveur, user_id)
+        outils = _lire_cache(cle)
+        if outils is not None:
+            resultat.extend(_avec_routes(serveur, user_id, outils))
+        elif not _echec_recent(cle):
+            en_attente.append((serveur, cle, _demarrer_chargement(serveur, user_id, cle)))
+    for serveur, cle, futur in en_attente:
+        try:
+            outils = futur.result(timeout=max(0.0, fin - time.monotonic()))
+        except DelaiAttenteDepasse:
+            logging.info("MCP personnalisé %s trop lent pour ce tour, la découverte continue en arrière-plan.", serveur.get("id"))
+            outils = _lire_cache(cle, tolere_perime=True) or []
+        except Exception:
+            outils = []
+        resultat.extend(_avec_routes(serveur, user_id, outils))
     return resultat
 
 
 def outils_interface_pour_utilisateur(user_id: str) -> list[dict]:
-    return [{cle: outil[cle] for cle in ("nom", "label", "icone", "onglet")} for outil in lister_outils_pour_utilisateur(user_id)]
+    outils = lister_outils_pour_utilisateur(user_id, attente_max=ATTENTE_MAX_INTERFACE)
+    return [{cle: outil[cle] for cle in ("nom", "label", "icone", "onglet")} for outil in outils]
 
 
 def _get_metadata_oauth(url: str) -> dict:
     cible = valider_url_mcp(url)
-    reponse = httpx.get(cible, timeout=8, follow_redirects=False, headers={"Accept": "application/json"})
+    reponse = requete_securisee("GET", cible, timeout=8, headers={"Accept": "application/json"})
     if reponse.status_code == 404:
         return {}
     reponse.raise_for_status()
@@ -301,7 +454,7 @@ def _metadata_serveur_autorisation(issuer: str) -> dict:
 
 def _poster_json_securise(url: str, payload: dict) -> dict:
     cible = valider_url_mcp(url)
-    reponse = httpx.post(cible, json=payload, timeout=10, follow_redirects=False, headers={"Accept": "application/json"})
+    reponse = requete_securisee("POST", cible, timeout=10, json=payload, headers={"Accept": "application/json"})
     reponse.raise_for_status()
     data = reponse.json()
     if not isinstance(data, dict):
@@ -415,7 +568,7 @@ def finaliser_oauth(code: str, state: str) -> tuple[bool, str, str | None]:
             payload["client_id"] = pending["client_id"]
             if pending.get("client_secret"):
                 payload["client_secret"] = pending["client_secret"]
-        response = httpx.post(endpoint, data=payload, auth=auth, timeout=12, follow_redirects=False, headers={"Accept": "application/json"})
+        response = requete_securisee("POST", endpoint, timeout=12, data=payload, auth=auth, headers={"Accept": "application/json"})
         response.raise_for_status()
         tokens = response.json()
         if not isinstance(tokens, dict) or not tokens.get("access_token"):
@@ -468,7 +621,7 @@ def obtenir_token_oauth(serveur_id: str, user_id: str) -> str | None:
                 payload["client_secret"] = ligne["client_secret"]
         try:
             endpoint = valider_url_mcp(ligne["token_endpoint"])
-            response = httpx.post(endpoint, data=payload, auth=auth, timeout=12, follow_redirects=False, headers={"Accept": "application/json"})
+            response = requete_securisee("POST", endpoint, timeout=12, data=payload, auth=auth, headers={"Accept": "application/json"})
             response.raise_for_status()
             tokens = response.json()
             if not isinstance(tokens, dict) or not tokens.get("access_token"):
@@ -527,23 +680,35 @@ def ajouter_serveur(payload: ServeurPayload, utilisateur=Depends(utilisateur_cou
     if payload.auth_type != "bearer":
         token = None
     try:
-        courant = _SUPABASE.table("mcp_personnalises").select("id").eq("user_id", utilisateur.id).execute().data or []
+        courant = _SUPABASE.table("mcp_personnalises").select("id,url").eq("user_id", utilisateur.id).execute().data or []
+        if any(ligne.get("url") == url for ligne in courant):
+            _erreur("MCP_DEJA_AJOUTE", "Ce serveur MCP est déjà dans ta liste. Modifie-le depuis la liste plutôt que de le rajouter.", 409)
         if len(courant) >= NOMBRE_MAX_SERVEURS_PAR_COMPTE:
             _erreur("MCP_LIMITE_ATTEINTE", f"Tu peux enregistrer au maximum {NOMBRE_MAX_SERVEURS_PAR_COMPTE} serveurs MCP.")
+        outils_reseau = None
         if payload.auth_type != "oauth":
-            _lister_outils_reseau(url, {"Authorization": f"Bearer {token}"} if token else {})
+            outils_reseau = _lister_outils_reseau(url, {"Authorization": f"Bearer {token}"} if token else {})
         lignes = _SUPABASE.table("mcp_personnalises").insert({
             "user_id": utilisateur.id, "nom": nom, "url": url, "auth_type": payload.auth_type,
             "bearer_token": token, "actif": True, "updated_at": datetime.now(timezone.utc).isoformat(),
         }).execute().data or []
         if not lignes:
             _erreur("MCP_ENREGISTREMENT_ECHOUE", "Le serveur MCP n’a pas pu être enregistré.", 503)
+        if outils_reseau is not None:
+            # Les outils viennent d'être découverts : le premier message n'a pas à les redécouvrir.
+            _ranger_cache(_cle_cache(lignes[0], utilisateur.id), _construire_outils(lignes[0], outils_reseau))
         return {"serveur": _config_publique(lignes[0], utilisateur.id)}
     except HTTPException:
         raise
     except ValueError as exc:
         _erreur("MCP_INACCESSIBLE", str(exc))
     except Exception as exc:
+        detail = f"{getattr(exc, 'code', '')} {exc}"
+        # Garde-fous de la base : doublon (clé unique) ou limite par compte (déclencheur SQL).
+        if "23505" in detail or "duplicate key" in detail.lower():
+            _erreur("MCP_DEJA_AJOUTE", "Ce serveur MCP est déjà dans ta liste. Modifie-le depuis la liste plutôt que de le rajouter.", 409)
+        if "MCP_LIMITE_ATTEINTE" in detail:
+            _erreur("MCP_LIMITE_ATTEINTE", f"Tu peux enregistrer au maximum {NOMBRE_MAX_SERVEURS_PAR_COMPTE} serveurs MCP.")
         logging.error("Ajout d’un MCP personnalisé impossible (%s).", type(exc).__name__)
         _erreur("MCP_ENREGISTREMENT_ECHOUE", "Le serveur MCP n’a pas pu être enregistré.", 503)
 
@@ -561,9 +726,17 @@ def modifier_serveur(serveur_id: str, payload: ServeurPayload, utilisateur=Depen
     token = (payload.token or "").strip()
     if payload.auth_type == "bearer":
         if not token:
-            token = precedent.get("bearer_token") if precedent.get("auth_type") == "bearer" else None
-        if not token:
-            _erreur("MCP_JETON_REQUIS", "Saisis un jeton Bearer pour ce serveur.")
+            # L'ancien jeton ne part jamais vers une autre adresse : si elle a changé, il faut le ressaisir.
+            adresse_changee = url != precedent.get("url")
+            if precedent.get("auth_type") == "bearer" and not adresse_changee:
+                token = precedent.get("bearer_token")
+            if not token:
+                _erreur(
+                    "MCP_JETON_REQUIS",
+                    "L’adresse a changé : saisis à nouveau le jeton Bearer, l’ancien n’est pas envoyé à une autre adresse."
+                    if adresse_changee and precedent.get("auth_type") == "bearer"
+                    else "Saisis un jeton Bearer pour ce serveur.",
+                )
     else:
         token = None
     if payload.auth_type != "oauth":
