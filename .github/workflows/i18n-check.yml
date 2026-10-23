@@ -28,5 +28,7 @@ jobs:
         run: python -m compileall -q api core
       - name: Test external PDF relay redirect safety
         run: python -m unittest -v test_relais_pdf_archive
+      - name: Test external file relay content validation
+        run: python -m unittest -v test_relais_fichier_externe
       - name: Test API localization
         run: python -m unittest -v test_i18n
