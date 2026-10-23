@@ -461,27 +461,56 @@ def inspecter(url, plafond=None):
 def _flux_verifie(reponse, type_attendu, plafond, debut_position):
     """
     Relaye les octets avec le plafond. Si la reponse commence au debut du fichier,
-    les premiers octets sont revérifiés : le site distant a pu changer de contenu
-    depuis la delivrance du lien. Un contenu qui ne correspond plus est coupe.
+    accumule suffisamment d'octets pour reconnaître le type avant de les émettre :
+    les morceaux réseau peuvent couper la signature en plein milieu.
     """
     envoye = 0
-    premier = debut_position == 0
+    verifier_debut = debut_position == 0
+    prefixe = bytearray()
     try:
         for bloc in reponse.iter_content(_TAILLE_BLOC):
             if not bloc:
                 continue
-            if premier:
-                premier = False
-                if type_depuis_octets(bloc[:4096], reponse.url) != type_attendu and not (
-                    type_attendu in _EXTENSIONS_ZIP and bloc.startswith(b"PK\x03\x04")
-                ):
+
+            sorties = []
+            if verifier_debut:
+                necessaires = max(0, 4096 - len(prefixe))
+                prefixe.extend(bloc[:necessaires])
+                reste = bloc[necessaires:]
+                if len(prefixe) < 4096:
+                    continue
+
+                signature_reconnue = type_depuis_octets(bytes(prefixe), reponse.url) == type_attendu
+                zip_reconnu = type_attendu in _EXTENSIONS_ZIP and prefixe.startswith(b"PK\\x03\\x04")
+                if not (signature_reconnue or zip_reconnu):
                     logging.warning("RELAIS EXTERNE : le contenu ne correspond plus au type verifie, coupure")
                     return
-            envoye += len(bloc)
-            if envoye > plafond:
+                verifier_debut = False
+                sorties.append(bytes(prefixe))
+                prefixe.clear()
+                if reste:
+                    sorties.append(reste)
+            else:
+                sorties.append(bloc)
+
+            for sortie in sorties:
+                envoye += len(sortie)
+                if envoye > plafond:
+                    logging.warning("RELAIS EXTERNE : plafond atteint en cours de flux, coupure")
+                    return
+                yield sortie
+
+        # Les fichiers courts peuvent se terminer avant d'atteindre 4096 octets.
+        if verifier_debut and prefixe:
+            signature_reconnue = type_depuis_octets(bytes(prefixe), reponse.url) == type_attendu
+            zip_reconnu = type_attendu in _EXTENSIONS_ZIP and prefixe.startswith(b"PK\\x03\\x04")
+            if not (signature_reconnue or zip_reconnu):
+                logging.warning("RELAIS EXTERNE : le contenu ne correspond plus au type verifie, coupure")
+                return
+            if len(prefixe) > plafond:
                 logging.warning("RELAIS EXTERNE : plafond atteint en cours de flux, coupure")
                 return
-            yield bloc
+            yield bytes(prefixe)
     finally:
         reponse.close()
 
