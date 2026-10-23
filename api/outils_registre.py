@@ -54,7 +54,8 @@ def lister_registre_affichage_outils():
         # découpe l'action ou le nom d'outil et prend le premier verbe connu.
         "verbes_actions": {verbe: {"icone": icone} for verbe, (_libelle, icone) in VERBES_ACTIONS.items()},
         # 20/10/2026 : appli -> préfixe du nom de ses outils, pour les serveurs MCP
-        # personnels (Higgsfield, Vercel, Railway, Supabase). Leurs outils sont trop
+        # personnels et services Workspace (Google, Microsoft, Netlify, Render,
+        # Cloudflare, Higgsfield, Vercel, Railway et Supabase). Leurs outils sont trop
         # nombreux pour figurer un par un dans le registre ; le frontend déduit le
         # vrai logo d'un outil de son préfixe (lib/outils.ts:iconePrincipalePour).
         "prefixes_applis": {

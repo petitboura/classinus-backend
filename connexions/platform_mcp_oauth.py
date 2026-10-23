@@ -47,6 +47,28 @@ FOURNISSEURS = {
         "mcp_url": "https://mcp.supabase.com/mcp",
         "scopes": ["openid", "offline_access"],
     },
+    "render_mcp": {
+        "resource_url": "https://mcp.render.com/mcp",
+        "mcp_url": "https://mcp.render.com/mcp",
+        "scopes": ["openid", "offline_access"],
+    },
+    "cloudflare_mcp": {
+        "resource_url": "https://mcp.cloudflare.com/mcp",
+        "mcp_url": "https://mcp.cloudflare.com/mcp",
+        "scopes": ["openid", "offline_access"],
+    },
+    # Microsoft MCP Server for Enterprise (preview), read-only Entra/Graph directory operations.
+    "microsoft_mcp": {
+        "resource_url": "https://mcp.svc.cloud.microsoft/enterprise",
+        "mcp_url": "https://mcp.svc.cloud.microsoft/enterprise",
+        "authorization_endpoint": "https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize",
+        "token_endpoint": "https://login.microsoftonline.com/organizations/oauth2/v2.0/token",
+        "client_id_env": "MICROSOFT_MCP_CLIENT_ID",
+        "client_secret_env": "MICROSOFT_MCP_CLIENT_SECRET",
+        "scopes": ["api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/.default"],
+        "token_auth_method": "client_secret_post",
+        "send_resource": False,
+    },
 }
 
 _supabase = create_client(
@@ -313,7 +335,7 @@ def finaliser_connexion(service, code, state):
             "redirect_uri": pending["redirect_uri"],
             "code_verifier": pending["code_verifier"],
         }
-        if service != "railway_mcp":
+        if service not in ("railway_mcp", "microsoft_mcp"):
             payload["resource"] = pending["resource_url"]
         tokens = _poster_token(pending, payload)
         if not tokens.get("access_token"):
@@ -364,7 +386,7 @@ def obtenir_token_valide(service, user_id):
                 _cache[key] = {"token": None, "until": now + CACHE_TTL}
                 return None
             payload = {"grant_type": "refresh_token", "refresh_token": refresh}
-            if service != "railway_mcp":
+            if service not in ("railway_mcp", "microsoft_mcp"):
                 payload["resource"] = row["resource_url"]
             tokens = _poster_token(row, payload)
             token = tokens.get("access_token")

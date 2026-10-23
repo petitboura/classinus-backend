@@ -167,6 +167,102 @@ SERVICES = {
             "include_granted_scopes": "true",
         },
     },
+    "google_gmail_mcp": {
+        "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+        "token_endpoint": "https://oauth2.googleapis.com/token",
+        "client_id_env": "GOOGLE_DRIVE_CLIENT_ID",
+        "client_secret_env": "GOOGLE_DRIVE_CLIENT_SECRET",
+        "scopes": "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/gmail.modify",
+        "extra_auth_params": {
+            "access_type": "offline",
+            "prompt": "consent",
+            "include_granted_scopes": "true",
+        },
+    },
+    "google_docs_mcp": {
+        "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+        "token_endpoint": "https://oauth2.googleapis.com/token",
+        "client_id_env": "GOOGLE_DRIVE_CLIENT_ID",
+        "client_secret_env": "GOOGLE_DRIVE_CLIENT_SECRET",
+        "scopes": "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/documents.readonly https://www.googleapis.com/auth/documents",
+        "extra_auth_params": {
+            "access_type": "offline",
+            "prompt": "consent",
+            "include_granted_scopes": "true",
+        },
+    },
+    "google_sheets_mcp": {
+        "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+        "token_endpoint": "https://oauth2.googleapis.com/token",
+        "client_id_env": "GOOGLE_DRIVE_CLIENT_ID",
+        "client_secret_env": "GOOGLE_DRIVE_CLIENT_SECRET",
+        "scopes": "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/spreadsheets",
+        "extra_auth_params": {
+            "access_type": "offline",
+            "prompt": "consent",
+            "include_granted_scopes": "true",
+        },
+    },
+    "google_slides_mcp": {
+        "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+        "token_endpoint": "https://oauth2.googleapis.com/token",
+        "client_id_env": "GOOGLE_DRIVE_CLIENT_ID",
+        "client_secret_env": "GOOGLE_DRIVE_CLIENT_SECRET",
+        "scopes": "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/presentations.readonly https://www.googleapis.com/auth/presentations",
+        "extra_auth_params": {
+            "access_type": "offline",
+            "prompt": "consent",
+            "include_granted_scopes": "true",
+        },
+    },
+    "google_calendar_mcp": {
+        "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+        "token_endpoint": "https://oauth2.googleapis.com/token",
+        "client_id_env": "GOOGLE_DRIVE_CLIENT_ID",
+        "client_secret_env": "GOOGLE_DRIVE_CLIENT_SECRET",
+        "scopes": "https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/calendar.events.freebusy https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/calendar.events",
+        "extra_auth_params": {
+            "access_type": "offline",
+            "prompt": "consent",
+            "include_granted_scopes": "true",
+        },
+    },
+    "google_chat_mcp": {
+        "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+        "token_endpoint": "https://oauth2.googleapis.com/token",
+        "client_id_env": "GOOGLE_DRIVE_CLIENT_ID",
+        "client_secret_env": "GOOGLE_DRIVE_CLIENT_SECRET",
+        "scopes": "https://www.googleapis.com/auth/chat.spaces.readonly https://www.googleapis.com/auth/chat.memberships.readonly https://www.googleapis.com/auth/chat.messages.readonly https://www.googleapis.com/auth/chat.messages.create https://www.googleapis.com/auth/chat.users.readstate",
+        "extra_auth_params": {
+            "access_type": "offline",
+            "prompt": "consent",
+            "include_granted_scopes": "true",
+        },
+    },
+    "google_classroom_mcp": {
+        "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+        "token_endpoint": "https://oauth2.googleapis.com/token",
+        "client_id_env": "GOOGLE_DRIVE_CLIENT_ID",
+        "client_secret_env": "GOOGLE_DRIVE_CLIENT_SECRET",
+        "scopes": "https://www.googleapis.com/auth/classroom.announcements https://www.googleapis.com/auth/classroom.courses.readonly https://www.googleapis.com/auth/classroom.coursework.students https://www.googleapis.com/auth/classroom.courseworkmaterials https://www.googleapis.com/auth/classroom.rosters.readonly https://www.googleapis.com/auth/classroom.student-submissions.students.readonly https://www.googleapis.com/auth/classroom.topics.readonly https://www.googleapis.com/auth/classroom.topics",
+        "extra_auth_params": {
+            "access_type": "offline",
+            "prompt": "consent",
+            "include_granted_scopes": "true",
+        },
+    },
+    "google_people_mcp": {
+        "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+        "token_endpoint": "https://oauth2.googleapis.com/token",
+        "client_id_env": "GOOGLE_DRIVE_CLIENT_ID",
+        "client_secret_env": "GOOGLE_DRIVE_CLIENT_SECRET",
+        "scopes": "https://www.googleapis.com/auth/directory.readonly https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/userinfo.profile",
+        "extra_auth_params": {
+            "access_type": "offline",
+            "prompt": "consent",
+            "include_granted_scopes": "true",
+        },
+    },
 }
 
 
@@ -407,3 +503,12 @@ def est_connecte(service, user_id):
         .execute()
     )
     return bool(ligne.data)
+
+
+def deconnecter(service, user_id):
+    """Supprime les jetons et tentatives OAuth d'un service pour un seul compte."""
+    if not service or not user_id:
+        return False
+    supabase.table("oauth_temp").delete().eq("service", service).eq("user_id", user_id).execute()
+    supabase.table("connexions_oauth").delete().eq("service", service).eq("user_id", user_id).execute()
+    return True
