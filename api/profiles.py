@@ -638,6 +638,7 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
         ("codes_partage_crees", "codes_partage", "proprietaire_id"),
         ("invitations_crees", "invitations_classinus", "proprietaire_id"),
         ("comportements_etudiant", "comportements_etudiants", "etudiant_id"),
+        ("skills_independants", "skills", "owner_id"),
     )
     for cle_export, table, colonne in tables_par_colonne_simple:
         try:
@@ -646,6 +647,13 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
         except Exception as e:
             logging.error(f"ERREUR SUPABASE (export {table} pour {user_id}) : {e}")
             export[cle_export] = {"erreur": "recuperation impossible, reessayer plus tard"}
+
+    try:
+        ids_skills = [row["id"] for row in (supabase.table("skills").select("id").eq("owner_id", user_id).execute().data or [])]
+        export["fichiers_skills_independants"] = (supabase.table("skill_files").select("*").in_("skill_id", ids_skills).execute().data or []) if ids_skills else []
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (export skill_files pour {user_id}) : {e}")
+        export["fichiers_skills_independants"] = {"erreur": "recuperation impossible, reessayer plus tard"}
 
     # Connexions personnelles aux plateformes (Vercel, Railway, Supabase) :
     # seulement le service et les dates, JAMAIS les jetons ni les secrets.
