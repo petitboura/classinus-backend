@@ -64,6 +64,7 @@ from api.mode_source_conversation import router_mode_source
 from api.guide_conversation import router_guide_conversation
 from api.historique_reponses_qcm import router_historique_reponses_qcm
 from api.outils_registre import router as outils_registre_router
+from api.permissions_outils import router as permissions_outils_router
 from api.appareils_mobiles import router as appareils_mobiles_router
 from api.connexions import router as connexions_router
 from api.connexions_notion import router as connexions_notion_router
@@ -877,6 +878,7 @@ app.include_router(router_mode_source)
 app.include_router(router_guide_conversation)
 app.include_router(router_historique_reponses_qcm)
 app.include_router(outils_registre_router)
+app.include_router(permissions_outils_router)
 app.include_router(appareils_mobiles_router)
 app.include_router(connexions_router)
 app.include_router(connexions_notion_router)

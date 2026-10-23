@@ -408,7 +408,7 @@ def _extraire_fichiers_generes(resultat_brut):
     return fichiers
 
 
-def _est_outil_sensible(appel):
+def _est_outil_sensible(appel, table_routage=None):
     """
     True si cet appel doit déclencher la confirmation utilisateur
     (OUTILS_SENSIBLES). Gère deux formats dans OUTILS_SENSIBLES :
@@ -420,6 +420,13 @@ def _est_outil_sensible(appel):
       26/08 (plusieurs outils fusionnés en un seul avec un paramètre
       `action`, dont certaines actions sont sensibles et d'autres non).
     """
+    # Une règle explicite par outil prime sur la confirmation par défaut.
+    route = (table_routage or {}).get(appel.get("name"), {})
+    mode_permission = route.get("mode_permission")
+    if mode_permission == "demander":
+        return True
+    if mode_permission == "autoriser":
+        return False
     if appel["name"] in OUTILS_SENSIBLES:
         return True
     if est_outil_sensible_serveur_personnel(appel["name"]):
@@ -464,7 +471,7 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
     if arret is not None and arret.est_demande():
         return
     index_sensible = next(
-        (i for i, appel in enumerate(appels) if _est_outil_sensible(appel)),
+        (i for i, appel in enumerate(appels) if _est_outil_sensible(appel, table_routage)),
         None,
     )
     appels_surs = appels if index_sensible is None else appels[:index_sensible]

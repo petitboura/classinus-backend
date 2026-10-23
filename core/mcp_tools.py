@@ -324,7 +324,7 @@ async def _appeler_outil_async(url, nom_outil, arguments, headers=None):
     return ""
 
 
-def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, conversation_id=None, origine=None):
+def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, conversation_id=None, origine=None, appliquer_permissions=True):
     """
     Se connecte a chaque serveur MCP du registre actif cote plateforme et
     retourne :
@@ -430,7 +430,7 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
                         "parameters": _schema_avec_delai(outil.input_schema),
                     },
                 })
-                route = {"url": url, "headers": headers}
+                route = {"url": url, "headers": headers, "permission_user_id": user_id}
                 if prefixe:
                     route["nom_reel"] = outil.name
                 table_routage[f"{prefixe}{outil.name}"] = route
@@ -445,7 +445,34 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
     # Origine de l'appareil (20/10/2026, demande de Bourama) : les outils d'écran qui n'existent pas
     # sur l'appareil utilisé ne sont jamais proposés. Origine inconnue : rien n'est retiré.
     from core.origine_appareil import filtrer_catalogue_par_origine
-    return filtrer_catalogue_par_origine(outils_pour_llm, table_routage, origine)
+    outils_pour_llm, table_routage = filtrer_catalogue_par_origine(outils_pour_llm, table_routage, origine)
+
+    # Les choix personnels sont vérifiés côté serveur, pas seulement dans l'interface.
+    # Une panne de lecture des règles bloque le catalogue : un refus déjà enregistré
+    # ne doit jamais être ignoré par défaut.
+    if appliquer_permissions:
+        from core.permissions_outils import charger_permissions_outils
+        try:
+            regles = charger_permissions_outils(user_id) if user_id else {}
+        except Exception:
+            logging.exception("Impossible de vérifier les autorisations MCP; outils bloqués par sécurité.")
+            return [], {}
+        for nom in list(table_routage):
+            mode = regles.get(nom, "demander")
+            if mode == "refuser":
+                table_routage.pop(nom, None)
+            else:
+                table_routage[nom]["mode_permission"] = mode if mode in {"autoriser", "demander"} else "demander"
+        outils_pour_llm = [
+            outil for outil in outils_pour_llm
+            if outil.get("function", {}).get("name") in table_routage
+        ]
+    else:
+        # L'écran des paramètres doit pouvoir afficher les outils refusés.
+        for nom, route in table_routage.items():
+            route["mode_permission"] = "demander"
+
+    return outils_pour_llm, table_routage
 
 
 def filtrer_catalogue_par_outil_force(outils_pour_llm, table_routage, outil_force=None):
@@ -540,6 +567,21 @@ def appeler_outil(nom_outil, arguments, table_routage, arret=None):
     if not route:
         logging.error(f"Outil '{nom_outil}' demandé par le LLM mais absent de la table de routage.")
         return f"Erreur : outil '{nom_outil}' inconnu."
+
+    user_id_permission = route.get("permission_user_id")
+    if user_id_permission:
+        try:
+            from core.permissions_outils import charger_permissions_outils
+            mode_actuel = charger_permissions_outils(str(user_id_permission)).get(nom_outil, "demander")
+        except Exception:
+            logging.exception("Vérification de permission impossible pour '%s'; exécution bloquée.", nom_outil)
+            return "Action bloquée : impossible de vérifier l’autorisation actuelle de cet outil. Réessaie plus tard."
+        if mode_actuel == "refuser":
+            logging.warning("Appel MCP '%s' bloqué : l’utilisateur a refusé cet outil.", nom_outil)
+            return "Action bloquée : tu as choisi de toujours refuser cet outil dans les paramètres."
+        if mode_actuel == "demander" and route.get("mode_permission") == "autoriser":
+            return "Action bloquée : l’autorisation permanente a changé. Relance la demande pour confirmer cette utilisation."
+
     try:
         resultat = asyncio.run(
             _appeler_avec_delai_et_arret(
