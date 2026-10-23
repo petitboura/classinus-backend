@@ -40,6 +40,7 @@ from connexions.oauth_generique import (
 import connexions.notion as notion
 import connexions.higgsfield_mcp as higgsfield_mcp
 import connexions.platform_mcp_oauth as platform_mcp_oauth
+import connexions.mcp_personnalises as mcp_personnalises
 
 router = APIRouter(prefix="/api/connexions", tags=["connexions"])
 
@@ -175,6 +176,11 @@ class FinaliserPayload(BaseModel):
 
 @router.post("/finaliser")
 def finaliser(payload: FinaliserPayload):
+    # MCP personnel : state opaque à usage unique, rattaché au serveur et au compte.
+    if mcp_personnalises.etat_oauth_en_attente(payload.state):
+        succes, message, service = mcp_personnalises.finaliser_oauth(payload.code, payload.state)
+        return {"succes": succes, "message": message, "service": service}
+
     # Pas de connexion requise ici : la page de retour appelle cette route
     # juste après la redirection du fournisseur. Le `state` (opaque, généré
     # par le serveur, à usage unique) sert de preuve d'origine.

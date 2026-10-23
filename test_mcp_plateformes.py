@@ -97,6 +97,7 @@ class TestConfirmation(unittest.TestCase):
             "vercel_create_project", "vercel_update_project", "vercel_cancel_deployment",
             "railway_delete-service", "railway_accept-deploy", "railway_set-variables",
             "railway_generate-domain", "railway_railway-agent", "higgsfield_generate_video",
+            "custommcp_get_abc123_list_tables_fedc", "custommcp_list_abc123_resources_1234",
         ):
             self.assertTrue(r.est_outil_sensible_serveur_personnel(nom), nom)
 
@@ -147,6 +148,21 @@ class TestAppelAvecVraiNom(unittest.TestCase):
         with patch.object(mcp_tools, "_appeler_outil_async", faux):
             mcp_tools.appeler_outil("vercel_get_project", {}, table)
         self.assertEqual(appels, ["get_project"])
+
+
+class TestMcpPersonnalise(unittest.TestCase):
+    def test_les_outils_personnalises_exigent_toujours_confirmation(self):
+        for nom in (
+            "custommcp_get_abc123_list_tables_fedc",
+            "custommcp_create_abc123_record_1234",
+        ):
+            self.assertTrue(r.est_outil_sensible_serveur_personnel(nom), nom)
+
+    def test_les_confirmations_affichent_un_nom_generique_lisible(self):
+        self.assertEqual(
+            r.plateforme_outil_personnel("custommcp_get_abc123_list_tables_fedc"),
+            "Serveur MCP personnalisé",
+        )
 
 
 if __name__ == "__main__":
