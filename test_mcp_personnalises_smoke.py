@@ -47,6 +47,14 @@ class TestValidationUrl(unittest.TestCase):
         with self.assertRaises(ValueError):
             mcp.valider_url_mcp("https://user:pass@example.com/mcp")
 
+    def test_refuse_dns_qui_pointe_vers_ip_privee(self):
+        from unittest.mock import patch
+
+        resultat_dns = [(None, None, None, None, ("10.0.0.8", 443))]
+        with patch.object(mcp.socket, "getaddrinfo", return_value=resultat_dns):
+            with self.assertRaises(ValueError):
+                mcp.valider_url_mcp("https://serveur-test.example/mcp")
+
 
 class TestSerialisationSansSecret(unittest.TestCase):
     def test_n_expose_jamais_le_jeton_bearer(self):
