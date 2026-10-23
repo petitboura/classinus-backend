@@ -1,0 +1,46 @@
+name: Vérifications des permissions MCP
+
+on:
+  push:
+    branches:
+      - feat/gestion-permissions-outils
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "core/mcp_tools.py"
+      - "core/execution_outils.py"
+      - "core/permissions_outils.py"
+      - "api/permissions_outils.py"
+      - "api/main.py"
+      - "test_mcp_plateformes.py"
+      - "migrations/2026_10_23_permissions_outils_utilisateur.sql"
+      - ".github/workflows/permissions-outils-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  permissions:
+    name: Syntaxe et tests de permissions MCP
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Installer les dépendances de test
+        run: python -m pip install --disable-pip-version-check fastapi requests groq mcp==2.0.0 httpx
+      - name: Vérifier la syntaxe Python
+        run: >-
+          python -m py_compile
+          core/mcp_tools.py
+          core/execution_outils.py
+          core/permissions_outils.py
+          api/permissions_outils.py
+          api/main.py
+      - name: Tester les règles MCP
+        run: python -m unittest -v test_mcp_plateformes

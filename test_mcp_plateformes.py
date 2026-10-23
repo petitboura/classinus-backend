@@ -91,6 +91,43 @@ class TestRegistreServeurs(unittest.TestCase):
 
 
 class TestConfirmation(unittest.TestCase):
+    def test_mode_personnel_demander_exige_toujours_confirmation(self):
+        from core.execution_outils import _est_outil_sensible
+        self.assertTrue(_est_outil_sensible(
+            {"name": "tavily_search", "arguments": "{}"},
+            {"tavily_search": {"mode_permission": "demander"}},
+        ))
+
+    def test_mode_personnel_autoriser_remplace_confirmation_par_defaut(self):
+        from core.execution_outils import _est_outil_sensible
+        self.assertFalse(_est_outil_sensible(
+            {"name": "gerer_depot_github", "arguments": "{\"action\": \"modifier_fichier\"}"},
+            {"gerer_depot_github": {"mode_permission": "autoriser"}},
+        ))
+
+    def test_refus_reverifie_juste_avant_execution(self):
+        import os
+        os.environ.setdefault("SUPABASE_URL", "http://localhost")
+        os.environ.setdefault("SUPABASE_SECRET", "test")
+        import mcp_tools
+
+        with patch("core.permissions_outils.charger_permissions_outils", return_value={"outil_test": "refuser"}), \
+             patch.object(mcp_tools.asyncio, "run") as executer:
+            resultat = mcp_tools.appeler_outil(
+                "outil_test",
+                {},
+                {"outil_test": {"url": "https://example.invalid/mcp", "permission_user_id": "utilisateur-test"}},
+            )
+        self.assertIn("toujours refuser", resultat)
+        executer.assert_not_called()
+
+    def test_sans_regle_personnelle_les_confirmations_existantes_restent_actives(self):
+        from core.execution_outils import _est_outil_sensible
+        self.assertTrue(_est_outil_sensible(
+            {"name": "gerer_depot_github", "arguments": "{\"action\": \"modifier_fichier\"}"},
+            {"gerer_depot_github": {}},
+        ))
+
     def test_actions_qui_modifient_sont_confirmees(self):
         for nom in (
             "supabase_execute_sql", "supabase_apply_migration", "supabase_pause_project",
