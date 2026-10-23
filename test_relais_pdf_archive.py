@@ -133,7 +133,7 @@ class Relais(unittest.TestCase):
     def test_redirection_archive_autorisee_suivie_manuellement(self):
         redirection = _amont(302, b"", {"Location": "https://ia800.us.archive.org/1/items/livre/livre.pdf"}, url="https://archive.org/download/livre/livre.pdf")
         finale = _amont(200, PDF, {"Content-Length": str(len(PDF))}, url="https://ia800.us.archive.org/1/items/livre/livre.pdf")
-        p1, p2 = self._simuler()
+        p1, _ = self._simuler()
         with p1, patch.object(rel.requests, "request", side_effect=[redirection, finale]) as appel:
             reponse = self.client.get("/fichiers/archive/livre.pdf")
             self.assertEqual(reponse.status_code, 200)
