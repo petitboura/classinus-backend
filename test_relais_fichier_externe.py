@@ -180,6 +180,15 @@ class Relais(unittest.TestCase):
             r = self._app().get(f"/fichiers/externe/{jeton}/cours.pdf")
         self.assertEqual(r.content, b"")
 
+    def test_signature_repartie_sur_plusieurs_blocs_est_acceptee(self):
+        jeton = rel.creer_jeton("https://exemple.org/cours.pdf", "pdf")
+        amont = _amont()
+        amont.iter_content.side_effect = lambda n: iter([PDF[:2], PDF[2:6], PDF[6:]])
+        with _sans_ssrf(), patch("requests.request", return_value=amont):
+            r = self._app().get(f"/fichiers/externe/{jeton}/cours.pdf")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.content, PDF)
+
     def test_plage_transmise_et_plage_multiple_ignoree(self):
         jeton = rel.creer_jeton("https://exemple.org/cours.pdf", "pdf")
         morceau = PDF[100:200]
