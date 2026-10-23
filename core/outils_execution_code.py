@@ -13,7 +13,7 @@ import time
 from pathlib import PurePosixPath
 from typing import Literal
 
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.mcpserver import Context, MCPServer as FastMCP
 
 mcp_execution_code = FastMCP("classinus-execution-code")
 _ROOT = "/home/user"
@@ -159,6 +159,31 @@ def _classe_sandbox():
     return Sandbox
 
 
+def _est_commande_en_echec(erreur) -> bool:
+    """Vrai si l'erreur est la fin d'une commande avec un code de sortie non nul."""
+    try:
+        from e2b import CommandExitException
+    except ImportError:
+        return False
+    return isinstance(erreur, CommandExitException)
+
+
+def _lancer_commande(sandbox, commande: str, timeout, request_timeout):
+    """Lance une commande dans le sandbox et renvoie toujours son résultat.
+
+    Le SDK E2B lève CommandExitException quand la commande se termine avec un code
+    non nul. Pour l'étudiant, un programme qui échoue est un résultat normal : sa
+    sortie et son code de sortie doivent lui revenir, pas une erreur technique.
+    Les autres erreurs (délai dépassé, sandbox injoignable) restent des exceptions.
+    """
+    try:
+        return sandbox.commands.run(commande, timeout=timeout, request_timeout=request_timeout)
+    except Exception as erreur:
+        if _est_commande_en_echec(erreur):
+            return erreur
+        raise
+
+
 def _resultat_commande(sandbox, commande: str, timeout: int, max_chars: int) -> str:
     # Limiter la sortie dans le sandbox avant son transfert vers le backend.
     # On capture stdout + stderr ensemble; head ferme le pipe quand la limite est atteinte,
@@ -170,11 +195,14 @@ def _resultat_commande(sandbox, commande: str, timeout: int, max_chars: int) -> 
             f"set -o pipefail; {{ {commande}; }} 2>&1 | head -c {limite_sortie + 1}"
         )
     )
-    resultat = sandbox.commands.run(
-        commande_bornee, timeout=timeout, request_timeout=timeout + 20
-    )
+    resultat = _lancer_commande(sandbox, commande_bornee, timeout, timeout + 20)
     stdout = getattr(resultat, "stdout", "") or ""
     exit_code = getattr(resultat, "exit_code", 0)
+    # head ferme le tube dès que la limite est atteinte : le programme reçoit alors
+    # SIGPIPE, ce qui donne le code 141 avec pipefail. Ce code vient de notre
+    # troncature et non du programme, on ne l'affiche donc pas.
+    if exit_code == 141 and len(stdout.encode("utf-8")) >= limite_sortie:
+        exit_code = 0
     sections = []
     if stdout.strip():
         sections.append(_tronquer(stdout.rstrip(), limite_sortie))
@@ -186,10 +214,11 @@ def _resultat_commande(sandbox, commande: str, timeout: int, max_chars: int) -> 
 
 
 def _taille_fichier(sandbox, distant: str, timeout: int) -> int:
-    resultat = sandbox.commands.run(
+    resultat = _lancer_commande(
+        sandbox,
         f"stat -c %s -- {shlex.quote(distant)}",
-        timeout=timeout,
-        request_timeout=timeout + 10,
+        timeout,
+        timeout + 10,
     )
     if getattr(resultat, "exit_code", 1) != 0:
         raise FileNotFoundError("Le fichier est introuvable.")
@@ -216,7 +245,7 @@ def _fichiers_workspace(sandbox, configuration: dict) -> str:
         f"-printf '%P\\t%s\\n' | head -n {limite_fichiers}"
     )
     reste = max(1, int(echeance - time.monotonic()))
-    liste = sandbox.commands.run(commande, timeout=min(timeout, reste), request_timeout=min(timeout + 10, reste + 5))
+    liste = _lancer_commande(sandbox, commande, min(timeout, reste), min(timeout + 10, reste + 5))
     if getattr(liste, "exit_code", 1) != 0:
         raise OSError("Impossible de lister les fichiers du workspace.")
     fichiers, total, ignores = {}, 0, 0
@@ -301,10 +330,11 @@ def _executer_action(sandbox, action: str, language: str, code: str, command: st
         if taille > max_bytes:
             return f"Le fichier dépasse la limite configurée de {max_bytes} octets."
         parent = str(PurePosixPath(distant).parent)
-        resultat_mkdir = sandbox.commands.run(
+        resultat_mkdir = _lancer_commande(
+            sandbox,
             f"mkdir -p -- {shlex.quote(parent)}",
-            timeout=timeout_fichier,
-            request_timeout=timeout_fichier + 10,
+            timeout_fichier,
+            timeout_fichier + 10,
         )
         if getattr(resultat_mkdir, "exit_code", 1) != 0:
             return "Impossible de préparer le dossier du fichier."
@@ -313,7 +343,10 @@ def _executer_action(sandbox, action: str, language: str, code: str, command: st
 
     if action == "read_file":
         distant = _chemin_distant(path)
-        taille = _taille_fichier(sandbox, distant, timeout_fichier)
+        try:
+            taille = _taille_fichier(sandbox, distant, timeout_fichier)
+        except FileNotFoundError:
+            return f"Fichier introuvable : {_chemin_relatif_sur(path)}"
         if taille > max_bytes:
             return f"Le fichier fait {taille} octets, au-delà de la limite configurée de {max_bytes} octets."
         contenu = sandbox.files.read(distant, format="text")
@@ -369,7 +402,7 @@ def _message_refus(reservation: dict) -> str:
 def gerer_execution_code(
     action: Literal["run_code", "run_command", "write_file", "read_file", "list_files", "download_files", "close"],
     ctx: Context,
-    language: Literal["python", "javascript", "typescript", "bash", "c", "rust"] = "python",
+    language: Literal["python", "javascript", "typescript", "bash"] = "python",
     code: str = "",
     command: str = "",
     path: str = "",
@@ -377,7 +410,7 @@ def gerer_execution_code(
 ) -> str:
     """Execute du code ou gère les fichiers d'un workspace Linux isolé propre à cette conversation.
 
-    Actions : run_code exécute du code en Python, JavaScript, TypeScript, Bash, C ou Rust;
+    Actions : run_code exécute du code en Python, JavaScript, TypeScript ou Bash;
     run_command lance une commande shell; write_file/read_file/list_files gèrent les fichiers;
     download_files prépare une archive ZIP; close ferme le workspace.
     Les fichiers restent disponibles entre les actions d'une même conversation. Aucune confirmation
