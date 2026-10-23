@@ -26,5 +26,14 @@ jobs:
           python-version: "3.12"
       - name: Install test dependency
         run: python -m pip install --disable-pip-version-check fastapi
+      - name: Check syntax of changed backend modules
+        run: >-
+          python -m py_compile
+          api/auth.py api/chat.py
+          core/limitation_debit.py
+          core/file_attente_vectorisation.py
+          core/vectorisation_dossiers_designes.py
+          core/file_attente_description_skills.py
+          core/taches_file_attente.py
       - name: Test API localization
         run: python -m unittest -v test_i18n

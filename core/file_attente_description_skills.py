@@ -33,6 +33,7 @@ from datetime import datetime, timedelta, timezone
 
 from groq import Groq
 from supabase import create_client, ClientOptions
+from core.taches_file_attente import recycler_taches_perimees
 from client_http_supabase import nouveau_client_http_supabase
 
 MAX_TENTATIVES = 3
@@ -94,20 +95,18 @@ def _generer_description_depuis_skill_md(skill_md: str) -> str:
 
 
 def remettre_en_attente_bloques() -> None:
-    """Appelée une fois au démarrage du process (voir _lifespan,
-    api/main.py) -- tout skill resté "en_cours" suite à un
-    redémarrage/crash précédent repart tout seul, jamais besoin
-    d'intervention manuelle. Même rôle que son équivalent dans
-    file_attente_vectorisation.py."""
-    try:
-        supabase.table("comportements_etudiants").update({"statut_description": "en_attente"}).eq(
-            "statut_description", "en_cours"
-        ).execute()
-    except Exception as e:
-        logging.error(f"ERREUR remise en attente au démarrage (description skills) : {e}")
+    """Reprend uniquement les descriptions perimees, pas celles d'une autre instance active."""
+    recycler_taches_perimees(
+        supabase, "comportements_etudiants", "statut_description",
+        "derniere_tentative_description_a",
+    )
 
 
 def _traiter_lot() -> int:
+    recycler_taches_perimees(
+        supabase, "comportements_etudiants", "statut_description",
+        "derniere_tentative_description_a",
+    )
     try:
         res = (
             supabase.table("comportements_etudiants")
@@ -123,9 +122,24 @@ def _traiter_lot() -> int:
     lignes = res.data or []
     for ligne in lignes:
         comportement_id = ligne["id"]
-        supabase.table("comportements_etudiants").update({"statut_description": "en_cours"}).eq(
-            "id", comportement_id
-        ).execute()
+        maintenant_iso = datetime.now(timezone.utc).isoformat()
+        try:
+            prise = (
+                supabase.table("comportements_etudiants")
+                .update({
+                    "statut_description": "en_cours",
+                    "derniere_tentative_description_a": maintenant_iso,
+                })
+                .eq("id", comportement_id)
+                .eq("statut_description", "en_attente")
+                .select("id")
+                .execute()
+            )
+        except Exception as e:
+            logging.error(f"ERREUR reservation description skill {comportement_id}: {e}")
+            continue
+        if not prise.data:
+            continue
         try:
             description = _generer_description_depuis_skill_md(ligne.get("skill_md") or "")
             supabase.table("comportements_etudiants").update(
