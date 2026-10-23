@@ -10,7 +10,7 @@ import concurrent.futures
 import requests
 from mcp_tools import appeler_outil
 from registre_outils import OUTILS_SENSIBLES, est_outil_sensible_serveur_personnel
-from profils_agents import _nom_lisible_appel, _action_appel
+from profils_agents import _nom_lisible_appel, _action_appel, _champs_domaines_appel
 
 class _AttenteConfirmation(Exception):
     """
@@ -494,6 +494,7 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                 # précédentes et afficher sa petite icône d'action.
                 "nom_lisible": _nom_lisible_appel(appel),
                 "action": _action_appel(appel),
+                **_champs_domaines_appel(appel),
             }
 
         # Pas de `with` ici (12/10/2026, bouton Arrêter) : sa sortie attend la fin de TOUS
@@ -539,6 +540,7 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                         "nom_outil": appel["name"],
                         "nom_lisible": _nom_lisible_appel(appel),
                         "action": _action_appel(appel),
+                        **_champs_domaines_appel(appel),
                         "resultat": resultat,
                         "id_appel": appel["id"],
                     }
@@ -557,6 +559,7 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                     "nom_outil": appel["name"],
                     "nom_lisible": _nom_lisible_appel(appel),
                     "action": _action_appel(appel),
+                    **_champs_domaines_appel(appel),
                     "resultat": _resultat_pour_affichage(resultat),
                     "id_appel": appel["id"],
                 }

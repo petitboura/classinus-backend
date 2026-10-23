@@ -59,6 +59,7 @@ from core.recherche_zenodo import rechercher_documents as _rechercher_zenodo
 _TOUTES_LES_SOURCES = {
     "internet_archive": {
         "nom": "Internet Archive",
+        "domaine": "archive.org",
         "alias": ["archive", "archive.org", "internet archive", "internetarchive", "wayback"],
         "description": "livres, manuels et PDF numérisés",
         "rechercher": _rechercher_archive,
@@ -66,6 +67,7 @@ _TOUTES_LES_SOURCES = {
     },
     "gallica": {
         "nom": "Gallica",
+        "domaine": "gallica.bnf.fr",
         "alias": ["bnf", "gallica.bnf.fr", "bibliotheque nationale de france", "bibliotheque nationale"],
         "description": "ouvrages anciens numérisés de la Bibliothèque nationale de France",
         "rechercher": _rechercher_gallica,
@@ -73,6 +75,7 @@ _TOUTES_LES_SOURCES = {
     },
     "hal": {
         "nom": "HAL",
+        "domaine": "hal.science",
         "alias": ["hal.science", "archives ouvertes", "archive ouverte", "hal archives ouvertes"],
         "description": "articles de recherche, thèses et rapports en texte complet",
         "rechercher": _rechercher_hal,
@@ -80,6 +83,7 @@ _TOUTES_LES_SOURCES = {
     },
     "arxiv": {
         "nom": "arXiv",
+        "domaine": "arxiv.org",
         "alias": ["arxiv.org", "arxiv org"],
         "description": "articles scientifiques de maths, physique et informatique, en général en anglais",
         "rechercher": _rechercher_arxiv,
@@ -87,6 +91,7 @@ _TOUTES_LES_SOURCES = {
     },
     "zenodo": {
         "nom": "Zenodo",
+        "domaine": "zenodo.org",
         "alias": ["zenodo.org", "cern"],
         "description": "travaux de recherche, thèses, cours et supports pédagogiques déposés en accès libre",
         "rechercher": _rechercher_zenodo,
@@ -94,6 +99,7 @@ _TOUTES_LES_SOURCES = {
     },
     "openalex": {
         "nom": "OpenAlex",
+        "domaine": "openalex.org",
         "alias": ["open alex", "openalex.org"],
         "description": "articles scientifiques de toutes disciplines dont une version est en accès libre",
         "rechercher": _rechercher_openalex,
@@ -101,6 +107,7 @@ _TOUTES_LES_SOURCES = {
     },
     "gutenberg": {
         "nom": "Project Gutenberg",
+        "domaine": "gutenberg.org",
         "alias": ["gutenberg", "gutenberg.org", "projet gutenberg"],
         "description": "livres du domaine public, surtout de la littérature",
         "rechercher": _rechercher_gutenberg,

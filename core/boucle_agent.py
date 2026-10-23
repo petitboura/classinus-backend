@@ -905,6 +905,11 @@ def _capturer_reponse(generateur, accumulateur, meta=None, fichiers_generes_accu
             }
             if event.get("action"):
                 entree_meta["action"] = event["action"]
+            # 21/10/2026 (demande Bourama, logo du site visé) : les sites visés
+            # par l'appel sont gardés pour que les logos survivent à la
+            # réouverture d'une conversation. Absents = comme avant.
+            if event.get("domaines"):
+                entree_meta["domaines"] = event["domaines"]
             meta.setdefault("outils", []).append(dict(entree_meta))
             meta.setdefault("segments", []).append({"type": "outil", **entree_meta})
         elif meta is not None and event["type"] == "sources" and meta.get("outils"):
