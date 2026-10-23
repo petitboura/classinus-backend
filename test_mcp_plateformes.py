@@ -211,6 +211,10 @@ class TestMcpPersonnalise(unittest.TestCase):
         ):
             self.assertTrue(r.est_outil_sensible_serveur_personnel(nom), nom)
 
+    def test_aucun_libelle_compose_avec_le_code_interne(self):
+        # La carte de confirmation affiche « Action sur <nom du serveur> » (voir profils_agents).
+        self.assertIsNone(r.libelle_outil_plateforme("custommcp_get_abc123_list_tables_fedc"))
+
     def test_les_confirmations_affichent_un_nom_generique_lisible(self):
         self.assertEqual(
             r.plateforme_outil_personnel("custommcp_get_abc123_list_tables_fedc"),

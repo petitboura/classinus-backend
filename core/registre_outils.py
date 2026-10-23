@@ -1052,6 +1052,10 @@ def libelle_outil_plateforme(nom_outil):
         return None
     for prefixe in PREFIXES_SERVEURS_PERSONNELS:
         if nom_outil.startswith(prefixe):
+            if prefixe == "custommcp_":
+                # Serveurs ajoutés par l'élève : le nom contient un code interne, la carte de
+                # confirmation affiche « Action sur <nom du serveur> » à la place.
+                return None
             reste = nom_outil[len(prefixe):].replace("-", "_")
             mots = [mot for mot in reste.split("_") if mot]
             if not mots:
