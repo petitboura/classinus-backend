@@ -193,6 +193,7 @@ MESSAGES_FR: dict[str, str] = {
     "RECHERCHE_INDISPONIBLE": "La recherche est indisponible pour le moment.",
     "SESSION_EXPIREE": "Ta session a expiré, reconnecte-toi.",
     "REQUETE_INVALIDE": "La requête envoyée est invalide.",
+    "REQUETE_TROP_VOLUMINEUSE": "Ton message et ses pièces jointes dépassent la taille maximale acceptée ({taille_max} Mo). Retire une pièce jointe ou raccourcis le texte, puis réessaie.",
     "ERREUR_INCONNUE": "Une erreur est survenue, réessaie dans un instant.",
     # 07/10/2026, vidéo d'une animation du chat (core/rendu_animation_travaux.py).
     # Codes à garder synchronisés avec lib/erreurs.ts côté frontend.
@@ -423,6 +424,7 @@ MESSAGES_EN: dict[str, str] = {
     "PROFIL_RELECTURE_ECHEC": "Profile updated, but could not reload it for confirmation.",
     "RECHERCHE_INDISPONIBLE": "Search is unavailable right now.",
     "REQUETE_INVALIDE": "The request sent is invalid.",
+    "REQUETE_TROP_VOLUMINEUSE": "Your message and its attachments exceed the maximum accepted size ({taille_max} MB). Remove an attachment or shorten the text, then try again.",
     "RIEN_A_MODIFIER": "Nothing to change.",
     "RIEN_N_A_ETE_COMPRIS_REESSAIE": "Nothing was understood, try again closer to the microphone.",
     "SERVICE_INCONNU": "Unknown service « {service} ».",

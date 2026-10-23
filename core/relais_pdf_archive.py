@@ -42,7 +42,7 @@ import os
 import re
 import threading
 import time
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urljoin, urlparse
 
 import requests
 
@@ -56,6 +56,8 @@ from core.lecture_document_archive import (
 )
 
 _URL_FICHIER = "https://archive.org/download/{id}/{fichier}"
+_SAUTS_REDIRECTION_MAX = 5
+_CODES_REDIRECTION = frozenset({301, 302, 303, 307, 308})
 _TAILLE_BLOC = 256 * 1024
 _REGEX_CONTENT_RANGE = re.compile(r"bytes\s+(\d+)-(\d+)/(\d+|\*)")
 _REGEX_CONTENT_RANGE_VIDE = re.compile(r"bytes\s+\*/(\d+)")
@@ -168,8 +170,74 @@ def _trouver_pdf(identifiant):
 
 
 def _hote_archive(url):
-    hote = (urlparse(url).hostname or "").lower()
-    return hote == "archive.org" or hote.endswith(".archive.org")
+    """N'autorise que HTTPS sur archive.org ou ses sous-domaines, port standard."""
+    try:
+        morceaux = urlparse(url)
+        hote = (morceaux.hostname or "").lower()
+        port = morceaux.port
+    except ValueError:
+        return False
+    return (
+        morceaux.scheme == "https"
+        and port in (None, 443)
+        and morceaux.username is None
+        and morceaux.password is None
+        and (hote == "archive.org" or hote.endswith(".archive.org"))
+    )
+
+
+def _requete_archive_sure(url, methode, entetes, delai, identifiant):
+    """Suit uniquement les redirections HTTPS d'Internet Archive, avant chaque requête."""
+    courante = url
+    for saut in range(_SAUTS_REDIRECTION_MAX + 1):
+        if not _hote_archive(courante):
+            logging.error(
+                "RELAIS PDF ARCHIVE (%s) : destination hors archive.org bloquee avant requete",
+                identifiant,
+            )
+            raise ErreurRelais(502, "ARCHIVE_INDISPONIBLE")
+        try:
+            reponse = requests.request(
+                methode,
+                courante,
+                headers=entetes,
+                timeout=(10, delai),
+                stream=True,
+                allow_redirects=False,
+            )
+        except requests.RequestException as e:
+            logging.error(
+                "ERREUR RELAIS PDF ARCHIVE (%s) : %s %s",
+                identifiant,
+                type(e).__name__,
+                str(e)[:200],
+            )
+            raise ErreurRelais(502, "ARCHIVE_INDISPONIBLE")
+
+        if reponse.status_code in _CODES_REDIRECTION:
+            destination = reponse.headers.get("Location")
+            reponse.close()
+            if not destination or saut >= _SAUTS_REDIRECTION_MAX:
+                logging.error("RELAIS PDF ARCHIVE (%s) : redirection absente ou trop longue", identifiant)
+                raise ErreurRelais(502, "ARCHIVE_INDISPONIBLE")
+            suivante = urljoin(courante, destination)
+            if not _hote_archive(suivante):
+                logging.error(
+                    "RELAIS PDF ARCHIVE (%s) : redirection hors archive.org bloquee avant requete",
+                    identifiant,
+                )
+                raise ErreurRelais(502, "ARCHIVE_INDISPONIBLE")
+            courante = suivante
+            continue
+
+        # Défense supplémentaire si un adaptateur renvoie une URL finale différente.
+        if not _hote_archive(getattr(reponse, "url", None) or courante):
+            reponse.close()
+            logging.error("RELAIS PDF ARCHIVE (%s) : URL finale hors archive.org refusee", identifiant)
+            raise ErreurRelais(502, "ARCHIVE_INDISPONIBLE")
+        return reponse
+
+    raise ErreurRelais(502, "ARCHIVE_INDISPONIBLE")
 
 
 def _taille_totale(reponse):
@@ -213,25 +281,13 @@ def ouvrir_pdf_archive(identifiant, methode="GET", plage=None):
     delai = _entier_env("ARCHIVE_RELAIS_DELAI", 30)
     plafond = plafond_octets()
 
-    try:
-        reponse = requests.request(
-            "HEAD" if methode == "HEAD" else "GET",
-            url,
-            headers={"Range": plage} if plage else {},
-            timeout=(10, delai),
-            stream=True,
-            allow_redirects=True,
-        )
-    except requests.RequestException as e:
-        logging.error(f"ERREUR RELAIS PDF ARCHIVE ({identifiant}) : {type(e).__name__} {str(e)[:200]}")
-        raise ErreurRelais(502, "ARCHIVE_INDISPONIBLE")
-
-    # Les redirections d'Internet Archive restent sur archive.org et ses serveurs.
-    sauts = [r.url for r in reponse.history] + [reponse.url]
-    if not all(_hote_archive(u) for u in sauts):
-        reponse.close()
-        logging.error(f"RELAIS PDF ARCHIVE ({identifiant}) : redirection hors archive.org refusée")
-        raise ErreurRelais(502, "ARCHIVE_INDISPONIBLE")
+    reponse = _requete_archive_sure(
+        url,
+        "HEAD" if methode == "HEAD" else "GET",
+        {"Range": plage} if plage else {},
+        delai,
+        identifiant,
+    )
 
     if reponse.status_code in (401, 403):
         reponse.close()

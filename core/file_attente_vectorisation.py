@@ -111,6 +111,7 @@ from catalogue_public_rag import (  # noqa: E402
     extraire_pages_pdf as extraire_pages_pdf_catalogue_public,
 )
 from embeddings import activer_pause_quota_gemini, est_en_pause_quota_gemini, est_erreur_quota_gemini  # noqa: E402
+from core.taches_file_attente import recycler_taches_perimees
 
 BUCKET_BIBLIOTHEQUE = "bibliotheque"
 MAX_TENTATIVES = 3
@@ -297,23 +298,14 @@ def _extraire_texte_pour_extraction_publique(type_mime: str | None, contenu: byt
 
 
 def remettre_en_attente_bloques() -> None:
-    """Appelée une fois au démarrage du process (voir api/main.py:_lifespan) -- voir docstring du module."""
+    """Reprend uniquement les taches perimees, pas celles d'une autre instance active."""
     for table in ("fichiers_uploades", "bibliotheque_publique"):
-        try:
-            supabase.table(table).update({"statut_vectorisation": "en_attente"}).eq(
-                "statut_vectorisation", "en_cours"
-            ).execute()
-        except Exception as e:
-            logging.error(f"ERREUR remise en attente au démarrage ({table}) : {e}")
-    # statut_extraction_texte n'existe que sur bibliotheque_publique
-    # (colonne absente de fichiers_uploades, hors scope -- voir docstring
-    # du module).
-    try:
-        supabase.table("bibliotheque_publique").update({"statut_extraction_texte": "en_attente"}).eq(
-            "statut_extraction_texte", "en_cours"
-        ).execute()
-    except Exception as e:
-        logging.error(f"ERREUR remise en attente au démarrage (extraction texte, bibliotheque_publique) : {e}")
+        recycler_taches_perimees(supabase, table, "statut_vectorisation", "derniere_tentative_vectorisation_a")
+    # L'extraction publique partage l'horodatage deja present dans cette table.
+    recycler_taches_perimees(
+        supabase, "bibliotheque_publique", "statut_extraction_texte",
+        "derniere_tentative_vectorisation_a",
+    )
 
 
 COLONNES_EXTRACTION_PUBLIQUE = "id, chemin_stockage, nom_fichier, type_mime"
@@ -326,6 +318,10 @@ def traiter_extractions_texte_publique_une_fois() -> int:
     catalogue public dès l'ajout (statut_extraction_texte="en_attente"),
     AUCUN appel Gemini/Groq donc AUCUN coupe-circuit quota ici.
     """
+    recycler_taches_perimees(
+        supabase, "bibliotheque_publique", "statut_extraction_texte",
+        "derniere_tentative_vectorisation_a",
+    )
     try:
         lignes = (
             supabase.table("bibliotheque_publique")
@@ -342,7 +338,23 @@ def traiter_extractions_texte_publique_une_fois() -> int:
     for ligne in lignes:
         fichier_id = ligne["id"]
         try:
-            supabase.table("bibliotheque_publique").update({"statut_extraction_texte": "en_cours"}).eq("id", fichier_id).execute()
+            prise = (
+                supabase.table("bibliotheque_publique")
+                .update({
+                    "statut_extraction_texte": "en_cours",
+                    "derniere_tentative_vectorisation_a": datetime.now(timezone.utc).isoformat(),
+                })
+                .eq("id", fichier_id)
+                .eq("statut_extraction_texte", "en_attente")
+                .select("id")
+                .execute()
+            )
+        except Exception as e:
+            logging.error(f"ERREUR réservation extraction publique (fichier_id={fichier_id}) : {e}")
+            continue
+        if not prise.data:
+            continue
+        try:
             contenu = _telecharger(ligne["chemin_stockage"])
             texte = _extraire_texte_pour_extraction_publique(ligne["type_mime"], contenu)
             supabase.table("bibliotheque_publique").update({
@@ -403,9 +415,23 @@ def extraire_texte_maintenant_publique(fichier_id: str) -> bool:
         return False
     if ligne.get("statut_extraction_texte") == "fait":
         return True
+    if ligne.get("statut_extraction_texte") != "en_attente":
+        return False
 
     try:
-        supabase.table("bibliotheque_publique").update({"statut_extraction_texte": "en_cours"}).eq("id", fichier_id).execute()
+        prise = (
+            supabase.table("bibliotheque_publique")
+            .update({
+                "statut_extraction_texte": "en_cours",
+                "derniere_tentative_vectorisation_a": datetime.now(timezone.utc).isoformat(),
+            })
+            .eq("id", fichier_id)
+            .eq("statut_extraction_texte", "en_attente")
+            .select("id")
+            .execute()
+        )
+        if not prise.data:
+            return False
         contenu = _telecharger(ligne["chemin_stockage"])
         texte = _extraire_texte_pour_extraction_publique(ligne["type_mime"], contenu)
         supabase.table("bibliotheque_publique").update({
@@ -447,12 +473,28 @@ def vectoriser_maintenant_publique(fichier_id: str) -> bool:
         return False
     if ligne.get("statut_vectorisation") == "pret":
         return True
+    statut_initial = ligne.get("statut_vectorisation")
+    if statut_initial == "en_cours" or not statut_initial:
+        return False
     if est_en_pause_quota_gemini():
         return False
 
     maintenant_iso = datetime.now(timezone.utc).isoformat()
     try:
-        supabase.table("bibliotheque_publique").update({"statut_vectorisation": "en_cours"}).eq("id", fichier_id).execute()
+        prise = (
+            supabase.table("bibliotheque_publique")
+            .update({"statut_vectorisation": "en_cours", "derniere_tentative_vectorisation_a": maintenant_iso})
+            .eq("id", fichier_id)
+            .eq("statut_vectorisation", statut_initial)
+            .select("id")
+            .execute()
+        )
+    except Exception as e:
+        logging.error(f"ERREUR réservation vectorisation publique (fichier_id={fichier_id}) : {e}")
+        return False
+    if not prise.data:
+        return False
+    try:
         _vectoriser_publique(ligne)
         # 15/09/2026 : même correction que _traiter_lot ci-dessus, voir
         # _a_produit_des_chunks.
@@ -515,12 +557,28 @@ def vectoriser_maintenant_privee(fichier_id: str) -> bool:
         return False
     if ligne.get("statut_vectorisation") == "pret":
         return True
+    statut_initial = ligne.get("statut_vectorisation")
+    if statut_initial == "en_cours" or not statut_initial:
+        return False
     if est_en_pause_quota_gemini():
         return False
 
     maintenant_iso = datetime.now(timezone.utc).isoformat()
     try:
-        supabase.table("fichiers_uploades").update({"statut_vectorisation": "en_cours"}).eq("id", fichier_id).execute()
+        prise = (
+            supabase.table("fichiers_uploades")
+            .update({"statut_vectorisation": "en_cours", "derniere_tentative_vectorisation_a": maintenant_iso})
+            .eq("id", fichier_id)
+            .eq("statut_vectorisation", statut_initial)
+            .select("id")
+            .execute()
+        )
+    except Exception as e:
+        logging.error(f"ERREUR réservation vectorisation privée (fichier_id={fichier_id}) : {e}")
+        return False
+    if not prise.data:
+        return False
+    try:
         _vectoriser_privee(ligne)
         if not _a_produit_des_chunks("documents_bibliotheque", fichier_id):
             raise ValueError("aucun contenu exploitable n'a pu être extrait de ce fichier (0 chunk produit)")
@@ -599,6 +657,9 @@ def _traiter_lot(table: str, colonnes: str, table_chunks: str, fonction_vectoris
     """
     if est_en_pause_quota_gemini():
         return 0
+    recycler_taches_perimees(
+        supabase, table, "statut_vectorisation", "derniere_tentative_vectorisation_a",
+    )
     try:
         requete = supabase.table(table).select(colonnes).eq("statut_vectorisation", "en_attente")
         if filtre_niveau:
@@ -620,7 +681,23 @@ def _traiter_lot(table: str, colonnes: str, table_chunks: str, fonction_vectoris
         fichier_id = ligne["id"]
         maintenant_iso = datetime.now(timezone.utc).isoformat()
         try:
-            supabase.table(table).update({"statut_vectorisation": "en_cours"}).eq("id", fichier_id).execute()
+            prise = (
+                supabase.table(table)
+                .update({
+                    "statut_vectorisation": "en_cours",
+                    "derniere_tentative_vectorisation_a": maintenant_iso,
+                })
+                .eq("id", fichier_id)
+                .eq("statut_vectorisation", "en_attente")
+                .select("id")
+                .execute()
+            )
+        except Exception as e:
+            logging.error(f"ERREUR réservation vectorisation ({table}, fichier_id={fichier_id}) : {e}")
+            continue
+        if not prise.data:
+            continue
+        try:
             fonction_vectorisation(ligne)
             # 15/09/2026 : voir _a_produit_des_chunks ci-dessus. Un
             # succès sans chunk n'est PAS un succès : on le traite
