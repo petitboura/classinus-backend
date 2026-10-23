@@ -42,10 +42,10 @@ def _content_type(chemin_fichier: str) -> str:
     return type_devine or "text/plain"
 
 
-def generer_zip_depuis_fichiers(nom_projet: str, fichiers: dict[str, str]) -> str:
+def generer_zip_depuis_fichiers(nom_projet: str, fichiers: dict[str, str | bytes], toujours_zip: bool = False) -> str:
     """
-    `fichiers` : dictionnaire {chemin_relatif: contenu_texte}, ex.
-    {"main.py": "print('hello')", "README.md": "# Mon projet"}.
+    `fichiers` : dictionnaire {chemin_relatif: contenu}, en texte ou octets.
+    Exemple : {"main.py": "print('hello')", "data.csv": b"a,b\\n1,2"}.
 
     Un seul fichier -> upload direct (PAS de zip) : Bourama a remonté en
     test réel qu'un fichier .py seul était forcé dans une archive .zip,
@@ -57,15 +57,16 @@ def generer_zip_depuis_fichiers(nom_projet: str, fichiers: dict[str, str]) -> st
     d'erreur que generation_documents.py : les exceptions remontent
     telles quelles.
     """
-    if len(fichiers) == 1:
+    if len(fichiers) == 1 and not toujours_zip:
         chemin_fichier, contenu = next(iter(fichiers.items()))
         # CORRECTIF 2026-07-30 (audit sécurité, voir securite_chemins.py) :
         # chemin_fichier vient du modèle, jamais vérifié auparavant.
         chemin_fichier = chemin_relatif_sur(chemin_fichier, repli="fichier.txt")
         chemin_stockage = f"code/{uuid.uuid4()}-{chemin_fichier}"
+        contenu_octets = contenu.encode("utf-8") if isinstance(contenu, str) else bytes(contenu)
         try:
             stockage_r2.from_(BUCKET).upload(
-                chemin_stockage, contenu.encode("utf-8"), {"content-type": _content_type(chemin_fichier)}
+                chemin_stockage, contenu_octets, {"content-type": _content_type(chemin_fichier)}
             )
         except Exception as e:
             logging.error(f"ERREUR SUPABASE STORAGE (upload code {chemin_stockage}) : {e}")
@@ -78,7 +79,8 @@ def generer_zip_depuis_fichiers(nom_projet: str, fichiers: dict[str, str]) -> st
             # CORRECTIF 2026-07-30 (audit sécurité) : sans ça, un chemin du
             # type "../../../etc/cron.d/x" s'écrivait tel quel dans le zip
             # (zip-slip à l'extraction chez la personne qui le télécharge).
-            archive.writestr(chemin_relatif_sur(chemin_fichier), contenu)
+            contenu_octets = contenu.encode("utf-8") if isinstance(contenu, str) else bytes(contenu)
+            archive.writestr(chemin_relatif_sur(chemin_fichier), contenu_octets)
     tampon.seek(0)
 
     chemin_stockage = f"code/{uuid.uuid4()}-{nom_projet}.zip"

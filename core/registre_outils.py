@@ -83,6 +83,21 @@ def _url_github(get_secret, user_id, agent_id, conversation_id=None):
     return url
 
 
+def _url_execution_code(get_secret, user_id, agent_id, conversation_id=None):
+    from urllib.parse import urlencode
+
+    port = os.environ.get("PORT", "8000")
+    params = {"user_id": user_id}
+    if conversation_id:
+        params["conversation_id"] = conversation_id
+    return f"http://localhost:{port}/mcp/execution-code?{urlencode(params)}"
+
+
+def _headers_execution_code(get_secret, user_id, agent_id):
+    secret = get_secret("SUPABASE_SECRET")
+    return {"X-Classinus-Internal": secret} if secret else None
+
+
 def _url_tavily(get_secret, user_id, agent_id, conversation_id=None):
     # 04/10/2026, demande Bourama : la cle n'est plus dans l'URL (elle
     # apparaissait en clair dans les logs Railway a chaque requete). Elle
@@ -226,6 +241,12 @@ SERVEURS_MCP = [
         # _outils_generation_actifs_pour_agent. Ce serveur est TOUJOURS
         # interroge (voir lister_tous_les_outils), contrairement a
         # wolfram/github/notion qui dependent de agents_serveurs.
+    },
+    {
+        "nom": "execution_code",
+        "url_builder": _url_execution_code,
+        "headers_builder": _headers_execution_code,
+        "necessite_utilisateur": True,
     },
     {
         "nom": "github",
@@ -518,6 +539,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "generer_document_powerpoint": {"label": "Génération d'un PowerPoint", "icone": "Presentation", "onglet": "generer"},
     "generer_document_latex": {"label": "Génération d'un document LaTeX", "icone": "FileDigit", "onglet": "generer"},
     "generer_code": {"label": "Génération de code", "icone": "Code", "onglet": "generer"},
+    "gerer_execution_code": {"label": "Exécution de code", "icone": "Play", "onglet": "generer"},
     "generer_site_zip": {"label": "Génération d'un site (zip)", "icone": "Package", "onglet": "generer"},
     "generer_bundle": {"label": "Génération d'une archive", "icone": "Archive", "onglet": "generer"},
     "generer_image": {"label": "Génération d'une image", "icone": "Image", "onglet": "generer"},
@@ -998,7 +1020,7 @@ CATEGORIES_OUTILS = {
     "generation_documents": [
         "generer_document", "generer_document_word", "generer_document_excel",
         "generer_document_powerpoint", "generer_document_latex", "generer_code",
-        "generer_site_zip", "generer_bundle", "generer_image", "deployer_site",
+        "gerer_execution_code", "generer_site_zip", "generer_bundle", "generer_image", "deployer_site",
         "exporter_donnees", "calculer_symbolique",
     ],
     # rechercher_image range ici (avec Tavily), pas dans generation_documents :
