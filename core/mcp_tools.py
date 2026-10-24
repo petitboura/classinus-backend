@@ -327,25 +327,13 @@ async def _appeler_outil_async(url, nom_outil, arguments, headers=None):
     return ""
 
 
-def _execution_code_autorise_pour_utilisateur(user_id) -> bool:
-    """Le serveur d'exécution n'est jamais proposé à un mineur ou sans profil lisible."""
-    if not user_id:
-        return False
-    try:
-        resultat = (
-            _supabase.table("profiles")
-            .select("est_majeur")
-            .eq("user_id", user_id)
-            .maybe_single()
-            .execute()
-        )
-    except Exception as e:
-        logging.error("ERREUR vérification accès exécution code: %s", type(e).__name__)
-        return False
-    if not resultat or not resultat.data:
-        return False
-    # Le sandbox est plus restrictif que le chat : seule la valeur True explicite l'autorise.
-    return resultat.data.get("est_majeur") is True
+def _raison_execution_code_masque(conversation_id):
+    """Pourquoi le serveur d'exécution de code n'est pas proposé (None s'il l'est)."""
+    if not os.environ.get("E2B_API_KEY"):
+        return "la variable E2B_API_KEY est absente du serveur"
+    if not conversation_id:
+        return "aucune conversation identifiée pour cette demande"
+    return None
 
 
 def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, conversation_id=None, origine=None):
@@ -394,14 +382,13 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
         s for s in SERVEURS_MCP
         if s["nom"] == "generation" or s["nom"] in noms_serveurs_actifs
     ]
-    # L'exécution de code est une capacité adulte uniquement. Le garde-fou est appliqué
-    # au catalogue avant même d'envoyer le schéma au modèle; le serveur re-vérifie aussi.
-    if "execution_code" in noms_serveurs_actifs and (
-        not os.environ.get("E2B_API_KEY")
-        or not conversation_id
-        or not _execution_code_autorise_pour_utilisateur(user_id)
-    ):
-        serveurs_actifs = [s for s in serveurs_actifs if s["nom"] != "execution_code"]
+    # L'exécution de code n'est proposée que si le serveur est configuré (clé E2B) et
+    # rattachée à une conversation. Quand elle est masquée, le journal dit pourquoi.
+    if "execution_code" in noms_serveurs_actifs:
+        raison_masquage = _raison_execution_code_masque(conversation_id)
+        if raison_masquage:
+            logging.warning(f"Outil d'exécution de code non proposé : {raison_masquage}.")
+            serveurs_actifs = [s for s in serveurs_actifs if s["nom"] != "execution_code"]
 
     logging.info(
         f"Serveurs MCP actifs : {noms_serveurs_actifs or '(aucun)'} "

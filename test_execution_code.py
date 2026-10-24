@@ -1,6 +1,8 @@
 """Tests hors ligne des protections et commandes de l'outil E2B."""
 
 import asyncio
+import os
+import sys
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -15,9 +17,11 @@ from core.outils_execution_code import (
     _options_reseau,
     _resultat_commande,
     _taille_fichier,
-    _utilisateur_autorise,
     mcp_execution_code,
 )
+# Les modules de core/ s'importent entre eux sans préfixe au lancement du serveur.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "core"))
+from mcp_tools import _raison_execution_code_masque  # noqa: E402
 
 
 def _echec(stdout="", exit_code=1):
@@ -71,35 +75,20 @@ class TestSortieBorne(unittest.TestCase):
         self.assertLessEqual(len(resultat), 1000)
 
 
-class TestAutorisationMajorite(unittest.TestCase):
-    def _client_avec_profil(self, profil):
-        client = MagicMock()
-        resultat = (
-            client.table.return_value.select.return_value.eq.return_value
-            .maybe_single.return_value.execute.return_value
-        )
-        resultat.data = profil
-        return client
+class TestOutilProposeAuModele(unittest.TestCase):
+    """L'outil n'est plus lié à la majorité du compte, seulement à la clé E2B et à la conversation."""
 
-    def test_seul_majeur_explicitement_confirme_est_autorise(self):
-        for valeur, attendu in ((True, True), (False, False), (None, False)):
-            with self.subTest(est_majeur=valeur):
-                client = self._client_avec_profil({"est_majeur": valeur})
-                with patch("core.outils_execution_code._client_supabase", return_value=client):
-                    self.assertEqual(_utilisateur_autorise("utilisateur-test"), attendu)
+    def test_masque_sans_cle_e2b_avec_une_raison_claire(self):
+        with patch.dict("os.environ", {}, clear=True):
+            self.assertIn("E2B_API_KEY", _raison_execution_code_masque("conv-1"))
 
-    def test_profil_absent_est_refuse(self):
-        client = self._client_avec_profil(None)
-        with patch("core.outils_execution_code._client_supabase", return_value=client):
-            self.assertFalse(_utilisateur_autorise("utilisateur-test"))
+    def test_masque_sans_conversation(self):
+        with patch.dict("os.environ", {"E2B_API_KEY": "cle-test"}, clear=True):
+            self.assertIn("conversation", _raison_execution_code_masque(None))
 
-    def test_erreur_base_est_refusee(self):
-        client = MagicMock()
-        client.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.side_effect = RuntimeError(
-            "database unavailable"
-        )
-        with patch("core.outils_execution_code._client_supabase", return_value=client):
-            self.assertFalse(_utilisateur_autorise("utilisateur-test"))
+    def test_propose_sans_aucune_verification_de_majorite(self):
+        with patch.dict("os.environ", {"E2B_API_KEY": "cle-test"}, clear=True):
+            self.assertIsNone(_raison_execution_code_masque("conv-1"))
 
 
 class TestReseau(unittest.TestCase):
