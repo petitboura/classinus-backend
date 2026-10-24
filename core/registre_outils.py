@@ -1041,6 +1041,19 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "gerer_dossier_catalogue_public": {"label": "Dossiers publics", "icone": "FolderSymlink", "onglet": None},
     "gerer_comportement_public": {"label": "Skills publics", "icone": "Puzzle", "onglet": None},
     "basculer_etoile_catalogue_public": {"label": "Étoile du catalogue public", "icone": "Bookmark", "onglet": None},
+    # 21/10/2026 (demande Bourama) : outils sans libellé repérés à l'audit. Le
+    # logo de la plateforme joue le rôle du nom, donc aucun nom de plateforme
+    # dans le texte. Higgsfield : les deux outils internes de l'API vidéo ; les
+    # outils du serveur MCP personnel passent par libelle_outil_plateforme.
+    # "appli": le chat affiche alors le vrai logo Higgsfield (nom d'appli
+    # higgsfield_mcp, voir APPLIS_DISPONIBLES côté frontend) et la petite icône
+    # d'action tirée du verbe du nom (lancer, consulter). L'icône lucide reste
+    # le repli si le frontend ne connaît pas cette appli.
+    "lancer_video_higgsfield": {"label": "Génération d'une vidéo", "icone": "Clapperboard", "onglet": None, "appli": "higgsfield_mcp"},
+    "consulter_video_higgsfield": {"label": "Suivi d'une vidéo", "icone": "Film", "onglet": None, "appli": "higgsfield_mcp"},
+    "gerer_programme_catalogue_public": {"label": "Programmes publics", "icone": "GraduationCap", "onglet": None},
+    "ajouter_commentaire_catalogue_public": {"label": "Ajout d'un commentaire public", "icone": "MessageSquarePlus", "onglet": None},
+    "supprimer_commentaire_catalogue_public": {"label": "Suppression d'un commentaire public", "icone": "MessageSquareX", "onglet": None},
     "gerer_session_concentration": {"label": "Concentration", "icone": "Focus", "onglet": None},
     "lire_temps_ecran": {"label": "Lecture du temps d'écran", "icone": "Smartphone", "onglet": None},
     "planifier_rappel": {"label": "Planification d'un rappel", "icone": "BellRing", "onglet": None},
@@ -1132,6 +1145,30 @@ def verbe_de_action(texte):
     for mot in texte.replace("-", "_").split("_"):
         if mot in VERBES_ACTIONS:
             return mot
+    return None
+
+
+def libelle_outil_plateforme(nom_outil):
+    """
+    Libellé lisible d'un outil d'un serveur MCP personnel (Higgsfield, Vercel,
+    Railway, Supabase) absent du registre (21/10/2026, demande Bourama). Leur
+    catalogue compte des centaines d'outils qui changent souvent : le texte est
+    donc composé à partir du nom réel, sans le préfixe de la plateforme puisque
+    son logo joue ce rôle. Exemple : "vercel_list_projects" -> "List projects".
+    Renvoie None si le nom n'a pas le préfixe d'une de ces plateformes ou s'il
+    ne reste rien après le préfixe : l'appelant garde alors son comportement
+    habituel.
+    """
+    if not isinstance(nom_outil, str):
+        return None
+    for prefixe in PREFIXES_SERVEURS_PERSONNELS:
+        if nom_outil.startswith(prefixe):
+            reste = nom_outil[len(prefixe):].replace("-", "_")
+            mots = [mot for mot in reste.split("_") if mot]
+            if not mots:
+                return None
+            texte = " ".join(mots)
+            return texte[0].upper() + texte[1:]
     return None
 
 # --- Categorisation pour demander_outils (19/09/2026, demande Bourama) ---

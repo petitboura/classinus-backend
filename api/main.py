@@ -465,6 +465,14 @@ async def _lifespan(app: FastAPI):
 
 app = FastAPI(title="Classinus API", version="0.1.0", lifespan=_lifespan)
 
+# Plafond de taille totale d'une requete du chat (core/plafond_taille_requete.py) : protege la
+# memoire du serveur, ne touche pas au contenu. Ajoute AVANT les middlewares ci-dessous pour
+# rester plus interne qu'eux : sa reponse 413 recoit ainsi les en-tetes CORS (sinon le navigateur
+# ne montre qu'une erreur reseau) et est traduite selon Accept-Language.
+from core.plafond_taille_requete import PlafondTailleRequete
+from core.plafonds_reglables import TAILLE_MAX_REQUETE_CHAT_MO
+app.add_middleware(PlafondTailleRequete, prefixes=("/api/chat",), taille_max_mo=TAILLE_MAX_REQUETE_CHAT_MO)
+
 # Traduction optionnelle des erreurs HTTP structurées selon Accept-Language ;
 # ne modifie pas les réponses métier ni les flux SSE.
 from core.localisation import MiddlewareLangueErreurs
@@ -725,6 +733,9 @@ ORIGINES_AUTORISEES = [
     # cas où elle serait servie directement au lieu d'être redirigée.
     "https://classinus.com",
     "https://www.classinus.com",
+    # 24/10/2026, demande de Bourama : copie de test (staging). Sans cette ligne,
+    # le navigateur bloque tout appel du site staging.classinus.com vers ce backend.
+    "https://staging.classinus.com",
     # Alias historique conserve comme domaine actif sur le projet Vercel
     # apres son renommage clovis-ai -> classinus (27/09/2026) -- toujours
     # appelable, mais ne correspond plus au nouveau motif ci-dessous donc

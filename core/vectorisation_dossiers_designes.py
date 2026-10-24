@@ -75,6 +75,7 @@ from core import stockage_r2
 
 sys.path.append(os.path.dirname(__file__))
 from embeddings import activer_pause_quota_gemini, decouper_texte, est_en_pause_quota_gemini, est_erreur_quota_gemini, vectoriser  # noqa: E402
+from core.taches_file_attente import recycler_taches_perimees
 from description_multimedia import decrire_image_bibliotheque, transcrire_audio_bibliotheque, transcrire_et_decrire_video_bibliotheque  # noqa: E402
 
 BUCKET_DOSSIERS_DESIGNES = "bibliotheque"  # meme bucket que la bibliotheque perso, sous-dossier "dossiers_designes/" (voir api/dossiers_designes.py)
@@ -295,16 +296,15 @@ def _extraire_texte_pour_extraction(type_mime: str | None, extension: str, conte
 
 
 def remettre_en_attente_bloques() -> None:
-    """Appelee une fois au demarrage du process -- voir docstring de file_attente_vectorisation.py::remettre_en_attente_bloques (meme raison : Railway redeploie a chaque push)."""
-    try:
-        supabase.table("fichiers_dossier_designe").update({"statut_vectorisation": "en_attente"}).eq(
-            "statut_vectorisation", "en_cours"
-        ).execute()
-        supabase.table("fichiers_dossier_designe").update({"statut_extraction_texte": "en_attente"}).eq(
-            "statut_extraction_texte", "en_cours"
-        ).execute()
-    except Exception as e:
-        logging.error(f"ERREUR remise en attente au demarrage (dossiers designes) : {e}")
+    """Reprend uniquement les taches perimees, pas celles d'une autre instance active."""
+    recycler_taches_perimees(
+        supabase, "fichiers_dossier_designe", "statut_vectorisation",
+        "derniere_tentative_vectorisation_a",
+    )
+    recycler_taches_perimees(
+        supabase, "fichiers_dossier_designe", "statut_extraction_texte",
+        "derniere_tentative_vectorisation_a",
+    )
 
 
 COLONNES = "id, user_id, chemin_stockage, nom_fichier, type_mime, tentatives_vectorisation, statut_vectorisation"
@@ -318,6 +318,10 @@ def traiter_extractions_texte_une_fois() -> int:
     (statut_extraction_texte = "en_attente"), AUCUN appel Gemini/Groq donc
     AUCUN coupe-circuit quota ici. Meme garde-fou TAILLE_LOT qu'ailleurs.
     """
+    recycler_taches_perimees(
+        supabase, "fichiers_dossier_designe", "statut_extraction_texte",
+        "derniere_tentative_vectorisation_a",
+    )
     try:
         lignes = (
             supabase.table("fichiers_dossier_designe")
@@ -334,7 +338,23 @@ def traiter_extractions_texte_une_fois() -> int:
     for ligne in lignes:
         fichier_id = ligne["id"]
         try:
-            supabase.table("fichiers_dossier_designe").update({"statut_extraction_texte": "en_cours"}).eq("id", fichier_id).execute()
+            prise = (
+                supabase.table("fichiers_dossier_designe")
+                .update({
+                    "statut_extraction_texte": "en_cours",
+                    "derniere_tentative_vectorisation_a": datetime.now(timezone.utc).isoformat(),
+                })
+                .eq("id", fichier_id)
+                .eq("statut_extraction_texte", "en_attente")
+                .select("id")
+                .execute()
+            )
+        except Exception as e:
+            logging.error(f"ERREUR reservation extraction dossier designe (fichier_id={fichier_id}): {e}")
+            continue
+        if not prise.data:
+            continue
+        try:
             contenu = _telecharger(ligne["chemin_stockage"])
             texte = _extraire_texte_pour_extraction(ligne["type_mime"], _extension(ligne["nom_fichier"]), contenu)
             supabase.table("fichiers_dossier_designe").update({
@@ -394,9 +414,23 @@ def extraire_texte_maintenant(fichier_id: str) -> bool:
         return False
     if ligne.get("statut_extraction_texte") == "fait":
         return True
+    if ligne.get("statut_extraction_texte") != "en_attente":
+        return False
 
     try:
-        supabase.table("fichiers_dossier_designe").update({"statut_extraction_texte": "en_cours"}).eq("id", fichier_id).execute()
+        prise = (
+            supabase.table("fichiers_dossier_designe")
+            .update({
+                "statut_extraction_texte": "en_cours",
+                "derniere_tentative_vectorisation_a": datetime.now(timezone.utc).isoformat(),
+            })
+            .eq("id", fichier_id)
+            .eq("statut_extraction_texte", "en_attente")
+            .select("id")
+            .execute()
+        )
+        if not prise.data:
+            return False
         contenu = _telecharger(ligne["chemin_stockage"])
         texte = _extraire_texte_pour_extraction(ligne["type_mime"], _extension(ligne["nom_fichier"]), contenu)
         supabase.table("fichiers_dossier_designe").update({
@@ -441,13 +475,32 @@ def vectoriser_maintenant(fichier_id: str) -> bool:
         return False
     if ligne.get("statut_vectorisation") == "pret":
         return True
+    statut_initial = ligne.get("statut_vectorisation")
+    if statut_initial == "en_cours" or not statut_initial:
+        return False
 
     if est_en_pause_quota_gemini():
         return False
 
     maintenant_iso = datetime.now(timezone.utc).isoformat()
     try:
-        supabase.table("fichiers_dossier_designe").update({"statut_vectorisation": "en_cours"}).eq("id", fichier_id).execute()
+        prise = (
+            supabase.table("fichiers_dossier_designe")
+            .update({
+                "statut_vectorisation": "en_cours",
+                "derniere_tentative_vectorisation_a": maintenant_iso,
+            })
+            .eq("id", fichier_id)
+            .eq("statut_vectorisation", statut_initial)
+            .select("id")
+            .execute()
+        )
+    except Exception as e:
+        logging.error(f"ERREUR reservation vectorisation dossier designe (fichier_id={fichier_id}): {e}")
+        return False
+    if not prise.data:
+        return False
+    try:
         _vectoriser_fichier(ligne)
         supabase.table("fichiers_dossier_designe").update({
             "statut_vectorisation": "pret",
@@ -487,6 +540,10 @@ def traiter_file_attente_une_fois() -> int:
     """
     if est_en_pause_quota_gemini():
         return 0
+    recycler_taches_perimees(
+        supabase, "fichiers_dossier_designe", "statut_vectorisation",
+        "derniere_tentative_vectorisation_a",
+    )
     try:
         lignes = (
             supabase.table("fichiers_dossier_designe")
@@ -512,7 +569,23 @@ def traiter_file_attente_une_fois() -> int:
         fichier_id = ligne["id"]
         maintenant_iso = datetime.now(timezone.utc).isoformat()
         try:
-            supabase.table("fichiers_dossier_designe").update({"statut_vectorisation": "en_cours"}).eq("id", fichier_id).execute()
+            prise = (
+                supabase.table("fichiers_dossier_designe")
+                .update({
+                    "statut_vectorisation": "en_cours",
+                    "derniere_tentative_vectorisation_a": maintenant_iso,
+                })
+                .eq("id", fichier_id)
+                .eq("statut_vectorisation", "en_attente")
+                .select("id")
+                .execute()
+            )
+        except Exception as e:
+            logging.error(f"ERREUR reservation vectorisation dossier designe (fichier_id={fichier_id}): {e}")
+            continue
+        if not prise.data:
+            continue
+        try:
             _vectoriser_fichier(ligne)
             supabase.table("fichiers_dossier_designe").update({
                 "statut_vectorisation": "pret",

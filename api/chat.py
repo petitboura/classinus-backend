@@ -22,7 +22,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import Dict, List, Optional, Literal
 
 from api.auth import utilisateur_optionnel, supabase
@@ -33,6 +33,7 @@ from core.canal_agent_applicatif import (
 )
 from core.plafond_outils_tour import retirer_plafond_tour
 from core.limitation_debit import limiteur
+from core.plafonds_reglables import PLAFOND_IMAGES_JOINTES, PLAFOND_OUTILS_PAR_MESSAGE, PLAFOND_ZIPS_JOINTS
 from core.restriction_mineur import acces_chat_bloque_pour_mineur
 from main import chat as chat_generateur  # core/main.py:chat()
 from core.libelles_outils_anglais import traduire_libelle_outil
@@ -48,8 +49,8 @@ class OutilHistorique(BaseModel):
     (voir core/historique_outils.py) -- même forme que meta.outils déjà
     sauvegardé pour l'affichage (nomOutil/nomLisible/resultat, sans
     sources/images : inutiles pour le modèle, uniquement pour l'UI)."""
-    nomOutil: str
-    nomLisible: str
+    nomOutil: str = Field(max_length=120)
+    nomLisible: str = Field(max_length=160)
     resultat: str
 
 
@@ -61,7 +62,7 @@ class MessageHistorique(BaseModel):
     # réinjectés au modèle au tour suivant -- voir
     # core/historique_outils.py. Absent/vide pour un message user ou un
     # message assistant sans outil, comportement inchangé dans ce cas.
-    outils: Optional[List[OutilHistorique]] = None
+    outils: Optional[List[OutilHistorique]] = Field(default=None, max_length=PLAFOND_OUTILS_PAR_MESSAGE)
 
 
 class Localisation(BaseModel):
@@ -79,9 +80,9 @@ class EnvoyerMessagePayload(BaseModel):
     # confirmation_requise), seul `reprise` est fourni -- chat_generateur
     # les ignore dans ce cas (voir core/main.py:chat()).
     message: Optional[str] = None
-    agent_id: Optional[str] = None
-    historique: List[MessageHistorique] = []
-    conversation_id: Optional[str] = None
+    agent_id: Optional[str] = Field(default=None, max_length=200)
+    historique: List[MessageHistorique] = Field(default_factory=list)
+    conversation_id: Optional[str] = Field(default=None, max_length=200)
     # Barre de saisie migrée : sélecteur Courte/Moyenne/Longue, modifiable à chaque message.
     longueur_reponse: Literal["courte", "moyenne", "longue"] = "moyenne"
     # Image jointe au message (URL publique renvoyée par
@@ -91,14 +92,14 @@ class EnvoyerMessagePayload(BaseModel):
     # description dans le message avant de continuer normalement vers le
     # grand modèle habituel (chantier "image -> grand modele", 11/09/2026)
     # -- voir le commentaire au-dessus de la branche image_url dans chat().
-    image_url: Optional[str] = None
+    image_url: Optional[str] = Field(default=None, max_length=2048)
     # Correctif 12/09/2026 (Bourama) : plusieurs images jointes au MEME
     # message (ChatIA.tsx envoie ce champ depuis le support multi-fichiers
     # du 17/08, mais il n'existait pas encore ici -- toute image finissait
     # donc silencieusement ignorée par Pydantic et jamais decrite par
     # Gemini). Combinee avec image_url (garde par compatibilite) dans
     # core/main.py:chat().
-    image_urls: Optional[List[str]] = None
+    image_urls: Optional[List[str]] = Field(default=None, max_length=PLAFOND_IMAGES_JOINTES)
     # Position GPS transmise explicitement par l'étudiant via un bouton
     # dédié (jamais capturée automatiquement) -- voir core/main.py:chat(),
     # paramètre localisation, injecté en contexte de prompt système.
@@ -109,12 +110,12 @@ class EnvoyerMessagePayload(BaseModel):
     # Frames JPEG en base64, extraites d'une vidéo uploadée (voir
     # api/uploads.py:uploader_video_chat). Combinable avec image_url mais
     # rarement les deux en même temps en pratique.
-    images_base64: Optional[List[str]] = None
+    images_base64: Optional[List[str]] = Field(default=None, max_length=12)
     # Zip(s) joint(s) au message (26/09/2026, chantier "zip en
     # conversation") : job_id(s) renvoyé(s) par
     # POST /api/uploads/zip-chat/demarrer, appelé DÈS l'upload (avant
     # l'envoi) -- voir core/zip_chat.py et core/main.py:chat().
-    zips_en_attente: Optional[List[str]] = None
+    zips_en_attente: Optional[List[str]] = Field(default=None, max_length=PLAFOND_ZIPS_JOINTS)
     # Icône de recherche web dans la barre de saisie (djiguigne-frontend,
     # 2026-07-23) -- forçage manuel EN PLUS de l'activation automatique
     # déjà possible : le modèle peut de toute façon décider seul
@@ -126,7 +127,7 @@ class EnvoyerMessagePayload(BaseModel):
     # voir core/mcp_tools.py:lister_tous_les_outils) : liste des outils
     # sélectionnés manuellement côté frontend (BarreDeSaisie.tsx), zéro,
     # un ou plusieurs à la fois.
-    outil_force: Optional[List[str]] = None
+    outil_force: Optional[List[str]] = Field(default=None, max_length=30)
     # Bouton "Aucun" à côté des suggestions du routeur (2026-07-31, demande
     # Bourama : le routeur se trompe souvent) -- distinct de outil_force
     # vide/absent : signale explicitement "réponds normalement, ne relance
@@ -199,7 +200,7 @@ class EnvoyerMessagePayload(BaseModel):
     # Vraie question a ranger dans l'historique quand `message` contient en plus des consignes ou du
     # contexte du client (plugin Thonny, 14/10/2026, demande Bourama : sinon le titre de la
     # conversation et son historique montrent les consignes). Absent : `message` est enregistre.
-    message_enregistre: Optional[str] = None
+    message_enregistre: Optional[str] = Field(default=None, max_length=50000)
     # Client qui envoie la requete (14/10/2026, demande Bourama). "thonny" : le prompt systeme
     # n'a plus les consignes d'affichage du site mais celles de Thonny (core/prompt_thonny.py).
     # Absent ou inconnu : comportement inchange. `libelles_client` donne le nom des boutons du
@@ -210,7 +211,15 @@ class EnvoyerMessagePayload(BaseModel):
     # chaque message, jamais devinée par le serveur. Valeurs connues : telephone_appli,
     # telephone_navigateur, pc_navigateur, pc_appli (voir core/origine_appareil.py). Absente ou
     # inconnue : comportement d'avant, rien n'est filtré.
-    origine: Optional[str] = None
+    origine: Optional[str] = Field(default=None, max_length=64)
+
+    @field_validator("images_base64")
+    @classmethod
+    def borner_images_base64(cls, valeurs):
+        """Plafonne la taille cumulée des frames base64 jointes au chat."""
+        if valeurs is not None and sum(len(v) for v in valeurs) > 20 * 1024 * 1024:
+            raise ValueError("Les images jointes dépassent la limite cumulée de 20 Mo.")
+        return valeurs
 
 
 def _resoudre_modele_force(agent_id, modele_demande):
@@ -312,7 +321,9 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
             evenement_affiche = evenement
             if langue_interface == "en" and isinstance(evenement, dict):
                 type_evenement = evenement.get("type")
-                if type_evenement in ("statut", "statut_termine", "outil_resultat", "confirmation_requise"):
+                # Phrase de la timeline écrite par l'IA (23/10/2026) : déjà dans la langue de la
+                # conversation, la table de traduction ne doit pas y toucher.
+                if type_evenement in ("statut", "statut_termine", "outil_resultat", "confirmation_requise") and not evenement.get("libelle_ia"):
                     evenement_affiche = dict(evenement)
                     if isinstance(evenement_affiche.get("nom_lisible"), str):
                         evenement_affiche["nom_lisible"] = traduire_libelle_outil(

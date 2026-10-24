@@ -180,6 +180,15 @@ class Relais(unittest.TestCase):
             r = self._app().get(f"/fichiers/externe/{jeton}/cours.pdf")
         self.assertEqual(r.content, b"")
 
+    def test_signature_repartie_sur_plusieurs_blocs_est_acceptee(self):
+        jeton = rel.creer_jeton("https://exemple.org/cours.pdf", "pdf")
+        amont = _amont()
+        amont.iter_content.side_effect = lambda n: iter([PDF[:2], PDF[2:6], PDF[6:]])
+        with _sans_ssrf(), patch("requests.request", return_value=amont):
+            r = self._app().get(f"/fichiers/externe/{jeton}/cours.pdf")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.content, PDF)
+
     def test_plage_transmise_et_plage_multiple_ignoree(self):
         jeton = rel.creer_jeton("https://exemple.org/cours.pdf", "pdf")
         morceau = PDF[100:200]
@@ -380,6 +389,27 @@ class PlafondEtVideo(unittest.TestCase):
             r = self._app().get(f"/fichiers/externe/{jeton}/livre.epub")
         self.assertEqual(r.headers["content-type"], "application/epub+zip")
         self.assertEqual(r.content, contenu)
+
+    def test_docx_sans_extension_dans_le_lien_est_relaye_en_entier(self):
+        # Regression : la signature de secours des fichiers ZIP etait ecrite avec un antislash en trop,
+        # le relais coupait alors a 0 octet tout fichier Office dont le lien n'a pas d'extension.
+        for taille in (10000, 500):
+            with self.subTest(taille=taille):
+                contenu = b"PK\x03\x04" + b"0" * taille
+                jeton = rel.creer_jeton("https://exemple.org/telecharger", "docx")
+                amont = _amont(contenu=contenu, url="https://exemple.org/telecharger")
+                with _sans_ssrf(), patch("requests.request", return_value=amont):
+                    r = self._app().get(f"/fichiers/externe/{jeton}/document.docx")
+                self.assertEqual(r.status_code, 200)
+                self.assertEqual(len(r.content), len(contenu))
+                self.assertEqual(r.content, contenu)
+
+    def test_docx_sans_extension_refuse_si_ce_nest_pas_un_zip(self):
+        jeton = rel.creer_jeton("https://exemple.org/telecharger", "docx")
+        amont = _amont(contenu=HTML, url="https://exemple.org/telecharger")
+        with _sans_ssrf(), patch("requests.request", return_value=amont):
+            r = self._app().get(f"/fichiers/externe/{jeton}/document.docx")
+        self.assertEqual(r.content, b"")
 
 
 if __name__ == "__main__":

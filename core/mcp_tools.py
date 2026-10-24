@@ -37,6 +37,7 @@ from supabase import create_client, ClientOptions
 from client_http_supabase import nouveau_client_http_supabase
 
 from registre_outils import SERVEURS_MCP
+from libelles_activite_ia import PARAMETRE_LIBELLE_OUTIL, schema_avec_libelle
 
 
 # 21/10/2026 (demande de Bourama) : la liste des outils de Higgsfield dépasse 1 Mo
@@ -427,7 +428,7 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
                         # silencieusement (AttributeError attrape par le except plus
                         # bas) et la liste d'outils envoyee au LLM restait vide, quel
                         # que soit l'outil selectionne via le bouton Outils.
-                        "parameters": _schema_avec_delai(outil.input_schema),
+                        "parameters": schema_avec_libelle(_schema_avec_delai(outil.input_schema)),
                     },
                 })
                 route = {"url": url, "headers": headers}
@@ -535,6 +536,8 @@ def appeler_outil(nom_outil, arguments, table_routage, arret=None):
     """
     arguments = dict(arguments or {})
     delai = _delai_demande(arguments.pop(PARAMETRE_DELAI_OUTIL, None))
+    # Phrase de la timeline (23/10/2026) : réservée à l'affichage, jamais transmise à l'outil.
+    arguments.pop(PARAMETRE_LIBELLE_OUTIL, None)
     logging.info(f"Appel outil demandé par le LLM : {nom_outil}({arguments})")
     route = table_routage.get(nom_outil)
     if not route:

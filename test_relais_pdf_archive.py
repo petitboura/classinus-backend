@@ -122,6 +122,26 @@ class Relais(unittest.TestCase):
         with p1, p2:
             self.assertEqual(self.client.get("/fichiers/archive/livre.pdf").status_code, 502)
 
+    def test_redirection_hors_archive_bloquee_avant_requete_cible(self):
+        redirection = _amont(302, b"", {"Location": "http://127.0.0.1/latest/meta-data"}, url="https://archive.org/download/livre/livre.pdf")
+        p1, p2 = self._simuler(amont=redirection)
+        with p1, p2 as appel:
+            reponse = self.client.get("/fichiers/archive/livre.pdf")
+            self.assertEqual(reponse.status_code, 502)
+            self.assertEqual(appel.call_count, 1, "l'adresse de redirection ne doit jamais être appelée")
+
+    def test_redirection_archive_autorisee_suivie_manuellement(self):
+        redirection = _amont(302, b"", {"Location": "https://ia800.us.archive.org/1/items/livre/livre.pdf"}, url="https://archive.org/download/livre/livre.pdf")
+        finale = _amont(200, PDF, {"Content-Length": str(len(PDF))}, url="https://ia800.us.archive.org/1/items/livre/livre.pdf")
+        p1, _ = self._simuler()
+        with p1, patch.object(rel.requests, "request", side_effect=[redirection, finale]) as appel:
+            reponse = self.client.get("/fichiers/archive/livre.pdf")
+            self.assertEqual(reponse.status_code, 200)
+            self.assertEqual(reponse.content, PDF)
+            self.assertEqual(appel.call_count, 2)
+            self.assertFalse(appel.call_args_list[0].kwargs["allow_redirects"])
+            self.assertFalse(appel.call_args_list[1].kwargs["allow_redirects"])
+
     def test_noms_refuses(self):
         for nom in ("livre", "livre.txt", "..%2Fx.pdf"):
             self.assertIn(self.client.get(f"/fichiers/archive/{nom}").status_code, (404, 422))

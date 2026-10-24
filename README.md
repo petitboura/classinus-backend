@@ -26,6 +26,7 @@ core/
   main.py                      chat() — cascade Groq → Gemini → Groq de secours, assemblage du prompt, outils
   mcp_tools.py                 moteur MCP générique (catalogue d'outils en cache 24h, appel d'outils externes)
   registre_outils.py           registre des outils (bras) MCP actifs
+  domaines_affichage.py        sites visés par un appel d'outil (YouTube, sources de documents, page Tavily), envoyés au chat pour afficher leur logo
   configuration.py             system prompt central de Clovis, chargé depuis Notion, cache 5 min
   proactivite.py               relance des utilisateurs inactifs (boucle en tâche de fond, voir api/main.py)
   comportements_etudiants.py   "Mes comportements" (skills côté UI) : routeur léger qui présente les
@@ -138,6 +139,17 @@ _desactive_programme/          ancien "programme d'études adaptatif" (api/core)
                                 voir LISEZ_MOI_NE_JAMAIS_REUTILISER.md, ne jamais réactiver sans consigne explicite
 ```
 
+## Timeline du chat : phrases écrites par l'IA
+
+Depuis le 23/10/2026, chaque outil proposé à l'IA porte un paramètre optionnel
+`libelle_activite` (voir `core/libelles_activite_ia.py`) : une courte phrase qui dit à
+l'utilisateur ce que l'IA fait, dans la langue de la conversation. Le serveur l'envoie
+dans les événements `statut`, `statut_termine` et `outil_resultat` (avec `libelle_ia: true`),
+sans passer par la table de traduction. Sans phrase valable, le texte fixe habituel
+(`_nom_lisible` dans `core/profils_agents.py`) s'affiche comme avant. Le paramètre n'est
+jamais transmis à l'outil, ne compte pas dans la détection d'appels répétés, et les
+confirmations d'actions sensibles gardent le texte fixe.
+
 ## Outils MCP externes : libellés de recherche
 
 Le 10/09/2026, la recherche interne d'outils (`core/recherche_outils.py`,
@@ -247,6 +259,9 @@ Pour vérifier chaque fournisseur avec ses vraies clés (texte, appel d'outil al
 | `CLASSINUS_PC_ACTIONS_CONTROLEES` / `CLASSINUS_PC_APPLICATIONS_SENSIBLES` / `CLASSINUS_PC_MOTS_TITRE_SENSIBLES` / `CLASSINUS_PC_MESSAGE_RISQUE` / `CLASSINUS_PC_MESSAGE_RISQUE_ACTION` | même fichier — conditions et textes du bloc d'autorisation (listes séparées par des virgules), lus seulement quand `CLASSINUS_PC_AUTORISATION_ACTIVE` vaut `true`. Facultatives : valeurs de départ dans le code (actions `lire,ecrire,ouvrir,cliquer`), textes absents = texte de secours de l'application PC |
 | `CLASSINUS_PC_APPLICATIONS_PROTEGEES` / `CLASSINUS_PC_DELAI_AUTORISATION_MS` | même fichier — programmes Windows pour lesquels taper au clavier ou ouvrir demande l'accord de l'étudiant (liste de départ dans le code), et durée de l'attente de cet accord (60000 ms par défaut) |
 | `CLASSINUS_PC_DELAI_APRES_CLIC_S` / `CLASSINUS_PC_DELAI_APRES_CLAVIER_S` / `CLASSINUS_PC_DELAI_APRES_OUVERTURE_S` | même fichier — secondes d'attente avant que le backend relise l'écran après un clic (0.8), une frappe (0.5) ou l'ouverture d'une application (2.0) |
+| `CLASSINUS_CHAT_MAX_OUTILS_PAR_MESSAGE` / `CLASSINUS_CHAT_MAX_IMAGES_JOINTES` / `CLASSINUS_CHAT_MAX_ZIPS_JOINTS` | `core/plafonds_reglables.py`, lus par `api/chat.py` — nombre maximum d'outils par message de l'historique (50 par défaut), d'images jointes (30) et de fichiers ZIP joints (20) pour une requête du chat. Facultatives ; une valeur absente, non numérique ou ≤ 0 retombe sur la valeur par défaut |
+| `CLASSINUS_CHAT_TAILLE_MAX_REQUETE_MO` | `core/plafond_taille_requete.py`, branché dans `api/main.py` — taille totale maximale d'une requête vers `/api/chat`, en Mo (100 par défaut). Au-delà : erreur 413 `REQUETE_TROP_VOLUMINEUSE`, sans lire la requête quand son `Content-Length` est déjà trop grand. Protège la mémoire du serveur, jamais le contenu |
+| `CLASSINUS_TACHE_PERIMEE_HEURES` | `core/taches_file_attente.py` — au bout de combien d'heures une tâche d'arrière-plan restée « en cours » est considérée abandonnée et remise en attente (2 par défaut) |
 
 Détail complet, variables obsolètes et checklist Railway : voir
 `RAILWAY_DEPLOY.md`.
