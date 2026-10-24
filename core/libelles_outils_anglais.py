@@ -37,6 +37,11 @@ LIBELLES_OUTILS_EN: dict[str, str] = {
     "Recherche de document": "Document search",
     "Lecture d'un document": "Read a document",
     "Lecture d'un fichier externe": "Read an external file",
+    "Génération d'une vidéo": "Generate a video",
+    "Suivi d'une vidéo": "Video status",
+    "Programmes publics": "Public programs",
+    "Ajout d'un commentaire public": "Add a public comment",
+    "Suppression d'un commentaire public": "Delete a public comment",
     "Ma bibliothèque": "My library",
     "Fichiers du chat": "Chat files",
     "Catalogue public": "Public catalog",
@@ -201,6 +206,10 @@ def _base_vers_anglais(texte: str) -> str:
     exact = STATUTS_EN.get(texte) or LIBELLES_OUTILS_EN.get(texte) or VERBES_STATUT_EN.get(texte)
     if exact:
         return exact
+    plateforme = re.fullmatch(r"(Action sur|Consultation de)\s+(.+)", texte)
+    if plateforme:
+        debut, nom = plateforme.groups()
+        return f"Action on {nom}" if debut == "Action sur" else f"Viewing {nom}"
     composite = re.fullmatch(r"(.+?)\s+\((.+)\)", texte)
     if composite:
         verbe, libelle = composite.groups()

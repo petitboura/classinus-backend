@@ -7,18 +7,17 @@ coûteux (chat, génération de contenu), ce qui pourrait faire exploser la
 facture des APIs externes (Groq, Gemini, etc.) ou saturer le serveur.
 
 Clé de comptage :
-- Si la requête porte un token Supabase valide -> on limite par
-  utilisateur (son id), pas par IP. Ça évite qu'un réseau partagé
-  (ex: plusieurs élèves sur le wifi d'un lycée) ne partage une même
-  limite par erreur.
-- Sinon (visiteur anonyme, ex: chat public) -> on limite par IP.
+- Token Supabase valide : limite par utilisateur.
+- Sinon : limite par IP.
 
-Ce fichier ne contient QUE la configuration du limiteur. Les limites
-précises par endpoint sont posées directement sur chaque route via le
-décorateur @limiteur.limit(...).
+En production multi-instance, définir RATE_LIMIT_STORAGE_URI vers un
+stockage partagé (par exemple Redis) afin que les compteurs soient
+cohérents entre les instances. Sans cette variable, le stockage mémoire
+reste le mode de repli pour préserver les déploiements existants.
 """
 
 import logging
+import os
 
 from fastapi import Request
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -27,16 +26,8 @@ from slowapi.util import get_remote_address
 
 def _cle_limitation(request: Request) -> str:
     """
-    Détermine la clé de comptage pour une requête donnée.
-
-    On essaie de résoudre l'utilisateur directement depuis le token
-    Supabase de l'en-tête Authorization (indépendamment de la logique
-    d'auth propre à chaque route, pour ne pas dépendre de l'ordre
-    d'exécution des dépendances FastAPI). Si absent ou invalide -> IP.
-
-    Le résultat est mis en cache sur request.state pour ne faire cet
-    appel qu'une seule fois même si plusieurs limites s'appliquent à la
-    même requête.
+    Détermine la clé de comptage. Réutilise l'identité déjà authentifiée
+    par une dépendance FastAPI sur cette requête, sinon vérifie le token.
     """
     if hasattr(request.state, "_cle_limitation_cache"):
         return request.state._cle_limitation_cache
@@ -46,16 +37,26 @@ def _cle_limitation(request: Request) -> str:
     if authorization.startswith("Bearer "):
         token = authorization.removeprefix("Bearer ").strip()
         if token:
-            try:
-                from api.auth import supabase  # import tardif : évite un cycle avec api.auth
+            utilisateur_cache = (
+                getattr(request.state, "_utilisateur_supabase_verifie", None)
+                if getattr(request.state, "_token_supabase_verifie", None) == token
+                else None
+            )
+            if utilisateur_cache is not None:
+                cle = f"user:{utilisateur_cache.id}"
+            else:
+                try:
+                    from api.auth import supabase  # import tardif : évite un cycle avec api.auth
 
-                reponse = supabase.auth.get_user(token)
-                if reponse and reponse.user:
-                    cle = f"user:{reponse.user.id}"
-            except Exception:
-                # Token invalide/expiré : on retombe simplement sur l'IP,
-                # la 401 sera de toute façon levée plus loin par la route.
-                pass
+                    reponse = supabase.auth.get_user(token)
+                    if reponse and reponse.user:
+                        cle = f"user:{reponse.user.id}"
+                        request.state._token_supabase_verifie = token
+                        request.state._utilisateur_supabase_verifie = reponse.user
+                except Exception:
+                    # Token invalide/expire : repli sur l'IP ; la route protegee
+                    # renverra ensuite une 401.
+                    pass
 
     if cle is None:
         cle = f"ip:{get_remote_address(request)}"
@@ -64,14 +65,23 @@ def _cle_limitation(request: Request) -> str:
     return cle
 
 
-limiteur = Limiter(key_func=_cle_limitation)
+_storage_uri = os.environ.get("RATE_LIMIT_STORAGE_URI")
+if not _storage_uri and (os.environ.get("RAILWAY_SERVICE_ID") or os.environ.get("RAILWAY_ENVIRONMENT_NAME")):
+    logging.warning(
+        "RATE_LIMIT_STORAGE_URI absent en production : le limiteur utilise "
+        "un stockage memoire propre a chaque processus. Configurez un stockage "
+        "partage (ex. Redis) pour une limitation coherente entre instances."
+    )
+
+limiteur = Limiter(
+    key_func=_cle_limitation,
+    storage_uri=_storage_uri or "memory://",
+)
 
 
 def gestionnaire_limite_depassee(request: Request, exc):
     """
-    Gestionnaire d'exception pour un dépassement de limite : journalise
-    (pour repérer les abus/patterns suspects) puis renvoie la réponse
-    429 standard de slowapi.
+    Journalise les depassements puis renvoie la reponse 429 standard.
     """
     logging.warning(
         f"RATE LIMIT depasse -- cle={_cle_limitation(request)} "

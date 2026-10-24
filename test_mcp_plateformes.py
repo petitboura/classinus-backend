@@ -149,5 +149,59 @@ class TestAppelAvecVraiNom(unittest.TestCase):
         self.assertEqual(appels, ["get_project"])
 
 
+class TestLibelleOutilPlateforme(unittest.TestCase):
+    def test_le_nom_devient_un_texte_sans_nom_de_plateforme(self):
+        self.assertEqual(r.libelle_outil_plateforme("vercel_list_projects"), "List projects")
+        self.assertEqual(r.libelle_outil_plateforme("railway_list-services"), "List services")
+        self.assertEqual(r.libelle_outil_plateforme("supabase_execute_sql"), "Execute sql")
+        self.assertEqual(r.libelle_outil_plateforme("higgsfield_generate_image"), "Generate image")
+
+    def test_hors_plateformes_ou_nom_vide_renvoie_none(self):
+        for nom in ("notion-search", "tavily_search", "lire_page", "vercel_", "railway__", None, 42):
+            self.assertIsNone(r.libelle_outil_plateforme(nom), repr(nom))
+
+    def test_aucun_libelle_compose_ne_contient_un_tiret_double(self):
+        double = "-" * 2
+        for nom in ("vercel_get-project", "railway_get" + double + "logs"):
+            self.assertNotIn(double, r.libelle_outil_plateforme(nom))
+
+
+class TestLibellesManuelsAjoutes(unittest.TestCase):
+    OUTILS = (
+        "lancer_video_higgsfield", "consulter_video_higgsfield", "gerer_programme_catalogue_public",
+        "ajouter_commentaire_catalogue_public", "supprimer_commentaire_catalogue_public",
+    )
+
+    def test_chaque_outil_a_un_libelle_et_une_icone(self):
+        for nom in self.OUTILS:
+            entree = r.REGISTRE_AFFICHAGE_OUTILS[nom]
+            self.assertTrue(entree["label"], nom)
+            self.assertTrue(entree["icone"], nom)
+
+    def test_aucun_libelle_ne_nomme_la_plateforme_ni_ne_contient_de_tiret_double(self):
+        for nom in self.OUTILS:
+            label = r.REGISTRE_AFFICHAGE_OUTILS[nom]["label"]
+            self.assertNotIn("higgsfield", label.lower(), nom)
+            self.assertNotIn("-" * 2, label, nom)
+
+    def test_les_outils_higgsfield_portent_l_appli_du_logo(self):
+        noms_applis = {s["nom"] for s in r.SERVEURS_MCP}
+        for nom in ("lancer_video_higgsfield", "consulter_video_higgsfield"):
+            appli = r.REGISTRE_AFFICHAGE_OUTILS[nom]["appli"]
+            self.assertEqual(appli, "higgsfield_mcp", nom)
+            self.assertIn(appli, noms_applis, nom)
+
+    def test_les_deux_outils_video_ont_des_libelles_distincts(self):
+        self.assertNotEqual(
+            r.REGISTRE_AFFICHAGE_OUTILS["lancer_video_higgsfield"]["label"],
+            r.REGISTRE_AFFICHAGE_OUTILS["consulter_video_higgsfield"]["label"],
+        )
+
+    def test_chaque_libelle_a_sa_traduction_anglaise(self):
+        from core.libelles_outils_anglais import LIBELLES_OUTILS_EN
+        for nom in self.OUTILS:
+            self.assertIn(r.REGISTRE_AFFICHAGE_OUTILS[nom]["label"], LIBELLES_OUTILS_EN, nom)
+
+
 if __name__ == "__main__":
     unittest.main()

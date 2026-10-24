@@ -15,7 +15,7 @@ forme), pas une simple substitution de colonne dans la requête.
 import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -200,6 +200,10 @@ class MonStatutReponse(BaseModel):
     # sur DeepSeek Flash). Un id absent de la liste de l'agent est ignoré par
     # le frontend, et revalidé côté serveur à chaque envoi (api/chat.py).
     modele_prefere: Optional[str] = None
+    # 22/10/2026, demande Bourama : langue de l'interface choisie à la création
+    # du compte puis modifiable dans Paramètres ("fr" ou "en"). None = jamais
+    # choisie (le frontend garde alors la langue de l'appareil et l'enregistre).
+    langue_interface: Optional[str] = None
 
 
 @router.get("/moi/statut", response_model=MonStatutReponse)
@@ -209,7 +213,7 @@ def mon_statut(utilisateur=Depends(utilisateur_courant)):
             supabase.table("profiles")
             .select(
                 "est_createur, est_majeur, est_professeur, "
-                "langue_cible_erreurs, traduction_auto_erreurs, modele_prefere"
+                "langue_cible_erreurs, traduction_auto_erreurs, modele_prefere, langue_interface"
             )
             .eq("user_id", utilisateur.id)
             .maybe_single()
@@ -225,6 +229,9 @@ def mon_statut(utilisateur=Depends(utilisateur_courant)):
     langue_cible_erreurs = donnees.get("langue_cible_erreurs")
     traduction_auto_erreurs = donnees.get("traduction_auto_erreurs")
     modele_prefere = donnees.get("modele_prefere")
+    langue_interface = donnees.get("langue_interface")
+    if langue_interface not in ("fr", "en"):
+        langue_interface = None
 
     agents_administres = _agents_administres_de(utilisateur.id)
 
@@ -236,6 +243,7 @@ def mon_statut(utilisateur=Depends(utilisateur_courant)):
         langue_cible_erreurs=langue_cible_erreurs,
         traduction_auto_erreurs=traduction_auto_erreurs,
         modele_prefere=modele_prefere,
+        langue_interface=langue_interface,
     )
 
 
@@ -407,6 +415,9 @@ class MettreAJourProfilPayload(BaseModel):
     # 15/10/2026, voir MonStatutReponse.modele_prefere. None = champ omis,
     # ne rien changer.
     modele_prefere: Optional[str] = Field(default=None, max_length=100)
+    # 22/10/2026, voir MonStatutReponse.langue_interface. None = champ omis,
+    # ne rien changer. Seules "fr" et "en" sont acceptées.
+    langue_interface: Optional[Literal["fr", "en"]] = None
 
 
 @router.patch("/me", response_model=ProfilPublic)
@@ -480,6 +491,8 @@ def mettre_a_jour_mon_profil(
         ligne["traduction_auto_erreurs"] = payload.traduction_auto_erreurs
     if payload.modele_prefere is not None:
         ligne["modele_prefere"] = payload.modele_prefere.strip() or None
+    if payload.langue_interface is not None:
+        ligne["langue_interface"] = payload.langue_interface
 
     try:
         deja_existant = (

@@ -57,7 +57,7 @@ from moderation_message import _verifier_message_utilisateur
 from filtre_texte_streaming import _ressemble_a_du_json_casse  # réexporté pour core/proactivite.py (05/09/2026)
 from lecture_urls_externes import _construire_parts_gemini, _enrichir_message_avec_urls, _telecharger_image
 from ocr_pages_scannees import ocr_tesseract_image_fiable
-from profils_agents import _nom_agent, _nom_lisible, _nom_lisible_appel, _action_appel
+from profils_agents import _nom_agent, _nom_lisible, _nom_lisible_appel, _action_appel, _champs_domaines_appel
 from routage_outils import (
     _ecrire_outils_retenus, _lire_outils_retenus, _outil_garder_outils, _router_outils,
     _preparer_demander_outils, _catalogue_pour_demander_outils, _outils_memoire_toujours_disponibles,
@@ -463,6 +463,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 "nom_outil": appel["name"],
                 "nom_lisible": _nom_lisible_appel(appel),
                 "action": _action_appel(appel),
+                **_champs_domaines_appel(appel),
             }
             try:
                 arguments = json.loads(appel["arguments"] or "{}")
@@ -476,7 +477,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # rien n'était renvoyé à la personne, pas même une erreur générique.
             deja_ajoute_a_messages_agent = False
             try:
-                resultat = appeler_outil(appel["name"], arguments, table_routage)
+                resultat = appeler_outil(appel["name"], arguments, table_routage, arret=arret_tour)
             except Exception as e:
                 logging.error(f"ERREUR OUTIL APPROUVÉ ({appel['name']}) : {e}")
                 resultat = f"Erreur : {_nom_lisible_appel(appel)} a échoué ({e})."
@@ -486,6 +487,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     "nom_outil": appel["name"],
                     "nom_lisible": _nom_lisible_appel(appel),
                     "action": _action_appel(appel),
+                    **_champs_domaines_appel(appel),
                     "resultat": resultat,
                     "id_appel": appel["id"],
                 }
@@ -502,6 +504,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     "nom_outil": appel["name"],
                     "nom_lisible": _nom_lisible_appel(appel),
                     "action": _action_appel(appel),
+                    **_champs_domaines_appel(appel),
                     "resultat": _resultat_pour_affichage(resultat),
                     "id_appel": appel["id"],
                 }

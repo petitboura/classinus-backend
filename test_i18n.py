@@ -163,6 +163,11 @@ class TestLocalisation(unittest.TestCase):
     def test_libelle_outil_est_traduit(self):
         self.assertEqual(traduire_libelle_outil("Recherche web"), "Web search")
 
+    def test_libelle_outil_plateforme_est_traduit(self):
+        self.assertEqual(traduire_libelle_outil("Action sur Vercel"), "Action on Vercel")
+        self.assertEqual(traduire_libelle_outil("Consultation de Railway"), "Viewing Railway")
+        self.assertEqual(traduire_libelle_outil("Action sur Supabase annulée"), "Action on Supabase canceled")
+
     def test_statut_dynamique_est_traduit(self):
         self.assertEqual(traduire_libelle_outil("Recherche web..."), "Web search...")
         self.assertEqual(
