@@ -273,5 +273,142 @@ class TestSkills(unittest.TestCase):
             self.assertNotIn(" -- ", MESSAGES_FR[code] + MESSAGES_EN[code])
 
 
+def faire_zip(fichiers, nom="mon-skill.zip", chiffre=None):
+    """Construit un zip en mémoire et renvoie un faux UploadFile."""
+    import io
+    import zipfile
+    tampon = io.BytesIO()
+    with zipfile.ZipFile(tampon, "w", zipfile.ZIP_DEFLATED) as z:
+        for chemin, contenu in fichiers:
+            z.writestr(zipfile.ZipInfo(chemin), contenu)
+    octets = bytearray(tampon.getvalue())
+    if chiffre:
+        # La bibliothèque efface ce drapeau à l'écriture : on le pose dans les octets,
+        # dans l'en-tête local (PK 03 04, drapeau à +6) et central (PK 01 02, drapeau à +8).
+        cible = chiffre.encode()
+        for signature, decalage_drapeau, decalage_nom in ((b"PK\x03\x04", 6, 30), (b"PK\x01\x02", 8, 46)):
+            debut = 0
+            while (debut := octets.find(signature, debut)) != -1:
+                if octets[debut + decalage_nom:debut + decalage_nom + len(cible)] == cible:
+                    octets[debut + decalage_drapeau] |= 0x1
+                debut += 4
+    return SimpleNamespace(file=io.BytesIO(bytes(octets)), filename=nom)
+
+
+class TestImportZip(unittest.TestCase):
+    def setUp(self):
+        for faux in (mock.patch.object(S, "supabase", base), mock.patch.object(S, "stockage_r2", _stock)):
+            faux.start()
+            self.addCleanup(faux.stop)
+        r2.objets.clear(); r2.echec_upload_sur = None
+        base.tables.clear(); base.echec_sur = None
+
+    def code(self, upload):
+        with self.assertRaises(HTTPException) as e:
+            S.importer_zip(upload, U)
+        self.assertEqual(base.tables.get("skills", []), [], "un zip refusé ne doit rien créer")
+        self.assertEqual(r2.objets, {}, "un zip refusé ne doit rien envoyer dans R2")
+        return e.exception.detail["code"]
+
+    def lus(self, skill):
+        return {f["chemin"]: f["contenu"] for f in S.obtenir(skill["id"], U)["fichiers"]}
+
+    def test_zip_a_la_racine_cree_le_skill_avec_ses_fichiers(self):
+        s = S.importer_zip(faire_zip([("SKILL.md", '---\nname: Maths\ndescription: Aide en maths\n---\nCorps'), ("ref/a.md", "A")]), U)
+        self.assertEqual((s["nom"], s["description"]), ("Maths", "Aide en maths"))
+        lus = self.lus(s)
+        self.assertEqual(set(lus), {"SKILL.md", "ref/a.md"})
+        self.assertIn("Corps", lus["SKILL.md"])
+
+    def test_dossier_principal_retire(self):
+        s = S.importer_zip(faire_zip([("mon-skill/SKILL.md", "---\nname: X\n---\nt"), ("mon-skill/sous/b.md", "B")]), U)
+        self.assertEqual(set(self.lus(s)), {"SKILL.md", "sous/b.md"})
+
+    def test_nom_absent_de_l_entete_prend_le_nom_du_zip(self):
+        s = S.importer_zip(faire_zip([("SKILL.md", "juste du texte")], nom="Chimie.zip"), U)
+        self.assertEqual(s["nom"], "Chimie")
+        self.assertEqual(s["description"], "")
+
+    def test_en_tete_sur_plusieurs_lignes_et_entre_guillemets(self):
+        s = S.importer_zip(faire_zip([("SKILL.md", '---\nname: "Le \\"vrai\\" nom"\ndescription: >-\n  une ligne\n  deux lignes\n---\nx')]), U)
+        self.assertEqual(s["nom"], 'Le "vrai" nom')
+        self.assertEqual(s["description"], "une ligne deux lignes")
+
+    def test_entrees_systeme_ignorees(self):
+        s = S.importer_zip(faire_zip([("SKILL.md", "a"), ("__MACOSX/._SKILL.md", "x"), (".DS_Store", "x"), ("d/.DS_Store", "x")]), U)
+        self.assertEqual(set(self.lus(s)), {"SKILL.md"})
+
+    def test_refus_sans_skill_md(self):
+        self.assertEqual(self.code(faire_zip([("a.md", "a"), ("b/c.md", "c")])), "ZIP_SKILL_SANS_SKILL_MD")
+        self.assertEqual(self.code(faire_zip([("d1/SKILL.md", "a"), ("d2/b.md", "b")])), "ZIP_SKILL_SANS_SKILL_MD")
+
+    def test_refus_zip_vide_ou_illisible(self):
+        self.assertEqual(self.code(faire_zip([])), "ZIP_SKILL_VIDE")
+        import io
+        self.assertEqual(self.code(SimpleNamespace(file=io.BytesIO(b"pas un zip"), filename="x.zip")), "ZIP_SKILL_ILLISIBLE")
+
+    def test_refus_fichier_non_texte_et_zip_imbrique(self):
+        import io
+        interne = faire_zip([("a", "a")]).file.getvalue()
+        for contenu in (b"\xff\xfe\x00\x01", b"ok\x00ok", interne):
+            self.assertEqual(self.code(faire_zip([("SKILL.md", "a"), ("image.png", contenu)])), "ZIP_SKILL_FICHIER_NON_TEXTE")
+
+    def test_refus_zip_chiffre(self):
+        self.assertEqual(self.code(faire_zip([("SKILL.md", "a"), ("secret.md", "b")], chiffre="secret.md")), "ZIP_SKILL_CHIFFRE")
+
+    def test_refus_chemin_dangereux_du_zip(self):
+        self.assertEqual(self.code(faire_zip([("SKILL.md", "a"), ("../evasion.md", "b")])), "CHEMIN_FICHIER_INVALIDE")
+
+    def test_limites_de_taille_et_de_nombre(self):
+        from core import config_skills
+        gros = faire_zip([("SKILL.md", "a"), ("gros.md", "z" * 5000)])
+        with mock.patch.object(config_skills, "TAILLE_FICHIER_MAX", 1000):
+            self.assertEqual(self.code(gros), "SKILL_TROP_VOLUMINEUX")
+        total = faire_zip([("SKILL.md", "a" * 600), ("b.md", "b" * 600)])
+        with mock.patch.object(config_skills, "TAILLE_TOTALE_MAX", 1000):
+            self.assertEqual(self.code(total), "SKILL_TROP_VOLUMINEUX")
+        beaucoup = faire_zip([("SKILL.md", "a")] + [(f"f{i}.md", "x") for i in range(5)])
+        with mock.patch.object(config_skills, "NB_FICHIERS_MAX", 3):
+            self.assertEqual(self.code(beaucoup), "ZIP_SKILL_TROP_DE_FICHIERS")
+
+    def test_taille_declaree_mensongere_refusee(self):
+        # La bibliothèque zip lit au plus la taille déclarée : un zip qui ment est
+        # rejeté (illisible) au lieu de faire gonfler la mémoire.
+        import zipfile
+        faux = zipfile.ZipFile.infolist
+
+        def menteur(self):
+            infos = faux(self)
+            for i in infos:
+                i.file_size = 1
+            return infos
+        with mock.patch.object(zipfile.ZipFile, "infolist", menteur):
+            self.assertIn(self.code(faire_zip([("SKILL.md", "a"), ("gros.md", "z" * 5000)])), {"ZIP_SKILL_ILLISIBLE", "SKILL_TROP_VOLUMINEUX"})
+
+    def test_en_tete_trop_long_refuse(self):
+        self.assertEqual(self.code(faire_zip([("SKILL.md", "---\nname: " + "n" * 200 + "\n---\n")])), "ZIP_SKILL_ENTETE_INVALIDE")
+
+    def test_limite_du_nombre_de_skills_toujours_appliquee(self):
+        with mock.patch.object(S, "NB_SKILLS_MAX", 1):
+            S.importer_zip(faire_zip([("SKILL.md", "a")]), U)
+            with self.assertRaises(HTTPException) as e:
+                S.importer_zip(faire_zip([("SKILL.md", "b")]), U)
+        self.assertEqual(e.exception.detail["code"], "SKILLS_LIMITE_ATTEINTE")
+
+    def test_codes_du_zip_declares_en_fr_et_en_sans_tiret_double(self):
+        from core import skills_zip
+        with open(skills_zip.__file__, encoding="utf-8") as fichier:
+            source = fichier.read()
+        codes = set(re.findall(r'erreur_api\(\d+,\s*"([A-Z_]+)"', source)) | {"ZIP_SKILL_ENTETE_INVALIDE"}
+        self.assertTrue(codes)
+        for code in codes:
+            self.assertIn(code, MESSAGES_FR, code)
+            self.assertIn(code, MESSAGES_EN, code)
+            self.assertNotIn(" -- ", MESSAGES_FR[code] + MESSAGES_EN[code])
+        self.assertIn("{fichier}", MESSAGES_FR["ZIP_SKILL_FICHIER_NON_TEXTE"])
+        self.assertIn("{fichier}", MESSAGES_EN["ZIP_SKILL_FICHIER_NON_TEXTE"])
+        self.assertIn("{maximum}", MESSAGES_EN["ZIP_SKILL_TROP_DE_FICHIERS"])
+
+
 if __name__ == "__main__":
     unittest.main()

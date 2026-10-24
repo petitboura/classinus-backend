@@ -12,12 +12,13 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile
 from pydantic import BaseModel, Field
 
 from api.auth import utilisateur_courant, supabase
 from core import config_skills, stockage_r2
-from core.skills_entete import appliquer_entete
+from core.skills_entete import appliquer_entete, lire_entete
+from core.skills_zip import lire_zip_skill
 from core.erreurs import erreur_api
 
 router = APIRouter(prefix="/api/skills", tags=["skills"])
@@ -183,6 +184,36 @@ def lister(utilisateur=Depends(utilisateur_courant)):
 
 @router.post("")
 def creer(payload: SkillPayload, utilisateur=Depends(utilisateur_courant)):
+    return _creer_skill(payload, utilisateur)
+
+
+@router.post("/import-zip")
+def importer_zip(fichier: UploadFile = File(...), utilisateur=Depends(utilisateur_courant)):
+    """Crée un nouveau skill à partir d'un zip (SKILL.md et ses fichiers texte).
+
+    Le nom et la description viennent de l'en-tête du SKILL.md ; à défaut de nom,
+    le nom du zip (sans .zip) est utilisé.
+    """
+    # Lecture bornée : jamais plus que le plafond total + 1 octet en mémoire.
+    brut = fichier.file.read(TAILLE_TOTALE_MAX + 1)
+    membres = lire_zip_skill(brut)
+    entete = lire_entete(dict(membres)["SKILL.md"])
+    nom = (entete.get("name") or "").strip() or _nom_depuis_zip(fichier.filename)
+    description = (entete.get("description") or "").strip()
+    if not nom:
+        raise erreur_api(422, "NOM_SKILL_REQUIS")
+    if len(nom) > 120 or len(description) > 1000 or not _texte_une_ligne(nom) or not _texte_une_ligne(description):
+        raise erreur_api(422, "ZIP_SKILL_ENTETE_INVALIDE")
+    payload = SkillPayload(nom=nom, description=description, actif=True, fichiers=[Fichier(chemin=c, contenu=t) for c, t in membres])
+    return _creer_skill(payload, utilisateur)
+
+
+def _nom_depuis_zip(nom_zip: str | None) -> str:
+    nom = posixpath.basename((nom_zip or "").replace("\\", "/"))
+    return (nom[:-4] if nom.lower().endswith(".zip") else nom).strip()
+
+
+def _creer_skill(payload: SkillPayload, utilisateur):
     files = _prepare(payload)
     try:
         nb = supabase.table("skills").select("id", count="exact").eq("owner_id", utilisateur.id).limit(1).execute().count or 0
