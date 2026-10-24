@@ -23,11 +23,12 @@ import sys
 import subprocess
 import tempfile
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from google import genai
 
 from api.auth import supabase, utilisateur_courant, get_secret
 from core import stockage_r2
+from core.video_workspaces import enregistrer_video
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "core"))
 from bibliotheque_fichiers import enregistrer_fichier, indexer_fichier_existant  # noqa: E402
@@ -597,6 +598,71 @@ def _extraire_frames_video(chemin_video, duree, nb_frames=NB_FRAMES_VIDEO):
                 with open(chemin_frame, "rb") as f:
                     frames.append(f.read())
     return frames
+
+
+@router.post("/video-workspace")
+async def uploader_video_espace(
+    fichier: UploadFile = File(...),
+    conversation_id: str = Form(...),
+    utilisateur=Depends(utilisateur_courant),
+):
+    """Dépose une source originale dans l'espace de montage de la conversation.
+
+    Contrairement à /video-chat, cet endpoint ne transcrit ni n'échantillonne
+    la vidéo : elle sera découpée/analyée uniquement en fonction de la demande.
+    L'identifiant retourné est opaque et réutilisable seulement avec le même
+    compte et la même conversation.
+    """
+    if not conversation_id or len(conversation_id) > 256:
+        raise erreur_api(400, "CONVERSATION_INVALIDE")
+    if fichier.content_type not in TYPES_VIDEO_AUTORISES:
+        raise erreur_api(400, "FORMAT_NON_SUPPORTE_MP4_WEBM_OU")
+
+    # Lire au plus la limite + 1 octet évite de charger un upload arbitrairement
+    # volumineux en mémoire avant de pouvoir le refuser.
+    contenu = await fichier.read(TAILLE_MAX_VIDEO_OCTETS + 1)
+    if not contenu:
+        raise erreur_api(400, "FICHIER_VIDE")
+    if len(contenu) > TAILLE_MAX_VIDEO_OCTETS:
+        raise erreur_api(400, "VIDEO_TROP_LOURDE_40_MO_MAX")
+
+    extension = TYPES_VIDEO_AUTORISES[fichier.content_type]
+    chemin_temporaire = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=f".{extension}", delete=False) as temporaire:
+            temporaire.write(contenu)
+            chemin_temporaire = temporaire.name
+        try:
+            duree = _duree_video(chemin_temporaire)
+        except Exception as e:
+            logging.error(f"ERREUR FFPROBE (espace montage vidéo) : {e}")
+            raise erreur_api(400, "VIDEO_ILLISIBLE_REESSAIE_AVEC_UN_AUTRE")
+        if not duree or duree <= 0:
+            raise erreur_api(400, "VIDEO_ILLISIBLE_REESSAIE_AVEC_UN_AUTRE")
+        if duree > DUREE_MAX_VIDEO_SECONDES:
+            raise erreur_api(400, "VIDEO_TROP_LONGUE", duree=int(duree), maximum=DUREE_MAX_VIDEO_SECONDES)
+
+        try:
+            enregistrement = enregistrer_video(
+                user_id=str(utilisateur.id),
+                conversation_id=conversation_id,
+                nom=fichier.filename or f"video.{extension}",
+                mime=fichier.content_type,
+                contenu=contenu,
+                duree_secondes=duree,
+            )
+        except RuntimeError as e:
+            logging.error("Stockage R2 indisponible pour l'atelier vidéo : %s", e)
+            raise erreur_api(503, "STOCKAGE_VIDEO_TEMPORAIREMENT_INDISPONIBLE") from e
+        enregistrement["source_path"] = f"uploads/{enregistrement['video_id']}.{extension}"
+        enregistrement["duree_secondes"] = round(duree, 3)
+        return enregistrement
+    finally:
+        if chemin_temporaire and os.path.exists(chemin_temporaire):
+            try:
+                os.remove(chemin_temporaire)
+            except OSError:
+                logging.warning("Impossible de supprimer le fichier temporaire de l'espace montage vidéo.")
 
 
 @router.post("/video-chat")

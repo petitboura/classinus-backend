@@ -183,6 +183,18 @@ def _purger_sandboxes_execution_code(supabase, user_id: str) -> None:
             logging.warning("ERREUR arrêt sandbox pendant purge: %s", type(e).__name__)
 
 
+def _purger_videos(user_id: str) -> None:
+    """Vidéos du montage (originaux et fichiers produits, dans R2 et en cache local)."""
+    try:
+        from core.video_workspaces import supprimer_videos_utilisateur
+
+        resultat = supprimer_videos_utilisateur(user_id)
+        if resultat["en_echec"]:
+            logging.error(f"ERREUR purge compte (vidéos : {resultat['en_echec']} objets restants pour {user_id})")
+    except Exception as e:
+        logging.error(f"ERREUR purge compte (vidéos pour {user_id}) : {e}")
+
+
 def purger_donnees_compte(supabase, user_id: str) -> None:
     """Point d'entrée, à appeler avant la suppression du profil."""
     _purger_sandboxes_execution_code(supabase, user_id)
@@ -201,6 +213,7 @@ def purger_donnees_compte(supabase, user_id: str) -> None:
     except Exception as e:
         logging.error(f"ERREUR SUPABASE (purge skills {user_id}) : {e}")
     _purger_fichiers(supabase, user_id)
+    _purger_videos(user_id)
 
     # Les activations de skills publics pointent vers le comportement de
     # l'élève avec SET NULL : on les supprime avant, pour ne pas laisser de

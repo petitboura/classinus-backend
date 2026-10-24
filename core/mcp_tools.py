@@ -336,7 +336,7 @@ def _raison_execution_code_masque(conversation_id):
     return None
 
 
-def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, conversation_id=None, origine=None):
+def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, conversation_id=None, origine=None, contexte_video=False):
     """
     Se connecte a chaque serveur MCP du registre actif cote plateforme et
     retourne :
@@ -380,7 +380,9 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
     noms_serveurs_actifs = _serveurs_disponibles()
     serveurs_actifs = [
         s for s in SERVEURS_MCP
-        if s["nom"] == "generation" or s["nom"] in noms_serveurs_actifs
+        if s["nom"] == "generation"
+        or (s["nom"] == "video" and contexte_video)
+        or (s["nom"] != "video" and s["nom"] in noms_serveurs_actifs)
     ]
     # L'exécution de code n'est proposée que si le serveur est configuré (clé E2B) et
     # rattachée à une conversation. Quand elle est masquée, le journal dit pourquoi.
