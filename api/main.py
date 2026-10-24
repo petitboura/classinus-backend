@@ -730,6 +730,9 @@ ORIGINES_AUTORISEES = [
     # cas où elle serait servie directement au lieu d'être redirigée.
     "https://classinus.com",
     "https://www.classinus.com",
+    # 24/10/2026, demande de Bourama : copie de test (staging). Sans cette ligne,
+    # le navigateur bloque tout appel du site staging.classinus.com vers ce backend.
+    "https://staging.classinus.com",
     # Alias historique conserve comme domaine actif sur le projet Vercel
     # apres son renommage clovis-ai -> classinus (27/09/2026) -- toujours
     # appelable, mais ne correspond plus au nouveau motif ci-dessous donc
