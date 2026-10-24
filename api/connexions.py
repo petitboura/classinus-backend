@@ -23,6 +23,8 @@ d'une page) sont dans api/connexions_notion.py, pour ne pas faire grossir ce
 fichier.
 """
 
+import logging
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
@@ -33,12 +35,16 @@ from connexions.oauth_generique import (
     URL_RETOUR,
     demarrer_connexion,
     est_connecte,
+    deconnecter as deconnecter_oauth_generique,
+    a_reconnecter as a_reconnecter_oauth_generique,
+    obtenir_token_valide as obtenir_token_valide_generique,
     etat_en_attente,
     finaliser_connexion,
     get_secret,
 )
 import connexions.notion as notion
 import connexions.higgsfield_mcp as higgsfield_mcp
+import connexions.netlify_mcp as netlify_mcp
 import connexions.platform_mcp_oauth as platform_mcp_oauth
 
 router = APIRouter(prefix="/api/connexions", tags=["connexions"])
@@ -46,6 +52,8 @@ router = APIRouter(prefix="/api/connexions", tags=["connexions"])
 
 @router.get("/{service}/statut")
 def statut_connexion(service: str, utilisateur=Depends(utilisateur_courant)):
+    if service == "netlify_mcp":
+        return {"connecte": netlify_mcp.est_connecte(utilisateur.id)}
     if service == "higgsfield_mcp":
         connecte = higgsfield_mcp.est_connecte(utilisateur.id)
         return {
@@ -62,19 +70,32 @@ def statut_connexion(service: str, utilisateur=Depends(utilisateur_courant)):
         return {"connecte": notion.est_connecte(utilisateur.id)}
     if service not in SERVICES:
         raise erreur_api(404, "SERVICE_INCONNU", service=service)
+    if service.endswith("_mcp"):
+        # Services Google Workspace : "connecté" seulement si le jeton est réellement utilisable.
+        connecte = obtenir_token_valide_generique(service, utilisateur.id) is not None
+        return {
+            "connecte": connecte,
+            "a_reconnecter": (not connecte) and a_reconnecter_oauth_generique(service, utilisateur.id),
+        }
     return {"connecte": est_connecte(service, utilisateur.id)}
 
 
 @router.post("/{service}/deconnecter")
 def deconnecter_plateforme_mcp(service: str, utilisateur=Depends(utilisateur_courant)):
-    """Supprime la connexion personnelle Higgsfield, Vercel, Railway ou Supabase de la personne connectee."""
+    """Supprime uniquement la connexion personnelle au service demandé."""
+    if service == "netlify_mcp":
+        netlify_mcp.deconnecter(utilisateur.id)
+        return {"connecte": False}
     if service == "higgsfield_mcp":
         higgsfield_mcp.deconnecter(utilisateur.id)
         return {"connecte": False}
-    if service not in platform_mcp_oauth.FOURNISSEURS:
-        raise erreur_api(404, "SERVICE_INCONNU", service=service)
-    platform_mcp_oauth.deconnecter(service, utilisateur.id)
-    return {"connecte": False}
+    if service in platform_mcp_oauth.FOURNISSEURS:
+        platform_mcp_oauth.deconnecter(service, utilisateur.id)
+        return {"connecte": False}
+    if service in SERVICES:
+        deconnecter_oauth_generique(service, utilisateur.id)
+        return {"connecte": False}
+    raise erreur_api(404, "SERVICE_INCONNU", service=service)
 
 
 @router.get("/diagnostic/{service}")
@@ -89,6 +110,14 @@ def diagnostic_config(service: str):
         return {"url_retour_app": URL_RETOUR, "oauth_dynamique": True}
     if service in platform_mcp_oauth.FOURNISSEURS:
         config = platform_mcp_oauth.FOURNISSEURS[service]
+        if service == "microsoft_mcp":
+            return {
+                "url_retour_app": URL_RETOUR,
+                "client_id_present": bool(get_secret("MICROSOFT_MCP_CLIENT_ID")),
+                "client_secret_present": bool(get_secret("MICROSOFT_MCP_CLIENT_SECRET")),
+                "oauth_dynamique": False,
+                "serveur_mcp": config["mcp_url"],
+            }
         if service == "railway_mcp":
             return {
                 "url_retour_app": URL_RETOUR,
@@ -125,6 +154,8 @@ def demarrer(service: str, agent_id: str = "", utilisateur=Depends(utilisateur_c
         if not url:
             if service == "railway_mcp":
                 message = "Connexion Railway indisponible : configure RAILWAY_OAUTH_CLIENT_ID et RAILWAY_OAUTH_CLIENT_SECRET dans Railway, ainsi que URL_RETOUR_APP."
+            elif service == "microsoft_mcp":
+                message = "Connexion Microsoft MCP indisponible : configure MICROSOFT_MCP_CLIENT_ID et MICROSOFT_MCP_CLIENT_SECRET, l’URI de retour OAuth, puis les permissions MCP côté Microsoft Entra. Le serveur est en préversion et limité aux lectures d’annuaire."
             else:
                 message = f"Connexion {service} indisponible : le serveur MCP n'a pas fourni de métadonnées OAuth compatibles ou URL_RETOUR_APP est absent."
             raise erreur_api(503, "CONNEXION_INDISPONIBLE", message=message)
@@ -166,6 +197,24 @@ def demarrer(service: str, agent_id: str = "", utilisateur=Depends(utilisateur_c
     if not url:
         raise erreur_api(500, "CONNEXION_INDISPONIBLE", service=service)
     return {"url": url}
+
+
+class JetonNetlifyPayload(BaseModel):
+    token: str
+
+
+@router.post("/netlify_mcp/jeton")
+def enregistrer_jeton_netlify(payload: JetonNetlifyPayload, utilisateur=Depends(utilisateur_courant)):
+    try:
+        netlify_mcp.enregistrer_token(utilisateur.id, payload.token)
+    except ValueError as exc:
+        raise erreur_api(400, "JETON_NETLIFY_INVALIDE", message=str(exc))
+    except RuntimeError as exc:
+        raise erreur_api(502, "CONNEXION_NETLIFY_INDISPONIBLE", message=str(exc))
+    except Exception:
+        logging.exception("Enregistrement du jeton Netlify échoué")
+        raise erreur_api(500, "ERREUR_CONNEXION_NETLIFY", message="Classinus n'a pas pu enregistrer le jeton Netlify.")
+    return {"connecte": True}
 
 
 class FinaliserPayload(BaseModel):
