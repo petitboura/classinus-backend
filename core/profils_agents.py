@@ -9,6 +9,7 @@ from groq import Groq
 from constantes_agent import get_secret, supabase, MODELE_PROFIL, SEUIL_PROFIL_MESSAGES, DELAI_MAX_PAR_APPEL
 from filtre_texte_streaming import NOMS_OUTILS_LISIBLES
 from registre_outils import VERBES_ACTIONS, verbe_de_action, plateforme_outil_personnel, est_outil_sensible_serveur_personnel, libelle_outil_plateforme
+from domaines_affichage import domaines_de_l_appel
 
 def _nom_agent(agent_id):
     """
