@@ -28,6 +28,12 @@ plus).
 | `RAILPACK_BUILD_APT_PACKAGES` / `RAILPACK_DEPLOY_APT_PACKAGES` | config Railpack native (voir aussi `railpack.json`) |
 | `RAILPACK_PYTHON_PLAYWRIGHT_INSTALL` | à mettre à `1` : installe le navigateur du rendu vidéo des animations (`core/rendu_animation_processus.py`), Railpack ne le fait plus par défaut depuis sa version 0.35 |
 
+## Variable à ajouter pour l'intégration E2B (avant activation)
+
+- `E2B_API_KEY` — clé serveur E2B, lue par `core/outils_execution_code.py`. À configurer uniquement côté Railway, jamais dans le frontend.
+
+Avant d'activer cette branche, exécuter `migrations/2026_10_23_execution_code_e2b.sql` dans le bon projet Supabase et vérifier que `gerer_execution_code` est activé dans `registre_outils_plateforme`. Le plafond de 100 USD est un garde-fou applicatif basé sur le coût estimé; il ne remplace pas un plafond de facturation configuré directement chez E2B. La concurrence n'est pas plafonnée arbitrairement par Classinus : les limites de capacité du compte E2B font autorité.
+
 ## Variable configurée mais non utilisée par le code (volontaire)
 
 - `HF_API_TOKEN` — présente sur Railway, aucune référence dans le code

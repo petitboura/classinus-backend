@@ -650,7 +650,7 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
             export[cle_export] = {"erreur": "recuperation impossible, reessayer plus tard"}
 
     try:
-        ids_skills = [row["id"] for row in (supabase.table("skills").select("id").eq("owner_id", user_id).execute().data or [])]
+        ids_skills =[row["id"] for row in (supabase.table("skills").select("id").eq("owner_id", user_id).execute().data or [])]
         fichiers_skills = (supabase.table("skill_files").select("*").in_("skill_id", ids_skills).execute().data or []) if ids_skills else []
         for fichier in fichiers_skills:
             # Le texte des skills n'est que dans R2 : on l'ajoute à l'export.
@@ -669,6 +669,29 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
     except Exception as e:
         logging.error(f"ERREUR SUPABASE (export skill_files pour {user_id}) : {e}")
         export["fichiers_skills_independants"] = {"erreur": "recuperation impossible, reessayer plus tard"}
+
+    # Exécution de code : exporter des métadonnées, jamais l'ID E2B ni le contenu du workspace.
+    try:
+        res = (
+            supabase.table("execution_code_sessions")
+            .select("conversation_id, status, created_at, updated_at, last_activity_at")
+            .eq("user_id", user_id).execute()
+        )
+        export["sessions_execution_code"] = res.data or []
+    except Exception as e:
+        logging.error("ERREUR SUPABASE (export sessions execution code): %s", type(e).__name__)
+        export["sessions_execution_code"] = {"erreur": "recuperation impossible, reessayer plus tard"}
+
+    try:
+        res = (
+            supabase.table("execution_code_usage_events")
+            .select("conversation_id, event_type, active_seconds, actual_cost_usd, started_at, finished_at")
+            .eq("user_id", user_id).execute()
+        )
+        export["usage_execution_code"] = res.data or []
+    except Exception as e:
+        logging.error("ERREUR SUPABASE (export usage execution code): %s", type(e).__name__)
+        export["usage_execution_code"] = {"erreur": "recuperation impossible, reessayer plus tard"}
 
     # Connexions personnelles aux plateformes (Vercel, Railway, Supabase) :
     # seulement le service et les dates, JAMAIS les jetons ni les secrets.
