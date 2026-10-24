@@ -5,7 +5,6 @@ Chaque version d'un fichier est écrite sous une clé R2 unique
 à l'ancien contenu tant que la base n'a pas suivi : en cas d'échec, l'ancienne
 version reste intacte et lisible.
 """
-import json
 import logging
 import mimetypes
 import posixpath
@@ -18,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from api.auth import utilisateur_courant, supabase
 from core import config_skills, stockage_r2
+from core.skills_entete import appliquer_entete
 from core.erreurs import erreur_api
 
 router = APIRouter(prefix="/api/skills", tags=["skills"])
@@ -35,7 +35,6 @@ TELECHARGEMENTS_PARALLELES = config_skills.TELECHARGEMENTS_PARALLELES
 class Fichier(BaseModel):
     chemin: str = Field(min_length=1, max_length=500)
     contenu: str = Field(max_length=TAILLE_FICHIER_MAX)
-    type_mime: str | None = None
 
 
 class SkillPayload(BaseModel):
@@ -67,9 +66,15 @@ def _texte_une_ligne(valeur: str) -> bool:
     return not any(c in valeur for c in ("\n", "\r", "\x00"))
 
 
-def _entete(nom: str, description: str) -> str:
-    # Guillemets JSON : valides en YAML et sans risque d'injection d'une autre clé.
-    return f"---\nname: {json.dumps(nom, ensure_ascii=False)}\ndescription: {json.dumps(description, ensure_ascii=False)}\n---\n\n"
+# Ces types sont déduits de l'extension, jamais du client, et ne peuvent pas être interprétés par un navigateur.
+_TYPES_REFUSES = {"text/html", "application/xhtml+xml", "image/svg+xml", "text/javascript", "application/javascript", "application/x-javascript"}
+
+
+def _type_mime(chemin: str) -> str:
+    devine = mimetypes.guess_type(chemin)[0]
+    if not devine or devine in _TYPES_REFUSES or not (devine.startswith("text/") or devine in ("application/json", "application/xml", "application/yaml", "application/x-yaml")):
+        return "text/plain"
+    return devine
 
 
 def _owned(skill_id: str, owner_id: str) -> dict:
@@ -99,13 +104,14 @@ def _prepare(payload: SkillPayload) -> list[dict]:
         if path in seen:
             raise erreur_api(422, "CHEMIN_FICHIER_DUPLIQUE")
         seen.add(path)
-        data = f.contenu.encode("utf-8")
+        texte = appliquer_entete(f.contenu, nom, description) if path == "SKILL.md" else f.contenu
+        data = texte.encode("utf-8")
         total += len(data)
         if len(data) > TAILLE_FICHIER_MAX or total > TAILLE_TOTALE_MAX:
             raise _erreur_taille()
-        files.append({"chemin": path, "contenu": data, "type_mime": f.type_mime or mimetypes.guess_type(path)[0] or "application/octet-stream"})
+        files.append({"chemin": path, "contenu": data, "type_mime": _type_mime(path)})
     if "SKILL.md" not in seen:
-        files.insert(0, {"chemin": "SKILL.md", "contenu": _entete(nom, description).encode("utf-8"), "type_mime": "text/markdown"})
+        files.insert(0, {"chemin": "SKILL.md", "contenu": appliquer_entete("", nom, description).encode("utf-8"), "type_mime": "text/markdown"})
     return files
 
 

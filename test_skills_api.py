@@ -113,6 +113,7 @@ from unittest import mock
 from fastapi import HTTPException
 from api import skills as S
 from core.erreurs import MESSAGES_EN, MESSAGES_FR
+from core.skills_entete import appliquer_entete
 
 U = SimpleNamespace(id="user-1")
 
@@ -133,7 +134,8 @@ class TestSkills(unittest.TestCase):
         s = S.creer(payload(fichiers=[("SKILL.md", "un"), ("a/b.md", "deux")]), U)
         S.modifier(s["id"], payload(fichiers=[("SKILL.md", "un v2"), ("a/b.md", "deux v2")]), U)
         lu = {f["chemin"]: f["contenu"] for f in S.obtenir(s["id"], U)["fichiers"]}
-        self.assertEqual(lu, {"SKILL.md": "un v2", "a/b.md": "deux v2"})
+        self.assertTrue(lu.pop("SKILL.md").endswith("un v2"))
+        self.assertEqual(lu, {"a/b.md": "deux v2"})
         self.assertEqual(len(r2.objets), 2, "les anciennes versions doivent être supprimées")
 
     def test_modifier_retire_les_fichiers_absents(self):
@@ -150,7 +152,8 @@ class TestSkills(unittest.TestCase):
         self.assertEqual(e.exception.detail["code"], "IMPOSSIBLE_DE_MODIFIER_SKILL")
         r2.echec_upload_sur = None
         lu = {f["chemin"]: f["contenu"] for f in S.obtenir(s["id"], U)["fichiers"]}
-        self.assertEqual(lu, {"SKILL.md": "ancien", "b.md": "b"})
+        self.assertTrue(lu.pop("SKILL.md").endswith("ancien"))
+        self.assertEqual(lu, {"b.md": "b"})
         self.assertEqual(len(r2.objets), 2)
 
     def test_echec_base_pendant_modification_garde_l_ancienne_version(self):
@@ -159,7 +162,7 @@ class TestSkills(unittest.TestCase):
         with self.assertRaises(HTTPException):
             S.modifier(s["id"], payload(fichiers=[("SKILL.md", "nouveau")]), U)
         base.echec_sur = None
-        self.assertEqual(S.obtenir(s["id"], U)["fichiers"][0]["contenu"], "ancien")
+        self.assertTrue(S.obtenir(s["id"], U)["fichiers"][0]["contenu"].endswith("ancien"))
         self.assertEqual(len(r2.objets), 1)
 
     def test_echec_creation_ne_laisse_rien(self):
@@ -216,6 +219,48 @@ class TestSkills(unittest.TestCase):
         s = S.creer(payload(fichiers=[("SKILL.md", "x")]), U)
         S.supprimer(s["id"], U)
         self.assertEqual(r2.objets, {})
+
+    def test_entete_suit_toujours_le_nom_et_la_description(self):
+        s = S.creer(payload(nom="Maths", description="Aide", fichiers=[("SKILL.md", "---\nname: ancien\ndescription: vieux\nautre: garde\n---\n\nCorps")]), U)
+        contenu = S.obtenir(s["id"], U)["fichiers"][0]["contenu"]
+        self.assertIn('name: "Maths"', contenu)
+        self.assertIn('description: "Aide"', contenu)
+        self.assertNotIn("ancien", contenu)
+        self.assertIn("autre: garde", contenu)
+        self.assertTrue(contenu.endswith("Corps"))
+        S.modifier(s["id"], payload(nom="Physique", description="Autre", fichiers=[("SKILL.md", contenu)]), U)
+        contenu2 = S.obtenir(s["id"], U)["fichiers"][0]["contenu"]
+        self.assertIn('name: "Physique"', contenu2)
+        self.assertEqual(contenu2.count("name:"), 1)
+
+    def test_skill_md_sans_entete_en_recoit_un(self):
+        s = S.creer(payload(nom="Chimie", fichiers=[("SKILL.md", "Juste du texte")]), U)
+        contenu = S.obtenir(s["id"], U)["fichiers"][0]["contenu"]
+        self.assertTrue(contenu.startswith('---\nname: "Chimie"'))
+        self.assertTrue(contenu.endswith("Juste du texte"))
+
+    def test_appliquer_entete_description_sur_plusieurs_lignes(self):
+        sortie = appliquer_entete("---\nname: a\ndescription: >\n  ligne 1\n  ligne 2\ntags: x\n---\ncorps", "N", "D")
+        self.assertEqual(sortie, '---\nname: "N"\ndescription: "D"\ntags: x\n---\ncorps')
+        self.assertEqual(appliquer_entete(sortie, "N", "D"), sortie)
+
+    def test_type_de_fichier_ignore_celui_du_client(self):
+        fichier = S.Fichier.model_validate({"chemin": "page.html", "contenu": "<script>1</script>", "type_mime": "text/html"})
+        s = S.creer(S.SkillPayload(nom="x", fichiers=[fichier]), U)
+        types = {f["chemin"]: f["type_mime"] for f in S.obtenir(s["id"], U)["fichiers"]}
+        self.assertEqual(types["page.html"], "text/plain")
+        self.assertEqual(types["SKILL.md"], "text/markdown")
+
+    def test_route_publique_refuse_le_bucket_des_skills(self):
+        from fastapi import Request
+        from api import fichiers_r2
+        requete = Request({"type": "http", "method": "GET", "headers": [], "query_string": b"", "path": "/"})
+        for methode in ("GET", "HEAD"):
+            requete.scope["method"] = methode
+            with self.assertRaises(HTTPException) as e:
+                fichiers_r2.servir_fichier_r2(S.BUCKET, "u/s/v/SKILL.md", requete)
+            self.assertEqual(e.exception.status_code, 404)
+            self.assertEqual(e.exception.detail["code"], "FICHIER_INTROUVABLE")
 
     def test_tous_les_codes_utilises_sont_declares_en_fr_et_en(self):
         with open(S.__file__, encoding="utf-8") as fichier:
