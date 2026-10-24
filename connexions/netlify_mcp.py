@@ -9,7 +9,7 @@ import logging
 import os
 import requests
 from supabase import create_client, ClientOptions
-from client_http_supabase import nouveau_client_http_supabase
+from core.client_http_supabase import nouveau_client_http_supabase
 
 _supabase = create_client(
     os.environ.get("SUPABASE_URL"),

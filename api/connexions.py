@@ -36,6 +36,8 @@ from connexions.oauth_generique import (
     demarrer_connexion,
     est_connecte,
     deconnecter as deconnecter_oauth_generique,
+    a_reconnecter as a_reconnecter_oauth_generique,
+    obtenir_token_valide as obtenir_token_valide_generique,
     etat_en_attente,
     finaliser_connexion,
     get_secret,
@@ -68,6 +70,13 @@ def statut_connexion(service: str, utilisateur=Depends(utilisateur_courant)):
         return {"connecte": notion.est_connecte(utilisateur.id)}
     if service not in SERVICES:
         raise erreur_api(404, "SERVICE_INCONNU", service=service)
+    if service.endswith("_mcp"):
+        # Services Google Workspace : "connecté" seulement si le jeton est réellement utilisable.
+        connecte = obtenir_token_valide_generique(service, utilisateur.id) is not None
+        return {
+            "connecte": connecte,
+            "a_reconnecter": (not connecte) and a_reconnecter_oauth_generique(service, utilisateur.id),
+        }
     return {"connecte": est_connecte(service, utilisateur.id)}
 
 

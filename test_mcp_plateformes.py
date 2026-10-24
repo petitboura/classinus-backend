@@ -1,6 +1,7 @@
 """Vérifie les serveurs MCP personnels et les préfixes, sans réseau ni base."""
 
 import os
+import re
 import sys
 import types
 import unittest
@@ -50,13 +51,13 @@ class TestGoogleWorkspaceMcpConfiguration(unittest.TestCase):
 
     def test_les_huit_services_google_ont_les_scopes_requis_aux_operations_exposees(self):
         exigences = {
-            "google_gmail_mcp": ("gmail.readonly", "gmail.compose", "gmail.modify"),
+            "google_gmail_mcp": ("gmail.readonly", "gmail.compose"),
             "google_docs_mcp": ("drive.readonly", "drive.file", "documents.readonly", "documents"),
             "google_sheets_mcp": ("drive.readonly", "drive.file", "spreadsheets.readonly", "spreadsheets"),
             "google_slides_mcp": ("drive.readonly", "drive.file", "presentations.readonly", "presentations"),
             "google_calendar_mcp": ("calendar.calendarlist.readonly", "calendar.events.readonly", "calendar.events"),
             "google_chat_mcp": ("chat.spaces.readonly", "chat.messages.readonly", "chat.messages.create"),
-            "google_classroom_mcp": ("classroom.announcements", "classroom.courses.readonly", "classroom.coursework.students", "classroom.topics"),
+            "google_classroom_mcp": ("classroom.announcements", "classroom.courses.readonly", "classroom.coursework.students", "classroom.topics.readonly"),
             "google_people_mcp": ("directory.readonly", "contacts.readonly", "userinfo.profile"),
         }
         for service, scopes in exigences.items():
@@ -66,6 +67,33 @@ class TestGoogleWorkspaceMcpConfiguration(unittest.TestCase):
             for scope in scopes:
                 with self.subTest(service=service, scope=scope):
                     self.assertIn(scope, configuration)
+
+    def test_les_permissions_hors_liste_officielle_ne_sont_pas_demandees(self):
+        for service, interdit in (
+            ("google_gmail_mcp", "gmail.modify"),
+            ("google_classroom_mcp", "classroom.topics"),
+        ):
+            debut = self.oauth_source.index(f'"{service}": {{')
+            fin = self.oauth_source.find('\n    },', debut)
+            scopes = re.findall(r"auth/([\w.\-]+)", self.oauth_source[debut:fin])
+            with self.subTest(service=service):
+                self.assertNotIn(interdit, scopes)
+
+    def test_la_deconnexion_google_vide_le_cache_et_le_statut_verifie_le_jeton(self):
+        debut = self.oauth_source.index("def deconnecter(service, user_id):")
+        self.assertIn("_cache_token.pop((service, user_id), None)", self.oauth_source[debut:])
+        self.assertIn("def a_reconnecter(service, user_id):", self.oauth_source)
+
+    def test_microsoft_demande_le_renouvellement_automatique(self):
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "connexions", "platform_mcp_oauth.py"), encoding="utf-8") as fichier:
+            source = fichier.read()
+        debut = source.index('"microsoft_mcp": {')
+        self.assertIn('"offline_access"', source[debut:source.index("\n    },", debut)])
+
+    def test_netlify_utilise_le_meme_chemin_d_import_que_les_autres_connexions(self):
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "connexions", "netlify_mcp.py"), encoding="utf-8") as fichier:
+            source = fichier.read()
+        self.assertIn("from core.client_http_supabase import nouveau_client_http_supabase", source)
 
     def test_les_url_google_pointent_vers_les_serveurs_mcp_officiels(self):
         for endpoint in (

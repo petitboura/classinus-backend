@@ -65,7 +65,7 @@ FOURNISSEURS = {
         "token_endpoint": "https://login.microsoftonline.com/organizations/oauth2/v2.0/token",
         "client_id_env": "MICROSOFT_MCP_CLIENT_ID",
         "client_secret_env": "MICROSOFT_MCP_CLIENT_SECRET",
-        "scopes": ["api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/.default"],
+        "scopes": ["api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/.default", "offline_access"],
         "token_auth_method": "client_secret_post",
         "send_resource": False,
     },

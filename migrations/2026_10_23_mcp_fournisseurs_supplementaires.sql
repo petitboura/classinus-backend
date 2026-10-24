@@ -1,3 +1,7 @@
+-- ORDRE OBLIGATOIRE : appliquer cette migration AVANT de déployer le code qui
+-- l'utilise. Sans elle, Render, Cloudflare et Microsoft ne peuvent pas se
+-- connecter et la table des jetons Netlify n'existe pas.
+--
 -- Connexions MCP supplémentaires utilisées par Classinus (23/10/2026).
 -- Google Workspace (hors Drive, déjà présent), Render et Cloudflare passent
 -- par leurs endpoints MCP officiels. Microsoft MCP Enterprise est en preview

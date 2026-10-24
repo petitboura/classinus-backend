@@ -172,7 +172,7 @@ SERVICES = {
         "token_endpoint": "https://oauth2.googleapis.com/token",
         "client_id_env": "GOOGLE_DRIVE_CLIENT_ID",
         "client_secret_env": "GOOGLE_DRIVE_CLIENT_SECRET",
-        "scopes": "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/gmail.modify",
+        "scopes": "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose",
         "extra_auth_params": {
             "access_type": "offline",
             "prompt": "consent",
@@ -244,7 +244,7 @@ SERVICES = {
         "token_endpoint": "https://oauth2.googleapis.com/token",
         "client_id_env": "GOOGLE_DRIVE_CLIENT_ID",
         "client_secret_env": "GOOGLE_DRIVE_CLIENT_SECRET",
-        "scopes": "https://www.googleapis.com/auth/classroom.announcements https://www.googleapis.com/auth/classroom.courses.readonly https://www.googleapis.com/auth/classroom.coursework.students https://www.googleapis.com/auth/classroom.courseworkmaterials https://www.googleapis.com/auth/classroom.rosters.readonly https://www.googleapis.com/auth/classroom.student-submissions.students.readonly https://www.googleapis.com/auth/classroom.topics.readonly https://www.googleapis.com/auth/classroom.topics",
+        "scopes": "https://www.googleapis.com/auth/classroom.announcements https://www.googleapis.com/auth/classroom.courses.readonly https://www.googleapis.com/auth/classroom.coursework.students https://www.googleapis.com/auth/classroom.courseworkmaterials https://www.googleapis.com/auth/classroom.rosters.readonly https://www.googleapis.com/auth/classroom.student-submissions.students.readonly https://www.googleapis.com/auth/classroom.topics.readonly",
         "extra_auth_params": {
             "access_type": "offline",
             "prompt": "consent",
@@ -511,4 +511,11 @@ def deconnecter(service, user_id):
         return False
     supabase.table("oauth_temp").delete().eq("service", service).eq("user_id", user_id).execute()
     supabase.table("connexions_oauth").delete().eq("service", service).eq("user_id", user_id).execute()
+    # Sans cela, le jeton resterait utilisable jusqu'à 2 minutes après la déconnexion.
+    _cache_token.pop((service, user_id), None)
     return True
+
+
+def a_reconnecter(service, user_id):
+    """Connexion enregistrée mais devenue inutilisable (jeton expiré ou révoqué)."""
+    return est_connecte(service, user_id) and obtenir_token_valide(service, user_id) is None
