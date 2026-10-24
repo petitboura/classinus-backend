@@ -334,6 +334,13 @@ MESSAGES_FR: dict[str, str] = {
     "IMPOSSIBLE_DE_CREER_SKILL": "Impossible de créer ce skill. Rien n'a été enregistré, réessaie dans un instant.",
     "IMPOSSIBLE_DE_MODIFIER_SKILL": "Impossible d'enregistrer les modifications de ce skill. Réessaie dans un instant.",
     "IMPOSSIBLE_DE_SUPPRIMER_SKILL": "Impossible de supprimer ce skill pour le moment. Réessaie dans un instant.",
+    "ZIP_SKILL_ILLISIBLE": "Ce fichier n'est pas un zip lisible. Vérifie qu'il n'est pas abîmé.",
+    "ZIP_SKILL_CHIFFRE": "Ce zip est protégé par un mot de passe. Envoie un zip sans mot de passe.",
+    "ZIP_SKILL_VIDE": "Ce zip ne contient aucun fichier.",
+    "ZIP_SKILL_SANS_SKILL_MD": "Ce zip ne contient pas de fichier SKILL.md, ni à sa racine ni dans son dossier principal.",
+    "ZIP_SKILL_TROP_DE_FICHIERS": "Ce zip contient trop de fichiers ({maximum} au maximum).",
+    "ZIP_SKILL_FICHIER_NON_TEXTE": "Le fichier {fichier} n'est pas un fichier texte. Les skills n'acceptent que des fichiers texte.",
+    "ZIP_SKILL_ENTETE_INVALIDE": "Le nom ou la description écrits dans l'en-tête de SKILL.md sont trop longs ou contiennent un saut de ligne.",
 }
 
 
@@ -670,6 +677,13 @@ MESSAGES_EN: dict[str, str] = {
     "IMPOSSIBLE_DE_CREER_SKILL": "Unable to create this skill. Nothing was saved, try again in a moment.",
     "IMPOSSIBLE_DE_MODIFIER_SKILL": "Unable to save the changes to this skill. Try again in a moment.",
     "IMPOSSIBLE_DE_SUPPRIMER_SKILL": "Unable to delete this skill right now. Try again in a moment.",
+    "ZIP_SKILL_ILLISIBLE": "This file is not a readable zip. Check that it is not damaged.",
+    "ZIP_SKILL_CHIFFRE": "This zip is password protected. Upload a zip without a password.",
+    "ZIP_SKILL_VIDE": "This zip does not contain any file.",
+    "ZIP_SKILL_SANS_SKILL_MD": "This zip does not contain a SKILL.md file, neither at its root nor in its main folder.",
+    "ZIP_SKILL_TROP_DE_FICHIERS": "This zip contains too many files ({maximum} at most).",
+    "ZIP_SKILL_FICHIER_NON_TEXTE": "The file {fichier} is not a text file. Skills only accept text files.",
+    "ZIP_SKILL_ENTETE_INVALIDE": "The name or description in the SKILL.md header is too long or contains a line break.",
 }
 
 def erreur_api(status_code: int, code: str, message: str | None = None, **kwargs) -> HTTPException:
