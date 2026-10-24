@@ -1067,9 +1067,15 @@ CATEGORIES_OUTILS = {
     "generation_documents": [
         "generer_document", "generer_document_word", "generer_document_excel",
         "generer_document_powerpoint", "generer_document_latex", "generer_code",
-        "gerer_execution_code", "generer_site_zip", "generer_bundle", "generer_image", "deployer_site",
+        "generer_site_zip", "generer_bundle", "generer_image", "deployer_site",
         "exporter_donnees", "calculer_symbolique",
     ],
+    # Exécution de code (24/10/2026, demande Bourama) : catégorie à part, retiré
+    # de generation_documents où il ne créait aucun document. Il lance du code
+    # et des commandes et gère des fichiers dans un espace de travail.
+    # generer_code (qui écrit du code sans l'exécuter) reste dans
+    # generation_documents.
+    "execution_code": ["gerer_execution_code"],
     # rechercher_image range ici (avec Tavily), pas dans generation_documents :
     # onglet="rechercher" dans REGISTRE_AFFICHAGE_OUTILS ci-dessus, c'est une
     # recherche d'image EXISTANTE sur le web, pas une creation (voir
@@ -1177,6 +1183,7 @@ INDEX_CATEGORIES_OUTILS = (
     "Catégories : notion, google_drive, github, vercel (sites et déploiements), "
     "railway (services et logs), supabase (base de données et SQL), "
     "higgsfield (génération d'images et de vidéos), generation_documents, "
+    "execution_code (lancer du code et des commandes, gérer des fichiers dans un espace de travail), "
     "recherche_web (web, actualité, images et vidéos ; pas le premier réflexe "
     "pour trouver un livre ou un PDF), bibliotheque (documents/dossiers "
     "personnels), catalogue_public, documents_externes (TOUT livre, manuel, PDF, "
