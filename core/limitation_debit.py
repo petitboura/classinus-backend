@@ -66,7 +66,11 @@ def _cle_limitation(request: Request) -> str:
 
 
 _storage_uri = os.environ.get("RATE_LIMIT_STORAGE_URI")
-if not _storage_uri and (os.environ.get("RAILWAY_SERVICE_ID") or os.environ.get("RAILWAY_ENVIRONMENT_NAME")):
+if not _storage_uri and (
+    os.environ.get("RAILWAY_SERVICE_ID")
+    or os.environ.get("RAILWAY_ENVIRONMENT_NAME")
+    or os.environ.get("RENDER_SERVICE_ID")
+):
     logging.warning(
         "RATE_LIMIT_STORAGE_URI absent en production : le limiteur utilise "
         "un stockage memoire propre a chaque processus. Configurez un stockage "
