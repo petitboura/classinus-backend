@@ -70,7 +70,7 @@ def _url_generation(get_secret, user_id, agent_id, conversation_id=None):
 
 def _url_video(get_secret, user_id, agent_id, conversation_id=None):
     # Serveur dédié au montage vidéo (core/serveur_mcp_video.py).
-    # Il n'est interrogé que sur les tours où un contexte vidéo est fourni.
+    # Interrogé avec un contexte vidéo, ou sans vidéo jointe si le registre plateforme l'active.
     port = os.environ.get("PORT", "8000")
     from urllib.parse import urlencode
     params = urlencode({"user_id": user_id or "", "conversation_id": conversation_id or ""})
@@ -268,7 +268,9 @@ SERVEURS_MCP = [
         "url_builder": _url_video,
         "headers_builder": _headers_video,
         "necessite_utilisateur": True,
-        # Activé uniquement quand l'API chat reçoit un contexte vidéo validé.
+        # Avec un contexte vidéo validé : forcé, comme avant. Sans vidéo jointe : proposé
+        # via demander_outils (catégorie montage_video) quand le registre plateforme le
+        # déclare disponible (migrations/2026_10_24_outils_montage_video.sql).
         # Ne pas ajouter ce serveur au menu d'outils manuel.
     },
     {
@@ -1104,6 +1106,10 @@ CATEGORIES_OUTILS = {
     # generer_code (qui écrit du code sans l'exécuter) reste dans
     # generation_documents.
     "execution_code": ["gerer_execution_code"],
+    # Montage vidéo (24/10/2026, demande Bourama) : disponible sans vidéo jointe, via
+    # demander_outils comme les autres catégories. Distinct de recherche_web
+    # (rechercher_video, lire_video = vidéos du web) et de higgsfield (génération IA).
+    "montage_video": ["video_lister_outils", "video_executer_outil"],
     # rechercher_image range ici (avec Tavily), pas dans generation_documents :
     # onglet="rechercher" dans REGISTRE_AFFICHAGE_OUTILS ci-dessus, c'est une
     # recherche d'image EXISTANTE sur le web, pas une creation (voir
@@ -1212,6 +1218,8 @@ INDEX_CATEGORIES_OUTILS = (
     "railway (services et logs), supabase (base de données et SQL), "
     "higgsfield (génération d'images et de vidéos), generation_documents, "
     "execution_code (lancer du code et des commandes, gérer des fichiers dans un espace de travail), "
+    "montage_video (créer ou modifier une vidéo : couper, assembler, sous-titrer, effets, animations ; "
+    "pas pour chercher une vidéo sur le web), "
     "recherche_web (web, actualité, images et vidéos ; pas le premier réflexe "
     "pour trouver un livre ou un PDF), bibliotheque (documents/dossiers "
     "personnels), catalogue_public, documents_externes (TOUT livre, manuel, PDF, "
@@ -1272,6 +1280,7 @@ GROUPES_OUTILS = {
         "rechercher_document_externe", "lire_document_externe", "lire_document_internet_archive",
     ],
     "video": ["rechercher_video", "lire_video"],
+    "montage_video": ["video_lister_outils", "video_executer_outil"],
     "conversations_passees": ["lister_conversations_historique", "lire_conversation_historique"],
     "bibliotheque": [
         "gerer_document_bibliotheque", "gerer_dossier_bibliotheque", "gerer_fichier_conversation",

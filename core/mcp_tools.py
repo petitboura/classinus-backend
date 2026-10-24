@@ -381,7 +381,7 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
     serveurs_actifs = [
         s for s in SERVEURS_MCP
         if s["nom"] == "generation"
-        or (s["nom"] == "video" and contexte_video)
+        or (s["nom"] == "video" and (contexte_video or "video" in noms_serveurs_actifs))
         or (s["nom"] != "video" and s["nom"] in noms_serveurs_actifs)
     ]
     # L'exécution de code n'est proposée que si le serveur est configuré (clé E2B) et
@@ -391,6 +391,13 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
         if raison_masquage:
             logging.warning(f"Outil d'exécution de code non proposé : {raison_masquage}.")
             serveurs_actifs = [s for s in serveurs_actifs if s["nom"] != "execution_code"]
+
+    # Montage vidéo sans vidéo jointe : le serveur rejoint le catalogue comme les autres
+    # (le modèle le réclame via demander_outils, catégorie montage_video). Il a besoin
+    # d'une conversation, qui porte son espace de travail ; avec une vidéo jointe
+    # (contexte_video) le comportement historique reste inchangé.
+    if not contexte_video and not conversation_id:
+        serveurs_actifs = [s for s in serveurs_actifs if s["nom"] != "video"]
 
     logging.info(
         f"Serveurs MCP actifs : {noms_serveurs_actifs or '(aucun)'} "
