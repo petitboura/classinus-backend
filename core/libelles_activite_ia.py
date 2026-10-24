@@ -1,8 +1,9 @@
 """
 Libellés de la timeline du chat écrits par l'IA elle-même (23/10/2026, demande de
 Bourama). Chaque outil proposé à l'IA reçoit un paramètre optionnel, dans lequel elle
-décrit en une courte phrase ce qu'elle fait pour l'utilisateur (« Je cherche des vidéos
-sur les dérivées »), dans la langue de la conversation.
+décrit en un court groupe nominal, sans verbe conjugué, ce qu'elle fait pour l'utilisateur
+(« Recherche de vidéos sur les dérivées »), dans la langue de la conversation. Changement
+du 24/10/2026 : plus de phrases au présent à la première personne (« Je cherche… »).
 
 Règles de la base posée ici :
 - Le paramètre est optionnel : sans phrase valable, le texte fixe habituel s'affiche
@@ -22,12 +23,14 @@ PARAMETRE_LIBELLE_OUTIL = "libelle_activite"
 LONGUEUR_MAX_LIBELLE = 90
 
 _DESCRIPTION_PARAMETRE = (
-    "Optionnel mais à toujours remplir. Une courte phrase (moins de 12 mots) à la première "
-    "personne qui dit à l'utilisateur ce que tu fais en ce moment, avec son sujet réel, "
-    "écrite dans la langue dans laquelle il t'écrit. Sans nom d'outil, sans nom de fichier, "
-    "sans jargon technique, sans point final. "
-    "Exemples : « Je cherche des vidéos sur les dérivées », « Je lis ton cours de chimie », "
-    "« I'm looking for videos on derivatives »."
+    "Optionnel mais à toujours remplir. Un court libellé (moins de 8 mots) qui dit à "
+    "l'utilisateur ce que tu fais en ce moment, avec son sujet réel, écrit dans la langue "
+    "dans laquelle il t'écrit. Il doit être un groupe nominal : un nom d'action suivi de son "
+    "sujet, jamais une phrase avec un verbe conjugué, jamais à la première personne, jamais "
+    "au présent (pas de « Je cherche », « Je lis », « I'm looking for »). "
+    "Sans nom d'outil, sans nom de fichier, sans jargon technique, sans point final. "
+    "Exemples : « Recherche de vidéos sur les dérivées », « Lecture de ton cours de chimie », "
+    "« Video search on derivatives », « Chemistry course reading »."
 )
 
 
