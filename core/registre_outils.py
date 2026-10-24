@@ -540,6 +540,16 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "generer_document_latex": {"label": "Génération d'un document LaTeX", "icone": "FileDigit", "onglet": "generer"},
     "generer_code": {"label": "Génération de code", "icone": "Code", "onglet": "generer"},
     "gerer_execution_code": {"label": "Exécution de code", "icone": "Play", "onglet": "generer"},
+    # Une icône et un libellé par action de l'outil (24/10/2026, demande de Bourama). Entrées
+    # composites "outil:action", jamais cliquables dans le menu Outils (onglet None) : seul
+    # l'affichage dans le chat change. Libellés de 18 caractères au plus (téléphone).
+    "gerer_execution_code:run_code": {"label": "Exécution de code", "icone": "Play", "onglet": None},
+    "gerer_execution_code:run_command": {"label": "Commande shell", "icone": "Terminal", "onglet": None},
+    "gerer_execution_code:write_file": {"label": "Ajout d'un fichier", "icone": "FilePlus", "onglet": None},
+    "gerer_execution_code:read_file": {"label": "Lecture de fichier", "icone": "FileText", "onglet": None},
+    "gerer_execution_code:list_files": {"label": "Liste des fichiers", "icone": "FolderOpen", "onglet": None},
+    "gerer_execution_code:download_files": {"label": "Export de fichiers", "icone": "Download", "onglet": None},
+    "gerer_execution_code:close": {"label": "Fin de l'espace", "icone": "Power", "onglet": None},
     "generer_site_zip": {"label": "Génération d'un site (zip)", "icone": "Package", "onglet": "generer"},
     "generer_bundle": {"label": "Génération d'une archive", "icone": "Archive", "onglet": "generer"},
     "generer_image": {"label": "Génération d'une image", "icone": "Image", "onglet": "generer"},
