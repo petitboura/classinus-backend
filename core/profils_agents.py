@@ -9,7 +9,7 @@ from groq import Groq
 from constantes_agent import get_secret, supabase, MODELE_PROFIL, SEUIL_PROFIL_MESSAGES, DELAI_MAX_PAR_APPEL
 from filtre_texte_streaming import NOMS_OUTILS_LISIBLES
 from registre_outils import VERBES_ACTIONS, verbe_de_action, plateforme_outil_personnel, est_outil_sensible_serveur_personnel, libelle_outil_plateforme
-from domaines_affichage import domaines_de_l_appel
+from domaines_affichage import domaines_de_l_appel, langage_de_l_appel
 
 def _nom_agent(agent_id):
     """
@@ -88,13 +88,23 @@ def _champs_domaines_appel(appel):
     les sites visés par l'appel, pour que le chat montre leur logo. Dictionnaire
     vide quand l'outil ne vise aucun site précis, à étaler dans l'événement
     (`**_champs_domaines_appel(appel)`) : aucune clé vide n'est envoyée.
+
+    Champ "langage" (24/10/2026, demande Bourama) : pour l'action run_code de
+    l'outil Exécution de code, le langage lancé, que le chat montre en petit
+    badge sur l'icône Play. Même principe : absent quand il ne s'applique pas.
     """
     try:
         arguments = json.loads(appel["arguments"] or "{}")
     except Exception:
         arguments = {}
+    champs = {}
     domaines = domaines_de_l_appel(appel["name"], arguments)
-    return {"domaines": domaines} if domaines else {}
+    if domaines:
+        champs["domaines"] = domaines
+    langage = langage_de_l_appel(appel["name"], arguments)
+    if langage:
+        champs["langage"] = langage
+    return champs
 
 
 def _nom_lisible_appel(appel):

@@ -110,3 +110,31 @@ def domaines_de_l_appel(nom_outil, arguments):
     except Exception as e:
         logging.error(f"AFFICHAGE : domaines de l'outil {nom_outil} illisibles ({e}).")
         return []
+
+
+# Langages de l'outil Exécution de code dont le chat montre le logo (24/10/2026,
+# demande Bourama : le logo du langage se pose en petit badge sur l'icône Play de
+# la ligne). Mêmes valeurs que le paramètre `language` de gerer_execution_code
+# (core/outils_execution_code.py), Python étant le langage par défaut de l'outil.
+LANGAGES_EXECUTION_CODE = ("python", "javascript", "typescript", "bash")
+LANGAGE_EXECUTION_CODE_DEFAUT = "python"
+
+
+def langage_de_l_appel(nom_outil, arguments):
+    """
+    Langage lancé par cet appel, seulement pour l'action run_code de l'outil
+    Exécution de code ("python", "javascript", "typescript" ou "bash"). None pour
+    tout autre outil ou toute autre action (commande shell, fichiers...) : ces
+    lignes gardent leur icône seule. Un langage absent donne le langage par
+    défaut de l'outil, un langage inconnu donne None (jamais une icône devinée).
+    """
+    try:
+        if nom_outil != "gerer_execution_code" or not isinstance(arguments, dict):
+            return None
+        if arguments.get("action") != "run_code":
+            return None
+        langage = arguments.get("language") or LANGAGE_EXECUTION_CODE_DEFAUT
+        return langage if langage in LANGAGES_EXECUTION_CODE else None
+    except Exception as e:
+        logging.error(f"AFFICHAGE : langage de l'outil {nom_outil} illisible ({e}).")
+        return None
