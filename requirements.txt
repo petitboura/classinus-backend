@@ -20,6 +20,7 @@ anthropic
 openai
 mcp==2.0.0
 e2b>=2.51,<3
+mcp-video[image]==1.2.1
 httpx
 weasyprint
 markdown

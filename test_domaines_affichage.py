@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from core.domaines_affichage import domaine_de_adresse, domaines_de_l_appel  # noqa: E402
+from core.domaines_affichage import domaine_de_adresse, domaines_de_l_appel, langage_de_l_appel  # noqa: E402
 
 
 def _sources():
@@ -96,6 +96,32 @@ class TestDomainesRechercheDocument(unittest.TestCase):
     def test_source_inconnue_ne_montre_rien(self):
         _sources()
         self.assertEqual(domaines_de_l_appel("rechercher_document_externe", {"source": "bibliotheque imaginaire"}), [])
+
+
+class TestLangageDeLAppel(unittest.TestCase):
+    """Langage lancé par l'outil Exécution de code (badge sur l'icône Play, 24/10/2026)."""
+
+    def test_run_code_donne_son_langage(self):
+        for langage in ("python", "javascript", "typescript", "bash"):
+            self.assertEqual(
+                langage_de_l_appel("gerer_execution_code", {"action": "run_code", "language": langage}),
+                langage,
+            )
+
+    def test_langage_absent_donne_le_defaut_de_l_outil(self):
+        self.assertEqual(langage_de_l_appel("gerer_execution_code", {"action": "run_code"}), "python")
+
+    def test_langage_inconnu_ne_donne_rien(self):
+        self.assertIsNone(langage_de_l_appel("gerer_execution_code", {"action": "run_code", "language": "cobol"}))
+
+    def test_autres_actions_et_autres_outils_ne_donnent_rien(self):
+        self.assertIsNone(langage_de_l_appel("gerer_execution_code", {"action": "run_command", "language": "bash"}))
+        self.assertIsNone(langage_de_l_appel("gerer_execution_code", {"action": "write_file"}))
+        self.assertIsNone(langage_de_l_appel("generer_code", {"action": "run_code", "language": "python"}))
+
+    def test_arguments_invalides_ne_font_jamais_echouer(self):
+        self.assertIsNone(langage_de_l_appel("gerer_execution_code", None))
+        self.assertIsNone(langage_de_l_appel("gerer_execution_code", "pas un dictionnaire"))
 
 
 if __name__ == "__main__":

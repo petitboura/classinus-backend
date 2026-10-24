@@ -713,6 +713,16 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
         logging.error(f"ERREUR SUPABASE (export higgsfield_oauth_connections pour {user_id}) : {e}")
         export["connexion_higgsfield_mcp"] = {"erreur": "recuperation impossible, reessayer plus tard"}
 
+    # Vidéos du montage : noms, tailles, durées et nombre de fichiers produits
+    # (pas le contenu des vidéos), voir core/video_workspaces.py.
+    try:
+        from core.video_workspaces import lister_videos_utilisateur
+
+        export["videos_montage"] = lister_videos_utilisateur(user_id)
+    except Exception as e:
+        logging.error(f"ERREUR export vidéos du montage pour {user_id} : {e}")
+        export["videos_montage"] = {"erreur": "recuperation impossible, reessayer plus tard"}
+
     # follows et messages_directs : deux colonnes possibles chacune (sens
     # de la relation), donc pas dans la boucle simple ci-dessus.
     try:

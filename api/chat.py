@@ -26,6 +26,8 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Dict, List, Optional, Literal
 
 from api.auth import utilisateur_optionnel, supabase
+from core.erreurs import erreur_api
+from core.video_workspaces import chemin_video, lire_metadonnees_video, workspace_dir
 from core.arret_tour import demander_arret_utilisateur, fermer_arret, ouvrir_arret
 from core.canal_agent_applicatif import (
     annuler_attentes, debuter_tour, definir_lecture_editeur_chat, diffuser_arret, renvoyer_messages_non_lus,
@@ -75,6 +77,54 @@ class RepriseConfirmation(BaseModel):
     approuve: bool
 
 
+class ZoneSelectionVideo(BaseModel):
+    """Zone normalisée en coordonnées relatives à l'image vidéo (0 à 1)."""
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    largeur: float = Field(gt=0, le=1)
+    hauteur: float = Field(gt=0, le=1)
+
+
+class ContexteVideoPayload(BaseModel):
+    """Contexte de montage associé à une source déjà déposée dans la conversation."""
+    video_id: str = Field(min_length=32, max_length=32)
+    nom_fichier: Optional[str] = None
+    duree_secondes: Optional[float] = Field(default=None, ge=0, le=120)
+    debut: Optional[float] = Field(default=None, ge=0)
+    fin: Optional[float] = Field(default=None, ge=0)
+    zone: Optional[ZoneSelectionVideo] = None
+    # Champs renseignés côté serveur uniquement après contrôle de propriété.
+    source_path: Optional[str] = None
+
+
+def _contexte_video_depuis_message(user_id: str, conversation_id: str, message_id: int) -> Optional["ContexteVideoPayload"]:
+    """Réessayer : retrouve la sélection vidéo enregistrée avec la question d'origine.
+
+    Seule une ligne "user" de CET utilisateur et de CETTE conversation est lue ;
+    le résultat repasse ensuite par la même validation qu'un envoi normal
+    (propriété de la source, durée, zone). Retourne None s'il n'y a rien à reprendre.
+    """
+    try:
+        res = (
+            supabase.table("historique_conversations")
+            .select("meta")
+            .eq("id", message_id)
+            .eq("user_id", user_id)
+            .eq("conversation_id", conversation_id)
+            .eq("role", "user")
+            .limit(1)
+            .execute()
+        )
+        lignes = res.data or []
+        brut = ((lignes[0].get("meta") or {}) if lignes else {}).get("contexte_video")
+        if not isinstance(brut, dict):
+            return None
+        return ContexteVideoPayload(**{k: v for k, v in brut.items() if k != "source_path"})
+    except Exception:
+        logging.exception("Contexte vidéo introuvable pour réessayer le message %s", message_id)
+        return None
+
+
 class EnvoyerMessagePayload(BaseModel):
     # message/agent_id optionnels : sur un appel de reprise (après
     # confirmation_requise), seul `reprise` est fourni -- chat_generateur
@@ -111,6 +161,9 @@ class EnvoyerMessagePayload(BaseModel):
     # api/uploads.py:uploader_video_chat). Combinable avec image_url mais
     # rarement les deux en même temps en pratique.
     images_base64: Optional[List[str]] = Field(default=None, max_length=12)
+    # Atelier vidéo contextuel : la source est vérifiée par utilisateur+conversation
+    # avant d'être transmise à core/main.py. Absent = comportement historique.
+    contexte_video: Optional[ContexteVideoPayload] = None
     # Zip(s) joint(s) au message (26/09/2026, chantier "zip en
     # conversation") : job_id(s) renvoyé(s) par
     # POST /api/uploads/zip-chat/demarrer, appelé DÈS l'upload (avant
@@ -315,6 +368,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
                 client=payload.client,
                 libelles_client=payload.libelles_client,
                 origine=payload.origine,
+                contexte_video=payload.contexte_video.model_dump() if payload.contexte_video else None,
                 langue_interface=langue_interface,
             )
         for evenement in generateur:
@@ -416,6 +470,40 @@ def envoyer_message(request: Request, payload: EnvoyerMessagePayload, utilisateu
     user_id = utilisateur.id if utilisateur else None
     valeur_langue = request.headers.get("accept-language", "fr").split(",", 1)[0].strip().lower()
     langue_interface = "en" if valeur_langue == "en" or valeur_langue.startswith("en-") else "fr"
+
+    # Le montage vidéo est réservé aux comptes connectés et aux sources déposées
+    # dans CETTE conversation. Ne jamais accepter le chemin absolu fourni par le client.
+    if payload.contexte_video is None and payload.regenerer and payload.parent_id and user_id and payload.conversation_id:
+        payload.contexte_video = _contexte_video_depuis_message(user_id, payload.conversation_id, payload.parent_id)
+    if payload.contexte_video is not None:
+        contexte = payload.contexte_video
+        if not user_id or not payload.conversation_id:
+            raise erreur_api(401, "MONTAGE_VIDEO_CONNEXION_REQUISE")
+        if (contexte.debut is None) != (contexte.fin is None):
+            raise erreur_api(422, "MONTAGE_VIDEO_INTERVALLE_INCOMPLET")
+        if contexte.debut is None and contexte.zone is None:
+            raise erreur_api(422, "MONTAGE_VIDEO_SELECTION_REQUISE")
+        if contexte.zone and (
+            contexte.zone.x + contexte.zone.largeur > 1.000001
+            or contexte.zone.y + contexte.zone.hauteur > 1.000001
+        ):
+            raise erreur_api(422, "MONTAGE_VIDEO_ZONE_HORS_IMAGE")
+        try:
+            metadata = lire_metadonnees_video(user_id, payload.conversation_id, contexte.video_id)
+            source = chemin_video(user_id, payload.conversation_id, contexte.video_id)
+            duree_reelle = float(metadata.get("duree_secondes") or 0)
+        except (ValueError, FileNotFoundError, OSError):
+            raise erreur_api(404, "MONTAGE_VIDEO_INTROUVABLE") from None
+        if contexte.debut is not None and contexte.fin is not None:
+            if contexte.fin <= contexte.debut:
+                raise erreur_api(422, "MONTAGE_VIDEO_FIN_AVANT_DEBUT")
+            if duree_reelle > 0 and contexte.fin > duree_reelle + 0.05:
+                raise erreur_api(422, "MONTAGE_VIDEO_SELECTION_TROP_LONGUE")
+        racine = workspace_dir(user_id, payload.conversation_id, create=False)
+        contexte.nom_fichier = metadata.get("nom_fichier") or contexte.nom_fichier
+        contexte.duree_secondes = duree_reelle
+        contexte.source_path = source.relative_to(racine).as_posix()
+
     if user_id and acces_chat_bloque_pour_mineur(user_id):
         return StreamingResponse(
             _evenement_bloque(

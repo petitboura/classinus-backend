@@ -68,6 +68,21 @@ def _url_generation(get_secret, user_id, agent_id, conversation_id=None):
     return url
 
 
+def _url_video(get_secret, user_id, agent_id, conversation_id=None):
+    # Serveur dédié au montage vidéo (core/serveur_mcp_video.py).
+    # Interrogé avec un contexte vidéo, ou sans vidéo jointe si le registre plateforme l'active.
+    port = os.environ.get("PORT", "8000")
+    from urllib.parse import urlencode
+    params = urlencode({"user_id": user_id or "", "conversation_id": conversation_id or ""})
+    return f"http://localhost:{port}/mcp/video/?{params}"
+
+
+def _headers_video(get_secret, user_id, agent_id):
+    # Jeton serveur-à-serveur : aucune clé ne passe dans l'URL.
+    secret = get_secret("SUPABASE_SECRET")
+    return {"Authorization": f"Bearer {secret}"} if secret else None
+
+
 def _url_github(get_secret, user_id, agent_id, conversation_id=None):
     # Même logique que _url_generation ci-dessus -- serveur MCP interne
     # (core/serveur_mcp_github.py), pas un tiers externe.
@@ -247,6 +262,16 @@ SERVEURS_MCP = [
         "url_builder": _url_execution_code,
         "headers_builder": _headers_execution_code,
         "necessite_utilisateur": True,
+    },
+    {
+        "nom": "video",
+        "url_builder": _url_video,
+        "headers_builder": _headers_video,
+        "necessite_utilisateur": True,
+        # Avec un contexte vidéo validé : forcé, comme avant. Sans vidéo jointe : proposé
+        # via demander_outils (catégorie montage_video) quand le registre plateforme le
+        # déclare disponible (migrations/2026_10_24_outils_montage_video.sql).
+        # Ne pas ajouter ce serveur au menu d'outils manuel.
     },
     {
         "nom": "github",
@@ -938,6 +963,11 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "consulter_signalement": {"label": "Consultation d'un signalement", "icone": "Flag", "onglet": None},
     "enregistrer_note_signalement": {"label": "Note sur un signalement", "icone": "NotebookPen", "onglet": None},
     "rattacher_signalement_notion": {"label": "Rattacher un signalement", "icone": "Link", "onglet": None},
+
+    # Atelier vidéo contextuel : les outils sont pilotés par Clovis, jamais
+    # sélectionnés manuellement dans le menu d'outils.
+    "video_lister_outils": {"label": "Recherche des capacités vidéo", "icone": "Clapperboard", "onglet": None},
+    "video_executer_outil": {"label": "Montage vidéo", "icone": "Film", "onglet": None},
 }
 
 # --- Verbes des actions (24/09/2026, demande Bourama : regroupement des
@@ -1067,9 +1097,19 @@ CATEGORIES_OUTILS = {
     "generation_documents": [
         "generer_document", "generer_document_word", "generer_document_excel",
         "generer_document_powerpoint", "generer_document_latex", "generer_code",
-        "gerer_execution_code", "generer_site_zip", "generer_bundle", "generer_image", "deployer_site",
+        "generer_site_zip", "generer_bundle", "generer_image", "deployer_site",
         "exporter_donnees", "calculer_symbolique",
     ],
+    # Exécution de code (24/10/2026, demande Bourama) : catégorie à part, retiré
+    # de generation_documents où il ne créait aucun document. Il lance du code
+    # et des commandes et gère des fichiers dans un espace de travail.
+    # generer_code (qui écrit du code sans l'exécuter) reste dans
+    # generation_documents.
+    "execution_code": ["gerer_execution_code"],
+    # Montage vidéo (24/10/2026, demande Bourama) : disponible sans vidéo jointe, via
+    # demander_outils comme les autres catégories. Distinct de recherche_web
+    # (rechercher_video, lire_video = vidéos du web) et de higgsfield (génération IA).
+    "montage_video": ["video_lister_outils", "video_executer_outil"],
     # rechercher_image range ici (avec Tavily), pas dans generation_documents :
     # onglet="rechercher" dans REGISTRE_AFFICHAGE_OUTILS ci-dessus, c'est une
     # recherche d'image EXISTANTE sur le web, pas une creation (voir
@@ -1177,6 +1217,9 @@ INDEX_CATEGORIES_OUTILS = (
     "Catégories : notion, google_drive, github, vercel (sites et déploiements), "
     "railway (services et logs), supabase (base de données et SQL), "
     "higgsfield (génération d'images et de vidéos), generation_documents, "
+    "execution_code (lancer du code et des commandes, gérer des fichiers dans un espace de travail), "
+    "montage_video (créer ou modifier une vidéo : couper, assembler, sous-titrer, effets, animations ; "
+    "pas pour chercher une vidéo sur le web), "
     "recherche_web (web, actualité, images et vidéos ; pas le premier réflexe "
     "pour trouver un livre ou un PDF), bibliotheque (documents/dossiers "
     "personnels), catalogue_public, documents_externes (TOUT livre, manuel, PDF, "
@@ -1237,6 +1280,7 @@ GROUPES_OUTILS = {
         "rechercher_document_externe", "lire_document_externe", "lire_document_internet_archive",
     ],
     "video": ["rechercher_video", "lire_video"],
+    "montage_video": ["video_lister_outils", "video_executer_outil"],
     "conversations_passees": ["lister_conversations_historique", "lire_conversation_historique"],
     "bibliotheque": [
         "gerer_document_bibliotheque", "gerer_dossier_bibliotheque", "gerer_fichier_conversation",
