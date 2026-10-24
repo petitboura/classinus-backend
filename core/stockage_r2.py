@@ -52,9 +52,15 @@ R2_BUCKET_NAME = _get_secret("R2_BUCKET_NAME")
 
 # Base publique des URLs renvoyées par get_public_url(). Par défaut, ce
 # backend lui-même (voir api/fichiers_r2.py). RAILWAY_PUBLIC_DOMAIN est
-# posée automatiquement par Railway sur chaque service exposé.
-R2_PUBLIC_BASE_URL = _get_secret("R2_PUBLIC_BASE_URL") or (
-    f"https://{_get_secret('RAILWAY_PUBLIC_DOMAIN')}" if _get_secret("RAILWAY_PUBLIC_DOMAIN") else None
+# posée automatiquement par Railway sur chaque service exposé, et
+# RENDER_EXTERNAL_URL (URL complète, schéma compris) par Render sur chaque
+# service web. Sans l'une de ces deux variables, les URLs d'images
+# deviennent relatives et le téléchargement pour l'analyse d'image échoue.
+R2_PUBLIC_BASE_URL = (
+    _get_secret("R2_PUBLIC_BASE_URL")
+    or (f"https://{_get_secret('RAILWAY_PUBLIC_DOMAIN')}" if _get_secret("RAILWAY_PUBLIC_DOMAIN") else None)
+    or (_get_secret("RENDER_EXTERNAL_URL") or "").rstrip("/")
+    or None
 )
 
 _client = boto3.client(

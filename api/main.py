@@ -643,11 +643,18 @@ CHEMIN_INTERNE_MCP_ESPACE = "/mcp/espace"
 _hote_mcp_public = hote_depuis_url(URL_BASE_PUBLIQUE)
 
 _domaine_public_railway = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
-# Hotes autorises : domaine de service Railway (comme avant) ET domaine
-# dedie du connecteur, sinon la protection anti DNS rebinding rejetterait
-# les requetes arrivant par ce dernier (421 Misdirected Request).
+# Render pose RENDER_EXTERNAL_HOSTNAME (nom d'hote seul, sans schema) sur
+# chaque service web, comme Railway pose RAILWAY_PUBLIC_DOMAIN. Sans lui,
+# sur Render, le domaine onrender.com du service serait rejete.
+_domaine_public_render = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+# Hotes autorises : domaine de service Railway ou Render (selon la
+# plateforme) ET domaine dedie du connecteur, sinon la protection anti DNS
+# rebinding rejetterait les requetes arrivant par l'un d'eux (421
+# Misdirected Request).
 _hotes_autorises_transport = [
-    hote for hote in (_domaine_public_railway, _hote_mcp_public) if hote
+    hote
+    for hote in (_domaine_public_railway, _domaine_public_render, _hote_mcp_public)
+    if hote
 ]
 _reglages_securite_transport = (
     TransportSecuritySettings(
