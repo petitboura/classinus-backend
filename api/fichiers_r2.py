@@ -20,7 +20,7 @@ from botocore.exceptions import ClientError
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import StreamingResponse
 
-from core import stockage_r2
+from core import config_skills, stockage_r2
 from core.erreurs import erreur_api
 
 router = APIRouter(prefix="/fichiers/r2", tags=["fichiers"])
@@ -86,6 +86,10 @@ def _reponse_plage_invalide(bucket_logique: str, chemin: str) -> Response:
 
 @router.api_route("/{bucket_logique}/{chemin:path}", methods=["GET", "HEAD"])
 def servir_fichier_r2(bucket_logique: str, chemin: str, request: Request):
+    # Les fichiers de skills sont privés : ils ne sortent que par /api/skills,
+    # avec authentification. Même réponse que pour un fichier absent.
+    if bucket_logique == config_skills.BUCKET:
+        raise erreur_api(404, "FICHIER_INTROUVABLE")
     if request.method == "HEAD":
         meta = _meta(bucket_logique, chemin)
         return Response(

@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from api.auth import utilisateur_courant, utilisateur_optionnel, supabase
 from api.agents import supprimer_agent_completement
 from api.journal import journaliser
+from core import config_skills, stockage_r2
 from core.limitation_debit import limiteur
 from core.purge_compte import purger_donnees_compte
 from creation_agent import generer_id_depuis_nom
@@ -638,6 +639,7 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
         ("codes_partage_crees", "codes_partage", "proprietaire_id"),
         ("invitations_crees", "invitations_classinus", "proprietaire_id"),
         ("comportements_etudiant", "comportements_etudiants", "etudiant_id"),
+        ("skills_independants", "skills", "owner_id"),
     )
     for cle_export, table, colonne in tables_par_colonne_simple:
         try:
@@ -646,6 +648,27 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
         except Exception as e:
             logging.error(f"ERREUR SUPABASE (export {table} pour {user_id}) : {e}")
             export[cle_export] = {"erreur": "recuperation impossible, reessayer plus tard"}
+
+    try:
+        ids_skills = [row["id"] for row in (supabase.table("skills").select("id").eq("owner_id", user_id).execute().data or [])]
+        fichiers_skills = (supabase.table("skill_files").select("*").in_("skill_id", ids_skills).execute().data or []) if ids_skills else []
+        for fichier in fichiers_skills:
+            # Le texte des skills n'est que dans R2 : on l'ajoute à l'export.
+            try:
+                brut = stockage_r2.from_(config_skills.BUCKET).download(fichier["cle_stockage"])
+                try:
+                    fichier["contenu"] = brut.decode("utf-8")
+                except UnicodeDecodeError:
+                    fichier["contenu"] = None
+                    fichier["contenu_non_texte"] = True
+            except Exception as e:
+                logging.error(f"ERREUR R2 (export fichier skill {fichier.get('cle_stockage')} pour {user_id}) : {e}")
+                fichier["contenu"] = None
+                fichier["erreur"] = "lecture impossible, reessayer plus tard"
+        export["fichiers_skills_independants"] = fichiers_skills
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (export skill_files pour {user_id}) : {e}")
+        export["fichiers_skills_independants"] = {"erreur": "recuperation impossible, reessayer plus tard"}
 
     # Connexions personnelles aux plateformes (Vercel, Railway, Supabase) :
     # seulement le service et les dates, JAMAIS les jetons ni les secrets.
