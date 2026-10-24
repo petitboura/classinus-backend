@@ -66,25 +66,6 @@ def _identite_interne(ctx: Context):
     return user_id, conversation_id, None
 
 
-def _utilisateur_autorise(user_id: str) -> bool:
-    """Un mineur explicite est bloqué; une erreur de vérification bloque l'exécution."""
-    try:
-        resultat = (
-            _client_supabase().table("profiles")
-            .select("est_majeur")
-            .eq("user_id", user_id)
-            .maybe_single()
-            .execute()
-        )
-        if not resultat or not resultat.data:
-            return False
-        # Cette capacité est réservée aux comptes explicitement majeurs : NULL bloque aussi.
-        return resultat.data.get("est_majeur") is True
-    except Exception as e:
-        logging.error("ERREUR vérification majorité exécution code: %s", type(e).__name__)
-        return False
-
-
 def _chemin_relatif_sur(chemin: str) -> str:
     if not isinstance(chemin, str):
         raise ValueError("Le chemin doit être du texte.")
@@ -421,8 +402,6 @@ def gerer_execution_code(
     user_id, conversation_id, erreur_identite = _identite_interne(ctx)
     if erreur_identite:
         return erreur_identite
-    if not _utilisateur_autorise(user_id):
-        return "EXECUTION_CODE_NOT_ALLOWED: cet outil n'est pas autorisé pour ce compte."
     if not os.environ.get("E2B_API_KEY"):
         return "EXECUTION_CODE_NOT_CONFIGURED: le service d'exécution de code n'est pas configuré sur le serveur."
 
