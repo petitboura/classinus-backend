@@ -68,6 +68,7 @@ import jwt as pyjwt
 from google.oauth2 import service_account
 from google.auth.transport.requests import Request as GoogleAuthRequest
 from pywebpush import webpush, WebPushException
+from py_vapid import Vapid
 
 from api.auth import supabase
 from core.notifications import corps_nouvelle_version, creer_notification
@@ -122,6 +123,16 @@ def _pem_prive() -> str:
     brut = (_get_secret("VAPID_PRIVATE_KEY_PEM_B64") or "").strip().strip("\"'").strip()
     texte = brut if "BEGIN" in brut else base64.b64decode(brut).decode("ascii")
     return texte.replace("\\n", "\n").strip() + "\n"
+
+
+def _cle_vapid() -> Vapid:
+    """
+    Objet clé prêt pour pywebpush. `webpush()` lit une CHAÎNE comme du base64 DER, jamais comme du
+    PEM : lui passer le PEM tel quel faisait échouer chaque envoi avec « ASN.1 parsing error:
+    invalid length », même avec une clé valide (constaté sur staging le 24/10/2026). On construit
+    donc l'objet clé nous-mêmes à partir du PEM.
+    """
+    return Vapid.from_pem(_pem_prive().encode("ascii"))
 
 
 def enregistrer_abonnement(user_id: str, subscription_info: dict) -> None:
@@ -472,7 +483,7 @@ def envoyer_notification_push(user_id: str, titre: str, corps: str, url: str = N
                     webpush(
                         subscription_info=subscription_info,
                         data=payload,
-                        vapid_private_key=_pem_prive(),
+                        vapid_private_key=_cle_vapid(),
                         vapid_claims={"sub": VAPID_CLAIMS_SUB},
                     )
                     envoyes += 1
