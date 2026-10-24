@@ -14,7 +14,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "cor
 # Une fausse source évite les dépendances réseau et les imports de collecte.
 _sources_docs = types.ModuleType("core.sources_documents_externes")
 _sources_docs.noms_sources = lambda: []
-sys.modules.setdefault("core.sources_documents_externes", _sources_docs)
+# Le faux module est retiré juste après l'import du registre : sinon il resterait en place
+# et casserait les autres tests qui utilisent la vraie source dans le même processus.
+_faux_sources_ajoute = "core.sources_documents_externes" not in sys.modules
+if _faux_sources_ajoute:
+    sys.modules["core.sources_documents_externes"] = _sources_docs
 
 # registre_outils importe des modules qui ouvrent une connexion Supabase à
 # l'import : on les remplace par des modules vides pour tester sans environnement.
@@ -34,6 +38,9 @@ if "supabase" not in sys.modules:
     sys.modules["supabase"] = _supabase
 
 from core import registre_outils as r  # noqa: E402
+
+if _faux_sources_ajoute:
+    sys.modules.pop("core.sources_documents_externes", None)
 
 
 def _outil(nom):
