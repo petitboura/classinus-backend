@@ -913,6 +913,10 @@ def _capturer_reponse(generateur, accumulateur, meta=None, fichiers_generes_accu
             # réouverture d'une conversation. Absents = comme avant.
             if event.get("domaines"):
                 entree_meta["domaines"] = event["domaines"]
+            # 24/10/2026 (demande Bourama, logo du langage sur le Play) : gardé
+            # pour survivre à la réouverture d'une conversation, absent sinon.
+            if event.get("langage"):
+                entree_meta["langage"] = event["langage"]
             meta.setdefault("outils", []).append(dict(entree_meta))
             meta.setdefault("segments", []).append({"type": "outil", **entree_meta})
         elif meta is not None and event["type"] == "sources" and meta.get("outils"):
