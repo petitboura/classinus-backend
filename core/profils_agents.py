@@ -109,7 +109,18 @@ def _champs_domaines_appel(appel):
 
 def _nom_lisible_appel(appel):
     """Raccourci : libellé lisible pour un appel complet (dict avec 'name' et 'arguments'), en tenant compte de son action le cas échéant."""
-    return _nom_lisible(appel["name"], _action_appel(appel))
+    action = _action_appel(appel)
+    if appel["name"] == "gerer_execution_code" and action == "demander_acces_reseau":
+        # 25/10/2026 : la carte de confirmation n'affiche que ce libellé (détails repliés).
+        # L'élève doit donc voir le domaine ici, pas seulement dans les détails.
+        try:
+            arguments = json.loads(appel["arguments"] or "{}")
+        except Exception:
+            arguments = {}
+        domaines = domaines_de_l_appel(appel["name"], arguments)
+        if domaines:
+            return f"Accès au site {domaines[0]}"
+    return _nom_lisible(appel["name"], action)
 
 
 def _charger_schema_profil(agent_id):
