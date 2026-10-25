@@ -479,9 +479,9 @@ OUTILS_SENSIBLES = {
     # "supprimer_examen" retirées le 29/08/2026 -- ces outils n'existent
     # plus (fonctionnalité "Programme" désactivée et isolée, voir
     # _desactive_programme/LISEZ_MOI_NE_JAMAIS_REUTILISER.md).
-    # Consolidé le 26/08 en une action de gerer_comportement (voir format
+    # Consolidé le 26/08 en une action de gerer_comportement, renommé gerer_configuration le 25/10 (voir format
     # "nom_outil:action" expliqué plus bas pour gerer_document_bibliotheque).
-    "gerer_comportement:supprimer",
+    "gerer_configuration:supprimer",
     # Skills avec dossier et fichiers (25/10/2026) : deux actions destructives.
     "gerer_skill:supprimer",
     "gerer_skill:supprimer_fichier",
@@ -815,7 +815,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # à neuf.
     "consulter_matiere_active": {"label": "Matière active", "icone": "BookOpen", "onglet": None},
     "annuler_derniere_modification": {"label": "Annuler la modification", "icone": "Undo2", "onglet": None},
-    "gerer_comportement": {"label": "Mes skills", "icone": "ScrollText", "onglet": None},
+    "gerer_configuration": {"label": "Ma configuration", "icone": "Settings2", "onglet": None},
     "gerer_skill": {"label": "Mes skills", "icone": "ScrollText", "onglet": None},
     # Routage en deux niveaux (22/08/2026, demande Bourama) : jamais un
     # outil que le grand LLM appelle lui-même (pas de tool MCP réel), c'est
@@ -1122,7 +1122,9 @@ CATEGORIES_OUTILS = {
         "rattacher_signalement_notion", "lire_reponses_qcm",
         "changer_mode_conversation",  # 25/09/2026
     ],
-    "comportement": ["gerer_comportement", "gerer_comportement_public", "gerer_skill"],
+    # 25/10/2026 : configuration et skills séparés (gerer_comportement renommé gerer_configuration).
+    "configuration": ["gerer_configuration"],
+    "skills": ["gerer_skill", "gerer_comportement_public"],
     "memoire": [
         "memoire_sommaire", "memoire_lire", "memoire_ecrire",
     ],
@@ -1208,7 +1210,7 @@ INDEX_CATEGORIES_OUTILS = (
     "personnels), catalogue_public, documents_externes (TOUT livre, manuel, PDF, "
     "thèse ou article à trouver en ligne, hors de Classinus ; sources : "
     f"{_sources_documents_externes_pour_index()}), base_connaissance (Classinus lui même), "
-    "pedagogie (avancement, signalements), comportement (skills), memoire, "
+    "pedagogie (avancement, signalements), configuration (règles, style, procédures, comportements), skills, memoire, "
     "telephone_etudiant (mobile, écran, concentration), historique "
     "(conversations passées), agent_applicatif (actions dans l'appli), minuteur (minuteurs dans le chat)."
 )
@@ -1268,7 +1270,7 @@ GROUPES_OUTILS = {
         "gerer_document_bibliotheque", "gerer_dossier_bibliotheque", "gerer_fichier_conversation",
     ],
     "telephone": ["gerer_dossier_telephone", "explorer_dossier", "gerer_session_concentration"],
-    "comportements": ["gerer_comportement", "gerer_comportement_public", "gerer_skill"],
+    "skills": ["gerer_skill", "gerer_comportement_public"],
     "site": ["generer_site_zip", "deployer_site"],
 }
 

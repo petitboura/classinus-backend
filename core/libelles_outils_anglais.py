@@ -125,6 +125,7 @@ LIBELLES_OUTILS_EN: dict[str, str] = {
     "Matière active": "Active subject",
     "Annuler la modification": "Undo the change",
     "Mes skills": "My skills",
+    "Ma configuration": "My configuration",
     "Skills des chapitres": "Chapter skills",
     "Programme": "Curriculum",
     "Consultation de l'avancement": "Check progress",

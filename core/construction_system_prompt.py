@@ -180,7 +180,7 @@ def _texte_editeur(etat):
         "- Les boutons de l'éditeur (Exécuter, Ouvrir, Enregistrer, Vers le chat, plein écran) sont dans la liste des éléments à l'écran.\n"
     )
 
-def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None, reponses_qcm_recentes=None, etat_editeur=None, configuration_etudiant=None, sommaire_memoire=None, client=None, libelles_client=None, origine=None, langue_interface="fr", skills_catalogue=None):
+def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None, reponses_qcm_recentes=None, etat_editeur=None, configuration_etudiant=None, sommaire_memoire=None, client=None, libelles_client=None, origine=None, langue_interface="fr", skills_catalogue=None):
     # Restauré le 14/08 (voir commentaire des constantes plus haut) : la
     # page Notion de l'agent (get_system_prompt) ne doit plus contenir QUE
     # la personnalité/le comportement propre à l'agent -- les 3 blocs fixes
@@ -191,8 +191,8 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # unique partagé par tout le monde :
     #   - formats/arbitrage/contexte invisible : fixes, identiques pour
     #     toute la plateforme (juste au-dessus, hors fonction)
-    #   - comportements_etudiant : écrit par CET étudiant, propre à lui
-    #     (13/08 : mécanisme "à la skill", voir juste en dessous)
+    #   - skills_catalogue et configuration_etudiant : propres à CET utilisateur
+    #     (voir juste en dessous)
     #   - bloc outils actifs / aucun outil actif : dépend de outil_force,
     #     donc de ce qui est RÉELLEMENT envoyé au modèle ce tour-ci --
     #     jamais une liste figée qui prétendrait que des outils sont
@@ -237,7 +237,6 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # AVANT de construire ce prompt (voir outils_forces_contexte plus haut
     # dans chat()) -- sinon ce bloc annonce un outil que le modèle ne peut
     # en réalité pas appeler, même contradiction que le bug du 12/08.
-    comportements_etudiant = comportements_etudiant or []
     mes_programmes = mes_programmes or []
     notions_pertinentes = notions_pertinentes or []
     signalements_pertinents = signalements_pertinents or []
@@ -267,21 +266,6 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
         )
     else:
         system_final += "\n\nMODE COURS : inactif pour cette conversation (aucun code rattaché ou aucun mode choisi)."
-
-    if comportements_etudiant:
-        candidats = "\n".join(
-            f"- id={c['id']} : {c.get('nom') or '(sans nom)'} -- {c['description']}" for c in comportements_etudiant
-        )
-        system_final += (
-            "\n\nINSTRUCTIONS PERSONNELLES POTENTIELLEMENT PERTINENTES POUR CE MESSAGE -- appelées "
-            "\"skill(s)\" dans TOUTE l'interface Classinus, \"comportement\" seulement en interne (écrites par cet "
-            "utilisateur lui-même, ou reçues d'un autre utilisateur via un code -- la description précise "
-            "\"(reçu de ...)\" dans ce second cas) :\n"
-            f"{candidats}\n"
-            "Si l'une d'elles semble s'appliquer, appelle l'outil gerer_comportement "
-            "(action=\"consulter\") avec son id pour lire son contenu complet AVANT de répondre "
-            "-- ne devine jamais son contenu à partir de la description seule."
-        )
 
     # 25/10/2026, demande Bourama : catalogue des skills avec dossier et fichiers
     # (nom et description seulement, chargement progressif comme chez Claude). Le
@@ -648,7 +632,6 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
 
     logging.info(
         f"Prompt système construit -> base_notion:{len(system_final or '')} caractères, "
-        f"comportements_etudiant:{'oui' if comportements_etudiant else 'NON'}, "
         f"configuration_etudiant:{'oui' if construire_bloc_configuration(configuration_etudiant) else 'NON'}, "
         f"programmes_etudiant:{len(mes_programmes)}, "
         f"signalements_pertinents:{len(signalements_pertinents)}, "

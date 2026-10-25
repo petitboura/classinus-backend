@@ -11,7 +11,6 @@ from comportements_etudiants import (
     lister_comportements as lister_comportements_etudiant,
     choisir_comportements_pertinents,
     separer_comportements_par_niveau,
-    lister_comportements_chapitres_pour_matiere,
     retirer_elements_destinataires_seuls,
 )
 # Fonctionnalité "Programme" désactivée et isolée le 29/08/2026 (demande
@@ -21,7 +20,7 @@ from comportements_etudiants import (
 #   from codes_partage import lister_programmes_recus_legers
 from codes_partage import lister_comportements_recus
 from core.mode_actif_conversation import rattachement_actif_pour_prompt
-from core.configuration_etudiant import separer_regles_et_styles, separer_config_retenue
+from core.configuration_etudiant import separer_regles_et_styles, separer_config_retenue, CATEGORIES_SELON_MESSAGE
 from core.memoire_eleve import obtenir_sommaire as obtenir_sommaire_memoire
 from core.persona_pedagogique_conversation import obtenir_persona_pedagogique
 from core.mode_source_conversation import obtenir_mode_source
@@ -587,7 +586,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # est décidée, indépendamment de ce que dit le routeur général.
     #
     # Pas de chemin image/vidéo (Gemini, aucun outil MCP dans cette
-    # branche, voir plus bas) -- comportements_etudiant/mes_programmes y
+    # branche, voir plus bas) -- mes_programmes y
     # restent calculés (coût négligeable, mes_programmes est déjà quasi
     # gratuit) mais outils_forces_contexte n'y est jamais fusionné.
     # Système de codes de partage (14/08, voir core/codes_partage.py) :
@@ -604,7 +603,6 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # est affiché comme un vrai résultat d'outil (voir
     # core/registre_outils.py::consulter_skills_chapitres_matiere) même si
     # c'est ce petit routeur qui décide de le déclencher, pas le grand LLM.
-    comportements_etudiant = []
     # 25/10/2026 : catalogue des skills avec dossier et fichiers (vide pour un visiteur sans compte).
     skills_catalogue = {"skills": [], "total": 0}
     # 02/10/2026, demande Bourama : Règles et Styles activés (donnés d'office),
@@ -667,7 +665,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             f_comportements_etudiant = executor.submit(lister_comportements_etudiant, agent_id, user_id)
             # Persona pédagogique (jonction items 1+8+9, 14/09/2026) : ne
             # dépend d'aucun des deux autres, lancé dans le même lot
-            # parallèle -- même principe que comportements_etudiant.
+            # parallèle -- même principe que la lecture des comportements.
             f_persona_pedagogique = executor.submit(obtenir_persona_pedagogique, conversation_id, user_id) if conversation_id else None
             # Guide de decouverte (etape 3, 16/09/2026, demande Bourama) :
             # meme principe que persona_pedagogique juste au-dessus, ne
@@ -740,35 +738,14 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             + comportements_recus
         )
         regles_actives, styles_actifs, tous_comportements = separer_regles_et_styles(tous_comportements)
-        candidats_niveau1, candidats_chapitre = separer_comportements_par_niveau(tous_comportements)
-        retenus_niveau1 = choisir_comportements_pertinents(message_utilisateur, candidats_niveau1)
-        config_retenue, retenus_niveau1 = separer_config_retenue(retenus_niveau1)
-        comportements_etudiant = list(retenus_niveau1)
+        # 25/10/2026, demande Bourama : les skills ne passent plus par l'ancien système (liste de
+        # candidats, outil de lecture). Ils sont lus uniquement par gerer_skill (catalogue du prompt).
+        # Ne restent ici que les procédures et comportements de la configuration.
+        tous_comportements = [c for c in tous_comportements if c.get("categorie") in CATEGORIES_SELON_MESSAGE]
+        candidats_niveau1, _ = separer_comportements_par_niveau(tous_comportements)
+        config_retenue, _ = separer_config_retenue(choisir_comportements_pertinents(message_utilisateur, candidats_niveau1))
         configuration_etudiant = {"regles": regles_actives, "styles": styles_actifs, "retenus": config_retenue}
 
-        matieres_retenues = {
-            c["lien_id"] for c in retenus_niveau1
-            if c.get("lien_type") == "matiere" and c.get("lien_id")
-        }
-        candidats_niveau2 = []
-        for matiere_id in matieres_retenues:
-            candidats_niveau2 += lister_comportements_chapitres_pour_matiere(candidats_chapitre, matiere_id)
-
-        if candidats_niveau2:
-            nom_outil_niveau2 = "consulter_skills_chapitres_matiere"
-            yield {"type": "statut", "texte": f"{_nom_lisible(nom_outil_niveau2)}..."}
-            retenus_niveau2 = choisir_comportements_pertinents(message_utilisateur, candidats_niveau2)
-            yield {"type": "statut_termine", "texte": f"{_nom_lisible(nom_outil_niveau2)} effectuée"}
-            yield {
-                "type": "outil_resultat",
-                "nom_outil": nom_outil_niveau2,
-                "nom_lisible": _nom_lisible(nom_outil_niveau2),
-                "resultat": (
-                    f"{len(candidats_niveau2)} skill(s) de chapitre trouvé(s), "
-                    f"{len(retenus_niveau2)} retenu(s) comme pertinent(s)."
-                ),
-            }
-            comportements_etudiant += retenus_niveau2
     # mes_programmes toujours vide désormais -- fonctionnalité "Programme"
     # désactivée le 29/08/2026, voir
     # _desactive_programme/LISEZ_MOI_NE_JAMAIS_REUTILISER.md (anciennement :
@@ -776,10 +753,8 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     mes_programmes = []
     reponses_qcm_recentes = reponses_qcm_a_injecter(historique, conversation_id)
     outils_forces_contexte = []
-    if comportements_etudiant:
-        outils_forces_contexte.append("gerer_comportement")
     if skills_catalogue["skills"]:
-        # Même raison que gerer_comportement : le prompt annonce des skills, l'outil pour les lire doit être réellement branché.
+        # Le prompt annonce des skills : l'outil pour les lire doit être réellement branché.
         outils_forces_contexte.append("gerer_skill")
     if code_id_actif:
         # 12/09/2026, demande explicite Bourama, obligation d'appel : si
@@ -1020,7 +995,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 lecture_ecran_anticipee.append(lancer_lecture_anticipee(user_id, conversation_id, table_routage_complet))
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force_contexte_seul)
             outil_force_verifie_optimiste = [o["function"]["name"] for o in outils_mcp] if outil_force_contexte_seul else None
-            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire, client=client, libelles_client=libelles_client, origine=origine, langue_interface=langue_interface, skills_catalogue=skills_catalogue)
+            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire, client=client, libelles_client=libelles_client, origine=origine, langue_interface=langue_interface, skills_catalogue=skills_catalogue)
             return outils_mcp, table_routage, system_final, catalogue_complet, table_routage_complet
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -1135,7 +1110,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id, origine=origine)
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force)
             outil_force_verifie = [o["function"]["name"] for o in outils_mcp] if outil_force else outil_force
-        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, comportements_etudiant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire, client=client, libelles_client=libelles_client, origine=origine, langue_interface=langue_interface, skills_catalogue=skills_catalogue)
+        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire, client=client, libelles_client=libelles_client, origine=origine, langue_interface=langue_interface, skills_catalogue=skills_catalogue)
 
         # PERF (10/08) : second (et dernier) point de vérification --
         # couvre tous les chemins qui ne passent PAS par le premier
