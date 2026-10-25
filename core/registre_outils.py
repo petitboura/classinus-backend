@@ -728,6 +728,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "gerer_execution_code:read_file": {"label": "Lecture de fichier", "icone": "FileText", "onglet": None},
     "gerer_execution_code:list_files": {"label": "Liste des fichiers", "icone": "FolderOpen", "onglet": None},
     "gerer_execution_code:download_files": {"label": "Export de fichiers", "icone": "Download", "onglet": None},
+    "gerer_execution_code:network": {"label": "Réseau autorisé", "icone": "Terminal", "onglet": None},
     "gerer_execution_code:close": {"label": "Fin de l'espace", "icone": "Power", "onglet": None},
     "generer_site_zip": {"label": "Génération d'un site (zip)", "icone": "Package", "onglet": "generer"},
     "generer_bundle": {"label": "Génération d'une archive", "icone": "Archive", "onglet": "generer"},

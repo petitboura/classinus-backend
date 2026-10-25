@@ -22,8 +22,14 @@ CREATE TABLE IF NOT EXISTS public.execution_code_configuration (
     sandbox_timeout_seconds integer NOT NULL DEFAULT 3600 CHECK (sandbox_timeout_seconds >= 60),
     e2b_template text NOT NULL DEFAULT 'base',
     allowed_domains text[] NOT NULL DEFAULT ARRAY[
-        'pypi.org', 'files.pythonhosted.org', 'registry.npmjs.org',
-        'index.crates.io', 'static.crates.io', 'crates.io'
+        'pypi.org', 'files.pythonhosted.org', 'pythonhosted.org',
+        'registry.npmjs.org', 'npmjs.com', 'npmjs.org', 'www.npmjs.com', 'www.npmjs.org',
+        'registry.yarnpkg.com', 'yarnpkg.com',
+        'index.crates.io', 'static.crates.io', 'crates.io',
+        'github.com', 'api.github.com', 'codeload.github.com',
+        'raw.githubusercontent.com', 'release-assets.githubusercontent.com',
+        'archive.ubuntu.com', 'security.ubuntu.com', 'conda.anaconda.org',
+        'api.anthropic.com'
     ]::text[],
     updated_at timestamptz NOT NULL DEFAULT now()
 );
