@@ -447,6 +447,8 @@ OUTILS_SENSIBLES = {
     # video par la cle API, potentiellement payante, donc TOUJOURS
     # interrompue pour confirmation avant execution.
     "lancer_video_higgsfield",
+    # Image Higgsfield (25/10/2026) : payante aussi, donc TOUJOURS interrompue pour confirmation.
+    "generer_image_higgsfield",
     # ÉCRIT réellement sur un dépôt GitHub (voir
     # core/serveur_mcp_github.py, gerer_depot_github action
     # "modifier_fichier", consolidé le 26/08, ex modifier_fichier_depot_github) :
@@ -934,6 +936,10 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # le repli si le frontend ne connaît pas cette appli.
     "lancer_video_higgsfield": {"label": "Génération d'une vidéo", "icone": "Clapperboard", "onglet": None, "appli": "higgsfield_mcp"},
     "consulter_video_higgsfield": {"label": "Suivi d'une vidéo", "icone": "Film", "onglet": None, "appli": "higgsfield_mcp"},
+    "generer_image_higgsfield": {"label": "Génération d'une image", "icone": "ImagePlus", "onglet": None, "appli": "higgsfield_mcp"},
+    "consulter_image_higgsfield": {"label": "Suivi d'une image", "icone": "Image", "onglet": None, "appli": "higgsfield_mcp"},
+    "estimer_cout_higgsfield": {"label": "Estimation du coût", "icone": "Coins", "onglet": None, "appli": "higgsfield_mcp"},
+    "annuler_generation_higgsfield": {"label": "Annulation d'une génération", "icone": "Ban", "onglet": None, "appli": "higgsfield_mcp"},
     "gerer_programme_catalogue_public": {"label": "Programmes publics", "icone": "GraduationCap", "onglet": None},
     "ajouter_commentaire_catalogue_public": {"label": "Ajout d'un commentaire public", "icone": "MessageSquarePlus", "onglet": None},
     "supprimer_commentaire_catalogue_public": {"label": "Suppression d'un commentaire public", "icone": "MessageSquareX", "onglet": None},
@@ -1143,7 +1149,11 @@ CATEGORIES_OUTILS = {
     # Outils internes de l'API vidéo Higgsfield (clé API partagée). Les outils du
     # serveur MCP personnel sont reconnus par le préfixe "higgsfield_" plus bas :
     # la catégorie les réunit tous.
-    "higgsfield": ["lancer_video_higgsfield", "consulter_video_higgsfield"],
+    "higgsfield": [
+        "lancer_video_higgsfield", "consulter_video_higgsfield",
+        "generer_image_higgsfield", "consulter_image_higgsfield",
+        "estimer_cout_higgsfield", "annuler_generation_higgsfield",
+    ],
     "google_drive": [
         "search_files", "read_file_content", "download_file_content",
         "list_recent_files", "get_file_metadata", "create_file", "copy_file",

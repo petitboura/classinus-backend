@@ -243,7 +243,7 @@ instance du serveur).
 
 Pour vérifier chaque fournisseur avec ses vraies clés (texte, appel d'outil aller-retour, chaque effort) : `python scripts/verifier_fournisseurs.py [--efforts] [--fournisseur claude]`, à lancer là où les clés existent.
 | `TOGETHER_API_KEY` | `core/generation_images.py` (meilleure fiabilité que le fournisseur par défaut) |
-| `HIGGSFIELD_API_KEY` ou `HIGGSFIELD_API_KEY_ID` + `HIGGSFIELD_API_KEY_SECRET` | `core/generation_video_higgsfield.py` : API vidéo Higgsfield/Seedance, outils exposés uniquement si une clé API est configurée |
+| `HIGGSFIELD_API_KEY` ou `HIGGSFIELD_API_KEY_ID` + `HIGGSFIELD_API_KEY_SECRET` | `core/generation_video_higgsfield.py` (envoi, suivi, prix, annulation), `core/higgsfield_catalogue.py` (modèles ouverts : vidéo seedance et kling, image grok), `core/higgsfield_requetes.py` (vérification des réglages), `core/outils_higgsfield.py` (outils vidéo, animation d'image, image, estimation du coût, annulation), outils exposés uniquement si une clé API est configurée |
 | `URL_RETOUR_APP` + migration `2026_10_20_higgsfield_mcp_oauth.sql` | `connexions/higgsfield_mcp.py` : connexion OAuth DCR par utilisateur au MCP Higgsfield; aucune clé API partagée requise |
 | `FAL_KEY` | `core/generation_3d.py`, `core/generation_video.py` — absente en prod, ces deux outils sont désactivés (`disponible=false`) |
 | `GOOGLE_TTS_API_KEY` / `AUDIO_TTS_ACTIF` | `core/generation_audio.py` — absentes en prod, `generer_audio` désactivé |
