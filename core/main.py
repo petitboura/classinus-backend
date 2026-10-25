@@ -1035,6 +1035,10 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 o for o in outils_disponibles_agent
                 if not o["function"]["name"].startswith("notion-")
                 and "depot_github" not in o["function"]["name"]
+                # MCP personnalisés exclus aussi : jusqu'à 500 outils par compte, avec des
+                # descriptions de 4000 caractères, feraient dépasser la limite du routeur.
+                # Ils restent utilisables via le bouton Outils.
+                and not o["function"]["name"].startswith("custommcp_")
             ]
             # 18/08 : filtre "onglet == generer" retire. La vraie cause de
             # l'echec du routeur etait le budget de SORTIE
