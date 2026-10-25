@@ -338,9 +338,41 @@ class TestImportZip(unittest.TestCase):
         s = S.importer_zip(faire_zip([("SKILL.md", "a"), ("__MACOSX/._SKILL.md", "x"), (".DS_Store", "x"), ("d/.DS_Store", "x")]), U)
         self.assertEqual(set(self.lus(s)), {"SKILL.md"})
 
-    def test_refus_sans_skill_md(self):
-        self.assertEqual(self.code(faire_zip([("a.md", "a"), ("b/c.md", "c")])), "ZIP_SKILL_SANS_SKILL_MD")
-        self.assertEqual(self.code(faire_zip([("d1/SKILL.md", "a"), ("d2/b.md", "b")])), "ZIP_SKILL_SANS_SKILL_MD")
+    def test_refus_sans_skill_md_et_le_message_montre_le_contenu(self):
+        with self.assertRaises(HTTPException) as e:
+            S.importer_zip(faire_zip([("a.md", "a"), ("b/c.md", "c")]), U)
+        self.assertEqual(e.exception.detail["code"], "ZIP_SKILL_SANS_SKILL_MD")
+        self.assertEqual(e.exception.detail["params"]["trouves"], "a.md, b/c.md")
+        self.assertIn("a.md, b/c.md", e.exception.detail["message"])
+
+    def test_skill_md_en_minuscules_accepte_et_renomme(self):
+        for chemin in ("skill.md", "mon/Skill.MD"):
+            base.tables.clear(); r2.objets.clear()
+            s = S.importer_zip(faire_zip([(chemin, "---\nname: Bas\n---\nx"), (chemin.rsplit("/", 1)[0] + "/b.md" if "/" in chemin else "b.md", "B")]), U)
+            self.assertEqual(set(self.lus(s)), {"SKILL.md", "b.md"})
+            self.assertEqual(s["nom"], "Bas")
+
+    def test_skill_md_dans_un_dossier_imbrique(self):
+        s = S.importer_zip(faire_zip([("a/b/SKILL.md", "---\nname: Profond\n---\nx"), ("a/b/ref/c.md", "C")]), U)
+        self.assertEqual(set(self.lus(s)), {"SKILL.md", "ref/c.md"})
+
+    def test_fichiers_a_cote_du_dossier_du_skill_sont_laisses_de_cote(self):
+        s = S.importer_zip(faire_zip([("mon/SKILL.md", "a"), ("mon/b.md", "B"), ("README.md", "r"), ("LICENSE", "l"), ("autre/x.md", "x")]), U)
+        self.assertEqual(set(self.lus(s)), {"SKILL.md", "b.md"})
+
+    def test_le_skill_md_le_moins_profond_gagne(self):
+        s = S.importer_zip(faire_zip([("SKILL.md", "racine"), ("exemples/SKILL.md", "exemple")]), U)
+        lus = self.lus(s)
+        self.assertEqual(set(lus), {"SKILL.md", "exemples/SKILL.md"})
+        self.assertIn("racine", lus["SKILL.md"])
+
+    def test_deux_skill_md_au_meme_niveau_refuses(self):
+        self.assertEqual(self.code(faire_zip([("a/SKILL.md", "a"), ("b/SKILL.md", "b")])), "ZIP_SKILL_PLUSIEURS_SKILL_MD")
+        self.assertEqual(self.code(faire_zip([("SKILL.md", "a"), ("skill.md", "b")])), "ZIP_SKILL_PLUSIEURS_SKILL_MD")
+
+    def test_prefixe_point_slash_accepte(self):
+        s = S.importer_zip(faire_zip([("./SKILL.md", "a"), ("./d/e.md", "e")]), U)
+        self.assertEqual(set(self.lus(s)), {"SKILL.md", "d/e.md"})
 
     def test_refus_zip_vide_ou_illisible(self):
         self.assertEqual(self.code(faire_zip([])), "ZIP_SKILL_VIDE")
@@ -408,6 +440,9 @@ class TestImportZip(unittest.TestCase):
         self.assertIn("{fichier}", MESSAGES_FR["ZIP_SKILL_FICHIER_NON_TEXTE"])
         self.assertIn("{fichier}", MESSAGES_EN["ZIP_SKILL_FICHIER_NON_TEXTE"])
         self.assertIn("{maximum}", MESSAGES_EN["ZIP_SKILL_TROP_DE_FICHIERS"])
+        for code in ("ZIP_SKILL_SANS_SKILL_MD", "ZIP_SKILL_PLUSIEURS_SKILL_MD"):
+            self.assertIn("{trouves}", MESSAGES_FR[code])
+            self.assertIn("{trouves}", MESSAGES_EN[code])
 
 
 if __name__ == "__main__":
