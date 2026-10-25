@@ -67,6 +67,7 @@ from api.historique_reponses_qcm import router_historique_reponses_qcm
 from api.outils_registre import router as outils_registre_router
 from api.appareils_mobiles import router as appareils_mobiles_router
 from api.connexions import router as connexions_router
+from connexions.mcp_personnalises import router as mcp_personnalises_router
 from api.connexions_notion import router as connexions_notion_router
 from api.connexions_github import router as connexions_github_router
 from api.canal_temps_reel import router as canal_temps_reel_router
@@ -923,6 +924,7 @@ app.include_router(router_historique_reponses_qcm)
 app.include_router(outils_registre_router)
 app.include_router(appareils_mobiles_router)
 app.include_router(connexions_router)
+app.include_router(mcp_personnalises_router)
 app.include_router(connexions_notion_router)
 app.include_router(connexions_github_router)
 app.include_router(canal_temps_reel_router)

@@ -506,7 +506,7 @@ SERVEURS_MCP = [
 # SENSIBLE (confirmation obligatoire) sauf s'il est reconnu en lecture seule.
 PREFIXES_SERVEURS_PERSONNELS = tuple(
     s["prefixe_outils"] for s in SERVEURS_MCP if s.get("prefixe_outils")
-)
+) + ("custommcp_",)
 
 # Premier mot du nom reel (tirets lus comme "_") d'un outil de lecture seule.
 VERBES_LECTURE_SERVEURS_PERSONNELS = {
@@ -542,6 +542,10 @@ def est_outil_sensible_serveur_personnel(nom_outil):
     """
     for prefixe in PREFIXES_SERVEURS_PERSONNELS:
         if nom_outil.startswith(prefixe):
+            # Un outil externe arbitraire n'a pas de convention de lecture fiable :
+            # même un nom qui commence par get/list doit être confirmé par l'utilisateur.
+            if prefixe == "custommcp_":
+                return True
             reel = nom_outil[len(prefixe):].replace("-", "_")
             if reel in LECTURES_A_CONFIRMER_SERVEURS_PERSONNELS:
                 return True
@@ -579,6 +583,8 @@ def plateforme_outil_personnel(nom_outil):
     """
     for prefixe in PREFIXES_SERVEURS_PERSONNELS:
         if nom_outil.startswith(prefixe):
+            if prefixe == "custommcp_":
+                return "Serveur MCP personnalisé"
             return NOMS_PLATEFORMES_PAR_PREFIXE.get(prefixe, prefixe.rstrip("_").capitalize())
     return None
 
@@ -1234,6 +1240,10 @@ def libelle_outil_plateforme(nom_outil):
         return None
     for prefixe in PREFIXES_SERVEURS_PERSONNELS:
         if nom_outil.startswith(prefixe):
+            if prefixe == "custommcp_":
+                # Serveurs ajoutés par l'élève : le nom contient un code interne, la carte de
+                # confirmation affiche « Action sur <nom du serveur> » à la place.
+                return None
             reste = nom_outil[len(prefixe):].replace("-", "_")
             mots = [mot for mot in reste.split("_") if mot]
             if not mots:
