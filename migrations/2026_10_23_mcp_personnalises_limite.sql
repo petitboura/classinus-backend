@@ -5,6 +5,7 @@
 create or replace function public.mcp_personnalises_limiter()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
     -- Verrou propre à ce compte : deux ajouts simultanés passent l'un après l'autre.
