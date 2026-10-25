@@ -661,6 +661,17 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
 
     try:
         res = (
+            supabase.table("execution_code_domaines_conversation")
+            .select("conversation_id, domain, created_at")
+            .eq("user_id", user_id).execute()
+        )
+        export["domaines_autorises_execution_code"] = res.data or []
+    except Exception as e:
+        logging.error("ERREUR SUPABASE (export domaines autorises execution code): %s", type(e).__name__)
+        export["domaines_autorises_execution_code"] = {"erreur": "recuperation impossible, reessayer plus tard"}
+
+    try:
+        res = (
             supabase.table("execution_code_usage_events")
             .select("conversation_id, event_type, active_seconds, actual_cost_usd, started_at, finished_at")
             .eq("user_id", user_id).execute()

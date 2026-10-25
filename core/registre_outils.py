@@ -456,6 +456,9 @@ OUTILS_SENSIBLES = {
     # "nom_outil:action" (voir plus bas pour gerer_document_bibliotheque) :
     # seule cette action est sensible, "explorer" et "lire_fichier" non.
     "gerer_depot_github:modifier_fichier",
+    # 25/10/2026 (demande Bourama) : ouvrir un domaine du réseau du workspace d'exécution de code
+    # n'est jamais automatique, l'élève doit confirmer. Valable pour la conversation seulement.
+    "gerer_execution_code:demander_acces_reseau",
     # Actions GitHub ajoutées le 20/10/2026 qui écrivent ou agissent au nom
     # de la personne connectée : toutes interrompues pour confirmation.
     "gerer_depot_github:creer_issue",
@@ -549,6 +552,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "gerer_execution_code:read_file": {"label": "Lecture de fichier", "icone": "FileText", "onglet": None},
     "gerer_execution_code:list_files": {"label": "Liste des fichiers", "icone": "FolderOpen", "onglet": None},
     "gerer_execution_code:download_files": {"label": "Export de fichiers", "icone": "Download", "onglet": None},
+    "gerer_execution_code:demander_acces_reseau": {"label": "Accès à un site", "icone": "Globe", "onglet": None},
     "gerer_execution_code:network": {"label": "Réseau autorisé", "icone": "Terminal", "onglet": None},
     "gerer_execution_code:close": {"label": "Fin de l'espace", "icone": "Power", "onglet": None},
     "generer_site_zip": {"label": "Génération d'un site (zip)", "icone": "Package", "onglet": "generer"},

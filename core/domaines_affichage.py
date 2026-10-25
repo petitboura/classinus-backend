@@ -23,6 +23,7 @@ une exception : l'affichage ne doit jamais faire échouer un outil.
 """
 
 import logging
+import re
 from urllib.parse import urlparse
 
 DOMAINES_FIXES = {
@@ -91,6 +92,17 @@ def _domaines_recherche_document(arguments):
     return [SOURCES[cle]["domaine"] for cle in cles if SOURCES[cle].get("domaine")]
 
 
+_MOTIF_NOM_DE_DOMAINE = re.compile(
+    r"^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$"
+)
+
+
+def _domaine_nom_seul(valeur):
+    """Le domaine tel quel s'il ressemble vraiment à un nom de domaine, sinon None (texte libre refusé)."""
+    texte = str(valeur or "").strip().lower().rstrip(".")
+    return texte if _MOTIF_NOM_DE_DOMAINE.fullmatch(texte) else None
+
+
 def domaines_de_l_appel(nom_outil, arguments):
     """Liste des domaines visés par cet appel d'outil ([] si aucun site précis)."""
     try:
@@ -99,6 +111,9 @@ def domaines_de_l_appel(nom_outil, arguments):
             return list(DOMAINES_FIXES[nom_outil])
         if nom_outil == "rechercher_document_externe":
             return _domaines_recherche_document(arguments)[:MAX_DOMAINES]
+        if nom_outil == "gerer_execution_code" and arguments.get("action") == "demander_acces_reseau":
+            domaine = _domaine_nom_seul(arguments.get("domain"))
+            return [domaine] if domaine else []
         if nom_outil == "lire_document_externe":
             return _domaines_de_adresses(arguments.get("url"))[:MAX_DOMAINES]
         if nom_outil in PARAMETRES_ADRESSE_TAVILY:
