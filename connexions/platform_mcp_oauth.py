@@ -47,11 +47,6 @@ FOURNISSEURS = {
         "mcp_url": "https://mcp.supabase.com/mcp",
         "scopes": ["openid", "offline_access"],
     },
-    "render_mcp": {
-        "resource_url": "https://mcp.render.com/mcp",
-        "mcp_url": "https://mcp.render.com/mcp",
-        "scopes": ["openid", "offline_access"],
-    },
     "cloudflare_mcp": {
         "resource_url": "https://mcp.cloudflare.com/mcp",
         "mcp_url": "https://mcp.cloudflare.com/mcp",
