@@ -94,6 +94,7 @@ import core.outils_programme_catalogue_public  # noqa: F401  # 22/09/2026, catal
 import core.outils_memoire_profil  # noqa: F401
 import core.outils_comportements_connaissance  # noqa: F401
 import core.outils_comportements_publics  # noqa: F401
+import core.outils_skills  # noqa: F401  # 25/10/2026, skills avec dossier et fichiers
 import core.outils_mobile  # noqa: F401
 import core.outils_signalements  # noqa: F401
 import core.outils_concentration  # noqa: F401

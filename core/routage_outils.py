@@ -713,6 +713,18 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "le catalogue public\", \"retire mon skill du catalogue "
         "public\". SI TU HÉSITES entre les deux, suggère les deux "
         "outils.\n\n"
+        # AJOUT 25/10/2026 (demande Bourama, branchement de l'IA aux skills
+        # avec dossier et fichiers) : gerer_skill, en parallèle de
+        # gerer_comportement tant que l'ancien système n'est pas remplacé.
+        "IMPORTANT : gerer_skill gère les skills AVEC DOSSIER ET FICHIERS "
+        "(un SKILL.md et d'autres fichiers texte, la page Skills de "
+        "l'interface). Il DOIT être suggéré quand l'utilisateur demande de "
+        "créer, lire, modifier, renommer, activer, désactiver, lister ou "
+        "supprimer un skill ou l'un de ses fichiers. Exemples : \"crée-moi "
+        "un skill pour corriger des exercices\", \"montre le SKILL.md de mon "
+        "skill\", \"ajoute un fichier de références à mon skill\", "
+        "\"désactive mon skill de résumé\". SI TU HÉSITES entre gerer_skill "
+        "et gerer_comportement, suggère les deux outils.\n\n"
         # AJOUT 2026-09-01 (demande Bourama, suite au renommage de
         # gerer_action_mobile en gerer_dossier_telephone) : le mot
         # "dossier" désigne DEUX choses totalement différentes dans le

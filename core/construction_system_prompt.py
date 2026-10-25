@@ -180,7 +180,7 @@ def _texte_editeur(etat):
         "- Les boutons de l'éditeur (Exécuter, Ouvrir, Enregistrer, Vers le chat, plein écran) sont dans la liste des éléments à l'écran.\n"
     )
 
-def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None, reponses_qcm_recentes=None, etat_editeur=None, configuration_etudiant=None, sommaire_memoire=None, client=None, libelles_client=None, origine=None, langue_interface="fr"):
+def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, comportements_etudiant=None, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None, reponses_qcm_recentes=None, etat_editeur=None, configuration_etudiant=None, sommaire_memoire=None, client=None, libelles_client=None, origine=None, langue_interface="fr", skills_catalogue=None):
     # Restauré le 14/08 (voir commentaire des constantes plus haut) : la
     # page Notion de l'agent (get_system_prompt) ne doit plus contenir QUE
     # la personnalité/le comportement propre à l'agent -- les 3 blocs fixes
@@ -281,6 +281,29 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
             "Si l'une d'elles semble s'appliquer, appelle l'outil gerer_comportement "
             "(action=\"consulter\") avec son id pour lire son contenu complet AVANT de répondre "
             "-- ne devine jamais son contenu à partir de la description seule."
+        )
+
+    # 25/10/2026, demande Bourama : catalogue des skills avec dossier et fichiers
+    # (nom et description seulement, chargement progressif comme chez Claude). Le
+    # contenu est lu à la demande par l'outil gerer_skill. Calculé dans chat()
+    # (core/main.py), reçu ici en paramètre.
+    if skills_catalogue and skills_catalogue.get("skills"):
+        lignes_skills = "\n".join(
+            f"- id={c['id']} : {c.get('nom') or '(sans nom)'} : {c.get('description') or '(sans description)'}"
+            for c in skills_catalogue["skills"]
+        )
+        restants = max(0, int(skills_catalogue.get("total", 0)) - len(skills_catalogue["skills"]))
+        suite = (
+            f"\n({restants} autre(s) skill(s) non listé(s) : appelle gerer_skill avec action \"lister\" pour tous les voir.)"
+            if restants else ""
+        )
+        system_final += (
+            "\n\nSKILLS DE L'UTILISATEUR (dossiers avec un SKILL.md et des fichiers, page Skills de l'interface) :\n"
+            f"{lignes_skills}{suite}\n"
+            "Quand la demande correspond à la description d'un skill, appelle gerer_skill (action \"consulter\", "
+            "skill_id) pour lire son SKILL.md AVANT de répondre, puis lis un autre fichier du skill seulement si "
+            "le SKILL.md le demande. Ne devine jamais le contenu d'un skill à partir de sa description. "
+            "Ne crée, ne modifie et ne supprime un skill que sur demande claire de l'utilisateur."
         )
 
     # 02/10/2026, demande Bourama : Règles et Styles activés donnés d'office,
