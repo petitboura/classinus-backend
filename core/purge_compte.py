@@ -52,6 +52,7 @@ _TABLES_SIMPLES = (
     ("minuteurs", "user_id"),
     ("execution_code_usage_events", "user_id"),
     ("execution_code_sessions", "user_id"),
+    ("execution_code_domaines_conversation", "user_id"),
     ("relances_proactives", "user_id"),
     # Réglages et réponses liés aux conversations de l'élève.
     ("historique_reponses_qcm", "user_id"),
