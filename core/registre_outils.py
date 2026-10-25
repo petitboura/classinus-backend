@@ -482,6 +482,9 @@ OUTILS_SENSIBLES = {
     # Consolidé le 26/08 en une action de gerer_comportement (voir format
     # "nom_outil:action" expliqué plus bas pour gerer_document_bibliotheque).
     "gerer_comportement:supprimer",
+    # Skills avec dossier et fichiers (25/10/2026) : deux actions destructives.
+    "gerer_skill:supprimer",
+    "gerer_skill:supprimer_fichier",
     # Portés depuis core/serveur_mcp_espace.py le 17/08 (demande Bourama :
     # "ajoute à Clovis tout ce que Claude peut faire") -- mêmes garanties
     # que côté MCP externe (destructive_hint=True là-bas), transposées
@@ -813,6 +816,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "consulter_matiere_active": {"label": "Matière active", "icone": "BookOpen", "onglet": None},
     "annuler_derniere_modification": {"label": "Annuler la modification", "icone": "Undo2", "onglet": None},
     "gerer_comportement": {"label": "Mes skills", "icone": "ScrollText", "onglet": None},
+    "gerer_skill": {"label": "Mes skills", "icone": "ScrollText", "onglet": None},
     # Routage en deux niveaux (22/08/2026, demande Bourama) : jamais un
     # outil que le grand LLM appelle lui-même (pas de tool MCP réel), c'est
     # le petit routeur "à la skill" (core/main.py) qui déclenche ça en
@@ -1118,7 +1122,7 @@ CATEGORIES_OUTILS = {
         "rattacher_signalement_notion", "lire_reponses_qcm",
         "changer_mode_conversation",  # 25/09/2026
     ],
-    "comportement": ["gerer_comportement", "gerer_comportement_public"],
+    "comportement": ["gerer_comportement", "gerer_comportement_public", "gerer_skill"],
     "memoire": [
         "memoire_sommaire", "memoire_lire", "memoire_ecrire",
     ],
@@ -1264,7 +1268,7 @@ GROUPES_OUTILS = {
         "gerer_document_bibliotheque", "gerer_dossier_bibliotheque", "gerer_fichier_conversation",
     ],
     "telephone": ["gerer_dossier_telephone", "explorer_dossier", "gerer_session_concentration"],
-    "comportements": ["gerer_comportement", "gerer_comportement_public"],
+    "comportements": ["gerer_comportement", "gerer_comportement_public", "gerer_skill"],
     "site": ["generer_site_zip", "deployer_site"],
 }
 
