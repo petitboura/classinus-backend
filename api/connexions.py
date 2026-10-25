@@ -45,6 +45,7 @@ from connexions.oauth_generique import (
 import connexions.notion as notion
 import connexions.higgsfield_mcp as higgsfield_mcp
 import connexions.netlify_mcp as netlify_mcp
+import connexions.render_mcp as render_mcp
 import connexions.platform_mcp_oauth as platform_mcp_oauth
 import connexions.mcp_personnalises as mcp_personnalises
 
@@ -55,6 +56,8 @@ router = APIRouter(prefix="/api/connexions", tags=["connexions"])
 def statut_connexion(service: str, utilisateur=Depends(utilisateur_courant)):
     if service == "netlify_mcp":
         return {"connecte": netlify_mcp.est_connecte(utilisateur.id)}
+    if service == "render_mcp":
+        return {"connecte": render_mcp.est_connecte(utilisateur.id)}
     if service == "higgsfield_mcp":
         connecte = higgsfield_mcp.est_connecte(utilisateur.id)
         return {
@@ -86,6 +89,9 @@ def deconnecter_plateforme_mcp(service: str, utilisateur=Depends(utilisateur_cou
     """Supprime uniquement la connexion personnelle au service demandé."""
     if service == "netlify_mcp":
         netlify_mcp.deconnecter(utilisateur.id)
+        return {"connecte": False}
+    if service == "render_mcp":
+        render_mcp.deconnecter(utilisateur.id)
         return {"connecte": False}
     if service == "higgsfield_mcp":
         higgsfield_mcp.deconnecter(utilisateur.id)
@@ -215,6 +221,24 @@ def enregistrer_jeton_netlify(payload: JetonNetlifyPayload, utilisateur=Depends(
     except Exception:
         logging.exception("Enregistrement du jeton Netlify échoué")
         raise erreur_api(500, "ERREUR_CONNEXION_NETLIFY", message="Classinus n'a pas pu enregistrer le jeton Netlify.")
+    return {"connecte": True}
+
+
+class JetonRenderPayload(BaseModel):
+    token: str
+
+
+@router.post("/render_mcp/jeton")
+def enregistrer_jeton_render(payload: JetonRenderPayload, utilisateur=Depends(utilisateur_courant)):
+    try:
+        render_mcp.enregistrer_token(utilisateur.id, payload.token)
+    except ValueError as exc:
+        raise erreur_api(400, "JETON_RENDER_INVALIDE", message=str(exc))
+    except RuntimeError as exc:
+        raise erreur_api(502, "CONNEXION_RENDER_INDISPONIBLE", message=str(exc))
+    except Exception:
+        logging.exception("Enregistrement de la clé Render échoué")
+        raise erreur_api(500, "ERREUR_CONNEXION_RENDER", message="Classinus n'a pas pu enregistrer la clé Render.")
     return {"connecte": True}
 
 

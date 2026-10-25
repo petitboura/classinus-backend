@@ -231,6 +231,13 @@ def _headers_google_workspace(service):
     return _builder
 
 
+def _headers_render_mcp(get_secret, user_id, agent_id):
+    """Clé personnelle Render de l'utilisateur, envoyée au serveur MCP hébergé par Render."""
+    from connexions.render_mcp import obtenir_token_valide as obtenir_cle_render
+    token = obtenir_cle_render(user_id)
+    return {"Authorization": f"Bearer {token}"} if token else None
+
+
 def _url_netlify_mcp(get_secret, user_id, agent_id, conversation_id=None):
     port = os.environ.get("PORT", "8000")
     return f"http://localhost:{port}/mcp/netlify?user_id={user_id}"
@@ -455,7 +462,7 @@ SERVEURS_MCP = [
     {
         "nom": "render_mcp",
         "url_builder": _url_mcp_constant("https://mcp.render.com/mcp"),
-        "headers_builder": _headers_platform_mcp("render_mcp"),
+        "headers_builder": _headers_render_mcp,
         "necessite_utilisateur": True,
         "prefixe_outils": "render_",
     },
