@@ -1,7 +1,7 @@
 """Lecture d'un zip de skill, sans aucune écriture.
 
-Un zip de skill contient un SKILL.md (à sa racine, ou dans son unique dossier
-principal) et ses autres fichiers. Les limites viennent de core/config_skills.py,
+Un zip de skill contient un SKILL.md (n'importe quelle casse, à sa racine ou dans
+un dossier) et ses autres fichiers. Les limites viennent de core/config_skills.py,
 comme pour l'éditeur : taille par fichier, taille totale, nombre de fichiers.
 
 Protections : les tailles déclarées sont vérifiées avant toute lecture, puis les
@@ -27,16 +27,26 @@ def _erreur_taille() -> Exception:
     )
 
 
-def _retirer_dossier_principal(chemins: list[str]) -> str:
-    """Renvoie le préfixe à retirer ("" si aucun) pour que SKILL.md soit à la racine."""
-    if CHEMIN_PRINCIPAL in chemins:
-        return ""
-    premiers = {c.split("/", 1)[0] for c in chemins}
-    if len(premiers) == 1 and all("/" in c for c in chemins):
-        dossier = next(iter(premiers))
-        if f"{dossier}/{CHEMIN_PRINCIPAL}" in chemins:
-            return dossier + "/"
-    raise erreur_api(422, "ZIP_SKILL_SANS_SKILL_MD")
+def _apercu(chemins: list[str]) -> str:
+    """Quelques chemins du zip, pour que le message d'erreur montre ce qui a été vu."""
+    vus = ", ".join(chemins[:6])
+    return vus + (", …" if len(chemins) > 6 else "")
+
+
+def _racine_du_skill(chemins: list[str]) -> tuple[str, str]:
+    """Trouve le SKILL.md (casse libre) le moins profond : (dossier à retirer, chemin trouvé).
+
+    Le dossier est "" quand SKILL.md est à la racine. Deux SKILL.md à la même
+    profondeur sont refusés : on ne devine pas lequel est le bon.
+    """
+    candidats = [c for c in chemins if c.rsplit("/", 1)[-1].lower() == CHEMIN_PRINCIPAL.lower()]
+    if not candidats:
+        raise erreur_api(422, "ZIP_SKILL_SANS_SKILL_MD", trouves=_apercu(chemins))
+    profondeur = min(c.count("/") for c in candidats)
+    retenus = [c for c in candidats if c.count("/") == profondeur]
+    if len(retenus) > 1:
+        raise erreur_api(422, "ZIP_SKILL_PLUSIEURS_SKILL_MD", trouves=_apercu(retenus))
+    return retenus[0][: -len(CHEMIN_PRINCIPAL)], retenus[0]
 
 
 def lire_zip_skill(contenu_zip: bytes) -> list[tuple[str, str]]:
@@ -59,6 +69,8 @@ def lire_zip_skill(contenu_zip: bytes) -> list[tuple[str, str]]:
         if info.is_dir():
             continue
         chemin = info.filename.replace("\\", "/")
+        while chemin.startswith("./"):
+            chemin = chemin[2:]
         if any(seg in SEGMENTS_IGNORES for seg in chemin.split("/")):
             continue
         if info.flag_bits & 0x1:
@@ -86,5 +98,13 @@ def lire_zip_skill(contenu_zip: bytes) -> list[tuple[str, str]]:
 
     if not membres:
         raise erreur_api(422, "ZIP_SKILL_VIDE")
-    prefixe = _retirer_dossier_principal([c for c, _ in membres])
-    return [(c[len(prefixe):], t) for c, t in membres]
+    prefixe, principal = _racine_du_skill([c for c, _ in membres])
+    # Seuls les fichiers du dossier du SKILL.md font partie du skill ; ce qui est
+    # à côté (README, licence, autre dossier) est laissé de côté. Le SKILL.md est
+    # renommé "SKILL.md" quelle que soit sa casse d'origine.
+    resultat = []
+    for chemin, texte in membres:
+        if not chemin.startswith(prefixe):
+            continue
+        resultat.append((CHEMIN_PRINCIPAL if chemin == principal else chemin[len(prefixe):], texte))
+    return resultat
