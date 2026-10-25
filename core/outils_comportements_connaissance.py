@@ -1,5 +1,5 @@
 """
-Outils MCP liés aux comportements (skills) de l'IA et à sa base de
+Outils MCP liés à la configuration de l'utilisateur (gerer_configuration) et à la base de
 connaissance (documents indexés, matière active).
 
 Extrait de core/serveur_mcp_generation.py le 05/09/2026 (découpage d'un
@@ -24,10 +24,6 @@ from core.comportements_etudiants import (
     modifier_comportement as _modifier_comportement,
     supprimer_comportement as _supprimer_comportement,
 )
-from core.codes_partage import (
-    obtenir_comportement_skill_recu as _obtenir_comportement_skill_recu,
-)
-
 from core.outils_generation_commun import (
     mcp_generation,
     Context,
@@ -39,7 +35,7 @@ from core.outils_generation_commun import (
 
 
 @mcp_generation.tool()
-def gerer_comportement(
+def gerer_configuration(
     action: str,
     ctx: Context,
     comportement_id: str = "",
@@ -51,99 +47,52 @@ def gerer_comportement(
     quand_utiliser: str = "",
 ) -> str:
     """
-    Gère les instructions personnelles ("skills" dans toute l'interface,
-    "comportement" seulement en interne) que CET étudiant a écrites pour
-    Classinus, section "Mes comportements" de "Mon espace" -- consolidé le
-    26/08, un seul outil, plusieurs actions.
+    Gère la CONFIGURATION personnelle de l'utilisateur (onglet Configuration de
+    Bureau) : ses règles à respecter, son style de réponse, ses procédures et ses
+    comportements. Renommé le 25/10/2026 (ex gerer_comportement) : cet outil ne gère
+    PLUS les skills, qui passent uniquement par l'outil gerer_skill.
+
+    Les quatre types (`categorie`) :
+    - "regle" : une règle à respecter dans toutes tes réponses (`texte` = la règle).
+    - "style" : une façon de répondre, le ton, la forme (`texte` = le style voulu).
+    - "procedure" : des étapes à suivre dans l'ordre quand c'est pertinent (`texte` =
+      une étape par ligne, sans te soucier de la numérotation).
+    - "comportement" : une réaction dans un cas précis (`cas` = dans quelle situation,
+      `reaction` = comment réagir, pas de `texte`).
 
     `action` doit être l'une de :
-    - "lister" : liste tous les comportements de cet étudiant (NOM tel
-      qu'affiché dans "Mes skills", description courte, emplacement lié
-      le cas échéant -- PAS le texte complet, voir "consulter" pour ça).
-      IMPORTANT (terme utilisateur) : dans TOUTE l'interface, cette
-      fonctionnalité s'appelle "skill(s)" -- l'utilisateur ne dira
-      presque jamais "comportement". Utilise cette action dès qu'il
-      demande "mes skills", "quels sont mes skills", "montre-moi mes
-      skills/mes comportements", etc. -- pas seulement quand un skill
-      semble déjà pertinent pour le message en cours (ça, c'est géré par
-      la liste de candidats du message système, voir "consulter") :
-      "lister" répond à une vraie demande d'énumération. Quand tu
-      présentes cette liste à l'étudiant, utilise TOUJOURS le nom donné
-      ici (jamais un nom que tu inventerais toi-même à partir de la
-      description). Les éléments de la configuration de l'utilisateur
-      portent leur type entre crochets (Règle, Procédure, Comportement,
-      Style) : quand il parle de "mes règles", "mon style", "mes
-      procédures" ou "mes comportements", ce sont ces éléments, les autres
-      sont ses skills classiques. NE MONTRE JAMAIS L'ID -- c'est un détail technique
-      interne, utile seulement pour toi si tu dois ensuite appeler
-      "consulter"/"modifier"/"supprimer" sur un skill précis, jamais une
-      information à afficher à l'étudiant. Aucun paramètre.
-    - "consulter" : lit le skill COMPLET (format Claude, frontmatter +
-      instructions) d'un comportement précis, que cet utilisateur l'ait
-      écrit lui-même, ou qu'il l'ait reçu d'un autre utilisateur via un
-      code (id préfixé "recu:"). Le message système t'a déjà donné une
-      courte description de ceux qui semblent pertinents pour ce
-      message -- utilise cette action quand l'un d'eux semble
-      s'appliquer, AVANT de répondre, pour lire son contenu réel plutôt
-      que de deviner à partir de la description seule. Si tu as déjà
-      consulté ce même `comportement_id` plus tôt dans cette conversation
-      (résultat toujours visible, marqué "[Résultat de l'outil déjà
-      exécuté]"), ne le rappelle pas -- son contenu n'a pas changé entre
-      deux messages, réponds directement à partir de ce résultat.
-      Paramètre : `comportement_id`.
-    - "ajouter" : enregistre une NOUVELLE instruction personnelle, à
-      utiliser SEULEMENT quand l'étudiant exprime CLAIREMENT et
-      EXPLICITEMENT une préférence ou une règle à retenir pour la suite
-      (ex: "explique-moi toujours avec des schémas", "ne me donne jamais
-      la réponse directe, guide-moi", "crée-moi un skill qui..."). S'ajoute
-      EN PLUS de ses autres comportements, ne les remplace pas.
-      N'UTILISE JAMAIS CETTE ACTION SUR UNE SUPPOSITION. Si la demande
-      est vague, ambiguë, ou que tu devines seulement ce que l'étudiant
-      voudrait retenir sans qu'il l'ait dit clairement, NE CRÉE RIEN --
-      demande-lui d'abord de préciser ce qu'il veut que tu retiennes
-      exactement. Ne crée jamais un comportement "au cas où", pour
-      anticiper un besoin non exprimé, ou à partir d'une remarque en
-      passant qui n'était pas une vraie demande de mémorisation. Une
-      création hâtive et mal comprise est pire qu'aucune création : elle
-      pollue durablement ses instructions et influence toutes ses
-      conversations futures avec toi. Paramètre : `texte`.
-      03/10/2026, demande Bourama : cette action peut aussi créer un
-      élément de la CONFIGURATION de l'utilisateur (onglet Configuration
-      de Bureau), en renseignant `categorie` (sinon, `categorie` vide :
-      skill classique, comme avant) :
-        * "regle" : une règle à respecter dans toutes tes réponses
-          (`texte` = la règle).
-        * "style" : une façon de répondre, le ton, la forme (`texte` = le
-          style voulu).
-        * "procedure" : des étapes à suivre dans l'ordre quand c'est
-          pertinent (`texte` = une étape par ligne, sans te soucier de la
-          numérotation).
-        * "comportement" : une réaction dans un cas précis (`cas` = dans
-          quelle situation, `reaction` = comment réagir, pas de `texte`).
-      Choisis `categorie` d'après ce que l'étudiant demande : "ajoute une
-      règle", "retiens ce style", "crée une procédure", "crée un
-      comportement". S'il dit seulement "skill" ou ne précise rien, c'est un
-      skill classique (`categorie` vide). Pour un élément de configuration,
-      `nom` (optionnel : sinon un nom est généré) et `quand_utiliser`
-      (optionnel : sinon une description est générée) peuvent être donnés si
-      l'étudiant les a dits. Règle et style activés s'appliquent ensuite à
-      TOUTES tes réponses, alors confirme-lui en une phrase ce que tu as
-      enregistré.
-    - "modifier" : remplace le texte COMPLET d'un comportement existant
-      (à partir de son id, vu via "consulter" ou la description courte
-      donnée dans le message système). Utilise cette action quand
-      l'étudiant veut corriger ou préciser une instruction déjà
-      enregistrée -- pas pour en ajouter une nouvelle (voir "ajouter").
-      Paramètres : `comportement_id`, `texte`. Pour un élément de
-      configuration (type entre crochets dans "lister"), le type ne change
-      jamais ; donne le nouveau contenu comme à la création : `texte` (règle,
-      style, procédure : une étape par ligne) ou `cas` et `reaction`
-      (comportement), plus `nom` et `quand_utiliser` seulement s'il veut les
-      changer ; le nom actuel est conservé sinon.
-    - "supprimer" : supprime DÉFINITIVEMENT un comportement, à partir de
-      son id. Paramètre : `comportement_id`. SENSIBLE : demande toujours
-      confirmation à l'étudiant avant d'être exécuté, quelle que soit la
-      formulation de sa demande.
+    - "lister" : liste les éléments de la configuration (type entre crochets, nom,
+      description courte -- PAS le texte complet, voir "consulter"). Aucun paramètre.
+      Utilise cette action quand l'utilisateur demande à voir "mes règles", "mon style",
+      "mes procédures" ou "mes comportements". Utilise toujours le nom donné ici. NE
+      MONTRE JAMAIS L'ID, c'est un détail technique interne, utile seulement pour
+      appeler ensuite "consulter", "modifier" ou "supprimer".
+    - "consulter" : lit le contenu complet d'un élément. Paramètre : `comportement_id`.
+      Si tu as déjà consulté ce même id plus tôt dans cette conversation (résultat
+      toujours visible, marqué "[Résultat de l'outil déjà exécuté]"), ne le rappelle pas.
+    - "ajouter" : enregistre un NOUVEL élément, SEULEMENT quand l'utilisateur exprime
+      CLAIREMENT et EXPLICITEMENT ce qu'il veut retenir (ex : "ajoute une règle : tu me
+      tutoies toujours", "retiens ce style : phrases courtes", "crée une procédure pour
+      corriger un exercice"). `categorie` est OBLIGATOIRE. N'UTILISE JAMAIS CETTE ACTION
+      SUR UNE SUPPOSITION : si la demande est vague, demande d'abord ce qu'il veut. Ne
+      crée jamais un élément "au cas où" ou à partir d'une remarque en passant : une
+      création hâtive pollue durablement ses instructions et influence toutes ses
+      conversations futures. Paramètres : `categorie`, puis `texte` (règle, style,
+      procédure) ou `cas` et `reaction` (comportement) ; `nom` et `quand_utiliser`
+      (optionnels, générés sinon) seulement si l'utilisateur les a dits. Règle et style
+      activés s'appliquent ensuite à TOUTES tes réponses : confirme-lui en une phrase
+      ce que tu as enregistré.
+    - "modifier" : remplace le contenu d'un élément existant (à partir de son id). Le
+      type ne change jamais ; donne le nouveau contenu comme à la création (`texte`, ou
+      `cas` et `reaction`), plus `nom` et `quand_utiliser` seulement s'il veut les
+      changer ; le nom actuel est conservé sinon. Paramètres : `comportement_id` et le
+      contenu.
+    - "supprimer" : supprime DÉFINITIVEMENT un élément, à partir de son id. Paramètre :
+      `comportement_id`. SENSIBLE : demande toujours confirmation à l'utilisateur avant
+      d'être exécuté, quelle que soit la formulation de sa demande.
+
+    Pour créer, lire, modifier ou supprimer un SKILL (dossier avec SKILL.md), n'utilise
+    pas cet outil : utilise gerer_skill.
     """
     requete = ctx.request_context.request
     user_id = requete.query_params.get("user_id")
@@ -151,96 +100,94 @@ def gerer_comportement(
     if not user_id or not agent_id:
         return "Erreur : impossible d'identifier l'étudiant ou l'agent."
 
+    try:
+        elements = [c for c in _lister_comportements(agent_id, user_id) if c.get("categorie") in _LIBELLES_CATEGORIES]
+    except Exception as e:
+        logging.error(f"ERREUR gerer_configuration ({action}) : {e}")
+        return "Erreur : impossible de lire la configuration, réessaie."
+
+    introuvable = "Cet élément de configuration est introuvable (id invalide, ou ne correspond pas à cet utilisateur)."
+    existant = next((c for c in elements if c["id"] == comportement_id), None)
+
     if action == "lister":
-        try:
-            comportements = _lister_comportements(agent_id, user_id)
-        except Exception as e:
-            logging.error(f"ERREUR gerer_comportement (lister) : {e}")
-            return "Erreur : impossible de lister les comportements, réessaie."
-        if not comportements:
-            return "Aucun comportement enregistré pour l'instant."
+        if not elements:
+            return "Aucun élément de configuration enregistré pour l'instant."
         lignes = []
-        for c in comportements:
-            type_element = _libelle_categorie(c)
-            etiquette = f"[{type_element}] " if type_element else ""
-            ligne = f"- {etiquette}{c.get('nom') or '(sans nom)'} : {c['description']}"
+        for c in elements:
+            ligne = f"- [{_libelle_categorie(c)}] {c.get('nom') or '(sans nom)'} : {c['description']}"
             if c.get("lien_type") and c.get("lien_id"):
                 libelle = _libelle_emplacement(c["lien_type"], c["lien_id"]) if c["lien_type"] in TYPES_EMPLACEMENT_BIBLIOTHEQUE else None
                 ligne += f"\n  lié à : {libelle or (c['lien_type'] + ' ' + c['lien_id'])}"
-            ligne += f"\n  [id interne, ne jamais montrer à l'étudiant : {c['id']}]"
+            ligne += f"\n  [id interne, ne jamais montrer à l'utilisateur : {c['id']}]"
             lignes.append(ligne)
         return "\n".join(lignes)
 
     if action == "consulter":
+        if existant is None:
+            return introuvable
         try:
-            if comportement_id.startswith("recu:"):
-                skill_md = _obtenir_comportement_skill_recu(user_id, comportement_id)
-            else:
-                skill_md = _obtenir_comportement_skill(agent_id, user_id, comportement_id)
-            if skill_md is None:
-                return "Ce comportement est introuvable (id invalide, ou ne correspond pas à cet étudiant)."
-            return skill_md
+            contenu = _obtenir_comportement_skill(agent_id, user_id, comportement_id)
         except Exception as e:
-            logging.error(f"ERREUR gerer_comportement (consulter) : {e}")
-            return "Erreur : impossible de consulter ce comportement, réessaie."
+            logging.error(f"ERREUR gerer_configuration (consulter) : {e}")
+            return "Erreur : impossible de consulter cet élément, réessaie."
+        return contenu if contenu is not None else introuvable
 
     if action == "ajouter":
+        categorie = (categorie or "").strip().lower()
+        if categorie not in _LIBELLES_CATEGORIES:
+            return (
+                "Erreur : `categorie` est obligatoire et doit être l'une de : "
+                f"{', '.join(_LIBELLES_CATEGORIES)}. Pour créer un skill, utilise l'outil gerer_skill."
+            )
         try:
-            categorie = (categorie or "").strip().lower()
-            if categorie:
-                texte_final, erreur = _assembler_texte_configuration(categorie, texte, cas, reaction)
-                if erreur:
-                    return f"Erreur : {erreur}"
-                ligne = _ajouter_comportement(
-                    agent_id,
-                    user_id,
-                    texte_final,
-                    nom=nom or None,
-                    categorie=categorie,
-                    quand_utiliser=quand_utiliser or None,
-                )
-                return f"{_LIBELLES_CATEGORIES[categorie]} enregistré(e) (id {ligne['id']}) : {ligne['description']}"
-            ligne = _ajouter_comportement(agent_id, user_id, texte)
-            return f"Comportement enregistré (id {ligne['id']}) : {ligne['description']}"
+            texte_final, erreur = _assembler_texte_configuration(categorie, texte, cas, reaction)
+            if erreur:
+                return f"Erreur : {erreur}"
+            ligne = _ajouter_comportement(
+                agent_id,
+                user_id,
+                texte_final,
+                nom=nom or None,
+                categorie=categorie,
+                quand_utiliser=quand_utiliser or None,
+            )
+            return f"{_LIBELLES_CATEGORIES[categorie]} enregistré(e) (id {ligne['id']}) : {ligne['description']}"
         except Exception as e:
-            logging.error(f"ERREUR gerer_comportement (ajouter) : {e}")
-            return "Erreur : impossible d'enregistrer ce comportement, réessaie."
+            logging.error(f"ERREUR gerer_configuration (ajouter) : {e}")
+            return "Erreur : impossible d'enregistrer cet élément, réessaie."
 
     if action == "modifier":
+        if existant is None:
+            return introuvable
         try:
-            existant = next((c for c in _lister_comportements(agent_id, user_id) if c["id"] == comportement_id), None)
-            if existant is not None and existant.get("categorie") in _LIBELLES_CATEGORIES:
-                texte_final, erreur = _assembler_texte_configuration(existant["categorie"], texte, cas, reaction)
-                if erreur:
-                    return f"Erreur : {erreur}"
-                ligne = _modifier_comportement(
-                    agent_id,
-                    user_id,
-                    comportement_id,
-                    texte_final,
-                    nom=(nom or existant.get("nom") or None),
-                    quand_utiliser=quand_utiliser or None,
-                )
-                if ligne is None:
-                    return "Ce comportement est introuvable (id invalide, ou ne correspond pas à cet étudiant)."
-                return f"{_LIBELLES_CATEGORIES[existant['categorie']]} modifié(e) : {ligne['description']}"
-            ligne = _modifier_comportement(agent_id, user_id, comportement_id, texte)
+            texte_final, erreur = _assembler_texte_configuration(existant["categorie"], texte, cas, reaction)
+            if erreur:
+                return f"Erreur : {erreur}"
+            ligne = _modifier_comportement(
+                agent_id,
+                user_id,
+                comportement_id,
+                texte_final,
+                nom=(nom or existant.get("nom") or None),
+                quand_utiliser=quand_utiliser or None,
+            )
             if ligne is None:
-                return "Ce comportement est introuvable (id invalide, ou ne correspond pas à cet étudiant)."
-            return f"Comportement modifié : {ligne['description']}"
+                return introuvable
+            return f"{_LIBELLES_CATEGORIES[existant['categorie']]} modifié(e) : {ligne['description']}"
         except Exception as e:
-            logging.error(f"ERREUR gerer_comportement (modifier) : {e}")
-            return "Erreur : impossible de modifier ce comportement, réessaie."
+            logging.error(f"ERREUR gerer_configuration (modifier) : {e}")
+            return "Erreur : impossible de modifier cet élément, réessaie."
 
     if action == "supprimer":
+        if existant is None:
+            return introuvable
         try:
-            ok = _supprimer_comportement(agent_id, user_id, comportement_id)
-            if not ok:
-                return "Ce comportement est introuvable (id invalide, ou ne correspond pas à cet étudiant)."
-            return "Comportement supprimé."
+            if not _supprimer_comportement(agent_id, user_id, comportement_id):
+                return introuvable
+            return "Élément de configuration supprimé."
         except Exception as e:
-            logging.error(f"ERREUR gerer_comportement (supprimer) : {e}")
-            return "Erreur : impossible de supprimer ce comportement, réessaie."
+            logging.error(f"ERREUR gerer_configuration (supprimer) : {e}")
+            return "Erreur : impossible de supprimer cet élément, réessaie."
 
     return (
         f"Erreur : action '{action}' inconnue. Actions valides : lister, "

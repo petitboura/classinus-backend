@@ -656,56 +656,44 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "suggère les 2 ; hésitation plus large (type \"cherche-moi...\") "
         "-> suggère perso + publique + web ; hésitation totale -> "
         "suggère les 4 (perso, publique, web, base de connaissance).\n\n"
-        # AJOUT 2026-08-22 (demande Bourama : "les skills ont été
-        # corrigés visuellement, mais intérieurement non, il faut que
-        # le LLM soit au courant") : lister_comportements/
-        # consulter_comportement (devenus gerer_comportement, actions
-        # "lister"/"consulter", consolidation du 26/08) existaient déjà
-        # dans le catalogue, mais rien n'apprenait au routeur que
-        # "skill(s)" -- le SEUL terme utilisé partout dans l'interface --
-        # désigne cette fonctionnalité ("comportement" reste un nom
-        # interne, jamais vu par l'utilisateur). Sans cette règle, une
-        # question comme "quels sont mes skills ?" ne matchait rien : le
-        # routeur ne proposait pas cet outil, et le grand modèle
-        # répondait à côté (confusion avec "compétences personnelles").
-        "IMPORTANT : gerer_comportement (action \"lister\") DOIT être "
-        "suggéré dès que l'utilisateur demande à voir/lister ses "
-        "\"skills\" (le SEUL mot utilisé dans toute l'interface Classinus "
-        "pour cette fonctionnalité -- \"comportement\" est un nom interne, "
-        "ignore-le pour reconnaître l'intention). Exemples qui DOIVENT "
-        "suggérer cet outil : \"quels sont mes skills ?\", \"montre-moi "
-        "mes skills\", \"liste mes skills/comportements\", \"j'ai combien "
-        "de skills ?\". Ne confonds JAMAIS ça avec une question sur les "
+        # AJOUT 25/10/2026 (demande Bourama) : gerer_comportement est devenu
+        # gerer_configuration et ne gère plus les skills. Deux outils distincts :
+        # gerer_configuration (règles, style, procédures, comportements) et
+        # gerer_skill (skills avec dossier et fichiers, page Skills).
+        "IMPORTANT : gerer_configuration gère la CONFIGURATION personnelle de "
+        "l'utilisateur : ses règles à respecter, son style de réponse, ses "
+        "procédures et ses comportements. Il DOIT être suggéré quand "
+        "l'utilisateur demande de créer, modifier, supprimer, voir ou lister "
+        "l'un de ces éléments. Exemples : \"ajoute une règle : tu me tutoies "
+        "toujours\", \"retiens ce style : phrases courtes\", \"crée une "
+        "procédure pour corriger un exercice\", \"crée un comportement quand "
+        "je suis bloqué\", \"montre-moi mes règles\", \"supprime ma règle "
+        "sur le tutoiement\", \"change mon style\". Ne le suggère PAS pour "
+        "une règle ou un style au sens d'une matière (\"règle de trois\", "
+        "\"règle de grammaire\", \"style de Victor Hugo\") : seule une "
+        "consigne que l'utilisateur veut que TOI tu appliques dans tes "
+        "réponses est concernée. Ne le suggère JAMAIS pour un skill.\n\n"
+        "IMPORTANT : gerer_skill gère les SKILLS de l'utilisateur (le SEUL mot "
+        "utilisé dans l'interface Classinus pour cette fonctionnalité) : des "
+        "dossiers avec un SKILL.md et d'autres fichiers texte, page Skills de "
+        "l'interface. Il DOIT être suggéré dès que l'utilisateur demande de "
+        "voir, lister, créer, lire, modifier, renommer, activer, désactiver ou "
+        "supprimer un skill ou l'un de ses fichiers. Exemples : \"quels sont "
+        "mes skills ?\", \"montre-moi mes skills\", \"crée-moi un skill pour "
+        "corriger des exercices\", \"montre le SKILL.md de mon skill\", "
+        "\"ajoute un fichier de références à mon skill\", \"désactive mon "
+        "skill de résumé\". Ne le confonds JAMAIS avec une question sur les "
         "compétences, talents ou aptitudes personnelles de l'utilisateur "
         "(\"qu'est-ce que je sais bien faire ?\") -- aucun rapport, ne "
         "suggère rien dans ce cas.\n\n"
-        # AJOUT 03/10/2026 (demande Bourama : pouvoir créer, modifier et
-        # supprimer depuis le chat les éléments de la Configuration, comme
-        # les skills) : gerer_comportement gère aussi ces 4 types (règle,
-        # style, procédure, comportement). Sans cette règle, "ajoute une
-        # règle" ou "retiens ce style" ne matchait rien (le mot "skill"
-        # n'y figure pas) et l'outil n'était pas proposé.
-        "IMPORTANT : gerer_comportement gère aussi la CONFIGURATION "
-        "personnelle de l'utilisateur : ses règles à respecter, son style "
-        "de réponse, ses procédures et ses comportements. Il DOIT être "
-        "suggéré quand l'utilisateur demande de créer, modifier, "
-        "supprimer, voir ou lister l'un de ces éléments. Exemples : "
-        "\"ajoute une règle : tu me tutoies toujours\", \"retiens ce style "
-        ": phrases courtes\", \"crée une procédure pour corriger un "
-        "exercice\", \"crée un comportement quand je suis bloqué\", "
-        "\"montre-moi mes règles\", \"supprime ma règle sur le tutoiement\", "
-        "\"change mon style\". Ne le suggère PAS pour une règle ou un style "
-        "au sens d'une matière (\"règle de trois\", \"règle de grammaire\", "
-        "\"style de Victor Hugo\") : seule une consigne que l'utilisateur "
-        "veut que TOI tu appliques dans tes réponses est concernée.\n\n"
-        # AJOUT 09/09/2026 (demande Bourama : "pareil avec les skills "
+        # AJOUT 09/09/2026 (demande Bourama : "pareil avec les skills
         # publique" -- avant cet ajout, le catalogue public de skills
         # ("Catalogue" de l'interface) était invisible du LLM). NE PAS
-        # confondre avec gerer_comportement ci-dessus (skills PERSONNELS,
-        # jamais publiés) : même piège que le monde bibliothèque
+        # confondre avec gerer_skill ci-dessus (skills PERSONNELS, jamais
+        # publiés) : même piège que le monde bibliothèque
         # personnelle/catalogue public plus haut, transposé aux skills.
         "IMPORTANT : ne confonds JAMAIS \"mes skills\" (personnels, "
-        "gerer_comportement) avec le CATALOGUE PUBLIC de skills (visible "
+        "gerer_skill) avec le CATALOGUE PUBLIC de skills (visible "
         "par tout le monde -> gerer_comportement_public). Exemples "
         "catalogue public : \"cherche un skill sur la prise de notes "
         "dans le catalogue\", \"quels sont les skills les plus utilisés "
@@ -713,18 +701,6 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "le catalogue public\", \"retire mon skill du catalogue "
         "public\". SI TU HÉSITES entre les deux, suggère les deux "
         "outils.\n\n"
-        # AJOUT 25/10/2026 (demande Bourama, branchement de l'IA aux skills
-        # avec dossier et fichiers) : gerer_skill, en parallèle de
-        # gerer_comportement tant que l'ancien système n'est pas remplacé.
-        "IMPORTANT : gerer_skill gère les skills AVEC DOSSIER ET FICHIERS "
-        "(un SKILL.md et d'autres fichiers texte, la page Skills de "
-        "l'interface). Il DOIT être suggéré quand l'utilisateur demande de "
-        "créer, lire, modifier, renommer, activer, désactiver, lister ou "
-        "supprimer un skill ou l'un de ses fichiers. Exemples : \"crée-moi "
-        "un skill pour corriger des exercices\", \"montre le SKILL.md de mon "
-        "skill\", \"ajoute un fichier de références à mon skill\", "
-        "\"désactive mon skill de résumé\". SI TU HÉSITES entre gerer_skill "
-        "et gerer_comportement, suggère les deux outils.\n\n"
         # AJOUT 2026-09-01 (demande Bourama, suite au renommage de
         # gerer_action_mobile en gerer_dossier_telephone) : le mot
         # "dossier" désigne DEUX choses totalement différentes dans le

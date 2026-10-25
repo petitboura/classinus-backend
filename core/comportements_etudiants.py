@@ -636,7 +636,7 @@ def ajouter_comportement(
     (voir api/comportements_etudiants.py) -- la contrainte SQL
     comportements_etudiants_categorie_valide est le filet de sécurité
     final. 03/10/2026, demande Bourama : l'IA peut maintenant créer ces
-    entrées depuis le chat (outil gerer_comportement, paramètre
+    entrées depuis le chat (outil gerer_configuration, ex gerer_comportement, paramètre
     `categorie`, voir core/outils_comportements_connaissance.py), ce qui
     remplace la règle du 28/09 qui la réservait à un humain via un bouton.
 

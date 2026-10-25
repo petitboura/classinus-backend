@@ -9,7 +9,7 @@ activer -- uniquement via l'UI (api/comportements_publics.py).
 Contrairement au catalogue public de la bibliothèque, il n'y a NI
 dossiers NI filtres (pays/niveau/...) pour les skills publics --
 seulement nom/description/texte/nombre d'activations. Nouvel outil
-séparé de gerer_comportement (skills PERSONNELS de cet utilisateur),
+séparé de gerer_skill (skills PERSONNELS de cet utilisateur),
 même principe de séparation que gerer_dossier_catalogue_public vs
 gerer_dossier_bibliotheque.
 """
@@ -36,7 +36,7 @@ def gerer_comportement_public(
 ) -> str:
     """
     Gère le catalogue PUBLIC des skills ("Catalogue" de l'interface,
-    visible par tout le monde) -- distinct de gerer_comportement (skills
+    visible par tout le monde) -- distinct de gerer_skill (skills
     PERSONNELS de cet utilisateur uniquement, jamais publiés).
     IMPORTANT (terme utilisateur) : "skill(s)" est le SEUL mot utilisé
     dans l'interface, "comportement" reste un nom interne.
@@ -46,8 +46,9 @@ def gerer_comportement_public(
       nombre d'activations). Paramètre optionnel : `mot_cle` -- laisse
       vide pour lister les plus populaires sans filtre.
     - "publier" : publie une copie figée d'un skill PERSONNEL de cet
-      utilisateur (un qu'il a déjà, voir gerer_comportement action
-      "lister" pour obtenir son id) dans le catalogue public. La copie
+      utilisateur (un qu'il a déjà : son id doit être connu, l'outil
+      gerer_configuration ne liste plus les skills depuis le 25/10/2026) dans le
+      catalogue public. La copie
       publiée est indépendante : la modifier ensuite en personnel ne
       change plus la version publique. Paramètre : `comportement_id`
       (id du skill PERSONNEL à publier, PAS un id du catalogue public).

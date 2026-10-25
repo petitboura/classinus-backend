@@ -197,9 +197,14 @@ class TestDeclaration(unittest.TestCase):
         self.assertIn("gerer_skill:supprimer", R.OUTILS_SENSIBLES)
         self.assertIn("gerer_skill:supprimer_fichier", R.OUTILS_SENSIBLES)
         self.assertIn("gerer_skill", R.REGISTRE_AFFICHAGE_OUTILS)
-        self.assertIn("gerer_skill", R.CATEGORIES_OUTILS["comportement"])
+        self.assertIn("gerer_skill", R.CATEGORIES_OUTILS["skills"])
+        self.assertIn("gerer_configuration", R.CATEGORIES_OUTILS["configuration"])
+        self.assertNotIn("gerer_skill", R.CATEGORIES_OUTILS["configuration"])
+        self.assertIn("gerer_configuration:supprimer", R.OUTILS_SENSIBLES)
+        self.assertNotIn("gerer_comportement", R.REGISTRE_AFFICHAGE_OUTILS)
         from core.libelles_outils_anglais import LIBELLES_OUTILS_EN
         self.assertIn(R.REGISTRE_AFFICHAGE_OUTILS["gerer_skill"]["label"], LIBELLES_OUTILS_EN)
+        self.assertIn(R.REGISTRE_AFFICHAGE_OUTILS["gerer_configuration"]["label"], LIBELLES_OUTILS_EN)
 
 
 if __name__ == "__main__":
