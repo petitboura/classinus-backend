@@ -14,9 +14,11 @@ from core.outils_execution_code import (
     _commande_langage,
     _domaines_autorises,
     _executer_action,
+    _message_reseau,
     _options_reseau,
     _resultat_commande,
     _taille_fichier,
+    gerer_execution_code,
     mcp_execution_code,
 )
 # Les modules de core/ s'importent entre eux sans préfixe au lancement du serveur.
@@ -111,6 +113,43 @@ class TestReseau(unittest.TestCase):
         )
 
 
+class TestActionReseau(unittest.TestCase):
+    """L'action network dit au modèle quels domaines sont joignables, sans quota ni sandbox."""
+
+    def _appel(self, lignes=None, erreur=None):
+        client = MagicMock()
+        requete = client.table.return_value.select.return_value.eq.return_value.limit.return_value
+        if erreur:
+            requete.execute.side_effect = erreur
+        else:
+            requete.execute.return_value = SimpleNamespace(data=lignes)
+        with patch("core.outils_execution_code._identite_interne", return_value=("u", "c", None)), \
+                patch("core.outils_execution_code._client_supabase", return_value=client), \
+                patch("core.outils_execution_code._rpc_objet") as rpc, \
+                patch("core.outils_execution_code._classe_sandbox") as classe:
+            resultat = gerer_execution_code(action="network", ctx=MagicMock())
+        rpc.assert_not_called()
+        classe.assert_not_called()
+        return resultat
+
+    def test_liste_les_domaines_de_la_configuration(self):
+        resultat = self._appel([{"allowed_domains": ["github.com", "pypi.org", "https://mauvais.example/x"]}])
+        self.assertIn("github.com", resultat)
+        self.assertIn("pypi.org", resultat)
+        self.assertNotIn("mauvais.example", resultat)
+
+    def test_liste_vide_est_annoncee_comme_bloquee(self):
+        self.assertIn("entièrement bloqué", self._appel([{"allowed_domains": []}]))
+        self.assertIn("entièrement bloqué", self._appel([]))
+
+    def test_erreur_de_lecture_est_claire(self):
+        self.assertTrue(self._appel(erreur=RuntimeError("base injoignable")).startswith("EXECUTION_CODE_UNAVAILABLE"))
+
+    def test_aucun_double_tiret_dans_le_texte_affiche(self):
+        self.assertNotIn("--", _message_reseau(["github.com"]))
+        self.assertNotIn("--", _message_reseau([]))
+
+
 class TestCommandesEnEchec(unittest.TestCase):
     """Le SDK E2B lève CommandExitException : la sortie du programme doit quand même revenir."""
 
@@ -181,6 +220,16 @@ class TestSchemaDeLOutil(unittest.TestCase):
             with self.subTest(language=langage):
                 nom_fichier, commande = _commande_langage(langage)
                 self.assertTrue(nom_fichier and commande)
+
+    def test_action_network_est_annoncee_et_acceptee_par_la_base(self):
+        actions = self._schema()["properties"]["action"]["enum"]
+        self.assertIn("network", actions)
+        # network ne passe jamais par execution_code_reserver : la liste blanche SQL n'a pas à la contenir.
+        with open("migrations/2026_10_23_execution_code_e2b.sql", encoding="utf-8") as fichier:
+            migration = fichier.read()
+        for action in actions:
+            if action != "network":
+                self.assertIn(f"'{action}'", migration)
 
     def test_les_langages_non_implementes_ne_sont_pas_annonces(self):
         langages = self._schema()["properties"]["language"]["enum"]

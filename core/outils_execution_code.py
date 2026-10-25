@@ -123,6 +123,34 @@ def _options_reseau(configuration: dict) -> dict:
     }
 
 
+def _domaines_reseau_configures() -> list[str]:
+    """Domaines joignables depuis le workspace, lus dans la configuration en base.
+
+    Lecture directe de la table : cette action n'ouvre aucun sandbox et ne
+    consomme aucun quota, elle ne passe donc pas par la réservation.
+    """
+    lignes = (
+        _client_supabase()
+        .table("execution_code_configuration")
+        .select("allowed_domains")
+        .eq("id", True)
+        .limit(1)
+        .execute()
+        .data
+    ) or []
+    return _domaines_autorises(lignes[0].get("allowed_domains") if lignes else [])
+
+
+def _message_reseau(domaines: list[str]) -> str:
+    if not domaines:
+        return "Le réseau sortant du workspace est entièrement bloqué : aucun domaine n'est autorisé."
+    return (
+        "Réseau sortant du workspace : seuls ces domaines sont joignables, tout le reste est bloqué. "
+        "Domaines autorisés : " + ", ".join(domaines) + ". "
+        "Cette liste est configurée côté serveur et ne peut pas être modifiée depuis le workspace."
+    )
+
+
 def _commande_langage(language: str) -> tuple[str, str]:
     commandes = {
         "python": ("main.py", "python /home/user/main.py"),
@@ -381,7 +409,7 @@ def _message_refus(reservation: dict) -> str:
 
 @mcp_execution_code.tool()
 def gerer_execution_code(
-    action: Literal["run_code", "run_command", "write_file", "read_file", "list_files", "download_files", "close"],
+    action: Literal["run_code", "run_command", "write_file", "read_file", "list_files", "download_files", "network", "close"],
     ctx: Context,
     language: Literal["python", "javascript", "typescript", "bash"] = "python",
     code: str = "",
@@ -394,6 +422,9 @@ def gerer_execution_code(
     Actions : run_code exécute du code en Python, JavaScript, TypeScript ou Bash;
     run_command lance une commande shell; write_file/read_file/list_files gèrent les fichiers;
     download_files prépare une archive ZIP; close ferme le workspace.
+    Le réseau sortant est limité à une liste de domaines configurée côté serveur : network renvoie
+    cette liste (sans ouvrir de workspace ni consommer de quota). À consulter avant de dire qu'un
+    accès réseau est impossible (clonage d'un dépôt, installation de paquets).
     Les fichiers restent disponibles entre les actions d'une même conversation. Aucune confirmation
     utilisateur n'est demandée. Les commandes et sorties sont bornées par la configuration actuelle.
     Pour une première création, un délai MCP de 180 secondes est prévu. Tout contenu du workspace
@@ -402,6 +433,12 @@ def gerer_execution_code(
     user_id, conversation_id, erreur_identite = _identite_interne(ctx)
     if erreur_identite:
         return erreur_identite
+    if action == "network":
+        try:
+            return _message_reseau(_domaines_reseau_configures())
+        except Exception as e:
+            logging.error("ERREUR lecture des domaines autorisés: %s", type(e).__name__)
+            return "EXECUTION_CODE_UNAVAILABLE: impossible de lire la liste des domaines autorisés."
     if not os.environ.get("E2B_API_KEY"):
         return "EXECUTION_CODE_NOT_CONFIGURED: le service d'exécution de code n'est pas configuré sur le serveur."
 
