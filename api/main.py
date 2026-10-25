@@ -86,6 +86,7 @@ from core.rendu_animation_travaux import nettoyer_anciens_fichiers
 from core.serveur_mcp_generation import mcp_generation
 from core.outils_execution_code import mcp_execution_code, mettre_en_pause_sandboxes_inactifs
 from core.serveur_mcp_video import mcp_video as mcp_video_editor
+from core.serveur_mcp_netlify import mcp_netlify
 from core.notifications_push import traiter_rappels_echus, un_canal_push_disponible
 from core.minuteurs import traiter_minuteurs_a_notifier
 from core.proactivite import verifier_relances_proactives
@@ -433,6 +434,7 @@ async def _lifespan(app: FastAPI):
         mcp_execution_code.session_manager.run(),
         mcp_video_editor.session_manager.run(),
         mcp_github.session_manager.run(),
+        mcp_netlify.session_manager.run(),
         mcp_public.session_manager.run(),
         mcp_espace.session_manager.run(),
     ):
@@ -522,6 +524,7 @@ app.mount("/mcp/video", mcp_video_editor.streamable_http_app(stateless_http=True
 # core/serveur_mcp_github.py, monté de la même façon que "generation"
 # ci-dessus. registre_outils.py l'enregistre sous le nom "github".
 app.mount("/mcp/github", mcp_github.streamable_http_app(stateless_http=True, streamable_http_path="/"))
+app.mount("/mcp/netlify", mcp_netlify.streamable_http_app(stateless_http=True, streamable_http_path="/"))
 
 # Serveurs MCP PUBLICS (Clovis) : contrairement aux deux ci-dessus,
 # destines a etre ajoutes comme connecteur externe dans un client MCP

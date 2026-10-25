@@ -1,0 +1,33 @@
+name: Vérifier les serveurs MCP
+
+on:
+  push:
+    branches:
+      - main
+      - feat/mcp-complets-depuis-connexions-centralisees
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Vérifier la syntaxe Python
+        run: |
+          python -m py_compile \
+            connexions/oauth_generique.py \
+            connexions/platform_mcp_oauth.py \
+            connexions/netlify_mcp.py \
+            core/registre_outils.py \
+            core/serveur_mcp_netlify.py \
+            api/connexions.py \
+            api/main.py
+      - name: Tester le registre MCP et les confirmations
+        run: python -m unittest -v test_mcp_plateformes.py

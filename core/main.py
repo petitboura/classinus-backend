@@ -1135,12 +1135,13 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     else:
         outils_mcp = table_routage = system_final = None  # recalculés ci-dessous dans tous les autres cas
         catalogue_complet = table_routage_complet = None
-        if not (toutes_les_urls_images or images_base64):
-            # Routeur général court-circuité ici (outil déjà forcé manuellement,
-            # bouton "Aucun" cliqué, ou pas de message) -- les outils de
-            # contexte (comportement/programme) doivent quand même être
-            # fusionnés, ils ne dépendent pas du routeur général.
-            outil_force = _fusionner_outils(outil_force, outils_forces_contexte + outils_retenus_precedents)
+        # Routeur général court-circuité ici (outil déjà forcé manuellement,
+        # bouton "Aucun" cliqué, message avec image ou vidéo jointe, ou pas de
+        # message) : les outils de contexte (comportement, programme, historique)
+        # doivent quand même être fusionnés, ils ne dépendent pas du routeur
+        # général. 25/10/2026, demande Bourama : un message avec pièce jointe
+        # reçoit les mêmes outils qu'un message sans pièce jointe.
+        outil_force = _fusionner_outils(outil_force, outils_forces_contexte + outils_retenus_precedents)
 
     # CORRECTION (29/07, Bourama) : la liste réelle d'outils (celle qui
     # part dans tools=... vers Groq, filtrée par autorisation agent en
@@ -1154,12 +1155,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # halluciner un faux appel (bloc TOOL_CODE) plutôt que d'utiliser un
     # vrai outil absent de son schéma technique réel.
     if system_final is None:
-        if toutes_les_urls_images or images_base64:
-            # Chemin image = Gemini, aucun outil MCP jamais utilisé ici (voir
-            # plus bas) -- inutile d'interroger les serveurs MCP pour rien.
-            outils_mcp, table_routage = [], {}
-            outil_force_verifie = outil_force
-        elif catalogue_complet is not None:
+        if catalogue_complet is not None:
             # Catalogue deja recupere plus haut (chemin routeur, prompt
             # optimiste toujours valide) -- reutilise tel quel, aucun
             # nouvel appel a lister_outils_autorises_pour_agent.
@@ -1210,12 +1206,12 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # garder_outils, au meme point de convergence -- voir
     # _preparer_demander_outils pour le catalogue complet + sa table de
     # routage necessaires au branchement reel dans _agent_groq
-    # (core/boucle_agent.py). Saute pour un message image/video (11/09/2026) :
-    # catalogue_complet vaut alors toujours None (jamais recupere plus haut,
-    # voir bloc "if system_final is None" ci-dessus), et de toute facon le
-    # chemin Gemini vision plus bas dans chat() n'utilise jamais outils_mcp --
-    # avant ce fix, un catalogue complet etait quand meme alle chercher pour
-    # rien a chaque message avec image jointe.
+    # (core/boucle_agent.py). 25/10/2026, demande Bourama : un message avec image
+    # ou video jointe recoit aussi le catalogue complet, donc demander_outils.
+    # Gemini ne fait plus que decrire la piece jointe, c'est le grand modele qui
+    # repond avec ses outils. Avant ce correctif, le prompt lui disait d'appeler
+    # demander_outils alors qu'il ne lui etait pas fourni : il ecrivait l'appel
+    # en texte brut dans sa reponse.
     if catalogue_complet is not None:
         outils_mcp = _preparer_demander_outils(outils_mcp, catalogue_complet, table_routage_complet)
         # Memoire eleve (27/09/2026) : seulement pour un utilisateur connecte,
