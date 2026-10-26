@@ -7,6 +7,7 @@ from openai import OpenAI
 from google import genai
 from google.genai import types
 from core.skills_catalogue import lister_catalogue_skills
+from etat_connexions import bloc_prompt_pour_utilisateur as bloc_connexions_pour_utilisateur
 from comportements_etudiants import (
     lister_comportements as lister_comportements_etudiant,
     choisir_comportements_pertinents,
@@ -605,6 +606,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # c'est ce petit routeur qui décide de le déclencher, pas le grand LLM.
     # 25/10/2026 : catalogue des skills avec dossier et fichiers (vide pour un visiteur sans compte).
     skills_catalogue = {"skills": [], "total": 0}
+    # 26/10/2026 (demande de Bourama) : état des connexions et des MCP personnels, pour que l'IA
+    # distingue ce qui est connecté, actif ou à proposer. None pour un visiteur sans compte.
+    bloc_connexions = None
     # 02/10/2026, demande Bourama : Règles et Styles activés (donnés d'office),
     # Procédures et Comportements retenus (donnés en entier), voir
     # core/configuration_etudiant.py.
@@ -685,6 +689,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             f_sommaire_memoire = executor.submit(obtenir_sommaire_memoire, user_id)
             # Catalogue des skills (25/10/2026) : lecture indépendante, lancée dans le même lot parallèle.
             f_skills_catalogue = executor.submit(lister_catalogue_skills, user_id)
+            f_bloc_connexions = executor.submit(bloc_connexions_pour_utilisateur, user_id)
             rattachement_id_actif = f_rattachement_actif.result() if f_rattachement_actif else None
             comportements_etudiant_bruts = f_comportements_etudiant.result()
             persona_pedagogique = f_persona_pedagogique.result() if f_persona_pedagogique else None
@@ -692,6 +697,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             mode_source = f_mode_source.result() if f_mode_source else None
             sommaire_memoire = f_sommaire_memoire.result()
             skills_catalogue = f_skills_catalogue.result()
+            bloc_connexions = f_bloc_connexions.result()
             # Agent applicatif : la liste des elements de l'ecran n'est lue
             # (et donc injectee dans le prompt) que lorsque le canal en
             # direct est actif pour ce tour (decision Bourama, 30/09/2026 :
@@ -999,7 +1005,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 lecture_ecran_anticipee.append(lancer_lecture_anticipee(user_id, conversation_id, table_routage_complet))
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force_contexte_seul)
             outil_force_verifie_optimiste = [o["function"]["name"] for o in outils_mcp] if outil_force_contexte_seul else None
-            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire, client=client, libelles_client=libelles_client, origine=origine, langue_interface=langue_interface, skills_catalogue=skills_catalogue)
+            system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie_optimiste, sans_enseignant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire, client=client, libelles_client=libelles_client, origine=origine, langue_interface=langue_interface, skills_catalogue=skills_catalogue, bloc_connexions=bloc_connexions)
             return outils_mcp, table_routage, system_final, catalogue_complet, table_routage_complet
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -1114,7 +1120,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id, origine=origine)
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force)
             outil_force_verifie = [o["function"]["name"] for o in outils_mcp] if outil_force else outil_force
-        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire, client=client, libelles_client=libelles_client, origine=origine, langue_interface=langue_interface, skills_catalogue=skills_catalogue)
+        system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire, client=client, libelles_client=libelles_client, origine=origine, langue_interface=langue_interface, skills_catalogue=skills_catalogue, bloc_connexions=bloc_connexions)
 
         # PERF (10/08) : second (et dernier) point de vérification --
         # couvre tous les chemins qui ne passent PAS par le premier

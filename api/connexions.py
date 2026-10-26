@@ -24,6 +24,8 @@ fichier.
 """
 
 import logging
+import os
+import sys
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -49,44 +51,34 @@ import connexions.render_mcp as render_mcp
 import connexions.platform_mcp_oauth as platform_mcp_oauth
 import connexions.mcp_personnalises as mcp_personnalises
 
+# core/ est sur le chemin des imports comme dans api/agents.py : le module doit être chargé sous le
+# MÊME nom que dans la boucle de l'IA, sinon deux copies et deux caches (l'invalidation ne servirait à rien).
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "core"))
+import etat_connexions  # noqa: E402
+
 router = APIRouter(prefix="/api/connexions", tags=["connexions"])
 
 
 @router.get("/{service}/statut")
 def statut_connexion(service: str, utilisateur=Depends(utilisateur_courant)):
-    if service == "netlify_mcp":
-        return {"connecte": netlify_mcp.est_connecte(utilisateur.id)}
-    if service == "render_mcp":
-        return {"connecte": render_mcp.est_connecte(utilisateur.id)}
-    if service == "higgsfield_mcp":
-        connecte = higgsfield_mcp.est_connecte(utilisateur.id)
-        return {
-            "connecte": connecte,
-            "a_reconnecter": (not connecte) and higgsfield_mcp.a_reconnecter(utilisateur.id),
-        }
-    if service in platform_mcp_oauth.FOURNISSEURS:
-        connecte = platform_mcp_oauth.est_connecte(service, utilisateur.id)
-        return {
-            "connecte": connecte,
-            "a_reconnecter": (not connecte) and platform_mcp_oauth.a_reconnecter(service, utilisateur.id),
-        }
-    if service == "notion":
-        return {"connecte": notion.est_connecte(utilisateur.id)}
-    if service not in SERVICES:
+    # Même lecture que celle de l'IA (core/etat_connexions.py) : une seule source de vérité.
+    statut = etat_connexions.etat_service(service, utilisateur.id)
+    if statut is None:
         raise erreur_api(404, "SERVICE_INCONNU", service=service)
-    if service.endswith("_mcp"):
-        # Services Google Workspace : "connecté" seulement si le jeton est réellement utilisable.
-        connecte = obtenir_token_valide_generique(service, utilisateur.id) is not None
-        return {
-            "connecte": connecte,
-            "a_reconnecter": (not connecte) and a_reconnecter_oauth_generique(service, utilisateur.id),
-        }
-    return {"connecte": est_connecte(service, utilisateur.id)}
+    return statut
 
 
 @router.post("/{service}/deconnecter")
 def deconnecter_plateforme_mcp(service: str, utilisateur=Depends(utilisateur_courant)):
     """Supprime uniquement la connexion personnelle au service demandé."""
+    try:
+        return _deconnecter(service, utilisateur)
+    finally:
+        # L'IA doit voir le changement tout de suite (voir core/etat_connexions.py).
+        etat_connexions.invalider_etats(utilisateur.id)
+
+
+def _deconnecter(service: str, utilisateur):
     if service == "netlify_mcp":
         netlify_mcp.deconnecter(utilisateur.id)
         return {"connecte": False}
@@ -213,6 +205,13 @@ class JetonNetlifyPayload(BaseModel):
 @router.post("/netlify_mcp/jeton")
 def enregistrer_jeton_netlify(payload: JetonNetlifyPayload, utilisateur=Depends(utilisateur_courant)):
     try:
+        return _enregistrer_jeton_netlify(payload, utilisateur)
+    finally:
+        etat_connexions.invalider_etats(utilisateur.id)
+
+
+def _enregistrer_jeton_netlify(payload, utilisateur):
+    try:
         netlify_mcp.enregistrer_token(utilisateur.id, payload.token)
     except ValueError as exc:
         raise erreur_api(400, "JETON_NETLIFY_INVALIDE", message=str(exc))
@@ -230,6 +229,13 @@ class JetonRenderPayload(BaseModel):
 
 @router.post("/render_mcp/jeton")
 def enregistrer_jeton_render(payload: JetonRenderPayload, utilisateur=Depends(utilisateur_courant)):
+    try:
+        return _enregistrer_jeton_render(payload, utilisateur)
+    finally:
+        etat_connexions.invalider_etats(utilisateur.id)
+
+
+def _enregistrer_jeton_render(payload, utilisateur):
     try:
         render_mcp.enregistrer_token(utilisateur.id, payload.token)
     except ValueError as exc:
@@ -249,6 +255,14 @@ class FinaliserPayload(BaseModel):
 
 @router.post("/finaliser")
 def finaliser(payload: FinaliserPayload):
+    try:
+        return _finaliser(payload)
+    finally:
+        # Aucune session ici : on vide l'état de tous, il sera relu au prochain message.
+        etat_connexions.invalider_etats()
+
+
+def _finaliser(payload: FinaliserPayload):
     # MCP personnel : state opaque à usage unique, rattaché au serveur et au compte.
     if mcp_personnalises.etat_oauth_en_attente(payload.state):
         succes, message, service = mcp_personnalises.finaliser_oauth(payload.code, payload.state)

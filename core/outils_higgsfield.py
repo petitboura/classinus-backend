@@ -99,6 +99,7 @@ if higgsfield_api_disponible():
         ctx: Context = None,
     ) -> str:
         """
+        Version Classinus de Higgsfield (API de Classinus, clé partagée, sans connexion de l'utilisateur). Si l'utilisateur a connecté son propre compte Higgsfield, ses outils higgsfield_ passent en premier.
         Lance une vidéo Higgsfield : depuis une description, en animant une
         image si `image_url` est donné, ou guidée par des références. NE renvoie PAS la vidéo (1 à 3 minutes) :
         renvoie un identifiant à donner à consulter_video_higgsfield un peu plus
@@ -144,7 +145,7 @@ if higgsfield_api_disponible():
 
     @mcp_generation.tool()
     def consulter_video_higgsfield(request_id: str, titre: str, ctx: Context = None) -> str:
-        """Vérifie une vidéo Higgsfield lancée et l'enregistre dans la bibliothèque Classinus sous le titre fourni quand elle est prête. Gère aussi l'échec, le refus de contenu et l'annulation."""
+        """Version Classinus de Higgsfield (API de Classinus) : vérifie une vidéo Higgsfield lancée et l'enregistre dans la bibliothèque Classinus sous le titre fourni quand elle est prête. Gère aussi l'échec, le refus de contenu et l'annulation."""
         try:
             return _texte_suivi(request_id, titre, "video", ctx)
         except Exception as e:

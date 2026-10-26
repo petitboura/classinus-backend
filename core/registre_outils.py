@@ -1324,10 +1324,11 @@ CATEGORIES_OUTILS = {
         "desactiver_canal_en_direct",
     ],
     "github": ["gerer_depot_github"],
-    # Outils internes de l'API vidéo Higgsfield (clé API partagée). Les outils du
-    # serveur MCP personnel sont reconnus par le préfixe "higgsfield_" plus bas :
-    # la catégorie les réunit tous.
-    "higgsfield": [
+    # Higgsfield, version de Classinus (26/10/2026, demande de Bourama) : outils de notre propre
+    # API (clé partagée), disponibles pour tout le monde sans connexion. Catégorie séparée de
+    # "higgsfield" (plus bas, par préfixe) qui est le compte Higgsfield de l'utilisateur :
+    # avant, les deux étaient mélangés et l'IA ne savait pas les distinguer.
+    "higgsfield_classinus": [
         "lancer_video_higgsfield", "consulter_video_higgsfield",
         "generer_image_higgsfield", "consulter_image_higgsfield",
         "estimer_cout_higgsfield", "annuler_generation_higgsfield",
@@ -1370,6 +1371,72 @@ CATEGORIES_OUTILS_PAR_PREFIXE = {
 
 NOMS_CATEGORIES_OUTILS = list(dict.fromkeys([*CATEGORIES_OUTILS.keys(), *CATEGORIES_OUTILS_PAR_PREFIXE.keys()]))
 
+# ---------------------------------------------------------------------------
+# Services que l'utilisateur peut connecter lui-même (26/10/2026, demande de Bourama).
+# Données pures, lues par core/etat_connexions.py : l'IA sait ainsi lesquels existent, lesquels
+# sont connectés, et peut proposer ceux qui ne le sont pas encore.
+#
+# "service" : nom du service côté connexions (identique à APPLIS_DISPONIBLES, frontend).
+# "categorie" : catégorie de demander_outils qui contient les outils de ce service.
+# "mots_cles" : mots français qui permettent de retrouver le service depuis un besoin exprimé
+#   en langage libre (les noms d'outils sont en anglais et ne recoupent jamais le besoin).
+# "proposable" : False pour un service masqué dans l'écran Connexions du site (Google Workspace
+#   en préversion, Google Drive). Le proposer ferait afficher une carte vide : à passer à True
+#   seulement quand le site l'affiche, sur décision de Bourama.
+# ---------------------------------------------------------------------------
+SERVICES_CONNECTABLES = [
+    {"service": "github", "label": "GitHub", "categorie": "github", "proposable": True,
+     "mots_cles": "github depot dépôt code repository repo commit branche pull request fichier source"},
+    {"service": "notion", "label": "Notion", "categorie": "notion", "proposable": True,
+     "mots_cles": "notion page base de données notes wiki espace de travail document"},
+    {"service": "microsoft_mcp", "label": "Microsoft Enterprise", "categorie": "microsoft_mcp", "proposable": True,
+     "mots_cles": "microsoft entra graph entreprise annuaire utilisateurs locataire azure"},
+    {"service": "netlify_mcp", "label": "Netlify", "categorie": "netlify_mcp", "proposable": True,
+     "mots_cles": "netlify site déployer deploiement déploiement hébergement build site web"},
+    {"service": "render_mcp", "label": "Render", "categorie": "render_mcp", "proposable": True,
+     "mots_cles": "render service déploiement hébergement serveur journaux logs backend"},
+    {"service": "cloudflare_mcp", "label": "Cloudflare", "categorie": "cloudflare_mcp", "proposable": True,
+     "mots_cles": "cloudflare dns workers domaine cdn pages cache"},
+    {"service": "higgsfield_mcp", "label": "Higgsfield", "categorie": "higgsfield", "proposable": True,
+     "mots_cles": "higgsfield vidéo video image génération générer créer film clip animation"},
+    {"service": "vercel_mcp", "label": "Vercel", "categorie": "vercel", "proposable": True,
+     "mots_cles": "vercel site déployer deploiement déploiement projet hébergement frontend domaine build"},
+    {"service": "railway_mcp", "label": "Railway", "categorie": "railway", "proposable": True,
+     "mots_cles": "railway service déployer deploiement déploiement backend serveur logs journaux projet"},
+    {"service": "supabase_mcp", "label": "Supabase", "categorie": "supabase", "proposable": True,
+     "mots_cles": "supabase base de données sql table postgres migration données requête"},
+    {"service": "google_drive", "label": "Google Drive", "categorie": "google_drive", "proposable": False,
+     "mots_cles": "google drive fichiers documents stockage"},
+    {"service": "google_gmail_mcp", "label": "Gmail", "categorie": "google_gmail", "proposable": False,
+     "mots_cles": "gmail mail email courriel messagerie brouillon"},
+    {"service": "google_docs_mcp", "label": "Google Docs", "categorie": "google_docs", "proposable": False,
+     "mots_cles": "google docs document texte"},
+    {"service": "google_sheets_mcp", "label": "Google Sheets", "categorie": "google_sheets", "proposable": False,
+     "mots_cles": "google sheets tableur classeur cellules"},
+    {"service": "google_slides_mcp", "label": "Google Slides", "categorie": "google_slides", "proposable": False,
+     "mots_cles": "google slides présentation diapositives"},
+    {"service": "google_calendar_mcp", "label": "Google Calendar", "categorie": "google_calendar", "proposable": False,
+     "mots_cles": "google calendar agenda événement rendez-vous"},
+    {"service": "google_chat_mcp", "label": "Google Chat", "categorie": "google_chat", "proposable": False,
+     "mots_cles": "google chat messages espaces conversation"},
+    {"service": "google_classroom_mcp", "label": "Google Classroom", "categorie": "google_classroom", "proposable": False,
+     "mots_cles": "google classroom cours élèves devoirs"},
+    {"service": "google_people_mcp", "label": "Google People", "categorie": "google_people", "proposable": False,
+     "mots_cles": "google people contacts profils"},
+]
+
+# Services qui existent en DEUX versions : celle de Classinus (notre API, clé partagée, sans
+# connexion) et celle du compte de l'utilisateur. Décision de Bourama (26/10/2026) : quand les
+# deux sont disponibles, celle de l'utilisateur passe en premier, sauf s'il demande l'autre.
+VERSIONS_DOUBLES = [
+    {
+        "service": "higgsfield_mcp",
+        "label": "Higgsfield",
+        "categorie_utilisateur": "higgsfield",
+        "categorie_classinus": "higgsfield_classinus",
+    },
+]
+
 # Texte compact envoye dans la description de demander_outils (voir
 # routage_outils._outil_demander_outils) : les categories evidentes sont
 # nommees seules, les autres ont une parenthese pour lever l'ambiguite.
@@ -1394,7 +1461,8 @@ INDEX_CATEGORIES_OUTILS = (
     "google_chat, google_classroom, google_people, microsoft_mcp (Microsoft Graph Entra, lecture seule), "
     "render_mcp, cloudflare_mcp, netlify_mcp, notion, google_drive, github, vercel (sites et déploiements), "
     "railway (services et logs), supabase (base de données et SQL), "
-    "higgsfield (génération d'images et de vidéos), "
+    "higgsfield (compte Higgsfield de l'utilisateur : images, vidéos et tout le catalogue Higgsfield), "
+    "higgsfield_classinus (génération de vidéo Higgsfield par l'API de Classinus, sans connexion), "
     "serveurs_personnalises (serveurs MCP ajoutés par l'utilisateur lui-même, quel que soit leur nom, "
     "par exemple Render ou un CRM ; le nom du serveur figure dans la description de chaque outil), "
     "generation_documents, "

@@ -27,6 +27,7 @@ from routage_outils import (
 from recherche_outils import rechercher_outils_pertinents
 from completion_outils import completer_outils_trouves, prerequis_parmi
 from registre_outils import REGISTRE_AFFICHAGE_OUTILS, outils_de_la_categorie
+import etat_connexions
 
 # Libellés français (déjà maintenus pour l'affichage à l'écran) réutilisés
 # le 10/09/2026 comme indice supplémentaire pour rechercher_outils_pertinents
@@ -685,6 +686,10 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                 # le reproposer.
                 trouves_total = []
                 lignes_detail = []
+                # Services que l'utilisateur peut connecter mais n'a pas encore connectés
+                # (26/10/2026, demande de Bourama) : proposés au lieu de répondre que rien n'existe.
+                propositions = {}
+                etats_services = etat_connexions.etats_connexions(user_id) if user_id else {}
                 for recherche in recherches_valides:
                     deja_en_main = _outils_deja_en_main(outils_mcp) | {
                         o["function"]["name"] for o in trouves_total
@@ -714,6 +719,23 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                         if perso:
                             texte_perso = f"{recherche['besoin']} {recherche['categorie'] or ''}".replace("_", " ")
                             trouves = rechercher_outils_pertinents(texte_perso, perso)
+                    # Service pas encore connecté qui répond au besoin : on le garde pour le dire
+                    # à l'IA. Un service dont la version de Classinus vient d'être trouvée n'est
+                    # pas proposé (la tâche est déjà faisable, la proposition ferait du bruit).
+                    if etats_services:
+                        noms_trouves_ici = [o for o in trouves]
+                        sans_proposition = {
+                            d["service"] for d in etat_connexions.VERSIONS_DOUBLES
+                            if outils_de_la_categorie(d["categorie_classinus"], noms_trouves_ici)
+                        }
+                        if recherche["categorie"]:
+                            entree_cat = etat_connexions.entree_par_categorie(recherche["categorie"])
+                            candidates = [entree_cat] if entree_cat and entree_cat["proposable"] and etats_services.get(entree_cat["service"]) in (etat_connexions.NON_CONNECTE, etat_connexions.A_RECONNECTER) else []
+                        else:
+                            candidates = etat_connexions.services_a_proposer(recherche["besoin"], etats_services)
+                        for entree_prop in candidates:
+                            if entree_prop["service"] not in sans_proposition:
+                                propositions.setdefault(entree_prop["service"], entree_prop)
                     # Groupes et dependances (21/10/2026, demande Bourama) : les
                     # outils qui vont avec ceux trouves, ex. l'outil qui fournit un
                     # projectId. Voir completion_outils.py.
@@ -772,10 +794,30 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     # depliant la ligne (resultat_affichage, inchange).
                     statut_fin = f"{nom_lisible_demande} effectuée"
                     resultat_affichage = "\n".join(lignes_detail)
+                    # Les deux versions d'un même service (Classinus et compte de l'utilisateur) :
+                    # celle de l'utilisateur d'abord, sauf demande contraire.
+                    note_doubles = etat_connexions.note_versions_doubles(
+                        [o["function"]["name"] for o in outils_mcp], etats_services,
+                    )
+                    if note_doubles:
+                        contenu_reponse += " " + note_doubles
                 else:
-                    contenu_reponse = "Aucun outil correspondant à ces besoins n'existe dans le catalogue de Classinus."
-                    statut_fin = f"{nom_lisible_demande} : rien trouvé"
+                    if propositions:
+                        contenu_reponse = ""
+                        statut_fin = f"{nom_lisible_demande} : service à connecter"
+                    else:
+                        contenu_reponse = "Aucun outil correspondant à ces besoins n'existe dans le catalogue de Classinus."
+                        statut_fin = f"{nom_lisible_demande} : rien trouvé"
                     resultat_affichage = "\n".join(lignes_detail)
+                if propositions:
+                    texte_props = " ".join(
+                        etat_connexions.texte_proposition(e, etats_services.get(e["service"]))
+                        for e in propositions.values()
+                    )
+                    contenu_reponse = (contenu_reponse + " " + texte_props).strip()
+                    resultat_affichage = (resultat_affichage + "\n" if resultat_affichage else "") + "\n".join(
+                        f"- {e['label']} : pas connecté, connexion proposée" for e in propositions.values()
+                    )
 
             yield {"type": "statut_termine", "texte": statut_fin, "id_appel": demande["id"]}
             yield {
