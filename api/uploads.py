@@ -34,6 +34,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "core"))
 from bibliotheque_fichiers import enregistrer_fichier, indexer_fichier_existant  # noqa: E402
 from conversion_pdf import conversion_disponible, convertir_en_pdf  # noqa: E402
 from core.erreurs import erreur_api
+from core.limites_media import duree_max_video_secondes, taille_max_audio_octets, taille_max_video_octets
+from core.lecture_media_conversation import lire_infos as lire_infos_media, resume_infos as resume_infos_media
 
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 
@@ -521,6 +523,92 @@ async def uploader_audio_chat(
         url_audio = None
 
     return {"texte": texte, "url": url_audio}
+
+
+# --- Vidéo ou audio JOINT à une conversation (26/10/2026, demande Bourama) --
+#
+# Contrairement aux images et aux documents, une vidéo ou un audio joint n'est
+# PLUS lu à l'envoi : cette route enregistre seulement le fichier et renvoie ses
+# informations peu coûteuses (durée, taille, résolution, son). C'est le modèle
+# qui décide ensuite de le lire, avec l'outil lire_media_conversation
+# (core/lecture_media_conversation.py : transcription, images, ou les deux, sur
+# le passage de son choix). Limites : core/limites_media.py (modifiables par
+# variables d'environnement). Les routes /audio-chat (dictée vocale) et
+# /video-chat plus bas restent inchangées.
+
+@router.post("/media-chat")
+async def uploader_media_chat(
+    fichier: UploadFile = File(...),
+    utilisateur=Depends(utilisateur_courant),
+):
+    """
+    Enregistre une vidéo ou un audio joint (origine "chat") et renvoie
+    {"url", "nom", "type", "duree_secondes", "taille_octets", "a_audio",
+    "largeur", "hauteur", "resume"}.
+    """
+    type_mime = fichier.content_type or ""
+    est_video = type_mime.startswith("video/")
+    est_audio = type_mime.startswith("audio/")
+    if not (est_video or est_audio):
+        raise erreur_api(400, "TYPE_DE_FICHIER_NON_SUPPORTE")
+    if est_video and type_mime not in TYPES_VIDEO_AUTORISES:
+        raise erreur_api(400, "FORMAT_NON_SUPPORTE_MP4_WEBM_OU")
+
+    taille_max = taille_max_video_octets() if est_video else taille_max_audio_octets()
+    contenu = await fichier.read()
+    if len(contenu) > taille_max:
+        raise erreur_api(400, "MEDIA_TROP_LOURD", maximum=taille_max // (1024 * 1024))
+    if len(contenu) == 0:
+        raise erreur_api(400, "FICHIER_VIDE")
+
+    nom_fichier = fichier.filename or ("video" if est_video else "audio")
+    extension = nom_fichier.rsplit(".", 1)[-1].lower() if "." in nom_fichier else ("mp4" if est_video else "webm")
+    with tempfile.NamedTemporaryFile(suffix=f".{extension}", delete=False) as f_media:
+        f_media.write(contenu)
+        chemin_media = f_media.name
+    try:
+        try:
+            infos = await asyncio.to_thread(lire_infos_media, chemin_media, len(contenu))
+        except Exception as e:
+            logging.error(f"ERREUR FFPROBE (média joint {nom_fichier}) : {e}")
+            raise erreur_api(500, "VIDEO_ILLISIBLE_REESSAIE_AVEC_UN_AUTRE")
+    finally:
+        if os.path.exists(chemin_media):
+            os.remove(chemin_media)
+
+    if est_video and infos["duree_secondes"] > duree_max_video_secondes():
+        raise erreur_api(400, "VIDEO_TROP_LONGUE", duree=int(infos["duree_secondes"]), maximum=duree_max_video_secondes())
+
+    # Un échec d'enregistrement ne doit pas être silencieux ici : sans lien réel,
+    # le modèle ne pourrait jamais lire le fichier (contrairement à l'ancien chemin,
+    # où le texte était déjà extrait).
+    try:
+        ligne = await asyncio.to_thread(
+            enregistrer_fichier,
+            contenu=contenu,
+            nom_fichier=nom_fichier,
+            type_mime=type_mime,
+            niveau="utilisateur",
+            uploade_par=utilisateur.id,
+            user_id=utilisateur.id,
+            description="Vidéo envoyée en conversation" if est_video else "Audio envoyé en conversation",
+            origine="chat",
+        )
+    except Exception as e:
+        logging.error(f"ERREUR enregistrement média joint {nom_fichier} : {e}")
+        raise erreur_api(500, "MEDIA_ENREGISTREMENT_ECHOUE")
+
+    return {
+        "url": ligne["url_publique"],
+        "nom": nom_fichier,
+        "type": "video" if est_video else "audio",
+        "duree_secondes": infos["duree_secondes"],
+        "taille_octets": infos["taille_octets"],
+        "a_audio": infos["a_audio"],
+        "largeur": infos["largeur"],
+        "hauteur": infos["hauteur"],
+        "resume": resume_infos_media(infos),
+    }
 
 
 # --- Vidéo : extraction audio (transcription) + frames (analyse visuelle) -

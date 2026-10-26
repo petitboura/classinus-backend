@@ -813,6 +813,8 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # manuellement (onglet=None), même logique que les autres outils
     # consolidés par action.
     "gerer_fichier_conversation": {"label": "Fichiers du chat", "icone": "Paperclip", "onglet": None},
+    # Ajouté 26/10/2026 : lecture, à la demande du modèle, d'une vidéo ou d'un audio joint.
+    "lire_media_conversation": {"label": "Lecture d'une vidéo ou d'un audio joint", "icone": "FileSearch", "onglet": "rechercher"},
     # Composites "nom_outil:action" (28/08, bug remonté par Bourama :
     # l'entrée générique ci-dessus s'affichait pour TOUTES les actions
     # de cet outil, y compris chercher_publique/trouver_catalogue_public/
@@ -1302,6 +1304,9 @@ CATEGORIES_OUTILS = {
         "gerer_document_bibliotheque", "gerer_dossier_bibliotheque",
         "gerer_fichier_conversation",
     ],
+    # Vidéo ou audio joint par l'étudiant (26/10/2026) : catégorie à part, pour ne pas
+    # tirer les trois gros outils de la bibliothèque quand on veut seulement lire un média.
+    "media_joint": ["lire_media_conversation"],
     "catalogue_public": [
         "gerer_entree_catalogue_public", "gerer_dossier_catalogue_public",
         "gerer_programme_catalogue_public",  # 22/09/2026

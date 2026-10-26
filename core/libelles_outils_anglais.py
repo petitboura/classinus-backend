@@ -44,6 +44,7 @@ LIBELLES_OUTILS_EN: dict[str, str] = {
     "Recherche de document": "Document search",
     "Lecture d'un document": "Read a document",
     "Lecture d'un fichier externe": "Read an external file",
+    "Lecture d'une vidéo ou d'un audio joint": "Read an attached video or audio",
     "Génération d'une vidéo": "Generate a video",
     "Suivi d'une vidéo": "Video status",
     "Programmes publics": "Public programs",

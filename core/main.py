@@ -7,6 +7,7 @@ from openai import OpenAI
 from google import genai
 from google.genai import types
 from core.skills_catalogue import lister_catalogue_skills
+from core.lecture_media_conversation import media_joint_present
 from comportements_etudiants import (
     lister_comportements as lister_comportements_etudiant,
     choisir_comportements_pertinents,
@@ -800,6 +801,11 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     if skills_catalogue["skills"]:
         # Le prompt annonce des skills : l'outil pour les lire doit être réellement branché.
         outils_forces_contexte.append("gerer_skill")
+    if media_joint_present(message_utilisateur, historique):
+        # 26/10/2026, demande Bourama : une vidéo ou un audio joint n'est plus lu à
+        # l'envoi, c'est le modèle qui décide. Le message ne contient que ses
+        # informations ; l'outil pour le lire doit donc être réellement branché.
+        outils_forces_contexte.append("lire_media_conversation")
     if code_id_actif:
         # 12/09/2026, demande explicite Bourama, obligation d'appel : si
         # l'outil n'est pas dans outils_forces_contexte, rien ne garantit
