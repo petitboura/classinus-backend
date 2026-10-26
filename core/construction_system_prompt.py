@@ -180,7 +180,7 @@ def _texte_editeur(etat):
         "- Les boutons de l'éditeur (Exécuter, Ouvrir, Enregistrer, Vers le chat, plein écran) sont dans la liste des éléments à l'écran.\n"
     )
 
-def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None, reponses_qcm_recentes=None, etat_editeur=None, configuration_etudiant=None, sommaire_memoire=None, client=None, libelles_client=None, origine=None, langue_interface="fr", skills_catalogue=None):
+def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None, reponses_qcm_recentes=None, etat_editeur=None, configuration_etudiant=None, sommaire_memoire=None, client=None, libelles_client=None, origine=None, langue_interface="fr", skills_catalogue=None, bloc_connexions=None):
     # Restauré le 14/08 (voir commentaire des constantes plus haut) : la
     # page Notion de l'agent (get_system_prompt) ne doit plus contenir QUE
     # la personnalité/le comportement propre à l'agent -- les 3 blocs fixes
@@ -289,6 +289,11 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
             "le SKILL.md le demande. Ne devine jamais le contenu d'un skill à partir de sa description. "
             "Ne crée, ne modifie et ne supprime un skill que sur demande claire de l'utilisateur."
         )
+
+    # 26/10/2026, demande de Bourama : l'IA doit savoir ce qui est connecté, quels MCP personnels
+    # sont actifs et quels outils sont ceux de Classinus. Calculé dans chat() (core/main.py).
+    if bloc_connexions:
+        system_final += "\n\n" + bloc_connexions
 
     # 02/10/2026, demande Bourama : Règles et Styles activés donnés d'office,
     # Procédures et Comportements retenus donnés en entier, voir
