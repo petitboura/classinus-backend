@@ -349,7 +349,7 @@ from core.generation_video_higgsfield import (
 if higgsfield_api_disponible():
     @mcp_generation.tool()
     def lancer_video_higgsfield(prompt: str, titre: str) -> str:
-        """Lance une vidéo Higgsfield. Conserve le même titre pour la consultation et l'enregistrement dans la bibliothèque."""
+        """Version Classinus de Higgsfield (API de Classinus, clé partagée, sans connexion de l'utilisateur) : lance une vidéo. Si l'utilisateur a connecté son propre compte Higgsfield, ses outils higgsfield_ passent en premier, sauf demande contraire. Conserve le même titre pour la consultation et l'enregistrement dans la bibliothèque."""
         try:
             resultat = _lancer_video_higgsfield(prompt)
             return (
@@ -362,7 +362,7 @@ if higgsfield_api_disponible():
 
     @mcp_generation.tool()
     def consulter_video_higgsfield(request_id: str, titre: str, ctx: Context = None) -> str:
-        """Vérifie le statut Higgsfield et enregistre la vidéo terminée dans la bibliothèque Classinus sous le titre fourni."""
+        """Version Classinus de Higgsfield (API de Classinus) : vérifie le statut d'une vidéo lancée avec lancer_video_higgsfield et enregistre la vidéo terminée dans la bibliothèque Classinus sous le titre fourni."""
         try:
             resultat = _statut_video_higgsfield(request_id)
             if resultat.get("url"):

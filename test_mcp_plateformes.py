@@ -142,11 +142,23 @@ class TestCategoriesSeparees(unittest.TestCase):
 
 
 class TestCategorieHiggsfield(unittest.TestCase):
-    def test_la_categorie_reunit_serveur_mcp_et_outils_api_sans_doublon_de_nom(self):
+    """26/10/2026 : la version de Classinus et celle du compte de l'utilisateur ne sont plus mélangées."""
+
+    def setUp(self):
+        self.candidats = [_outil(n) for n in ("higgsfield_generate_image", "lancer_video_higgsfield", "consulter_video_higgsfield", "generer_image")]
+
+    def _noms(self, categorie):
+        return [o["function"]["name"] for o in r.outils_de_la_categorie(categorie, self.candidats)]
+
+    def test_chaque_categorie_existe_une_seule_fois(self):
         self.assertEqual(r.NOMS_CATEGORIES_OUTILS.count("higgsfield"), 1)
-        candidats = [_outil(n) for n in ("higgsfield_generate_image", "lancer_video_higgsfield", "consulter_video_higgsfield", "generer_image")]
-        noms = [o["function"]["name"] for o in r.outils_de_la_categorie("higgsfield", candidats)]
-        self.assertEqual(noms, ["higgsfield_generate_image", "lancer_video_higgsfield", "consulter_video_higgsfield"])
+        self.assertEqual(r.NOMS_CATEGORIES_OUTILS.count("higgsfield_classinus"), 1)
+
+    def test_le_compte_de_l_utilisateur_ne_contient_pas_les_outils_de_classinus(self):
+        self.assertEqual(self._noms("higgsfield"), ["higgsfield_generate_image"])
+
+    def test_la_version_de_classinus_ne_contient_que_ses_deux_outils(self):
+        self.assertEqual(self._noms("higgsfield_classinus"), ["lancer_video_higgsfield", "consulter_video_higgsfield"])
 
 
 class TestPrefixesPourLeFrontend(unittest.TestCase):

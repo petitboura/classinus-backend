@@ -397,6 +397,37 @@ def lister_outils_pour_utilisateur(user_id: str, attente_max: float = ATTENTE_MA
     return resultat
 
 
+def etats_serveurs_pour_llm(user_id: str) -> list[dict]:
+    """État de chaque serveur MCP ajouté par l'utilisateur, pour que l'IA sache lesquels sont utilisables.
+
+    Un seul appel à la base (pas de réseau) : l'état "injoignable" vient du cache d'échecs, qui
+    couvre aussi un jeton absent ou expiré (le serveur est alors noté en échec).
+    États : "actif", "desactive", "injoignable". Ne lève jamais d'exception.
+    """
+    if not user_id:
+        return []
+    try:
+        lignes = (
+            _SUPABASE.table("mcp_personnalises").select("id,nom,url,actif,updated_at")
+            .eq("user_id", user_id).order("created_at", desc=False).execute().data or []
+        )
+    except Exception as exc:
+        logging.warning("États des MCP personnels illisibles pour l'assistant (%s).", type(exc).__name__)
+        return []
+    resultat = []
+    for ligne in lignes[:NOMBRE_MAX_SERVEURS_PAR_COMPTE]:
+        if not ligne.get("actif", True):
+            resultat.append({"nom": ligne["nom"], "etat": "desactive", "nb_outils": 0})
+            continue
+        cle = _cle_cache(ligne, user_id)
+        outils = _lire_cache(cle, tolere_perime=True)
+        if outils is None and _echec_recent(cle):
+            resultat.append({"nom": ligne["nom"], "etat": "injoignable", "nb_outils": 0})
+        else:
+            resultat.append({"nom": ligne["nom"], "etat": "actif", "nb_outils": len(outils or [])})
+    return resultat
+
+
 def outils_interface_pour_utilisateur(user_id: str) -> list[dict]:
     outils = lister_outils_pour_utilisateur(user_id, attente_max=ATTENTE_MAX_INTERFACE)
     return [{cle: outil[cle] for cle in ("nom", "label", "icone", "onglet")} for outil in outils]
