@@ -465,6 +465,27 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
             for detail in _details_erreur(e):
                 logging.error(f"ERREUR MCP listing ({nom}) cause réelle : {detail}")
 
+    # MCP personnalisés ajoutés par l'utilisateur connecté : le module gère
+    # le catalogue par serveur, les jetons et un cache court séparé par compte.
+    if user_id:
+        try:
+            from connexions.mcp_personnalises import lister_outils_pour_utilisateur
+            for outil in lister_outils_pour_utilisateur(user_id):
+                nom_expose = outil["nom"]
+                if not nom_expose or nom_expose in table_routage:
+                    continue
+                outils_pour_llm.append({
+                    "type": "function",
+                    "function": {
+                        "name": nom_expose,
+                        "description": outil["description"],
+                        "parameters": _schema_avec_delai(outil["parameters"]),
+                    },
+                })
+                table_routage[nom_expose] = outil["route"]
+        except Exception as e:
+            logging.warning("Catalogue MCP personnalisé ignoré pour ce tour (%s).", type(e).__name__)
+
     # Origine de l'appareil (20/10/2026, demande de Bourama) : les outils d'écran qui n'existent pas
     # sur l'appareil utilisé ne sont jamais proposés. Origine inconnue : rien n'est retiré.
     from core.origine_appareil import filtrer_catalogue_par_origine
@@ -585,13 +606,18 @@ def appeler_outil(nom_outil, arguments, table_routage, arret=None):
         logging.error(f"Outil '{nom_outil}' demandé par le LLM mais absent de la table de routage.")
         return f"Erreur : outil '{nom_outil}' inconnu."
     try:
-        resultat = asyncio.run(
-            _appeler_avec_delai_et_arret(
-                _appeler_outil_async(route["url"], route.get("nom_reel", nom_outil), arguments, route.get("headers")),
-                delai,
-                arret,
-            )
-        )
+        if route.get("custom_mcp"):
+            # Serveur ajouté par l'utilisateur : adresse et jeton relus à l'instant de l'appel,
+            # connexion sans redirection et sur une adresse publique vérifiée.
+            from connexions.mcp_personnalises import preparer_appel_personnalise, appeler_outil_personnalise_async
+            try:
+                url_appel, headers_appel = preparer_appel_personnalise(route)
+            except ValueError as e:
+                return f"Erreur : {e}"
+            appel = appeler_outil_personnalise_async(url_appel, route.get("nom_reel", nom_outil), arguments, headers_appel)
+        else:
+            appel = _appeler_outil_async(route["url"], route.get("nom_reel", nom_outil), arguments, route.get("headers"))
+        resultat = asyncio.run(_appeler_avec_delai_et_arret(appel, delai, arret))
         logging.info(f"Résultat outil '{nom_outil}' : {len(resultat or '')} caractères")
         return resultat
     except _AppelAnnule:

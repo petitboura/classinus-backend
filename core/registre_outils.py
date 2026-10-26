@@ -481,7 +481,7 @@ SERVEURS_MCP = [
 # SENSIBLE (confirmation obligatoire) sauf s'il est reconnu en lecture seule.
 PREFIXES_SERVEURS_PERSONNELS = tuple(
     s["prefixe_outils"] for s in SERVEURS_MCP if s.get("prefixe_outils")
-)
+) + ("custommcp_",)
 
 # Premier mot du nom reel (tirets lus comme "_") d'un outil de lecture seule.
 VERBES_LECTURE_SERVEURS_PERSONNELS = {
@@ -517,6 +517,10 @@ def est_outil_sensible_serveur_personnel(nom_outil):
     """
     for prefixe in PREFIXES_SERVEURS_PERSONNELS:
         if nom_outil.startswith(prefixe):
+            # Un outil externe arbitraire n'a pas de convention de lecture fiable :
+            # même un nom qui commence par get/list doit être confirmé par l'utilisateur.
+            if prefixe == "custommcp_":
+                return True
             reel = nom_outil[len(prefixe):].replace("-", "_")
             if reel in LECTURES_A_CONFIRMER_SERVEURS_PERSONNELS:
                 return True
@@ -554,6 +558,8 @@ def plateforme_outil_personnel(nom_outil):
     """
     for prefixe in PREFIXES_SERVEURS_PERSONNELS:
         if nom_outil.startswith(prefixe):
+            if prefixe == "custommcp_":
+                return "Serveur MCP personnalisé"
             return NOMS_PLATEFORMES_PAR_PREFIXE.get(prefixe, prefixe.rstrip("_").capitalize())
     return None
 
@@ -1211,6 +1217,10 @@ def libelle_outil_plateforme(nom_outil):
         return None
     for prefixe in PREFIXES_SERVEURS_PERSONNELS:
         if nom_outil.startswith(prefixe):
+            if prefixe == "custommcp_":
+                # Serveurs ajoutés par l'élève : le nom contient un code interne, la carte de
+                # confirmation affiche « Action sur <nom du serveur> » à la place.
+                return None
             reste = nom_outil[len(prefixe):].replace("-", "_")
             mots = [mot for mot in reste.split("_") if mot]
             if not mots:
@@ -1344,6 +1354,11 @@ CATEGORIES_OUTILS_PAR_PREFIXE = {
     "railway": "railway_",
     "supabase": "supabase_",
     "higgsfield": "higgsfield_",
+    # Serveurs MCP ajoutés par l'utilisateur lui-même (Render, un CRM...) : leur nom d'outil
+    # commence par custommcp_ puis un code interne, donc aucune des catégories ci-dessus ne les
+    # contient. Sans celle-ci, l'IA cherchait « Render » dans la catégorie render_mcp, la
+    # connexion officielle, la trouvait vide et répondait qu'elle ne voyait rien.
+    "serveurs_personnalises": "custommcp_",
 }
 
 NOMS_CATEGORIES_OUTILS = list(dict.fromkeys([*CATEGORIES_OUTILS.keys(), *CATEGORIES_OUTILS_PAR_PREFIXE.keys()]))
@@ -1372,7 +1387,10 @@ INDEX_CATEGORIES_OUTILS = (
     "google_chat, google_classroom, google_people, microsoft_mcp (Microsoft Graph Entra, lecture seule), "
     "render_mcp, cloudflare_mcp, netlify_mcp, notion, google_drive, github, vercel (sites et déploiements), "
     "railway (services et logs), supabase (base de données et SQL), "
-    "higgsfield (génération d'images et de vidéos), generation_documents, "
+    "higgsfield (génération d'images et de vidéos), "
+    "serveurs_personnalises (serveurs MCP ajoutés par l'utilisateur lui-même, quel que soit leur nom, "
+    "par exemple Render ou un CRM ; le nom du serveur figure dans la description de chaque outil), "
+    "generation_documents, "
     "execution_code (lancer du code et des commandes, gérer des fichiers dans un espace de travail), "
     "recherche_web (web, actualité, images et vidéos ; pas le premier réflexe "
     "pour trouver un livre ou un PDF), bibliotheque (documents/dossiers "

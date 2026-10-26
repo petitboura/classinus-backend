@@ -56,6 +56,13 @@ def _nom_lisible(nom_outil, action=None):
     # <plateforme> » ; le nom exact reste visible dans les détails de la carte.
     if not connu and base == nom_outil:
         plateforme = plateforme_outil_personnel(nom_outil)
+        if plateforme and nom_outil.startswith("custommcp_"):
+            # Avec plusieurs serveurs, l'utilisateur doit savoir lequel il autorise.
+            try:
+                from connexions.mcp_personnalises import nom_serveur_pour_outil
+                plateforme = nom_serveur_pour_outil(nom_outil) or plateforme
+            except Exception:
+                pass
         if plateforme:
             if est_outil_sensible_serveur_personnel(nom_outil):
                 return f"Action sur {plateforme}"

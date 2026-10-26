@@ -700,6 +700,20 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                         libelles_supplementaires=_LIBELLES_POUR_RECHERCHE_OUTILS,
                         completer_hors_score=bool(recherche["categorie"]),
                     )
+                    # Serveurs ajoutes par l'utilisateur : leur nom d'outil ne ressemble a aucune
+                    # categorie officielle. Si le modele a cherche "Render" dans render_mcp (la
+                    # connexion officielle) et que rien n'est sorti, on regarde aussi les outils
+                    # de ses serveurs personnalises, uniquement s'ils ont un vrai mot en commun
+                    # avec le besoin (le nom du serveur est dans leur description).
+                    if not trouves:
+                        perso = [
+                            o for o in catalogue_complet
+                            if o["function"]["name"].startswith("custommcp_")
+                            and o["function"]["name"] not in deja_en_main
+                        ]
+                        if perso:
+                            texte_perso = f"{recherche['besoin']} {recherche['categorie'] or ''}".replace("_", " ")
+                            trouves = rechercher_outils_pertinents(texte_perso, perso)
                     # Groupes et dependances (21/10/2026, demande Bourama) : les
                     # outils qui vont avec ceux trouves, ex. l'outil qui fournit un
                     # projectId. Voir completion_outils.py.
