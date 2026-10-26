@@ -15,7 +15,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     tesseract-ocr \
     tesseract-ocr-fra \
+    nodejs \
+    npm \
     && rm -rf /var/lib/apt/lists/*
+# nodejs et npm : requis par les outils Remotion du montage vidéo (remotion_create_project,
+# remotion_render). Sans eux la passerelle les déclare indisponibles. railpack.json les
+# installe déjà côté Railway, ce fichier les ajoute pour les builds Docker (staging Render).
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
