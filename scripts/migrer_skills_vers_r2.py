@@ -8,6 +8,8 @@ Sources, jamais modifiées ni supprimées :
 
 Par défaut c'est une SIMULATION : rien n'est écrit. Pour écrire :
     python -m scripts.migrer_skills_vers_r2 --executer
+Le SKILL.md de chaque skill est rangé dans un dossier qui porte son nom exact, avec
+le nom et la description actuels dans l'en-tête.
 Avant d'écrire, les lignes sources sont sauvegardées dans un fichier JSON.
 Après l'écriture, les comptages avant et après sont comparés et chaque fichier
 R2 est relu. Relançable sans risque : une ligne déjà migrée est ignorée.
@@ -27,6 +29,13 @@ from core import config_skills, stockage_r2
 from core.skills_entete import appliquer_entete
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+
+def dossier_du_skill(nom: str) -> str:
+    """Dossier du skill dans R2 : son nom exact. Seuls les caractères qui casseraient
+    la clé (séparateurs de chemin, caractères de contrôle) sont remplacés par une espace."""
+    propre = "".join(" " if (c in "/\\" or ord(c) < 32) else c for c in nom).strip(" .")
+    return propre or "Skill"
 
 
 def _contenu(row: dict, nom: str, description: str) -> str:
@@ -77,7 +86,7 @@ def deja_migre(db, colonne: str, valeur: str) -> bool:
 
 def ecrire(db, bucket, plan: dict) -> None:
     skill, contenu = plan["skill"], plan["contenu"].encode("utf-8")
-    cle = f"{skill['owner_id']}/{skill['id']}/migration/SKILL.md"
+    cle = f"{skill['owner_id']}/{skill['id']}/{dossier_du_skill(skill['nom'])}/SKILL.md"
     bucket.upload(cle, contenu, {"content-type": "text/markdown"})
     try:
         db.table("skills").insert(skill).execute()
