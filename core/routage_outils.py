@@ -419,7 +419,7 @@ def _preparer_demander_outils(outils_mcp, catalogue_complet, table_routage_compl
     return (outils_mcp or []) + [_outil_demander_outils()]
 
 
-NOMS_OUTILS_MEMOIRE_TOUJOURS_DISPONIBLES = ("memoire_sommaire", "memoire_lire", "memoire_ecrire")
+NOMS_OUTILS_MEMOIRE_TOUJOURS_DISPONIBLES = ("memoire_sommaire", "memoire_lire", "memoire_ecrire", "memoire_completer")
 
 
 def _outils_memoire_toujours_disponibles(outils_mcp, table_routage, catalogue_complet, table_routage_complet):

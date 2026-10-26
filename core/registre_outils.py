@@ -751,6 +751,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "memoire_sommaire": {"label": "Aperçu de ta mémoire", "icone": "Brain", "onglet": None},
     "memoire_lire": {"label": "Lecture de ta mémoire", "icone": "Brain", "onglet": None},
     "memoire_ecrire": {"label": "Enregistrement dans ta mémoire", "icone": "Brain", "onglet": None},
+    "memoire_completer": {"label": "Enregistrement dans ta mémoire", "icone": "Brain", "onglet": None},
     "consulter_profil_utilisateur": {"label": "Consultation de ton profil", "icone": "UserCircle", "onglet": None},
     "mettre_a_jour_profil_utilisateur": {"label": "Mise à jour de ton profil", "icone": "UserCog", "onglet": None},
 
@@ -1126,7 +1127,7 @@ CATEGORIES_OUTILS = {
     "configuration": ["gerer_configuration"],
     "skills": ["gerer_skill", "gerer_comportement_public"],
     "memoire": [
-        "memoire_sommaire", "memoire_lire", "memoire_ecrire",
+        "memoire_sommaire", "memoire_lire", "memoire_ecrire", "memoire_completer",
     ],
     "telephone_etudiant": [
         "gerer_dossier_telephone", "explorer_dossier", "gerer_action_mobile",

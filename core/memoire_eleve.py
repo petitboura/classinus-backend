@@ -214,3 +214,57 @@ def ecrire_categorie(
         logging.error(f"ERREUR SUPABASE (écriture memoire_eleve, user {user_id}, {categorie}/{sous_categorie}) : {e}")
         return False, "Erreur : l'écriture en mémoire a échoué, réessaie."
     return True, None
+
+
+def _fusion_profonde(existant: dict, ajouts: dict) -> dict:
+    """
+    Fusion qui ne perd jamais rien : un dict est fusionné clé par clé
+    (récursivement), une liste reçoit les éléments qu'elle n'a pas déjà,
+    toute autre valeur est remplacée par la nouvelle.
+    """
+    resultat = dict(existant)
+    for cle, valeur in ajouts.items():
+        ancien = resultat.get(cle)
+        if isinstance(ancien, dict) and isinstance(valeur, dict):
+            resultat[cle] = _fusion_profonde(ancien, valeur)
+        elif isinstance(ancien, list) and isinstance(valeur, list):
+            resultat[cle] = ancien + [v for v in valeur if v not in ancien]
+        else:
+            resultat[cle] = valeur
+    return resultat
+
+
+def completer_categorie(
+    user_id: str,
+    categorie: str,
+    sous_categorie: str | None,
+    ajouts: dict,
+    description: str,
+) -> tuple[bool, str | None]:
+    """
+    Ajoute ou modifie seulement quelques éléments d'UNE ligne sans jamais
+    renvoyer ni réécrire le reste de son contenu (chantier du 26/10/2026,
+    demande de Bourama : écrire sans tout relire ni tout réécrire).
+    La lecture ici est stricte : en cas d'erreur Supabase on s'arrête,
+    on n'écrit JAMAIS à partir d'un contenu qu'on n'a pas pu lire, sinon
+    une panne de lecture effacerait la fiche existante.
+    """
+    categorie = normaliser_nom(categorie)
+    sous = normaliser_nom(sous_categorie)
+    if not categorie:
+        return False, "Erreur : nom de catégorie manquant ou invalide."
+    try:
+        res = (
+            _supabase_memoire.table(_TABLE)
+            .select("contenu")
+            .eq("user_id", user_id)
+            .eq("categorie", categorie)
+            .eq("sous_categorie", _depuis_api(sous))
+            .execute()
+        )
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (lecture avant ajout memoire_eleve, user {user_id}, {categorie}/{sous}) : {e}")
+        return False, "Erreur : impossible de lire cette catégorie avant d'y ajouter, réessaie."
+    lignes = (res.data if res else None) or []
+    existant = (lignes[0].get("contenu") or {}) if lignes else {}
+    return ecrire_categorie(user_id, categorie, sous or None, _fusion_profonde(existant, ajouts), description)

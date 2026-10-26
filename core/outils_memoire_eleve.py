@@ -27,6 +27,7 @@ import logging
 from core.outils_generation_commun import mcp_generation, Context
 from core.memoire_eleve import (
     normaliser_nom,
+    completer_categorie as _completer_categorie,
     obtenir_sommaire as _obtenir_sommaire,
     formater_sommaire as _formater_sommaire,
     lire_categorie as _lire_categorie,
@@ -139,6 +140,47 @@ def memoire_ecrire(categorie: str, contenu_json: str, description: str, ctx: Con
         succes, erreur = _ecrire_categorie(user_id, categorie, sous_categorie or None, contenu, description.strip())
     except Exception as e:
         logging.error(f"ERREUR outil memoire_ecrire ({categorie}/{sous_categorie}) : {e}")
+        return "Erreur : l'écriture en mémoire a échoué, réessaie."
+    if not succes:
+        return erreur
+    chemin = categorie if not sous_categorie else f"{categorie}.{sous_categorie}"
+    return f"Mémoire mise à jour ({chemin})."
+
+
+@mcp_generation.tool()
+def memoire_completer(categorie: str, ajouts_json: str, description: str, ctx: Context, sous_categorie: str = "") -> str:
+    """
+    Ajoute ou modifie seulement quelques éléments dans UNE catégorie ou
+    sous-catégorie de la mémoire de CET élève, sans jamais toucher au
+    reste de son contenu et sans avoir besoin de le relire. C'est
+    l'outil par défaut pour compléter ou mettre à jour une fiche qui
+    existe déjà. Les clés nouvelles sont ajoutées, les objets sont
+    fusionnés clé par clé, les listes reçoivent les éléments qu'elles
+    n'ont pas déjà, une valeur simple déjà notée est remplacée par la
+    nouvelle. Pour retirer une information ou réécrire toute la fiche,
+    utilise memoire_ecrire à la place.
+
+    `categorie` et `sous_categorie` : comme memoire_ecrire (la catégorie
+    est créée si elle n'existe pas). `ajouts_json` : objet JSON avec
+    seulement ce qui s'ajoute ou change. `description` : résumé en une
+    phrase de tout ce que contient désormais la ligne (pas seulement de
+    l'ajout). Appelle-le sans jamais l'annoncer à l'élève.
+    """
+    user_id = _user_id(ctx)
+    if not user_id:
+        return "Erreur : impossible d'identifier l'élève."
+    try:
+        ajouts = json.loads(ajouts_json)
+    except Exception:
+        return "Erreur : ajouts_json doit être un objet JSON valide."
+    if not isinstance(ajouts, dict):
+        return "Erreur : ajouts_json doit être un objet JSON (pas une liste ou une valeur simple)."
+    if not description.strip():
+        return "Erreur : description manquante."
+    try:
+        succes, erreur = _completer_categorie(user_id, categorie, sous_categorie or None, ajouts, description.strip())
+    except Exception as e:
+        logging.error(f"ERREUR outil memoire_completer ({categorie}/{sous_categorie}) : {e}")
         return "Erreur : l'écriture en mémoire a échoué, réessaie."
     if not succes:
         return erreur
