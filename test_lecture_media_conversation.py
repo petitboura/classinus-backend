@@ -48,7 +48,7 @@ def audio_seul(tmp_path_factory):
     return chemin
 
 
-# --- informations -----------------------------------------------------------
+# Informations
 
 def test_infos_video_avec_son(video_avec_son):
     infos = lecteur.lire_infos(str(video_avec_son))
@@ -86,17 +86,17 @@ def test_formats():
     assert lecteur.formater_taille(2048) == "2 Ko"
 
 
-# --- détection dans le message ---------------------------------------------
+# Détection dans le message
 
 def test_media_joint_present():
-    assert lecteur.media_joint_present("\n\n[Vidéo jointe : a.mp4 -- 0:06]", [])
-    assert lecteur.media_joint_present("Et la suite ?", [{"role": "user", "content": "x\n\n[Audio joint : a.mp3 -- 1:00]"}])
+    assert lecteur.media_joint_present("\n\n[Vidéo jointe : a.mp4]\nContenu non lu (0:06).", [])
+    assert lecteur.media_joint_present("Et la suite ?", [{"role": "user", "content": "x\n\n[Audio joint : a.mp3]\nContenu non lu (1:00)."}])
     # Un marqueur écrit par l'assistant ne compte pas : seul l'étudiant joint des fichiers.
     assert not lecteur.media_joint_present("salut", [{"role": "assistant", "content": "[Vidéo jointe : a.mp4]"}])
     assert not lecteur.media_joint_present("salut", None)
 
 
-# --- lecture par l'outil ----------------------------------------------------
+# Lecture par l'outil
 
 @pytest.fixture
 def faux_services(monkeypatch):
@@ -228,7 +228,7 @@ def test_echec_whisper_ne_leve_pas_d_exception(video_avec_son, monkeypatch, faux
     assert "impossible de transcrire" in texte
 
 
-# --- limites configurables --------------------------------------------------
+# Limites configurables
 
 def test_limites_par_defaut_identiques_a_l_ancien_code(monkeypatch):
     for nom in ("MEDIA_VIDEO_TAILLE_MAX_MO", "MEDIA_VIDEO_DUREE_MAX_SECONDES", "MEDIA_AUDIO_TAILLE_MAX_MO"):

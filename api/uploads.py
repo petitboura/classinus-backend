@@ -525,7 +525,7 @@ async def uploader_audio_chat(
     return {"texte": texte, "url": url_audio}
 
 
-# --- Vidéo ou audio JOINT à une conversation (26/10/2026, demande Bourama) --
+# Vidéo ou audio JOINT à une conversation (26/10/2026, demande Bourama)
 #
 # Contrairement aux images et aux documents, une vidéo ou un audio joint n'est
 # PLUS lu à l'envoi : cette route enregistre seulement le fichier et renvoie ses
