@@ -39,6 +39,7 @@ _TABLES_SIMPLES = (
     ("notion_oauth_temp", "user_id"),
     ("oauth_temp", "user_id"),
     ("higgsfield_oauth_connections", "user_id"),
+    ("higgsfield_usage", "user_id"),
     ("higgsfield_oauth_temp", "user_id"),
     ("platform_mcp_oauth_connections", "user_id"),
     ("platform_mcp_oauth_temp", "user_id"),

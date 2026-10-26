@@ -19,7 +19,13 @@ from core.higgsfield_requetes import (
     construire_requete_image,
     construire_requete_video,
 )
-from core.outils_generation_commun import mcp_generation, Context, _sauvegarder_generation_bibliotheque
+from core.higgsfield_limites import reserver_generation
+from core.outils_generation_commun import (
+    mcp_generation,
+    Context,
+    _sauvegarder_generation_bibliotheque,
+    _supabase_memoire,
+)
 
 _MIME_IMAGES = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp"}
 
@@ -27,6 +33,13 @@ _MIME_IMAGES = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "
 def _extension_image(url: str) -> str:
     fin = url.split("?", 1)[0].rsplit(".", 1)[-1].lower()
     return fin if fin in _MIME_IMAGES else "png"
+
+
+def _id_utilisateur(ctx):
+    try:
+        return ctx.request_context.request.query_params.get("user_id")
+    except Exception:
+        return None
 
 
 def _message_erreur(e: Exception, action: str) -> str:
@@ -80,10 +93,14 @@ if higgsfield_api_disponible():
         son: bool = True,
         image_url: str = "",
         image_fin_url: str = "",
+        images_reference: Optional[List[str]] = None,
+        videos_reference: Optional[List[str]] = None,
+        sons_reference: Optional[List[str]] = None,
+        ctx: Context = None,
     ) -> str:
         """
-        Lance une vidéo Higgsfield : depuis une description, ou en animant une
-        image si `image_url` est donné. NE renvoie PAS la vidéo (1 à 3 minutes) :
+        Lance une vidéo Higgsfield : depuis une description, en animant une
+        image si `image_url` est donné, ou guidée par des références. NE renvoie PAS la vidéo (1 à 3 minutes) :
         renvoie un identifiant à donner à consulter_video_higgsfield un peu plus
         tard. Préviens l'utilisateur que ça prend du temps.
 
@@ -100,13 +117,23 @@ if higgsfield_api_disponible():
 
         `image_url` : adresse publique (https) de l'image à animer. `image_fin_url` :
         adresse publique de la dernière image, la vidéo fait la transition.
-        Génération payante : si l'utilisateur hésite, appelle d'abord
-        estimer_cout_higgsfield.
+
+        RÉFÉRENCES (seedance seulement, ne se mélange pas avec image_url) :
+        `images_reference` (9 maximum), `videos_reference` (3 maximum),
+        `sons_reference` (3 maximum), toutes en adresses publiques https. Pour
+        garder le MÊME personnage ou le même style d'une vidéo à l'autre, redonne
+        à chaque fois les mêmes images de référence. Des sons seuls ne suffisent
+        pas : il faut au moins une image ou une vidéo.
+
+        Chaque utilisateur a un nombre limité de générations par jour. Génération
+        payante : si l'utilisateur hésite, appelle d'abord estimer_cout_higgsfield.
         """
         try:
             adresse, corps = construire_requete_video(
-                modele, prompt, duree_secondes, format_video, qualite, son, image_url, image_fin_url
+                modele, prompt, duree_secondes, format_video, qualite, son, image_url, image_fin_url,
+                images_reference, videos_reference, sons_reference,
             )
+            reserver_generation(_supabase_memoire, _id_utilisateur(ctx), "video")
             resultat = lancer_generation(adresse, corps)
             return (
                 f"Génération Higgsfield lancée (id: {resultat['request_id']}). "
@@ -131,6 +158,7 @@ if higgsfield_api_disponible():
         format_image: str = "auto",
         qualite: str = "1k",
         images_reference: Optional[List[str]] = None,
+        ctx: Context = None,
     ) -> str:
         """
         Lance une image Higgsfield : depuis une description, ou en modifiant des
@@ -142,10 +170,13 @@ if higgsfield_api_disponible():
         Redonne EXACTEMENT le même titre à consulter_image_higgsfield.
 
         `format_image` : "auto", "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3",
-        "2:1" ou "1:2". `qualite` : "1k" ou "2k". Génération payante.
+        "2:1" ou "1:2". `qualite` : "1k" ou "2k". Génération payante, avec un
+        nombre limité par jour et par utilisateur. Pour garder le même personnage
+        d'une image à l'autre, redonne la même image de référence.
         """
         try:
             adresse, corps = construire_requete_image(modele, prompt, format_image, qualite, images_reference)
+            reserver_generation(_supabase_memoire, _id_utilisateur(ctx), "image")
             resultat = lancer_generation(adresse, corps)
             return (
                 f"Génération d'image Higgsfield lancée (id: {resultat['request_id']}). "
@@ -172,6 +203,7 @@ if higgsfield_api_disponible():
         qualite: str = "",
         son: bool = True,
         image_url: str = "",
+        images_reference: Optional[List[str]] = None,
     ) -> str:
         """
         Donne le prix d'une génération Higgsfield AVANT de la lancer (rien n'est
@@ -182,10 +214,11 @@ if higgsfield_api_disponible():
         """
         try:
             if (genre or "").strip().lower() == "image":
-                adresse, corps = construire_requete_image(modele, prompt, format_video, qualite)
+                adresse, corps = construire_requete_image(modele, prompt, format_video, qualite, images_reference)
             else:
                 adresse, corps = construire_requete_video(
-                    modele, prompt, duree_secondes, format_video, qualite, son, image_url, ""
+                    modele, prompt, duree_secondes, format_video, qualite, son, image_url, "",
+                    images_reference,
                 )
             prix = estimer_cout(adresse, corps)
             return f"Coût estimé : {prix['credits']} crédits (environ {prix['usd']} dollars)."

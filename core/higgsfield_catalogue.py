@@ -5,7 +5,8 @@ Seuls les modèles dont le schéma a été lu dans la documentation officielle
 plus dans MODELES_VIDEO ou MODELES_IMAGE, rien d'autre à toucher.
 
 Chaque modèle vidéo a deux adresses : "texte" (vidéo depuis une description) et
-"image" (vidéo depuis une image de départ). Les valeurs permises viennent du
+"image" (vidéo depuis une image de départ), plus "reference" quand le modèle accepte
+des références. Les valeurs permises viennent du
 schéma officiel de chaque adresse.
 """
 
@@ -17,6 +18,9 @@ MODELES_VIDEO = {
         "label": "Seedance 2.0",
         "texte": "bytedance/seedance-2.0/text-to-video",
         "image": "bytedance/seedance-2.0/image-to-video",
+        # Vidéo guidée par des images, vidéos ou sons de référence (garder un personnage, un style).
+        "reference": "bytedance/seedance-2.0/reference-to-video",
+        "max_references": {"images": 9, "videos": 3, "audios": 3},
         "duree": (4, 15),
         "duree_defaut": 5,
         # Format : seulement depuis du texte (avec une image, le cadrage suit l'image).
@@ -32,6 +36,7 @@ MODELES_VIDEO = {
         "label": "Kling 3.0 Pro",
         "texte": "kling-video/v3.0/pro/text-to-video",
         "image": "kling-video/v3.0/pro/image-to-video",
+        "reference": None,
         "duree": (3, 15),
         "duree_defaut": 5,
         "formats": ["16:9", "9:16", "1:1"],

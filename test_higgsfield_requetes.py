@@ -40,6 +40,27 @@ class TestRequeteVideo(unittest.TestCase):
             construire_requete_video("kling", "", 5, "", "", True, "https://x.com/a.jpg")
 
 
+class TestReferencesVideo(unittest.TestCase):
+    def test_references_seedance(self):
+        adresse, corps = construire_requete_video(
+            "seedance", "le héros court", 6, "9:16", "", True, "", "",
+            ["https://x.com/a.jpg"], ["https://x.com/v.mp4"], None,
+        )
+        self.assertEqual(adresse, "bytedance/seedance-2.0/reference-to-video")
+        self.assertEqual(corps["image_urls"], ["https://x.com/a.jpg"])
+        self.assertEqual(corps["video_urls"], ["https://x.com/v.mp4"])
+
+    def test_references_refusees(self):
+        with self.assertRaises(ErreurHiggsfield):
+            construire_requete_video("kling", "a", 5, "", "", True, "", "", ["https://x.com/a.jpg"])
+        with self.assertRaises(ErreurHiggsfield):
+            construire_requete_video("seedance", "a", 5, "", "", True, "https://x.com/p.jpg", "", ["https://x.com/a.jpg"])
+        with self.assertRaises(ErreurHiggsfield):
+            construire_requete_video("seedance", "a", 5, "", "", True, "", "", None, None, ["https://x.com/s.mp3"])
+        with self.assertRaises(ErreurHiggsfield):
+            construire_requete_video("seedance", "a", 5, "", "", True, "", "", ["https://x.com/a.jpg"] * 10)
+
+
 class TestRequeteImage(unittest.TestCase):
     def test_image_avec_references(self):
         adresse, corps = construire_requete_image(None, "un vase", "16:9", "2k", ["https://x.com/a.png"])

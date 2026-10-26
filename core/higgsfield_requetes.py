@@ -44,6 +44,17 @@ def _choix_valide(valeur, permises, libelle: str) -> str:
     return texte
 
 
+def _liste_adresses(valeurs, libelle: str, maximum: int) -> list:
+    propres = []
+    for valeur in valeurs or []:
+        propre = _adresse_publique(valeur, libelle)
+        if propre:
+            propres.append(propre)
+    if len(propres) > maximum:
+        raise ErreurHiggsfield(f"Maximum {maximum} pour : {libelle.lower()}.")
+    return propres
+
+
 def construire_requete_video(
     modele,
     prompt,
@@ -53,6 +64,9 @@ def construire_requete_video(
     son=True,
     image_url="",
     image_fin_url="",
+    images_reference=None,
+    videos_reference=None,
+    sons_reference=None,
 ):
     """Renvoie (adresse_du_modele, corps_de_la_demande) pour une vidéo."""
     cle = (modele or MODELE_VIDEO_DEFAUT).strip().lower()
@@ -63,9 +77,22 @@ def construire_requete_video(
     description = (prompt or "").strip()
     depart = _adresse_publique(image_url, "L'image de départ")
     fin = _adresse_publique(image_fin_url, "L'image de fin")
+    # Sans limite connue (modèle sans références), le refus clair vient du contrôle juste dessous.
+    limites = spec.get("max_references") or {"images": 99, "videos": 99, "audios": 99}
+    refs_images = _liste_adresses(images_reference, "Les images de référence", limites["images"])
+    refs_videos = _liste_adresses(videos_reference, "Les vidéos de référence", limites["videos"])
+    refs_sons = _liste_adresses(sons_reference, "Les sons de référence", limites["audios"])
+    avec_references = bool(refs_images or refs_videos or refs_sons)
+    if avec_references:
+        if not spec.get("reference"):
+            raise ErreurHiggsfield(f"Le modèle {cle} ne gère pas les références. Utilise seedance.")
+        if depart or fin:
+            raise ErreurHiggsfield("Choisis : une image de départ OU des références, pas les deux.")
+        if not refs_images and not refs_videos:
+            raise ErreurHiggsfield("Des sons seuls ne suffisent pas : ajoute au moins une image ou une vidéo de référence.")
     if fin and not depart:
         raise ErreurHiggsfield("Une image de fin demande aussi une image de départ.")
-    if not description and (not depart or spec["prompt_obligatoire_avec_image"]):
+    if not description and not avec_references and (not depart or spec["prompt_obligatoire_avec_image"]):
         raise ErreurHiggsfield("Il faut une description pour cette vidéo.")
 
     mini, maxi = spec["duree"]
@@ -73,7 +100,18 @@ def construire_requete_video(
     if description:
         corps["prompt"] = description
 
-    if depart:
+    if avec_references:
+        adresse = spec["reference"]
+        if refs_images:
+            corps["image_urls"] = refs_images
+        if refs_videos:
+            corps["video_urls"] = refs_videos
+        if refs_sons:
+            corps["audio_urls"] = refs_sons
+        choix_format = _choix_valide(format_video, spec["formats"], "Format")
+        if choix_format:
+            corps["aspect_ratio"] = choix_format
+    elif depart:
         # Avec une image de départ, le cadrage suit l'image : pas de choix de format.
         corps["image_url"] = depart
         if fin:

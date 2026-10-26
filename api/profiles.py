@@ -701,6 +701,13 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
         logging.error(f"ERREUR SUPABASE (export higgsfield_oauth_connections pour {user_id}) : {e}")
         export["connexion_higgsfield_mcp"] = {"erreur": "recuperation impossible, reessayer plus tard"}
 
+    try:
+        res = supabase.table("higgsfield_usage").select("jour,genre,nombre").eq("user_id", user_id).execute()
+        export["generations_higgsfield"] = res.data or []
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (export higgsfield_usage pour {user_id}) : {e}")
+        export["generations_higgsfield"] = {"erreur": "recuperation impossible, reessayer plus tard"}
+
     # follows et messages_directs : deux colonnes possibles chacune (sens
     # de la relation), donc pas dans la boucle simple ci-dessus.
     try:
