@@ -34,7 +34,41 @@ EXTENSIONS_MIME = {
     "video/mp4": ".mp4",
     "video/webm": ".webm",
     "video/quicktime": ".mov",
+    # Audios et images importés depuis les fichiers joints du chat (26/10/2026,
+    # demande Bourama) : mêmes dossier, mêmes règles de propriété et même
+    # stockage durable que les vidéos. La route /video-workspace, elle, ne
+    # laisse toujours passer que des vidéos.
+    "audio/mpeg": ".mp3",
+    "audio/wav": ".wav",
+    "audio/mp4": ".m4a",
+    "audio/ogg": ".ogg",
+    "audio/flac": ".flac",
+    "audio/webm": ".webm",
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
 }
+
+# Variantes de type MIME rencontrées sur les fichiers joints -> type canonique ci-dessus.
+ALIAS_MIME = {
+    "audio/mp3": "audio/mpeg",
+    "audio/x-wav": "audio/wav",
+    "audio/wave": "audio/wav",
+    "audio/x-m4a": "audio/mp4",
+    "audio/m4a": "audio/mp4",
+    "audio/aac": "audio/mp4",
+    "audio/x-flac": "audio/flac",
+    "audio/opus": "audio/ogg",
+    "image/jpg": "image/jpeg",
+}
+
+EXTENSIONS_SOURCES = {extension for extension in EXTENSIONS_MIME.values()}
+
+
+def mime_canonique(mime: str) -> str:
+    """'audio/webm;codecs=opus' -> 'audio/webm', 'audio/x-m4a' -> 'audio/mp4'."""
+    base = (mime or "").split(";")[0].strip().lower()
+    return ALIAS_MIME.get(base, base)
 
 
 def _segment(value: str) -> str:

@@ -1146,6 +1146,8 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # sélectionnés manuellement dans le menu d'outils.
     "video_lister_outils": {"label": "Recherche des capacités vidéo", "icone": "Clapperboard", "onglet": None},
     "video_executer_outil": {"label": "Montage vidéo", "icone": "Film", "onglet": None},
+    # 26/10/2026 : copie un fichier joint (vidéo, audio, image) dans l'espace de montage.
+    "video_importer_fichier_conversation": {"label": "Import d'un fichier joint pour le montage", "icone": "Paperclip", "onglet": None},
 }
 
 # --- Verbes des actions (24/09/2026, demande Bourama : regroupement des
@@ -1291,7 +1293,7 @@ CATEGORIES_OUTILS = {
     # Montage vidéo (24/10/2026, demande Bourama) : disponible sans vidéo jointe, via
     # demander_outils comme les autres catégories. Distinct de recherche_web
     # (rechercher_video, lire_video = vidéos du web) et de higgsfield (génération IA).
-    "montage_video": ["video_lister_outils", "video_executer_outil"],
+    "montage_video": ["video_lister_outils", "video_executer_outil", "video_importer_fichier_conversation"],
     # rechercher_image range ici (avec Tavily), pas dans generation_documents :
     # onglet="rechercher" dans REGISTRE_AFFICHAGE_OUTILS ci-dessus, c'est une
     # recherche d'image EXISTANTE sur le web, pas une creation (voir
@@ -1489,7 +1491,7 @@ GROUPES_OUTILS = {
         "rechercher_document_externe", "lire_document_externe", "lire_document_internet_archive",
     ],
     "video": ["rechercher_video", "lire_video"],
-    "montage_video": ["video_lister_outils", "video_executer_outil"],
+    "montage_video": ["video_lister_outils", "video_executer_outil", "video_importer_fichier_conversation"],
     "conversations_passees": ["lister_conversations_historique", "lire_conversation_historique"],
     "bibliotheque": [
         "gerer_document_bibliotheque", "gerer_dossier_bibliotheque", "gerer_fichier_conversation",

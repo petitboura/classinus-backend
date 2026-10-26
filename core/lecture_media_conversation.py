@@ -280,7 +280,15 @@ def retrouver_fichier(url_fichier: str, user_id: str) -> tuple[dict, bytes] | No
     if not res.data:
         return None
     ligne = res.data[0]
-    return ligne, stockage_r2.from_(BUCKET).download(ligne["chemin_stockage"])
+    chemin = ligne["chemin_stockage"]
+    try:
+        return ligne, stockage_r2.from_(BUCKET).download(chemin)
+    except Exception:
+        # Les images du chat sont rangées dans le bucket des images (chat/<user>/...)
+        # tout en étant référencées dans la bibliothèque (api/uploads.py:uploader_image_chat).
+        if not chemin.startswith("chat/"):
+            raise
+        return ligne, stockage_r2.from_("images-publiques").download(chemin)
 
 
 def lire_media(

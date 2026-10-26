@@ -708,11 +708,11 @@ async def uploader_video_espace(
 
     # Lire au plus la limite + 1 octet évite de charger un upload arbitrairement
     # volumineux en mémoire avant de pouvoir le refuser.
-    contenu = await fichier.read(TAILLE_MAX_VIDEO_OCTETS + 1)
+    contenu = await fichier.read(taille_max_video_octets() + 1)
     if not contenu:
         raise erreur_api(400, "FICHIER_VIDE")
-    if len(contenu) > TAILLE_MAX_VIDEO_OCTETS:
-        raise erreur_api(400, "VIDEO_TROP_LOURDE_40_MO_MAX")
+    if len(contenu) > taille_max_video_octets():
+        raise erreur_api(400, "MEDIA_TROP_LOURD", maximum=taille_max_video_octets() // (1024 * 1024))
 
     extension = TYPES_VIDEO_AUTORISES[fichier.content_type]
     chemin_temporaire = None
@@ -727,8 +727,8 @@ async def uploader_video_espace(
             raise erreur_api(400, "VIDEO_ILLISIBLE_REESSAIE_AVEC_UN_AUTRE")
         if not duree or duree <= 0:
             raise erreur_api(400, "VIDEO_ILLISIBLE_REESSAIE_AVEC_UN_AUTRE")
-        if duree > DUREE_MAX_VIDEO_SECONDES:
-            raise erreur_api(400, "VIDEO_TROP_LONGUE", duree=int(duree), maximum=DUREE_MAX_VIDEO_SECONDES)
+        if duree > duree_max_video_secondes():
+            raise erreur_api(400, "VIDEO_TROP_LONGUE", duree=int(duree), maximum=duree_max_video_secondes())
 
         try:
             enregistrement = enregistrer_video(

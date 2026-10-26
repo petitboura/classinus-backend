@@ -53,6 +53,10 @@ def lire_media_conversation(
     de langue (« fr », « en »...) seulement si la détection automatique se
     trompe, sinon laisse vide.
 
+    Pour MONTER ou MODIFIER ce fichier (couper, assembler, sous-titrer, mixer
+    avec un autre audio...), ne le lis pas : utilise le montage vidéo, en
+    important d'abord le fichier avec video_importer_fichier_conversation.
+
     Si le fichier est illisible ou sans son exploitable, dis-le clairement à
     l'étudiant sans rien inventer.
     """

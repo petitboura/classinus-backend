@@ -28,7 +28,9 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer as FastMCP, Context
 
+from core.import_fichier_montage import importer_fichier_conversation
 from core.video_workspaces import (
+    EXTENSIONS_SOURCES,
     chemin_interne,
     chemin_video,
     restaurer_workspace,
@@ -299,6 +301,21 @@ def _termes_recherche_video(recherche: str) -> list[str]:
 
 
 @mcp_video.tool()
+def video_importer_fichier_conversation(ctx: Context, url_fichier: str) -> dict[str, Any]:
+    """Importe dans l'espace de montage un fichier que l'étudiant a joint à la conversation.
+
+    À utiliser AVANT tout montage d'une vidéo, d'un audio ou d'une image joints avec
+    le « + » : les outils de montage ne lisent que les fichiers de l'espace de
+    travail, jamais une adresse internet. `url_fichier` est le lien réel du fichier,
+    visible entre crochets après « [Lien réel du fichier : ... ] » (jamais inventé).
+    Renvoie `source_path`, le chemin à donner ensuite aux outils de montage. Appelle-le
+    une fois par fichier à utiliser (par exemple une vidéo et un audio à assembler).
+    """
+    user_id, conversation_id, _root = _context_owner(ctx)
+    return importer_fichier_conversation(user_id, conversation_id, url_fichier)
+
+
+@mcp_video.tool()
 def video_lister_outils(ctx: Context, recherche: str = "") -> dict[str, Any]:
     """Découvre les capacités vidéo disponibles (montage, audio, effets, analyse, Remotion).
 
@@ -480,7 +497,7 @@ def _restaurer_sources_dans_arguments(valeur: Any, user_id: str, conversation_id
     if len(morceaux) != 2 or morceaux[0] != "uploads":
         return
     nom = Path(morceaux[1])
-    if nom.suffix.lower() not in {".mp4", ".webm", ".mov"}:
+    if nom.suffix.lower() not in EXTENSIONS_SOURCES:
         return
     if len(nom.stem) != 32 or any(c not in "0123456789abcdef" for c in nom.stem.lower()):
         return
