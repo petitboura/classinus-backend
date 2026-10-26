@@ -2,9 +2,9 @@
 Registre des sources de documents externes de Classinus (09/10/2026,
 demande Bourama).
 
-Deux façons de chercher, selon ce que l'étudiant a indiqué :
-- l'étudiant NOMME une source (rare) : la recherche porte sur elle seule ;
-- l'étudiant n'en nomme aucune : la recherche porte sur TOUTES les sources
+Deux façons de chercher, selon ce que l'utilisateur a indiqué :
+- l'utilisateur NOMME une source (rare) : la recherche porte sur elle seule ;
+- l'utilisateur n'en nomme aucune : la recherche porte sur TOUTES les sources
   à la fois, les résultats sont mélangés (un de chaque source tour à tour)
   et chacun indique sa source. Décision de Bourama du 09/10/2026 (version
   "mélangée"). Une source qui ne répond pas ne bloque pas les autres : on
@@ -12,7 +12,7 @@ Deux façons de chercher, selon ce que l'étudiant a indiqué :
 
 Réglages par variables d'environnement (aucun changement de code) :
 - RECHERCHE_DOCUMENTS_MODE : "melangee" (par défaut) ou "une_source" (sans
-  indication de l'étudiant, seule la source par défaut est cherchée, comme
+  indication de l'utilisateur, seule la source par défaut est cherchée, comme
   avant l'ajout de Gallica et HAL)
 - RECHERCHE_DOCUMENTS_SOURCES : liste de clés séparées par des virgules
   (ex. "internet_archive,hal") pour n'activer que certaines sources ; vide
@@ -163,10 +163,10 @@ def _normaliser(texte):
 
 def identifiant_source(source):
     """
-    Identifiant interne (clé de SOURCES) correspondant à ce que l'étudiant a
+    Identifiant interne (clé de SOURCES) correspondant à ce que l'utilisateur a
     indiqué. Source vide ou absente : la source par défaut. Source inconnue :
     SourceInconnue, jamais un repli silencieux sur une autre source (un
-    étudiant qui demande une bibliothèque précise ne doit pas croire qu'elle
+    utilisateur qui demande une bibliothèque précise ne doit pas croire qu'elle
     a été fouillée alors qu'elle ne l'a pas été).
     """
     demande = _normaliser(source)
@@ -240,7 +240,7 @@ def _rechercher_partout(requete, nombre):
 
 def rechercher(source, requete, nombre=None):
     """
-    Cherche dans UNE source, ou dans toutes à la fois si l'étudiant n'en a
+    Cherche dans UNE source, ou dans toutes à la fois si l'utilisateur n'en a
     nommé aucune (mode "melangee"). Renvoie (noms des sources interrogées,
     liste de documents chacun avec le champ "source", noms des sources en
     panne). Lève SourceInconnue si la source nommée n'existe pas,

@@ -541,7 +541,7 @@ def _message_erreur_technique_outil(nom_outil: str) -> str:
     return (
         f"Erreur technique interne pendant l'appel à l'outil '{nom_outil}'. "
         "La cause est inconnue : ne l'attribue pas au téléphone, à l'app ou à "
-        "l'étudiant. Dis simplement qu'une erreur technique est survenue et "
+        "l'utilisateur. Dis simplement qu'une erreur technique est survenue et "
         "propose de réessayer."
     )
 

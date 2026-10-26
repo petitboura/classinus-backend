@@ -248,23 +248,23 @@ def _explication_illisible(identifiant, raison):
     if raison == "acces_reserve":
         return (
             f"Ce document est en prêt numérique sur Internet Archive : son contenu n'est pas lisible sans "
-            f"compte et je ne peux pas le lire. Donne seulement le lien de sa page à l'étudiant : {page} . "
+            f"compte et je ne peux pas le lire. Donne seulement le lien de sa page à l'utilisateur : {page} . "
             f"Ne devine ni ne résume ce qu'il contient."
         )
     if raison == "pdf_trop_gros":
         return (
             f"Internet Archive n'a pas extrait le texte de ce document, et son PDF est trop gros pour que je "
-            f"le lise ici. Donne le lien de la page à l'étudiant : {page} . Ne devine ni ne résume ce qu'il contient."
+            f"le lise ici. Donne le lien de la page à l'utilisateur : {page} . Ne devine ni ne résume ce qu'il contient."
         )
     if raison == "trop_gros":
         return (
             f"Le texte de ce document est trop gros pour être lu ici. Donne le lien de la page à "
-            f"l'étudiant : {page} . Ne devine ni ne résume ce qu'il contient."
+            f"l'utilisateur : {page} . Ne devine ni ne résume ce qu'il contient."
         )
     if raison == "aucun_texte":
         return (
             f"Je n'ai trouvé aucun texte lisible pour ce document (il s'agit peut-être d'images seules, "
-            f"d'une vidéo ou d'un enregistrement audio). Donne le lien de la page à l'étudiant : {page} . "
+            f"d'une vidéo ou d'un enregistrement audio). Donne le lien de la page à l'utilisateur : {page} . "
             f"Ne devine ni ne résume ce qu'il contient."
         )
     return f"{raison} Lien de la page : {page} ."
@@ -306,7 +306,7 @@ def _tranche(identifiant, infos, a_partir_du_caractere):
     lien_pdf = _lien_visionneur(identifiant) if infos.get("pdf_visionneur") else None
     if lien_pdf:
         entete += (
-            f"Si l'étudiant veut ouvrir le PDF, écris son lien en markdown [titre]({lien_pdf}) avec cette "
+            f"Si l'utilisateur veut ouvrir le PDF, écris son lien en markdown [titre]({lien_pdf}) avec cette "
             f"adresse exacte, sans la modifier : il s'ouvre dans le visionneur du chat. "
         )
     entete += (
@@ -379,7 +379,7 @@ def lire_document_archive(url_ou_id, a_partir_du_caractere=0, rechercher=""):
             logging.error(f"ERREUR LECTURE ARCHIVE ({identifiant}) : {type(e).__name__} {str(e)[:200]}")
             return (
                 "La lecture de ce document a échoué. Réessaie une fois ; si ça échoue encore, "
-                f"donne seulement le lien de la page à l'étudiant : {_URL_PAGE.format(id=identifiant)} . "
+                f"donne seulement le lien de la page à l'utilisateur : {_URL_PAGE.format(id=identifiant)} . "
                 "Ne devine pas ce que contient le document."
             )
 

@@ -51,9 +51,9 @@ def consulter_signalement(signalement_id: str, ctx: Context) -> str:
 
     parties = []
     if ligne["visible_question"]:
-        parties.append(f"Question de l'élève : {ligne['question_texte']}")
+        parties.append(f"Question de l'utilisateur : {ligne['question_texte']}")
     else:
-        parties.append("Question de l'élève : non partagée (tu peux la demander).")
+        parties.append("Question de l'utilisateur : non partagée (tu peux la demander).")
     if ligne["visible_reponse"]:
         parties.append(f"Réponse donnée par l'IA : {ligne['reponse_texte']}")
     else:
@@ -61,7 +61,7 @@ def consulter_signalement(signalement_id: str, ctx: Context) -> str:
     if ligne["visible_conversation"] and ligne.get("contexte_conversation"):
         parties.append(f"Contexte de conversation : {ligne['contexte_conversation']}")
     if ligne.get("probleme_observe"):
-        parties.append(f"Problème décrit par l'élève : {ligne['probleme_observe']}")
+        parties.append(f"Problème décrit par l'utilisateur : {ligne['probleme_observe']}")
     if ligne.get("correction_texte"):
         parties.append(f"Note de synthèse actuelle : {ligne['correction_texte']}")
     else:

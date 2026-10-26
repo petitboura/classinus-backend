@@ -119,7 +119,7 @@ def formater_sommaire(lignes: list[dict]) -> str:
 def construire_bloc_sommaire(lignes: list[dict] | None, pour_voix: bool = False) -> str:
     """
     Bloc de prompt donné d'office au modèle : le sommaire de la mémoire de
-    l'élève, déjà lu. Chaîne vide si on n'a pas pu le lire. Le contenu
+    l'utilisateur, déjà lu. Chaîne vide si on n'a pas pu le lire. Le contenu
     détaillé n'est jamais inclus ici, seulement les titres et résumés.
 
     pour_voix=False : texte du chat, qui peut appeler memoire_lire.
@@ -130,12 +130,12 @@ def construire_bloc_sommaire(lignes: list[dict] | None, pour_voix: bool = False)
         return ""
     if pour_voix:
         intro = (
-            "\n\nSOMMAIRE DE LA MÉMOIRE DE L'ÉTUDIANT (déjà lu). Une ligne par sujet : titre, résumé, "
+            "\n\nSOMMAIRE DE LA MÉMOIRE DE L'UTILISATEUR (déjà lu). Une ligne par sujet : titre, résumé, "
             "date de dernière mise à jour. Voici comment t'en servir :\n"
-            "1. Appelle l'étudiant par son prénom, tel qu'il apparaît dans le sommaire, souvent et "
+            "1. Appelle l'utilisateur par son prénom, tel qu'il apparaît dans le sommaire, souvent et "
             "naturellement, sans en faire trop.\n"
-            "2. Si le sommaire indique comment l'étudiant appelle Classinus (un surnom), ce surnom est "
-            "aussi ton nom : quand l'étudiant le prononce, c'est à toi qu'il s'adresse, exactement comme "
+            "2. Si le sommaire indique comment l'utilisateur appelle Classinus (un surnom), ce surnom est "
+            "aussi ton nom : quand l'utilisateur le prononce, c'est à toi qu'il s'adresse, exactement comme "
             "s'il disait Classinus.\n"
             "3. Respecte ses préférences d'expression indiquées dans le sommaire (ton, genre grammatical "
             "avec lequel tu parles de toi).\n"
@@ -144,7 +144,7 @@ def construire_bloc_sommaire(lignes: list[dict] | None, pour_voix: bool = False)
         )
     else:
         intro = (
-            "\n\nSOMMAIRE DE LA MÉMOIRE DE CET ÉLÈVE (déjà lu, tu n'as pas besoin de l'outil "
+            "\n\nSOMMAIRE DE LA MÉMOIRE DE CET UTILISATEUR (déjà lu, tu n'as pas besoin de l'outil "
             "memoire_sommaire pour le consulter). Une ligne par sujet : titre, résumé, date de "
             "dernière mise à jour. Ce sont seulement des résumés, pas le détail :\n"
         )
@@ -154,7 +154,7 @@ def construire_bloc_sommaire(lignes: list[dict] | None, pour_voix: bool = False)
 def lire_categorie(user_id: str, categorie: str, sous_categorie: str | None = None) -> dict | None:
     """
     Contenu complet d'UNE seule ligne (categorie/sous_categorie) pour cet
-    élève. None si elle n'existe pas encore, ou en cas d'erreur Supabase
+    utilisateur. None si elle n'existe pas encore, ou en cas d'erreur Supabase
     (jamais d'exception vers l'appelant).
     """
     try:
@@ -186,7 +186,7 @@ def ecrire_categorie(
 ) -> tuple[bool, str | None]:
     """
     Crée ou remplace le contenu d'UNE SEULE ligne (categorie/sous_categorie),
-    jamais les autres lignes de cet élève, c'est tout le principe de
+    jamais les autres lignes de cet utilisateur, c'est tout le principe de
     cette refonte (voir docstring de module). `categorie` est libre
     (créée à la volée si elle n'existe pas), seulement normalisée.
 

@@ -424,11 +424,11 @@ NOMS_OUTILS_MEMOIRE_TOUJOURS_DISPONIBLES = ("memoire_sommaire", "memoire_lire", 
 
 def _outils_memoire_toujours_disponibles(outils_mcp, table_routage, catalogue_complet, table_routage_complet):
     """
-    Chantier "memoire eleve" (27/09/2026, demande Bourama) : les 3 outils
+    Chantier "memoire utilisateur" (27/09/2026, demande Bourama) : les 3 outils
     de core/outils_memoire_eleve.py doivent etre disponibles a CHAQUE
     tour, comme demander_outils (voir _preparer_demander_outils juste
     au-dessus), pour que le modele les utilise en reflexe plutot qu'a
-    l'occasion : c'est l'unique systeme de memoire de l'eleve.
+    l'occasion : c'est l'unique systeme de memoire de l'utilisateur.
 
     Contrairement a demander_outils/garder_outils, CE SONT de vrais
     outils MCP (deja dans catalogue_complet, voir
@@ -535,7 +535,7 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "salutation...), renvoie une liste vide.\n\n"
         "IMPORTANT : diagramme, graphique/chart, carte/localisation, "
         "figure géométrique, mini-outil interactif (widget), animation et question "
-        "interactive à l'étudiant NE SONT JAMAIS des outils de cette liste "
+        "interactive à l'utilisateur NE SONT JAMAIS des outils de cette liste "
         "-- ce sont des blocs que le modèle principal écrit lui-même "
         "directement dans sa réponse, affichés nativement par l'interface. "
         "Une demande de ce type (\"fais-moi un diagramme de...\", "
@@ -568,7 +568,7 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "fie JAMAIS à un mot-clé ('bibliothèque', 'public', 'catalogue', "
         "'Classinus'...), base-toi sur l'intention réelle :\n\n"
         "1) MES DOCUMENTS À MOI -- cours, exercice, fichier que "
-        "L'ÉTUDIANT LUI-MÊME a uploadé dans SA bibliothèque personnelle. "
+        "L'UTILISATEUR LUI-MÊME a uploadé dans SA bibliothèque personnelle. "
         "-> gerer_document_bibliotheque (action \"chercher\"). "
         "Exemples : \"explique-moi le chapitre 3\", \"résume mon cours "
         "sur les intégrales\", \"qu'est-ce que dit mon document sur la "
@@ -588,7 +588,7 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "fonctionnalité\".\n\n"
         "3) CATALOGUE PUBLIC -- LOCALISER un document dans la section "
         "\"Bibliothèque publique\", ouverte à tout le monde, PAS "
-        "l'étudiant qui l'a uploadé, PAS Classinus lui-même. "
+        "l'utilisateur qui l'a uploadé, PAS Classinus lui-même. "
         "-> gerer_document_bibliotheque (action "
         "\"trouver_catalogue_public\"). "
         "Exemples : \"trouve-moi un document sur la thermodynamique "
@@ -631,10 +631,10 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "publiée (type_element=\"programme\") : "
         "basculer_etoile_catalogue_public / "
         "ajouter_commentaire_catalogue_public.\n\n"
-        "4) WEB -- tout ce qui n'est NI un document de l'étudiant, NI "
+        "4) WEB -- tout ce qui n'est NI un document de l'utilisateur, NI "
         "Classinus/l'application, NI le catalogue public : actualité, "
         "information générale externe, sujet "
-        "sans rapport avec Classinus ou les documents de l'étudiant. "
+        "sans rapport avec Classinus ou les documents de l'utilisateur. "
         "-> tavily_search. "
         "Exemples : \"quelle est la capitale du Japon ?\", \"donne-moi "
         "les dernières nouvelles sur X\", \"c'est quoi la photosynthèse "
@@ -645,7 +645,7 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "règle que plus haut, une info ne devient pas une recherche web "
         "juste parce qu'elle est \"externe\" à Classinus.\n\n"
         "Piège fréquent à éviter : une question généraliste et une "
-        "question sur LES documents personnels de l'étudiant peuvent se "
+        "question sur LES documents personnels de l'utilisateur peuvent se "
         "ressembler en surface (\"c'est quoi la mitose ?\" = web ou "
         "connaissance générale, \"c'est quoi dans MON cours sur la "
         "mitose ?\" = monde 1) -- le mot \"mon\"/\"ma\" ou une référence "
@@ -712,11 +712,11 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         # outil de trop.
         "IMPORTANT : ne confonds JAMAIS un dossier de la BIBLIOTHÈQUE "
         "Classinus PERSONNELLE (documents/liens/notes privés de "
-        "l'étudiant -> gerer_dossier_bibliotheque), un dossier du "
+        "l'utilisateur -> gerer_dossier_bibliotheque), un dossier du "
         "CATALOGUE PUBLIC (visible par tout le monde, statut "
         "contribution_libre/privee -> gerer_dossier_catalogue_public, "
         "AJOUT 09/09/2026), et un dossier PHYSIQUE sur le TÉLÉPHONE de "
-        "l'étudiant (fichiers réels de son appareil, aucun rapport avec "
+        "l'utilisateur (fichiers réels de son appareil, aucun rapport avec "
         "la bibliothèque Classinus -> gerer_dossier_telephone + "
         "explorer_dossier). Exemples bibliothèque personnelle : "
         "\"crée-moi un dossier pour mes cours de maths\", \"range ce "
@@ -765,7 +765,7 @@ def _router_outils(message_utilisateur, outils_disponibles, historique=None):
         "gerer_document_bibliotheque, qui exclut volontairement ces "
         "pièces jointes de conversation) : suggère TOUJOURS "
         "gerer_fichier_conversation à la place. Si le fichier demandé est "
-        "physiquement SUR LE TÉLÉPHONE de l'étudiant plutôt que dans sa "
+        "physiquement SUR LE TÉLÉPHONE de l'utilisateur plutôt que dans sa "
         "bibliothèque Classinus, suggère plutôt la paire gerer_dossier_telephone + "
         "explorer_dossier (voir règle du monde téléphone plus haut) --"
         " explorer_dossier a une action dédiée \"donner_fichier\" pour "
