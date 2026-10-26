@@ -157,6 +157,11 @@ class MessageHistorique(BaseModel):
     # lignes de la conversation demandee, pas seulement le chemin actif.
     id: Optional[int] = None
     parent_id: Optional[int] = None
+    # Date du dernier choix de cette version par l'utilisateur (fleches de
+    # version), voir la migration 2026_10_26. Le chat affiche, a chaque
+    # embranchement, la version dont coalesce(selectionne_le, created_at)
+    # est la plus recente.
+    selectionne_le: Optional[str] = None
 
 
 @router.get("/{agent_id}", response_model=List[MessageHistorique])
@@ -175,7 +180,7 @@ def obtenir_historique_agent(agent_id: str, utilisateur=Depends(utilisateur_cour
     try:
         lignes = _recuperer_toutes_les_lignes(
             lambda: supabase.table("historique_conversations")
-            .select("id, parent_id, role, content, created_at, meta")
+            .select("id, parent_id, role, content, created_at, meta, selectionne_le")
             .eq("user_id", utilisateur.id)
             .eq("agent_id", agent_id)
             .order("created_at")
@@ -305,7 +310,7 @@ def obtenir_fil_conversation(agent_id: str, conversation_id: str, utilisateur=De
     def _construire_requete():
         requete = (
             supabase.table("historique_conversations")
-            .select("id, parent_id, role, content, created_at, meta")
+            .select("id, parent_id, role, content, created_at, meta, selectionne_le")
             .eq("user_id", utilisateur.id)
             .eq("agent_id", agent_id)
         )
@@ -325,6 +330,45 @@ def obtenir_fil_conversation(agent_id: str, conversation_id: str, utilisateur=De
         raise erreur_api(500, "IMPOSSIBLE_DE_CHARGER_CETTE_CONVERSATION")
 
     return [MessageHistorique(**ligne) for ligne in lignes]
+
+
+class ChoixVersion(BaseModel):
+    message_id: int
+
+
+@router.post("/{agent_id}/conversations/{conversation_id}/version-active")
+def choisir_version_active(
+    agent_id: str,
+    conversation_id: str,
+    choix: ChoixVersion,
+    utilisateur=Depends(utilisateur_courant),
+):
+    """
+    Retient la version que l'utilisateur vient d'afficher avec les fleches
+    de version du chat (26/10/2026). Au rechargement, c'est elle qui
+    s'affiche a cet embranchement, au lieu de la version la plus recente.
+    Une seule ecriture, filtree par user_id, agent_id et fil : on ne peut
+    jamais marquer le message de quelqu'un d'autre.
+    """
+    _verifier_cle_fil(conversation_id)
+    try:
+        res = _filtrer_fil(
+            supabase.table("historique_conversations")
+            .update({"selectionne_le": datetime.now(timezone.utc).isoformat()})
+            .eq("id", choix.message_id)
+            .eq("user_id", utilisateur.id)
+            .eq("agent_id", agent_id),
+            conversation_id,
+        ).execute()
+    except Exception as e:
+        logging.error(
+            f"ERREUR SUPABASE (choisir_version_active, user_id={utilisateur.id}, "
+            f"agent_id={agent_id}, conversation_id={conversation_id}) : {e}"
+        )
+        raise erreur_api(500, "IMPOSSIBLE_DE_MODIFIER_LE_FIL")
+    if not (res.data or []):
+        raise erreur_api(404, "FIL_INTROUVABLE")
+    return {"ok": True}
 
 
 # ===========================================================================
