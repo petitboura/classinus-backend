@@ -5,6 +5,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 os.environ.setdefault("SUPABASE_SECRET", "test-only-video-gateway-secret")
 os.environ.setdefault("AWS_ACCESS_KEY_ID", "test")
@@ -100,6 +101,76 @@ class TestPasserelleVideo(unittest.TestCase):
         self.assertNotIn("remotion_studio", passerelle._outils_exposes())
         if passerelle._tools_dict():
             self.assertIn("video_trim", passerelle._outils_exposes())
+
+
+class TestDependancesRemotion(unittest.TestCase):
+    """node_modules n'est jamais sauvegardé : la passerelle doit le réinstaller."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.projet = Path(self.tmp.name).resolve() / "projects" / "titre-anime"
+        self.projet.mkdir(parents=True)
+
+    def _avec_package_json(self):
+        (self.projet / "package.json").write_text("{}", encoding="utf-8")
+
+    def test_rien_a_faire_sans_package_json(self):
+        with mock.patch.object(passerelle.subprocess, "run") as lancer:
+            passerelle._assurer_dependances_remotion(self.projet)
+        lancer.assert_not_called()
+
+    def test_rien_a_faire_si_node_modules_present(self):
+        self._avec_package_json()
+        (self.projet / "node_modules").mkdir()
+        with mock.patch.object(passerelle.subprocess, "run") as lancer:
+            passerelle._assurer_dependances_remotion(self.projet)
+        lancer.assert_not_called()
+
+    def test_installe_quand_node_modules_manque(self):
+        self._avec_package_json()
+        fini = mock.Mock(returncode=0, stdout="", stderr="")
+        with mock.patch.object(passerelle.subprocess, "run", return_value=fini) as lancer:
+            passerelle._assurer_dependances_remotion(self.projet)
+        lancer.assert_called_once()
+        commande = lancer.call_args.args[0]
+        self.assertEqual(commande[:2], ["npm", "install"])
+        self.assertEqual(lancer.call_args.kwargs["cwd"], str(self.projet))
+        self.assertIn("npm_config_cache", lancer.call_args.kwargs["env"])
+
+    def test_echec_npm_remonte_un_message_lisible(self):
+        self._avec_package_json()
+        echec = mock.Mock(returncode=1, stdout="", stderr="npm ERR! network request failed")
+        with mock.patch.object(passerelle.subprocess, "run", return_value=echec):
+            with self.assertRaises(RuntimeError) as contexte:
+                passerelle._assurer_dependances_remotion(self.projet)
+        self.assertIn("installation des dépendances", str(contexte.exception))
+        self.assertIn("network request failed", str(contexte.exception))
+        self.assertNotIn("--", str(contexte.exception))
+
+    def test_delai_depasse_remonte_un_message_lisible(self):
+        self._avec_package_json()
+        delai = passerelle.subprocess.TimeoutExpired(cmd="npm install", timeout=1)
+        with mock.patch.object(passerelle.subprocess, "run", side_effect=delai):
+            with self.assertRaises(RuntimeError) as contexte:
+                passerelle._assurer_dependances_remotion(self.projet)
+        self.assertIn("délai", str(contexte.exception))
+
+    def test_npm_introuvable_remonte_un_message_lisible(self):
+        self._avec_package_json()
+        with mock.patch.object(passerelle.subprocess, "run", side_effect=FileNotFoundError):
+            with self.assertRaises(RuntimeError) as contexte:
+                passerelle._assurer_dependances_remotion(self.projet)
+        self.assertIn("npm est introuvable", str(contexte.exception))
+
+    def test_dossier_projet_lu_dans_les_arguments(self):
+        self.assertEqual(
+            passerelle._dossier_projet_remotion({"project_path": str(self.projet), "composition_id": "x"}),
+            self.projet,
+        )
+        self.assertEqual(passerelle._dossier_projet_remotion({"project_dir": str(self.projet)}), self.projet)
+        self.assertIsNone(passerelle._dossier_projet_remotion({"composition_id": "x"}))
+        self.assertIsNone(passerelle._dossier_projet_remotion({"project_path": ""}))
 
 
 if __name__ == "__main__":

@@ -19,6 +19,9 @@ import unicodedata
 import os
 import secrets
 import shutil
+import subprocess
+import tempfile
+import threading
 import uuid
 from pathlib import Path
 from typing import Any
@@ -498,6 +501,71 @@ def _serialiser(value: Any) -> Any:
     return value
 
 
+# Remotion a besoin de node_modules dans le dossier du projet. Ce dossier n'est
+# jamais sauvegardé dans R2 (voir video_workspaces._REPERTOIRES_IGNORES) et
+# l'installation lancée par remotion_create_project échoue sans bruit : un appel
+# suivant, surtout s'il atterrit sur une autre instance, ne trouve donc plus rien
+# et npx répond « could not determine executable to run ». La passerelle
+# réinstalle les dépendances avant chaque outil Remotion qui en a besoin.
+_DELAI_INSTALLATION_NPM = 300
+_CLES_PROJET_REMOTION = ("project_path", "project_dir", "project_root")
+_verrous_installation: dict[str, threading.Lock] = {}
+_verrou_registre_installation = threading.Lock()
+
+
+def _verrou_projet(projet: Path) -> threading.Lock:
+    with _verrou_registre_installation:
+        return _verrous_installation.setdefault(str(projet), threading.Lock())
+
+
+def _dossier_projet_remotion(args: dict) -> Path | None:
+    for cle in _CLES_PROJET_REMOTION:
+        valeur = args.get(cle)
+        if isinstance(valeur, str) and valeur.strip():
+            return Path(valeur)
+    return None
+
+
+def _assurer_dependances_remotion(projet: Path) -> None:
+    """Installe node_modules dans le projet Remotion s'il manque (sans effet sinon).
+
+    Lève RuntimeError avec un message lisible si l'installation échoue, au lieu de
+    laisser npx répondre par une erreur obscure.
+    """
+    if not (projet / "package.json").is_file() or (projet / "node_modules").is_dir():
+        return
+    env = dict(os.environ)
+    # Cache npm partagé entre les projets : les réinstallations suivantes sont bien plus rapides.
+    env.setdefault("npm_config_cache", str(Path(tempfile.gettempdir()) / "classinus-npm-cache"))
+    env["npm_config_update_notifier"] = "false"
+    with _verrou_projet(projet):
+        if (projet / "node_modules").is_dir():
+            return
+        try:
+            resultat = subprocess.run(
+                # --ignore-scripts : aucun script d'installation de paquet ne s'exécute sur le
+                # serveur ; testé, Remotion fonctionne sans (binaires fournis en paquets séparés).
+                ["npm", "install", "--no-audit", "--no-fund", "--prefer-offline", "--ignore-scripts"],
+                cwd=str(projet),
+                capture_output=True,
+                text=True,
+                timeout=_DELAI_INSTALLATION_NPM,
+                env=env,
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(
+                "L'installation des dépendances de l'animation a dépassé le délai de "
+                f"{_DELAI_INSTALLATION_NPM // 60} minutes. Réessaie dans un instant."
+            ) from None
+        except FileNotFoundError:
+            raise RuntimeError("npm est introuvable sur le serveur de montage vidéo.") from None
+        if resultat.returncode != 0:
+            detail = (resultat.stderr or resultat.stdout or "").strip()[-400:]
+            raise RuntimeError(
+                "L'installation des dépendances de l'animation a échoué : " + (detail or "aucun détail fourni.")
+            )
+
+
 def _chemins_sortie(value: Any, root: Path) -> list[Path]:
     trouves: list[Path] = []
     def parcourir(item: Any, cle: str = ""):
@@ -603,6 +671,10 @@ def video_executer_outil(ctx: Context, nom_outil: str, arguments: dict[str, Any]
         restaurer_workspace(user_id, _conversation_id, root=root)
         _restaurer_sources_dans_arguments(arguments or {}, user_id, _conversation_id)
         args = _normaliser_arguments(nom_outil, arguments or {}, root)
+        if nom_outil.startswith("remotion_") and nom_outil != "remotion_create_project":
+            projet_remotion = _dossier_projet_remotion(args)
+            if projet_remotion is not None:
+                _assurer_dependances_remotion(projet_remotion)
         fonction = tool.fn
         result = fonction(**args)
         if inspect.isawaitable(result):
@@ -611,6 +683,13 @@ def video_executer_outil(ctx: Context, nom_outil: str, arguments: dict[str, Any]
         # Persiste les versions intermédiaires AVANT de renvoyer le contrôle
         # au modèle, pour qu'une opération suivante survive à un redémarrage.
         synchroniser_workspace(user_id, _conversation_id, root=root)
+        if nom_outil == "remotion_create_project" and isinstance(result, dict) and result.get("project_path"):
+            # L'installation faite par l'outil amont échoue sans bruit : on la reprend ici.
+            # Un échec n'annule pas la création du projet, le prochain rendu réessaiera.
+            try:
+                _assurer_dependances_remotion(Path(result["project_path"]))
+            except RuntimeError as exc:
+                result["avertissement_dependances"] = str(exc)
         sorties = _chemins_sortie(result, root) + _sorties_depuis_arguments(args, root)
         urls = _publier_sorties(list(dict.fromkeys(sorties)), user_id)
         if isinstance(result, dict):
