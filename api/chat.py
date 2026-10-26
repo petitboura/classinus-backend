@@ -309,7 +309,11 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
                 etat_editeur=payload.etat_editeur,
                 message_automatique=payload.message_automatique or False,
                 parent_id=payload.parent_id,
-                regenerer=payload.regenerer or False,
+                # Un reessai n'a de sens que si la question existe deja en base
+                # (parent_id connu). Sans parent_id, par exemple apres un echec
+                # qui n'a rien enregistre, c'est un envoi normal : la question
+                # est enregistree au lieu d'etre perdue.
+                regenerer=bool(payload.regenerer and payload.parent_id),
                 arret_tour=arret,
                 message_enregistre=payload.message_enregistre,
                 client=payload.client,
