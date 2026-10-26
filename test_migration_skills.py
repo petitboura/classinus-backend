@@ -32,6 +32,16 @@ class TestMigration(unittest.TestCase):
         s = plan["skill"]
         self.assertEqual((s["visibilite"], s["actif"], s["retire_le"]), ("retire", False, "2026-10-01T00:00:00+00:00"))
 
+    def test_dossier_du_skill_porte_le_nom_exact(self):
+        self.assertEqual(M.dossier_du_skill("Mon cours d'algèbre"), "Mon cours d'algèbre")
+        self.assertEqual(M.dossier_du_skill("a/b\\c"), "a b c")
+        self.assertEqual(M.dossier_du_skill("  "), "Skill")
+        db, bucket = FausseBase(), FauxR2()
+        plan = M.preparer({"id": "c1", "etudiant_id": "u1", "nom": "Mon cours", "description": "d", "texte": "t"}, False)
+        M.ecrire(db, bucket, plan)
+        self.assertEqual(list(bucket.objets), ["u1/c1/Mon cours/SKILL.md"])
+        self.assertEqual(db.tables["skill_files"][0]["chemin"], "SKILL.md")
+
     def test_sans_proprietaire_est_ignore(self):
         self.assertIsNone(M.preparer({"id": "x", "etudiant_id": None, "nom": "n"}, False))
 
