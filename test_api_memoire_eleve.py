@@ -95,9 +95,9 @@ with avec_base(base):
     r = client.get("/api/memoire-eleve")
 verifier(r.status_code == 200, "GET : 200 pour un eleve connecte")
 noms = [c["categorie"] for c in r.json()["categories"]]
-verifier(noms == ["identite", "scolarite", "apprentissage", "preferences"], "GET : les 4 categories du socle, dans l'ordre, sans categorie inventee")
+verifier(noms == ["apprentissage", "categorie_inventee", "identite"], "GET : toutes les categories creees par Classinus, triees, aucune imposee")
 par_nom = {c["categorie"]: c["lignes"] for c in r.json()["categories"]}
-verifier(par_nom["scolarite"] == [] and par_nom["preferences"] == [], "GET : categories vides renvoyees avec une liste vide, pas d'erreur")
+verifier("scolarite" not in par_nom, "GET : aucune categorie vide ajoutee d'office")
 verifier([l["sous_categorie"] for l in par_nom["apprentissage"]] == [None, "maths"], "GET : ligne racine (None) en premier puis sous-categories")
 verifier(base.requetes[0]["filtres"] == {"user_id": "eleve-1"}, "GET : lecture filtree sur l'eleve connecte uniquement")
 
@@ -113,12 +113,11 @@ with avec_base(base):
 verifier(r.status_code == 204, "DELETE categorie : 204")
 verifier(base.requetes[0]["operation"] == "delete" and base.requetes[0]["filtres"] == {"user_id": "eleve-1", "categorie": "apprentissage"}, "DELETE categorie : filtre sur l'eleve ET la categorie, jamais les autres")
 
-# 4. Categorie inconnue : refusee avant tout appel a la base
+# 4. Categorie libre : plus aucune liste imposee, le filtre sur l'eleve reste obligatoire
 base = BaseSimulee()
 with avec_base(base):
     r = client.delete("/api/memoire-eleve/inventee")
-verifier(r.status_code == 404 and r.json()["detail"]["code"] == "MEMOIRE_ELEVE_CATEGORIE_INCONNUE", "DELETE categorie inconnue : 404 avec code stable")
-verifier(base.requetes == [], "DELETE categorie inconnue : aucun appel a la base")
+verifier(r.status_code == 204 and base.requetes[0]["filtres"] == {"user_id": "eleve-1", "categorie": "inventee"}, "DELETE categorie libre : 204, toujours filtre sur l'eleve")
 
 # 5. Effacement total
 base = BaseSimulee()

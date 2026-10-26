@@ -26,7 +26,7 @@ import logging
 
 from core.outils_generation_commun import mcp_generation, Context
 from core.memoire_eleve import (
-    CATEGORIES_MEMOIRE_ELEVE,
+    normaliser_nom,
     obtenir_sommaire as _obtenir_sommaire,
     formater_sommaire as _formater_sommaire,
     lire_categorie as _lire_categorie,
@@ -44,10 +44,8 @@ def memoire_sommaire(ctx: Context) -> str:
     Renvoie la liste des catégories/sous-catégories déjà connues pour CET
     élève, JAMAIS leur contenu, juste de quoi savoir où aller (une
     ligne = une catégorie ou sous-catégorie, sa description en une
-    phrase, sa date de dernière mise à jour). Les catégories du socle
-    (identite, scolarite, apprentissage, preferences) apparaissent même
-    vides pour que tu saches où ranger un premier fait sans en inventer
-    une nouvelle.
+    phrase, sa date de dernière mise à jour). C'est toi qui as
+    construit cette structure : grandes catégories puis sous-catégories.
 
     À appeler en début de conversation si le contexte de l'élève peut
     aider à répondre, et systématiquement AVANT d'écrire une nouvelle
@@ -76,8 +74,7 @@ def memoire_lire(categorie: str, ctx: Context, sous_categorie: str = "") -> str:
     """
     Contenu complet d'UNE catégorie ou sous-catégorie précise de la
     mémoire de CET élève (repérée via memoire_sommaire au préalable).
-    `categorie` doit être l'une de : identite, scolarite, apprentissage,
-    preferences. `sous_categorie` optionnelle (notation pointée si
+    `categorie` : le nom exact vu dans memoire_sommaire. `sous_categorie` optionnelle (notation pointée si
     plusieurs niveaux, ex. "maths.derivees") ; laisse vide pour lire
     directement la catégorie racine. Renvoie un JSON, ou un message si
     rien n'est encore noté à cet endroit. Appelle-le sans jamais l'annoncer
@@ -86,8 +83,8 @@ def memoire_lire(categorie: str, ctx: Context, sous_categorie: str = "") -> str:
     user_id = _user_id(ctx)
     if not user_id:
         return "Erreur : impossible d'identifier l'élève."
-    if categorie not in CATEGORIES_MEMOIRE_ELEVE:
-        return f"Erreur : categorie '{categorie}' invalide. Catégories possibles : {', '.join(CATEGORIES_MEMOIRE_ELEVE)}."
+    if not normaliser_nom(categorie):
+        return "Erreur : nom de catégorie manquant ou invalide."
     try:
         ligne = _lire_categorie(user_id, categorie, sous_categorie or None)
     except Exception as e:
@@ -104,14 +101,17 @@ def memoire_ecrire(categorie: str, contenu_json: str, description: str, ctx: Con
     Crée ou remplace le contenu d'UNE catégorie ou sous-catégorie précise
     de la mémoire de CET élève, ne touche JAMAIS aux autres
     catégories/sous-catégories déjà notées. À utiliser dès que l'élève
-    énonce ou corrige un fait explicite qui mérite d'être retenu d'une
-    conversation à l'autre (établissement, niveau, difficulté récurrente,
-    préférence...), jamais sur une simple déduction ou un ressenti
-    passager.
+    énonce ou corrige un fait explicite qui peut servir plus tard, définitif OU en cours (sujet en
+    cours, projet, chantier, difficulté du moment, préférence...). Garde
+    tout, ne jette rien qui pourrait aider à se rappeler de l'élève ;
+    jamais sur une simple déduction de ta part.
 
-    `categorie` doit être l'une de : identite, scolarite, apprentissage,
-    preferences (vérifie via memoire_sommaire avant d'inventer une
-    sous-catégorie qui existe peut-être déjà sous un autre nom).
+    `categorie` : libre, tu en crées autant que nécessaire quand rien
+    dans memoire_sommaire ne convient. Privilégie quelques grandes
+    catégories (ex. identite, scolarite, apprentissage, preferences,
+    projets, vie_quotidienne...) avec des sous-catégories dedans, plutôt
+    que de multiplier les catégories à plat. Vérifie via memoire_sommaire
+    qu'un équivalent n'existe pas déjà avant d'en créer une.
     `sous_categorie` optionnelle, libre, notation pointée si plusieurs
     niveaux (ex. "maths.derivees") ; laisse vide pour écrire directement
     au niveau de la catégorie racine. `contenu_json` : objet JSON avec le

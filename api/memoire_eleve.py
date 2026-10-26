@@ -5,9 +5,8 @@ systeme de memoire, celui de core/memoire_eleve.py).
 
 Quatre routes :
 - GET /api/memoire-eleve : tout ce que Classinus retient de l'eleve
-  connecte, groupe par categorie du socle (identite, scolarite,
-  apprentissage, preferences). Les 4 categories sont toujours presentes,
-  meme vides, pour que l'ecran garde la meme forme.
+  connecte, groupe par categorie. Les categories sont libres
+  (29/10/2026) : seules celles creees par Classinus apparaissent.
 - DELETE /api/memoire-eleve/{categorie} : oublie une categorie entiere
   (sa ligne racine et toutes ses sous-categories).
 - DELETE /api/memoire-eleve : oublie tout.
@@ -26,7 +25,7 @@ from pydantic import BaseModel
 from api.auth import utilisateur_courant, supabase
 from api.journal import journaliser
 from core.erreurs import erreur_api
-from core.memoire_eleve import CATEGORIES_MEMOIRE_ELEVE, ecrire_categorie
+from core.memoire_eleve import ecrire_categorie
 
 router = APIRouter(prefix="/api/memoire-eleve", tags=["memoire_eleve"])
 
@@ -69,13 +68,12 @@ def obtenir_ma_memoire(utilisateur=Depends(utilisateur_courant)):
         logging.error(f"ERREUR SUPABASE (lecture memoire_eleve user={utilisateur.id}) : {e}")
         raise erreur_api(500, "MEMOIRE_ELEVE_LECTURE_ECHEC")
 
-    par_categorie: dict[str, list[dict]] = {c: [] for c in CATEGORIES_MEMOIRE_ELEVE}
+    par_categorie: dict[str, list[dict]] = {}
     for ligne in lignes:
-        if ligne["categorie"] in par_categorie:
-            par_categorie[ligne["categorie"]].append(ligne)
+        par_categorie.setdefault(ligne["categorie"], []).append(ligne)
 
     categories = []
-    for categorie in CATEGORIES_MEMOIRE_ELEVE:
+    for categorie in sorted(par_categorie):
         lignes_categorie = sorted(par_categorie[categorie], key=lambda l: l["sous_categorie"] or _RACINE)
         categories.append(
             CategoriePayload(
@@ -107,8 +105,6 @@ def modifier_une_ligne(
     utilisateur=Depends(utilisateur_courant),
 ):
     """Remplace le contenu d'une ligne qui existe deja (jamais de creation ici)."""
-    if categorie not in CATEGORIES_MEMOIRE_ELEVE:
-        raise erreur_api(404, "MEMOIRE_ELEVE_CATEGORIE_INCONNUE")
     sous = payload.sous_categorie or _RACINE
     try:
         existantes = (
@@ -143,8 +139,6 @@ def modifier_une_ligne(
 
 @router.delete("/{categorie}", status_code=204)
 def oublier_une_categorie(categorie: str, request: Request, utilisateur=Depends(utilisateur_courant)):
-    if categorie not in CATEGORIES_MEMOIRE_ELEVE:
-        raise erreur_api(404, "MEMOIRE_ELEVE_CATEGORIE_INCONNUE")
     try:
         (
             supabase.table("memoire_eleve")

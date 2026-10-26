@@ -13,9 +13,13 @@ lieu de le compléter, symptôme rapporté par Bourama d'une mémoire qui
 migrations/2026_09_27_memoire_eleve.sql), jamais de réécriture globale ,
 une écriture ne touche jamais que sa propre ligne.
 
-Catégories de premier niveau imposées (CATEGORIES_MEMOIRE_ELEVE) : le
-modèle ne peut pas en créer d'autres à ce niveau. Sous-catégories
-libres, décidées par le modèle selon chaque élève.
+Aucune catégorie imposée (décision de Bourama, 29/10/2026) : le modèle
+crée et structure lui-même autant de grandes catégories et de
+sous-catégories qu'il veut, à tout moment (pendant un tour, un message,
+une conversation). Il doit privilégier quelques grandes catégories
+avec des sous-catégories plutôt que des dizaines de catégories à plat.
+Les noms sont seulement normalisés (minuscules, sans accents, sans
+espaces) pour éviter les doublons du type "Scolarité" / "scolarite".
 
 Ce module ne connaît rien du protocole MCP (voir
 core/outils_memoire_eleve.py pour les outils appelés par le modèle) ,
@@ -24,11 +28,28 @@ core/historique_reponses_qcm.py / core/outils_reponses_qcm.py.
 """
 
 import logging
+import re
+import unicodedata
 from datetime import datetime, timezone
 
 from core.outils_generation_commun import _supabase_memoire
 
-CATEGORIES_MEMOIRE_ELEVE: tuple[str, ...] = ("identite", "scolarite", "apprentissage", "preferences")
+LONGUEUR_MAX_NOM = 80
+
+
+def normaliser_nom(nom: str | None) -> str:
+    """
+    Normalise un nom de catégorie ou de sous-catégorie : minuscules, sans
+    accents, espaces et séparateurs remplacés par un tiret bas, seuls
+    a-z 0-9 _ - . conservés (le point sépare les niveaux d'une
+    sous-catégorie). Chaîne vide si rien d'exploitable.
+    """
+    if not nom:
+        return ""
+    sans_accents = unicodedata.normalize("NFKD", nom).encode("ascii", "ignore").decode("ascii")
+    propre = re.sub(r"[^a-z0-9_.\-]+", "_", sans_accents.lower().strip())
+    propre = re.sub(r"_+", "_", propre).strip("_.")
+    return propre[:LONGUEUR_MAX_NOM]
 
 _TABLE = "memoire_eleve"
 
@@ -54,9 +75,8 @@ def obtenir_sommaire(user_id: str) -> list[dict]:
     Une entrée par catégorie/sous-catégorie déjà connue pour cet élève :
     categorie, sous_categorie, description, updated_at, JAMAIS le
     contenu (voir lire_categorie pour ça, à n'appeler que sur la ligne
-    précise identifiée ici). Les catégories du socle sans aucune ligne
-    existante sont quand même incluses, description=None, pour que le
-    modèle sache où ranger un premier fait sans en inventer une nouvelle.
+    précise identifiée ici). Aucune catégorie n'est ajoutée d'office : le sommaire
+    reflète uniquement ce que le modèle a lui-même créé.
     Liste vide en cas d'erreur Supabase, jamais d'exception vers
     l'appelant (même convention que historique_reponses_qcm.py).
     """
@@ -74,11 +94,6 @@ def obtenir_sommaire(user_id: str) -> list[dict]:
     for ligne in lignes:
         ligne["sous_categorie"] = _vers_api(ligne["sous_categorie"])
 
-    racines_existantes = {l["categorie"] for l in lignes if l["sous_categorie"] is None}
-    for categorie in CATEGORIES_MEMOIRE_ELEVE:
-        if categorie not in racines_existantes:
-            lignes.append({"categorie": categorie, "sous_categorie": None, "description": None, "updated_at": None})
-
     lignes.sort(key=lambda l: (l["categorie"], l["sous_categorie"] or ""))
     return lignes
 
@@ -94,8 +109,8 @@ def formater_sommaire(lignes: list[dict]) -> str:
     textes = []
     for l in lignes:
         chemin = l["categorie"] if not l["sous_categorie"] else f"{l['categorie']}.{l['sous_categorie']}"
-        if l["description"] is None:
-            textes.append(f"{chemin}: (vide)")
+        if not l.get("description"):
+            textes.append(f"{chemin}: (sans résumé)")
         else:
             textes.append(f"{chemin}: {l['description']} (maj: {l['updated_at']})")
     return "\n".join(textes)
@@ -147,8 +162,8 @@ def lire_categorie(user_id: str, categorie: str, sous_categorie: str | None = No
             _supabase_memoire.table(_TABLE)
             .select("contenu, description, updated_at")
             .eq("user_id", user_id)
-            .eq("categorie", categorie)
-            .eq("sous_categorie", _depuis_api(sous_categorie))
+            .eq("categorie", normaliser_nom(categorie))
+            .eq("sous_categorie", _depuis_api(normaliser_nom(sous_categorie)))
             .maybe_single()
             .execute()
         )
@@ -172,21 +187,17 @@ def ecrire_categorie(
     """
     Crée ou remplace le contenu d'UNE SEULE ligne (categorie/sous_categorie),
     jamais les autres lignes de cet élève, c'est tout le principe de
-    cette refonte (voir docstring de module). `categorie` doit faire
-    partie du socle (CATEGORIES_MEMOIRE_ELEVE), sinon l'écriture est
-    refusée AVANT tout appel Supabase (pas de garde-fou côté base, la
-    contrainte SQL check refuserait aussi mais avec une erreur moins
-    claire pour l'appelant).
+    cette refonte (voir docstring de module). `categorie` est libre
+    (créée à la volée si elle n'existe pas), seulement normalisée.
 
     Renvoie (succes, message_erreur). message_erreur est None en cas de
     succès, sinon un texte prêt à être renvoyé tel quel par l'outil MCP
     appelant.
     """
-    if categorie not in CATEGORIES_MEMOIRE_ELEVE:
-        return False, (
-            f"Erreur : categorie '{categorie}' invalide. Catégories possibles : "
-            f"{', '.join(CATEGORIES_MEMOIRE_ELEVE)}."
-        )
+    categorie = normaliser_nom(categorie)
+    sous_categorie = normaliser_nom(sous_categorie) or None
+    if not categorie:
+        return False, "Erreur : nom de catégorie manquant ou invalide."
     ligne = {
         "user_id": user_id,
         "categorie": categorie,

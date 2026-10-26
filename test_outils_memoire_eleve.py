@@ -80,9 +80,9 @@ async def cas_sommaire_nominal():
 
 async def cas_lire_categorie_invalide():
     ctx = construire_ctx(user_id="u1")
-    resultat = ome.memoire_lire(categorie="hobbies", ctx=ctx)
-    assert resultat.startswith("Erreur : categorie 'hobbies' invalide"), resultat
-    print("OK : memoire_lire, categorie hors socle -> refusée avant tout appel Supabase")
+    resultat = ome.memoire_lire(categorie="  !!  ", ctx=ctx)
+    assert resultat.startswith("Erreur : nom de catégorie"), resultat
+    print("OK : memoire_lire, nom de catégorie inexploitable -> refusé avant tout appel Supabase")
 
 
 async def cas_lire_rien_note():
@@ -105,9 +105,9 @@ async def cas_lire_nominal_avec_sous_categorie():
 
 async def cas_ecrire_categorie_invalide():
     ctx = construire_ctx(user_id="u1")
-    resultat = ome.memoire_ecrire(categorie="hobbies", contenu_json="{}", description="x", ctx=ctx)
+    resultat = ome.memoire_ecrire(categorie="  !!  ", contenu_json="{}", description="x", ctx=ctx)
     assert "invalide" in resultat, resultat
-    print("OK : memoire_ecrire, categorie hors socle -> refusée avant tout appel Supabase")
+    print("OK : memoire_ecrire, nom de catégorie inexploitable -> refusé avant tout appel Supabase")
 
 
 async def cas_ecrire_json_invalide():
@@ -145,7 +145,7 @@ async def cas_ecrire_nominal():
 
 async def cas_ecrire_echec_supabase():
     ctx = construire_ctx(user_id="u1")
-    with patch.object(ome, "_ecrire_categorie", return_value=(False, "Erreur : categorie 'x' invalide. Catégories possibles : identite, scolarite, apprentissage, preferences.")):
+    with patch.object(ome, "_ecrire_categorie", return_value=(False, "Erreur : nom de catégorie manquant ou invalide.")):
         resultat = ome.memoire_ecrire(categorie="scolarite", contenu_json="{}", description="x", ctx=ctx)
     assert resultat.startswith("Erreur :"), resultat
     print("OK : memoire_ecrire, échec côté couche données -> message d'erreur relayé, pas de succès menteur")
@@ -273,16 +273,14 @@ async def cas_couche_donnees_lecture_panne():
     print("OK : couche donnees, panne Supabase a la lecture : None, jamais d'exception")
 
 
-async def cas_couche_donnees_sommaire_complete_le_socle():
+async def cas_couche_donnees_sommaire_sans_categorie_imposee():
     import core.memoire_eleve as me
     lignes = [{"categorie": "apprentissage", "sous_categorie": "maths", "description": "d", "updated_at": "t"}]
     with patch.object(me, "_supabase_memoire", _FauxSupabase(lignes=lignes)):
         res = me.obtenir_sommaire("u1")
     racines = {(l["categorie"], l["sous_categorie"]) for l in res}
-    for c in me.CATEGORIES_MEMOIRE_ELEVE:
-        assert (c, None) in racines, (c, racines)
-    assert ("apprentissage", "maths") in racines
-    print("OK : couche donnees, sommaire : 4 categories du socle toujours presentes, sous-categories conservees")
+    assert racines == {("apprentissage", "maths")}, racines
+    print("OK : couche donnees, sommaire : uniquement ce que le modele a cree, aucune categorie ajoutee d'office")
 
 
 async def cas_couche_donnees_ecriture_racine_et_sous_categorie():
@@ -298,13 +296,15 @@ async def cas_couche_donnees_ecriture_racine_et_sous_categorie():
     print("OK : couche donnees, ecriture : racine = chaine vide, sous-categorie conservee, cle de conflit correcte")
 
 
-async def cas_couche_donnees_ecriture_categorie_hors_socle_sans_appel_base():
+async def cas_couche_donnees_ecriture_categorie_libre_normalisee():
     import core.memoire_eleve as me
     faux = _FauxSupabase()
     with patch.object(me, "_supabase_memoire", faux):
-        ok, err = me.ecrire_categorie("u1", "hobbies", None, {}, "d")
-    assert not ok and "invalide" in err and not any(a[0] == "upsert" for a in faux.appels)
-    print("OK : couche donnees, categorie hors socle : refusee avant tout appel a la base")
+        ok, err = me.ecrire_categorie("u1", "Vie Quotidienne", "Sport & Santé", {"a": 1}, "d")
+    ups = [a for a in faux.appels if a[0] == "upsert"]
+    assert ok and err is None and ups[0][1]["categorie"] == "vie_quotidienne", ups
+    assert ups[0][1]["sous_categorie"] == "sport_sante", ups
+    print("OK : couche donnees, categorie libre creee a la volee, nom normalise (minuscules, sans accents)")
 
 
 async def main():
@@ -327,9 +327,9 @@ async def main():
     await cas_couche_donnees_lecture_ligne_absente()
     await cas_couche_donnees_lecture_ligne_presente()
     await cas_couche_donnees_lecture_panne()
-    await cas_couche_donnees_sommaire_complete_le_socle()
+    await cas_couche_donnees_sommaire_sans_categorie_imposee()
     await cas_couche_donnees_ecriture_racine_et_sous_categorie()
-    await cas_couche_donnees_ecriture_categorie_hors_socle_sans_appel_base()
+    await cas_couche_donnees_ecriture_categorie_libre_normalisee()
     print("\nTous les cas passent (outils, injection, regle systeme, couche donnees).")
     print("Validation de l'isolation reelle entre categories/sous-categories et de la")
     print("non-regeneration globale : faite a part contre Supabase (Clovis, ljrbwwmiainrjirymmak),")
