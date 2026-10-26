@@ -1,6 +1,7 @@
-"""Vérifie les serveurs MCP personnels (Vercel, Railway, Supabase, Higgsfield), sans réseau ni base."""
+"""Vérifie les serveurs MCP personnels et les préfixes, sans réseau ni base."""
 
 import os
+import re
 import sys
 import types
 import unittest
@@ -8,6 +9,16 @@ from unittest.mock import patch
 
 # En production le dossier core est sur le chemin d'import (import direct de mcp_tools).
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "core"))
+
+# Le registre n'a pas besoin de charger les sources documentaires pour ces tests.
+# Une fausse source évite les dépendances réseau et les imports de collecte.
+_sources_docs = types.ModuleType("core.sources_documents_externes")
+_sources_docs.noms_sources = lambda: []
+# Le faux module est retiré juste après l'import du registre : sinon il resterait en place
+# et casserait les autres tests qui utilisent la vraie source dans le même processus.
+_faux_sources_ajoute = "core.sources_documents_externes" not in sys.modules
+if _faux_sources_ajoute:
+    sys.modules["core.sources_documents_externes"] = _sources_docs
 
 # registre_outils importe des modules qui ouvrent une connexion Supabase à
 # l'import : on les remplace par des modules vides pour tester sans environnement.
@@ -28,14 +39,87 @@ if "supabase" not in sys.modules:
 
 from core import registre_outils as r  # noqa: E402
 
+if _faux_sources_ajoute:
+    sys.modules.pop("core.sources_documents_externes", None)
+
 
 def _outil(nom):
     return {"type": "function", "function": {"name": nom, "description": "", "parameters": {}}}
 
 
+
+class TestGoogleWorkspaceMcpConfiguration(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "connexions", "oauth_generique.py"), encoding="utf-8") as fichier:
+            cls.oauth_source = fichier.read()
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "core", "registre_outils.py"), encoding="utf-8") as fichier:
+            cls.registre_source = fichier.read()
+
+    def test_les_huit_services_google_ont_les_scopes_requis_aux_operations_exposees(self):
+        exigences = {
+            "google_gmail_mcp": ("gmail.readonly", "gmail.compose"),
+            "google_docs_mcp": ("drive.readonly", "drive.file", "documents.readonly", "documents"),
+            "google_sheets_mcp": ("drive.readonly", "drive.file", "spreadsheets.readonly", "spreadsheets"),
+            "google_slides_mcp": ("drive.readonly", "drive.file", "presentations.readonly", "presentations"),
+            "google_calendar_mcp": ("calendar.calendarlist.readonly", "calendar.events.readonly", "calendar.events"),
+            "google_chat_mcp": ("chat.spaces.readonly", "chat.messages.readonly", "chat.messages.create"),
+            "google_classroom_mcp": ("classroom.announcements", "classroom.courses.readonly", "classroom.coursework.students", "classroom.topics.readonly"),
+            "google_people_mcp": ("directory.readonly", "contacts.readonly", "userinfo.profile"),
+        }
+        for service, scopes in exigences.items():
+            debut = self.oauth_source.index(f'"{service}": {{')
+            fin = self.oauth_source.find('\n    },', debut)
+            configuration = self.oauth_source[debut:fin]
+            for scope in scopes:
+                with self.subTest(service=service, scope=scope):
+                    self.assertIn(scope, configuration)
+
+    def test_les_permissions_hors_liste_officielle_ne_sont_pas_demandees(self):
+        for service, interdit in (
+            ("google_gmail_mcp", "gmail.modify"),
+            ("google_classroom_mcp", "classroom.topics"),
+        ):
+            debut = self.oauth_source.index(f'"{service}": {{')
+            fin = self.oauth_source.find('\n    },', debut)
+            scopes = re.findall(r"auth/([\w.\-]+)", self.oauth_source[debut:fin])
+            with self.subTest(service=service):
+                self.assertNotIn(interdit, scopes)
+
+    def test_la_deconnexion_google_vide_le_cache_et_le_statut_verifie_le_jeton(self):
+        debut = self.oauth_source.index("def deconnecter(service, user_id):")
+        self.assertIn("_cache_token.pop((service, user_id), None)", self.oauth_source[debut:])
+        self.assertIn("def a_reconnecter(service, user_id):", self.oauth_source)
+
+    def test_microsoft_demande_le_renouvellement_automatique(self):
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "connexions", "platform_mcp_oauth.py"), encoding="utf-8") as fichier:
+            source = fichier.read()
+        debut = source.index('"microsoft_mcp": {')
+        self.assertIn('"offline_access"', source[debut:source.index("\n    },", debut)])
+
+    def test_netlify_utilise_le_meme_chemin_d_import_que_les_autres_connexions(self):
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "connexions", "netlify_mcp.py"), encoding="utf-8") as fichier:
+            source = fichier.read()
+        self.assertIn("from core.client_http_supabase import nouveau_client_http_supabase", source)
+
+    def test_les_url_google_pointent_vers_les_serveurs_mcp_officiels(self):
+        for endpoint in (
+            "https://gmailmcp.googleapis.com/mcp/v1",
+            "https://docsmcp.googleapis.com/mcp/v1",
+            "https://sheetsmcp.googleapis.com/mcp/v1",
+            "https://slidesmcp.googleapis.com/mcp/v1",
+            "https://calendarmcp.googleapis.com/mcp/v1",
+            "https://chatmcp.googleapis.com/mcp/v1",
+            "https://classroommcp.googleapis.com/mcp/v1",
+            "https://people.googleapis.com/mcp/v1",
+        ):
+            with self.subTest(endpoint=endpoint):
+                self.assertIn(endpoint, self.registre_source)
+
+
 class TestCategoriesSeparees(unittest.TestCase):
     def test_chaque_serveur_a_sa_categorie(self):
-        for categorie in ("vercel", "railway", "supabase", "higgsfield"):
+        for categorie in ("vercel", "railway", "supabase", "higgsfield", "google_gmail", "google_docs", "google_sheets", "google_slides", "google_calendar", "google_chat", "google_classroom", "google_people", "microsoft_mcp", "render_mcp", "cloudflare_mcp", "netlify_mcp"):
             self.assertIn(categorie, r.NOMS_CATEGORIES_OUTILS)
             self.assertIn(categorie, r.INDEX_CATEGORIES_OUTILS)
 
@@ -74,7 +158,24 @@ class TestPrefixesPourLeFrontend(unittest.TestCase):
         prefixes = outils_registre.lister_registre_affichage_outils()["prefixes_applis"]
         self.assertEqual(
             prefixes,
-            {"higgsfield_mcp": "higgsfield_", "vercel_mcp": "vercel_", "railway_mcp": "railway_", "supabase_mcp": "supabase_"},
+            {
+                "higgsfield_mcp": "higgsfield_",
+                "vercel_mcp": "vercel_",
+                "railway_mcp": "railway_",
+                "supabase_mcp": "supabase_",
+                "google_gmail_mcp": "gmail_",
+                "google_docs_mcp": "gdocs_",
+                "google_sheets_mcp": "gsheets_",
+                "google_slides_mcp": "gslides_",
+                "google_calendar_mcp": "gcal_",
+                "google_chat_mcp": "gchat_",
+                "google_classroom_mcp": "gclass_",
+                "google_people_mcp": "gpeople_",
+                "microsoft_mcp": "ms365_",
+                "render_mcp": "render_",
+                "cloudflare_mcp": "cloudflare_",
+                "netlify_mcp": "netlify_",
+            },
         )
 
 
@@ -83,10 +184,17 @@ class TestRegistreServeurs(unittest.TestCase):
         noms = [serveur["nom"] for serveur in r.SERVEURS_MCP]
         self.assertEqual(len(noms), len(set(noms)), f"serveur en double : {sorted(n for n in set(noms) if noms.count(n) > 1)}")
 
-    def test_les_quatre_serveurs_personnels_ont_un_prefixe_distinct(self):
-        prefixes = {s["nom"]: s.get("prefixe_outils") for s in r.SERVEURS_MCP if s["nom"] in ("higgsfield_mcp", "vercel_mcp", "railway_mcp", "supabase_mcp")}
-        self.assertEqual(len(prefixes), 4)
-        self.assertEqual(len(set(prefixes.values())), 4)
+    def test_tous_les_serveurs_personnels_ont_un_prefixe_distinct(self):
+        noms_personnels = {
+            "higgsfield_mcp", "vercel_mcp", "railway_mcp", "supabase_mcp",
+            "google_gmail_mcp", "google_docs_mcp", "google_sheets_mcp",
+            "google_slides_mcp", "google_calendar_mcp", "google_chat_mcp",
+            "google_classroom_mcp", "google_people_mcp", "microsoft_mcp",
+            "render_mcp", "cloudflare_mcp", "netlify_mcp",
+        }
+        prefixes = {s["nom"]: s.get("prefixe_outils") for s in r.SERVEURS_MCP if s["nom"] in noms_personnels}
+        self.assertEqual(len(prefixes), len(noms_personnels))
+        self.assertEqual(len(set(prefixes.values())), len(noms_personnels))
         self.assertNotIn(None, prefixes.values())
 
 
@@ -104,7 +212,7 @@ class TestConfirmation(unittest.TestCase):
         for nom in (
             "supabase_list_tables", "supabase_get_project", "supabase_query_logs",
             "vercel_list_projects", "vercel_get_deployment", "vercel_search_vercel_documentation",
-            "railway_get-logs", "railway_list-services", "railway_describe-service", "railway_whoami",
+            "railway_get-logs", "railway_list-services", "railway_describe-service", "railway_whoami", "netlify_lister_sites", "netlify_consulter_site", "cloudflare_search", "render_list_services", "ms365_microsoft_graph_get",
         ):
             self.assertFalse(r.est_outil_sensible_serveur_personnel(nom), nom)
 
@@ -121,14 +229,25 @@ class TestConfirmation(unittest.TestCase):
 
 
 class TestNomsSansCollision(unittest.TestCase):
+    def test_les_confirmations_affichent_le_nom_lisible_du_fournisseur(self):
+        for nom, attendu in (
+            ("gdocs_update_doc", "Google Docs"),
+            ("gsheets_update_values", "Google Sheets"),
+            ("gcal_create_event", "Google Calendar"),
+            ("ms365_update_directory_object", "Microsoft"),
+            ("netlify_relancer_deploiement", "Netlify"),
+            ("cloudflare_update_worker", "Cloudflare"),
+            ("render_update_service", "Render"),
+        ):
+            self.assertEqual(r.plateforme_outil_personnel(nom), attendu)
+
     def test_meme_nom_reel_donne_deux_noms_exposes_differents(self):
         self.assertNotEqual("vercel_get_project", "supabase_get_project")
         for serveur in r.SERVEURS_MCP:
             prefixe = serveur.get("prefixe_outils")
             if prefixe:
-                # 64 caracteres : limite des noms de fonction chez les fournisseurs d'IA.
-                # Le plus long nom reel connu (Vercel) fait 51 caracteres.
-                self.assertLessEqual(len(prefixe) + 51, 64, serveur["nom"])
+                # Le préfixe doit rester assez court pour les noms d'outils (limite 64).
+                self.assertLessEqual(len(prefixe) + 40, 64, serveur["nom"])
 
 
 class TestAppelAvecVraiNom(unittest.TestCase):

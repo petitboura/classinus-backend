@@ -201,6 +201,48 @@ def _headers_google_drive(get_secret, user_id, agent_id):
     return {"Authorization": f"Bearer {token}"}
 
 
+
+
+def _url_mcp_constant(endpoint):
+    """Build a common URL builder for fixed remote MCP endpoints."""
+    def _builder(get_secret, user_id, agent_id, conversation_id=None):
+        return endpoint
+    return _builder
+
+
+def _headers_platform_mcp(service):
+    """Authorization header for a personal OAuth connection to an official MCP server."""
+    def _builder(get_secret, user_id, agent_id):
+        token = obtenir_token_platform_mcp(service, user_id)
+        return {"Authorization": f"Bearer {token}"} if token else None
+    return _builder
+
+
+def _url_google_workspace(endpoint):
+    return _url_mcp_constant(endpoint)
+
+
+def _headers_google_workspace(service):
+    """Per-product Google Workspace token; Google Drive remains its existing connector."""
+    def _builder(get_secret, user_id, agent_id):
+        from connexions.oauth_generique import obtenir_token_valide as obtenir_token_google
+        token = obtenir_token_google(service, user_id)
+        return {"Authorization": f"Bearer {token}"} if token else None
+    return _builder
+
+
+def _url_netlify_mcp(get_secret, user_id, agent_id, conversation_id=None):
+    port = os.environ.get("PORT", "8000")
+    return f"http://localhost:{port}/mcp/netlify?user_id={user_id}"
+
+
+def _headers_netlify_mcp(get_secret, user_id, agent_id):
+    from connexions.netlify_mcp import obtenir_token_valide as obtener_token_netlify
+    if not obtener_token_netlify(user_id):
+        return None
+    secret = get_secret("SUPABASE_SECRET")
+    return {"X-Classinus-MCP-Internal": secret} if secret else None
+
 SERVEURS_MCP = [
     # Wolfram DESACTIVE (10/09/2026, demande Bourama) : le serveur
     # agenttools.wolfram.com renvoyait des 503 Service Unavailable de
@@ -345,6 +387,92 @@ SERVEURS_MCP = [
             "copy_file",
         ],
     },
+
+    # Official Google Workspace MCP servers. Drive is already registered above.
+    {
+        "nom": "google_gmail_mcp",
+        "url_builder": _url_google_workspace("https://gmailmcp.googleapis.com/mcp/v1"),
+        "headers_builder": _headers_google_workspace("google_gmail_mcp"),
+        "necessite_utilisateur": True,
+        "prefixe_outils": "gmail_",
+    },
+    {
+        "nom": "google_docs_mcp",
+        "url_builder": _url_google_workspace("https://docsmcp.googleapis.com/mcp/v1"),
+        "headers_builder": _headers_google_workspace("google_docs_mcp"),
+        "necessite_utilisateur": True,
+        "prefixe_outils": "gdocs_",
+    },
+    {
+        "nom": "google_sheets_mcp",
+        "url_builder": _url_google_workspace("https://sheetsmcp.googleapis.com/mcp/v1"),
+        "headers_builder": _headers_google_workspace("google_sheets_mcp"),
+        "necessite_utilisateur": True,
+        "prefixe_outils": "gsheets_",
+    },
+    {
+        "nom": "google_slides_mcp",
+        "url_builder": _url_google_workspace("https://slidesmcp.googleapis.com/mcp/v1"),
+        "headers_builder": _headers_google_workspace("google_slides_mcp"),
+        "necessite_utilisateur": True,
+        "prefixe_outils": "gslides_",
+    },
+    {
+        "nom": "google_calendar_mcp",
+        "url_builder": _url_google_workspace("https://calendarmcp.googleapis.com/mcp/v1"),
+        "headers_builder": _headers_google_workspace("google_calendar_mcp"),
+        "necessite_utilisateur": True,
+        "prefixe_outils": "gcal_",
+    },
+    {
+        "nom": "google_chat_mcp",
+        "url_builder": _url_google_workspace("https://chatmcp.googleapis.com/mcp/v1"),
+        "headers_builder": _headers_google_workspace("google_chat_mcp"),
+        "necessite_utilisateur": True,
+        "prefixe_outils": "gchat_",
+    },
+    {
+        "nom": "google_classroom_mcp",
+        "url_builder": _url_google_workspace("https://classroommcp.googleapis.com/mcp/v1"),
+        "headers_builder": _headers_google_workspace("google_classroom_mcp"),
+        "necessite_utilisateur": True,
+        "prefixe_outils": "gclass_",
+    },
+    {
+        "nom": "google_people_mcp",
+        "url_builder": _url_google_workspace("https://people.googleapis.com/mcp/v1"),
+        "headers_builder": _headers_google_workspace("google_people_mcp"),
+        "necessite_utilisateur": True,
+        "prefixe_outils": "gpeople_",
+    },
+    {
+        "nom": "microsoft_mcp",
+        "url_builder": _url_mcp_constant("https://mcp.svc.cloud.microsoft/enterprise"),
+        "headers_builder": _headers_platform_mcp("microsoft_mcp"),
+        "necessite_utilisateur": True,
+        "prefixe_outils": "ms365_",
+    },
+    {
+        "nom": "render_mcp",
+        "url_builder": _url_mcp_constant("https://mcp.render.com/mcp"),
+        "headers_builder": _headers_platform_mcp("render_mcp"),
+        "necessite_utilisateur": True,
+        "prefixe_outils": "render_",
+    },
+    {
+        "nom": "cloudflare_mcp",
+        "url_builder": _url_mcp_constant("https://mcp.cloudflare.com/mcp"),
+        "headers_builder": _headers_platform_mcp("cloudflare_mcp"),
+        "necessite_utilisateur": True,
+        "prefixe_outils": "cloudflare_",
+    },
+    {
+        "nom": "netlify_mcp",
+        "url_builder": _url_netlify_mcp,
+        "headers_builder": _headers_netlify_mcp,
+        "necessite_utilisateur": True,
+        "prefixe_outils": "netlify_",
+    },
 ]
 
 # Serveurs MCP personnels dont les outils portent un prefixe (voir
@@ -359,12 +487,18 @@ PREFIXES_SERVEURS_PERSONNELS = tuple(
 VERBES_LECTURE_SERVEURS_PERSONNELS = {
     "get", "list", "search", "fetch", "read", "describe", "whoami",
     "aggregate", "count", "query", "domain", "environment", "http",
+    # Verbes français des outils du pont Netlify et de futurs MCP internes.
+    "lister", "consulter", "rechercher", "lire", "explorer", "obtenir", "verifier",
 }
 
 # Lectures seules dont le nom commence par "generate" (verbe volontairement
 # absent de la liste ci-dessus : "generate" cree souvent quelque chose, comme
 # la generation d'une video ou d'un domaine public).
-LECTURES_EXPLICITES_SERVEURS_PERSONNELS = {"generate_typescript_types", "generate_route"}
+LECTURES_EXPLICITES_SERVEURS_PERSONNELS = {
+    "generate_typescript_types", "generate_route",
+    # Lecture seule du MCP Microsoft Graph Enterprise en préversion.
+    "microsoft_graph_get", "microsoft_graph_suggest_queries", "microsoft_graph_list_properties",
+}
 
 # Outils en apparence de lecture mais qui exposent un secret (valeur de
 # variable, identifiants) ou fabriquent un acces : toujours confirmes.
@@ -392,15 +526,35 @@ def est_outil_sensible_serveur_personnel(nom_outil):
     return False
 
 
+NOMS_PLATEFORMES_PAR_PREFIXE = {
+    "higgsfield_": "Higgsfield",
+    "vercel_": "Vercel",
+    "railway_": "Railway",
+    "supabase_": "Supabase",
+    "gmail_": "Gmail",
+    "gdocs_": "Google Docs",
+    "gsheets_": "Google Sheets",
+    "gslides_": "Google Slides",
+    "gcal_": "Google Calendar",
+    "gchat_": "Google Chat",
+    "gclass_": "Google Classroom",
+    "gpeople_": "Google People",
+    "ms365_": "Microsoft",
+    "render_": "Render",
+    "cloudflare_": "Cloudflare",
+    "netlify_": "Netlify",
+}
+
+
 def plateforme_outil_personnel(nom_outil):
     """
-    Nom d'affichage de la plateforme (Vercel, Railway...) dont vient `nom_outil`
-    s'il porte le prefixe d'un serveur MCP personnel, sinon None. Deduit du
-    prefixe, donc aucune liste a tenir a jour quand une plateforme s'ajoute.
+    Nom lisible de la plateforme d'où vient un outil MCP préfixé.
+    Les services Google gardent leur nom complet dans les confirmations,
+    au lieu des préfixes techniques qui évitent les collisions.
     """
     for prefixe in PREFIXES_SERVEURS_PERSONNELS:
         if nom_outil.startswith(prefixe):
-            return prefixe.rstrip("_").capitalize()
+            return NOMS_PLATEFORMES_PAR_PREFIXE.get(prefixe, prefixe.rstrip("_").capitalize())
     return None
 
 
@@ -1170,6 +1324,18 @@ CATEGORIES_OUTILS = {
 # Categories reconnues par prefixe de nom d'outil plutot que par liste
 # figee (voir commentaire au-dessus de CATEGORIES_OUTILS).
 CATEGORIES_OUTILS_PAR_PREFIXE = {
+    "google_gmail": "gmail_",
+    "google_docs": "gdocs_",
+    "google_sheets": "gsheets_",
+    "google_slides": "gslides_",
+    "google_calendar": "gcal_",
+    "google_chat": "gchat_",
+    "google_classroom": "gclass_",
+    "google_people": "gpeople_",
+    "microsoft_mcp": "ms365_",
+    "render_mcp": "render_",
+    "cloudflare_mcp": "cloudflare_",
+    "netlify_mcp": "netlify_",
     "notion": "notion-",
     # Serveurs MCP personnels (20/10/2026) : le prefixe est AJOUTE par
     # mcp_tools.py au nom reel de chaque outil (voir "prefixe_outils" dans
@@ -1202,7 +1368,9 @@ def _sources_documents_externes_pour_index():
 
 
 INDEX_CATEGORIES_OUTILS = (
-    "Catégories : notion, google_drive, github, vercel (sites et déploiements), "
+    "Catégories : google_gmail, google_docs, google_sheets, google_slides, google_calendar, "
+    "google_chat, google_classroom, google_people, microsoft_mcp (Microsoft Graph Entra, lecture seule), "
+    "render_mcp, cloudflare_mcp, netlify_mcp, notion, google_drive, github, vercel (sites et déploiements), "
     "railway (services et logs), supabase (base de données et SQL), "
     "higgsfield (génération d'images et de vidéos), generation_documents, "
     "execution_code (lancer du code et des commandes, gérer des fichiers dans un espace de travail), "
