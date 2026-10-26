@@ -1384,6 +1384,11 @@ CATEGORIES_OUTILS_PAR_PREFIXE = {
     "railway": "railway_",
     "supabase": "supabase_",
     "higgsfield": "higgsfield_",
+    # Serveurs MCP ajoutés par l'utilisateur lui-même (Render, un CRM...) : leur nom d'outil
+    # commence par custommcp_ puis un code interne, donc aucune des catégories ci-dessus ne les
+    # contient. Sans celle-ci, l'IA cherchait « Render » dans la catégorie render_mcp, la
+    # connexion officielle, la trouvait vide et répondait qu'elle ne voyait rien.
+    "serveurs_personnalises": "custommcp_",
 }
 
 NOMS_CATEGORIES_OUTILS = list(dict.fromkeys([*CATEGORIES_OUTILS.keys(), *CATEGORIES_OUTILS_PAR_PREFIXE.keys()]))
@@ -1412,7 +1417,10 @@ INDEX_CATEGORIES_OUTILS = (
     "google_chat, google_classroom, google_people, microsoft_mcp (Microsoft Graph Entra, lecture seule), "
     "render_mcp, cloudflare_mcp, netlify_mcp, notion, google_drive, github, vercel (sites et déploiements), "
     "railway (services et logs), supabase (base de données et SQL), "
-    "higgsfield (génération d'images et de vidéos), generation_documents, "
+    "higgsfield (génération d'images et de vidéos), "
+    "serveurs_personnalises (serveurs MCP ajoutés par l'utilisateur lui-même, quel que soit leur nom, "
+    "par exemple Render ou un CRM ; le nom du serveur figure dans la description de chaque outil), "
+    "generation_documents, "
     "execution_code (lancer du code et des commandes, gérer des fichiers dans un espace de travail), "
     "montage_video (créer ou modifier une vidéo : couper, assembler, sous-titrer, effets, animations ; "
     "pas pour chercher une vidéo sur le web), "
