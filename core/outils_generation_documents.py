@@ -25,6 +25,7 @@ from core.generation_site import (
     site_deploiement_disponible,
 )
 
+from core.zip_edition import modifier_zip as _modifier_zip
 from core.outils_generation_commun import mcp_generation, Context, _sauvegarder_generation_bibliotheque
 
 
@@ -250,7 +251,10 @@ def generer_site_zip(nom_projet: str, fichiers: dict, ctx: Context) -> str:
 
 
 @mcp_generation.tool()
-def generer_bundle(nom_projet: str, elements: list, ctx: Context) -> str:
+def generer_bundle(
+    nom_projet: str, elements: list, ctx: Context,
+    zip_de_depart: str = "", retirer: list = None, deplacer: dict = None,
+) -> str:
     """
     Regroupe plusieurs fichiers hétérogènes (déjà générés ailleurs, ou
     fournis en brut) en une seule archive .zip téléchargeable.
@@ -261,13 +265,29 @@ def generer_bundle(nom_projet: str, elements: list, ctx: Context) -> str:
     [{"chemin": "rapport.pdf", "url": "https://..."},
      {"chemin": "donnees.csv", "contenu": "a,b\\n1,2"}]
     Renvoie l'URL publique du .zip.
+
+    MODIFIER UN ZIP EXISTANT sans rien relire ni réécrire : donne
+    `zip_de_depart` (URL d'un zip déjà généré, ou référence d'un zip joint
+    au chat). Le serveur garde tout ce que tu ne touches pas. Alors :
+    `elements` = les fichiers à AJOUTER (ou remplacer), en plus de "url" et
+    "contenu", un fichier d'un zip joint peut être donné par
+    {"chemin": "...", "reference": "job::index"} ; `retirer` = liste de
+    fichiers ou dossiers à retirer ; `deplacer` = {"ancien/chemin": "nouveau/chemin"}
+    (fichier ou dossier, sert aussi à renommer). Ne recopie jamais le contenu
+    du zip dans `elements`.
     """
     try:
+        if (zip_de_depart or "").strip():
+            url, notes = _modifier_zip(nom_projet, zip_de_depart, elements, retirer, deplacer)
+            _sauvegarder_generation_bibliotheque(ctx, url, f"{nom_projet}.zip", "application/zip")
+            return url + "\n" + "\n".join(notes)
         url = _generer_bundle(nom_projet, elements)
         _sauvegarder_generation_bibliotheque(ctx, url, f"{nom_projet}.zip", "application/zip")
         return url
     except Exception as e:
         logging.error(f"ERREUR outil generation : {e}")
+        if isinstance(e, ValueError):
+            return f"Erreur : {e}"
         return "Erreur : la génération du bundle a échoué, réessaie."
 
 

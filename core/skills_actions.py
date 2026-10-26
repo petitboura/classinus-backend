@@ -17,7 +17,7 @@ from core.skills_entete import lire_entete
 
 ACTIONS = (
     "lister", "consulter", "creer", "modifier_infos", "ecrire_fichier",
-    "remplacer_texte", "supprimer_fichier", "supprimer",
+    "remplacer_texte", "supprimer_fichier", "supprimer", "importer_zip", "exporter_zip",
 )
 
 
@@ -198,9 +198,22 @@ def _supprimer(user_id: str, skill_id: str) -> str:
     return f"Skill supprimé : {ligne['nom']}."
 
 
+def _exporter_zip(user_id: str, skill_id: str) -> str:
+    from core.skills_export_zip import exporter_skills_en_zip
+    try:
+        url, notes = exporter_skills_en_zip(user_id, skill_id)
+    except ValueError:
+        return "Erreur : cet utilisateur n'a aucun skill à exporter."
+    reponse = f"Zip prêt (un dossier par skill) : {url}"
+    if notes:
+        reponse += "\nFichiers non inclus :\n" + "\n".join(f"- {n}" for n in notes)
+    return reponse
+
+
 def executer(
     user_id: str, action: str, skill_id: str = "", nom: str = "", description: str = "",
     contenu: str = "", chemin: str = "", ancien: str = "", nouveau: str = "", actif: str = "",
+    reference: str = "",
 ) -> str:
     """Exécute une action et renvoie toujours un texte pour l'IA (jamais une exception)."""
     action = (action or "").strip().lower()
@@ -211,6 +224,11 @@ def executer(
             return _lister(user_id)
         if action == "creer":
             return _creer(user_id, nom, description, contenu)
+        if action == "importer_zip":
+            from core.skills_import_zip import importer_depuis_zip_chat
+            return importer_depuis_zip_chat(user_id, reference)
+        if action == "exporter_zip":
+            return _exporter_zip(user_id, skill_id)
         if not (skill_id or "").strip():
             return "Erreur : il faut préciser le skill (paramètre skill_id). Utilise l'action lister pour le retrouver."
         if action == "consulter":

@@ -18,6 +18,7 @@ def gerer_skill(
     ancien: str = "",
     nouveau: str = "",
     actif: str = "",
+    reference: str = "",
 ) -> str:
     """
     Gère les skills de l'utilisateur (page "Skills" de l'interface) : un skill est un
@@ -55,6 +56,12 @@ def gerer_skill(
       exact, présent une seule fois), `nouveau`.
     - "supprimer_fichier" : supprime un fichier (jamais le SKILL.md). Paramètres :
       `skill_id`, `chemin`. SENSIBLE : demande confirmation avant.
+    - "importer_zip" : importe d'un coup TOUS les skills d'un zip joint au chat (un ou
+      plusieurs dossiers de skill, zips rangés dans le zip compris), sans rien lire ni
+      réécrire. Paramètre : `reference` (la référence du zip donnée dans le sommaire du zip).
+      Ne lis pas les fichiers un par un pour recréer les skills : cette action le fait.
+    - "exporter_zip" : fabrique un zip téléchargeable, un dossier par skill, comme un skill
+      de Claude. Paramètre : `skill_id` (vide : tous les skills de l'utilisateur).
     - "supprimer" : supprime définitivement un skill et tous ses fichiers. Paramètre :
       `skill_id`. SENSIBLE : demande toujours confirmation avant.
 
@@ -66,5 +73,5 @@ def gerer_skill(
         return "Erreur : impossible d'identifier l'utilisateur."
     return skills_actions.executer(
         user_id, action, skill_id=skill_id, nom=nom, description=description,
-        contenu=contenu, chemin=chemin, ancien=ancien, nouveau=nouveau, actif=actif,
+        contenu=contenu, chemin=chemin, ancien=ancien, nouveau=nouveau, actif=actif, reference=reference,
     )

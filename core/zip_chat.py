@@ -49,6 +49,8 @@ from import_zip import extraire_membres_zip
 TAILLE_MAX_ZIP_CHAT_OCTETS = 200 * 1024 * 1024  # 200 Mo -- relevé de 50 à 200 Mo le 27/09/2026 (bug réel : un dossier exporté depuis Google Drive dépassait 50 Mo, le job ne démarrait jamais, voir MESSAGES_FR dans core/erreurs.py)
 NOMBRE_MAX_FICHIERS_ZIP_CHAT = 20  # aligné sur la limite de fichiers par upload de Claude.ai (chat)
 
+TAILLE_MAX_ZIP_SKILLS_OCTETS = 25 * 1024 * 1024  # zips gardés en mémoire pour l'import de skills
+
 NOM_OUTIL_DEZIP = "dezipper_zip_chat"
 
 _JOBS: dict[str, dict] = {}
@@ -73,9 +75,29 @@ def _extraire_texte_membre(nom_fichier: str, contenu: bytes, type_mime: str) -> 
     return resultat["texte"], resultat["raison"]
 
 
+def _reperer_skills(job: dict, contenu_zip: bytes, nom_zip: str) -> None:
+    """Garde le zip en mémoire (zips raisonnables seulement, pour core/zip_edition.py et
+    l'import de skills) et note les skills qu'il contient, pour que l'IA puisse les importer
+    sans rien relire (core/skills_import_zip.py)."""
+    if len(contenu_zip) > TAILLE_MAX_ZIP_SKILLS_OCTETS:
+        return
+    with _VERROU:
+        job["contenu_zip"] = contenu_zip
+    try:
+        from core.skills_zip_multiple import trouver_skills
+        noms = [t["origine"] for t in trouver_skills(contenu_zip, nom_zip)]
+    except Exception as e:
+        logging.warning(f"ZIP CHAT : repérage des skills impossible pour {nom_zip} : {e}")
+        return
+    if noms:
+        with _VERROU:
+            job["skills_detectes"] = noms
+
+
 def _executer(job_id: str, contenu_zip: bytes, nom_zip: str) -> None:
     job = _JOBS[job_id]
     try:
+        _reperer_skills(job, contenu_zip, nom_zip)
         membres, erreurs = extraire_membres_zip(contenu_zip, nom_zip)
 
         membres_traites = membres[:NOMBRE_MAX_FICHIERS_ZIP_CHAT]
@@ -193,6 +215,16 @@ def construire_digest_zip(job_id: str) -> str:
             lignes.append(f"- {chemin_affiche} : illisible ({element['raison_echec']})")
     if job.get("nombre_ignores_limite"):
         lignes.append(f"({job['nombre_ignores_limite']} fichier(s) supplémentaire(s) au-delà de la limite de {NOMBRE_MAX_FICHIERS_ZIP_CHAT}, non traités.)")
+    if job.get("contenu_zip"):
+        lignes.append(
+            f"[Pour ajouter, retirer ou déplacer un fichier de ce zip sans rien réécrire : generer_bundle avec zip_de_depart=\"{job_id}\".]"
+        )
+    if job.get("skills_detectes"):
+        lignes.append(
+            f"[Ce zip contient {len(job['skills_detectes'])} skill(s) : "
+            + ", ".join(job["skills_detectes"])
+            + f". Pour les importer tous d'un coup, sans rien lire ni réécrire : gerer_skill action=\"importer_zip\" reference=\"{job_id}\".]"
+        )
     return "\n".join(lignes)
 
 
