@@ -529,6 +529,26 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
             "</outils>"
         )
 
+    # 26/10/2026, demande de Bourama : l'IA a affirmé qu'un outil (Higgsfield) n'était pas chargé
+    # et s'est contentée de l'expliquer, sans le demander. Cette règle vaut dans les DEUX cas
+    # ci-dessus (outils préchargés ou non) : seul le résultat de demander_outils peut établir
+    # qu'un outil n'existe pas. Elle ne dit jamais que demander_outils est présent s'il ne l'est pas.
+    system_final += (
+        "\n\n<regle_outils_absents>\n"
+        "RÈGLE ABSOLUE : tant que tu n'as pas appelé demander_outils pour le besoin en question, "
+        "et que sa réponse ne t'a pas confirmé que l'outil n'existe pas ou n'est pas possible, "
+        "tu ne dis JAMAIS à l'utilisateur que tu n'as pas cet outil, qu'il n'existe pas, qu'il n'est "
+        "pas chargé, pas disponible ou pas accessible ce tour-ci. Les outils ne sont pas tous "
+        "préchargés : ne pas en voir dans ta liste ne prouve rien. Si l'utilisateur nomme un outil, "
+        "une catégorie ou un service (par exemple Higgsfield, Notion), ou demande ce que tu peux "
+        "faire avec, appelle demander_outils tout de suite, au lieu de répondre de mémoire ou de "
+        "proposer de le demander plus tard. Demander l'outil fait partie de ton travail : ne "
+        "demande pas la permission de le faire. Seule la réponse de demander_outils décide. "
+        "Si demander_outils lui-même ne figure pas dans ta liste, dis seulement que tu n'arrives "
+        "pas à le lancer pour l'instant, sans prétendre que l'outil n'existe pas.\n"
+        "</regle_outils_absents>"
+    )
+
     # Réflexe de transition (2026-09-05, demande Bourama, timeline
     # chronologique) retiré le même jour après deux pièges constatés en
     # test réel avec gpt-oss-120b (Groq) : 1) le modèle annonçait "je vais
