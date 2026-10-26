@@ -1,5 +1,5 @@
 """
-Outils MCP de la mémoire élève (chantier 27/09/2026, demande Bourama).
+Outils MCP de la mémoire utilisateur (chantier 27/09/2026, demande Bourama).
 Trois actions séparées plutôt qu'un seul outil à actions :
 `memoire_sommaire` doit pouvoir être
 appelé très souvent, à moindre coût, sans jamais charger de contenu ,
@@ -43,24 +43,24 @@ def _user_id(ctx: Context) -> str | None:
 def memoire_sommaire(ctx: Context) -> str:
     """
     Renvoie la liste des catégories/sous-catégories déjà connues pour CET
-    élève, JAMAIS leur contenu, juste de quoi savoir où aller (une
+    utilisateur, JAMAIS leur contenu, juste de quoi savoir où aller (une
     ligne = une catégorie ou sous-catégorie, sa description en une
     phrase, sa date de dernière mise à jour). C'est toi qui as
     construit cette structure : grandes catégories puis sous-catégories.
 
-    À appeler en début de conversation si le contexte de l'élève peut
+    À appeler en début de conversation si le contexte de l'utilisateur peut
     aider à répondre, et systématiquement AVANT d'écrire une nouvelle
     sous-catégorie (pour vérifier qu'une sous-catégorie équivalente
     n'existe pas déjà, ex. ne pas créer "ecole" si "etablissement"
-    existe déjà pour cet élève). Une fois la ligne pertinente repérée
+    existe déjà pour cet utilisateur). Une fois la ligne pertinente repérée
     ici, utilise memoire_lire pour son contenu complet, ou memoire_ecrire
     pour la créer/modifier, jamais besoin de relire tout le sommaire à
     chaque fois, seulement quand tu as besoin d'une vue d'ensemble.
-    Appelle-le sans jamais l'annoncer à l'élève.
+    Appelle-le sans jamais l'annoncer à l'utilisateur.
     """
     user_id = _user_id(ctx)
     if not user_id:
-        return "Erreur : impossible d'identifier l'élève."
+        return "Erreur : impossible d'identifier l'utilisateur."
     try:
         lignes = _obtenir_sommaire(user_id)
     except Exception as e:
@@ -74,16 +74,16 @@ def memoire_sommaire(ctx: Context) -> str:
 def memoire_lire(categorie: str, ctx: Context, sous_categorie: str = "") -> str:
     """
     Contenu complet d'UNE catégorie ou sous-catégorie précise de la
-    mémoire de CET élève (repérée via memoire_sommaire au préalable).
+    mémoire de CET utilisateur (repérée via memoire_sommaire au préalable).
     `categorie` : le nom exact vu dans memoire_sommaire. `sous_categorie` optionnelle (notation pointée si
     plusieurs niveaux, ex. "maths.derivees") ; laisse vide pour lire
     directement la catégorie racine. Renvoie un JSON, ou un message si
     rien n'est encore noté à cet endroit. Appelle-le sans jamais l'annoncer
-    à l'élève.
+    à l'utilisateur.
     """
     user_id = _user_id(ctx)
     if not user_id:
-        return "Erreur : impossible d'identifier l'élève."
+        return "Erreur : impossible d'identifier l'utilisateur."
     if not normaliser_nom(categorie):
         return "Erreur : nom de catégorie manquant ou invalide."
     try:
@@ -100,33 +100,36 @@ def memoire_lire(categorie: str, ctx: Context, sous_categorie: str = "") -> str:
 def memoire_ecrire(categorie: str, contenu_json: str, description: str, ctx: Context, sous_categorie: str = "") -> str:
     """
     Crée ou remplace le contenu d'UNE catégorie ou sous-catégorie précise
-    de la mémoire de CET élève, ne touche JAMAIS aux autres
-    catégories/sous-catégories déjà notées. À utiliser dès que l'élève
-    énonce ou corrige un fait explicite qui peut servir plus tard, définitif OU en cours (sujet en
-    cours, projet, chantier, difficulté du moment, préférence...). Garde
-    tout, ne jette rien qui pourrait aider à se rappeler de l'élève ;
-    jamais sur une simple déduction de ta part.
+    de la mémoire de CET utilisateur, ne touche JAMAIS aux autres
+    catégories/sous-catégories déjà notées. À utiliser pour créer une
+    fiche entière, la réorganiser ou retirer une information (pour
+    ajouter ou modifier un élément dans une fiche existante, préfère
+    memoire_completer). Ne note que ce que l'utilisateur a lui-même dit
+    ou corrigé, jamais une déduction de ta part, et jamais de numéro de
+    pièce d'identité, de carte ou de compte bancaire, ni de token ou de
+    clé d'accès.
 
     `categorie` : libre, tu en crées autant que nécessaire quand rien
-    dans memoire_sommaire ne convient. Privilégie quelques grandes
-    catégories (ex. identite, scolarite, apprentissage, preferences,
-    projets, vie_quotidienne...) avec des sous-catégories dedans, plutôt
-    que de multiplier les catégories à plat. Vérifie via memoire_sommaire
+    dans memoire_sommaire ne convient. Range par sujet (identite,
+    preferences, projets, travail_et_etudes, vie_quotidienne...) avec
+    des sous-catégories dedans, plutôt que de multiplier les catégories
+    à plat. Les règles de comportement demandées par l'utilisateur vont
+    dans preferences, à part des faits. Vérifie via memoire_sommaire
     qu'un équivalent n'existe pas déjà avant d'en créer une.
     `sous_categorie` optionnelle, libre, notation pointée si plusieurs
-    niveaux (ex. "maths.derivees") ; laisse vide pour écrire directement
+    niveaux (ex. "projets.startup") ; laisse vide pour écrire directement
     au niveau de la catégorie racine. `contenu_json` : objet JSON avec le
     contenu complet de cette catégorie/sous-catégorie après mise à jour
     (remplace tout ce qui y était noté avant, pas une fusion partielle ,
     relis d'abord avec memoire_lire si tu dois compléter plutôt que
     remplacer). `description` : résumé en une phrase de ce que contient
     désormais cette ligne, affiché ensuite dans memoire_sommaire.
-    Appelle-le sans jamais annoncer à l'élève que tu retiens quelque
+    Appelle-le sans jamais annoncer à l'utilisateur que tu retiens quelque
     chose.
     """
     user_id = _user_id(ctx)
     if not user_id:
-        return "Erreur : impossible d'identifier l'élève."
+        return "Erreur : impossible d'identifier l'utilisateur."
     try:
         contenu = json.loads(contenu_json)
     except Exception:
@@ -151,7 +154,7 @@ def memoire_ecrire(categorie: str, contenu_json: str, description: str, ctx: Con
 def memoire_completer(categorie: str, ajouts_json: str, description: str, ctx: Context, sous_categorie: str = "") -> str:
     """
     Ajoute ou modifie seulement quelques éléments dans UNE catégorie ou
-    sous-catégorie de la mémoire de CET élève, sans jamais toucher au
+    sous-catégorie de la mémoire de CET utilisateur, sans jamais toucher au
     reste de son contenu et sans avoir besoin de le relire. C'est
     l'outil par défaut pour compléter ou mettre à jour une fiche qui
     existe déjà. Les clés nouvelles sont ajoutées, les objets sont
@@ -164,11 +167,11 @@ def memoire_completer(categorie: str, ajouts_json: str, description: str, ctx: C
     est créée si elle n'existe pas). `ajouts_json` : objet JSON avec
     seulement ce qui s'ajoute ou change. `description` : résumé en une
     phrase de tout ce que contient désormais la ligne (pas seulement de
-    l'ajout). Appelle-le sans jamais l'annoncer à l'élève.
+    l'ajout). Appelle-le sans jamais l'annoncer à l'utilisateur.
     """
     user_id = _user_id(ctx)
     if not user_id:
-        return "Erreur : impossible d'identifier l'élève."
+        return "Erreur : impossible d'identifier l'utilisateur."
     try:
         ajouts = json.loads(ajouts_json)
     except Exception:

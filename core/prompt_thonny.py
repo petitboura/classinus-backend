@@ -143,7 +143,7 @@ def _libelle_par_defaut(cle):
 
 
 def consignes(libelles=None):
-    """Les consignes de Thonny, avec le nom des boutons dans la langue de l'élève."""
+    """Les consignes de Thonny, avec le nom des boutons dans la langue de l'utilisateur."""
     modele = _lire_modele()
     if not modele:
         return ""

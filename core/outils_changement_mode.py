@@ -143,7 +143,7 @@ def changer_mode_conversation(
     """
     user_id = ctx.request_context.request.query_params.get("user_id")
     if not user_id:
-        return "Erreur : impossible d'identifier l'élève."
+        return "Erreur : impossible d'identifier l'utilisateur."
     conversation_id = ctx.request_context.request.query_params.get("conversation_id")
     if not conversation_id:
         return "Erreur : impossible d'identifier la conversation."
@@ -183,7 +183,7 @@ def changer_mode_conversation(
         if code_actif and code_actif.get("eleve_choisit_mode") is False:
             return (
                 "Refusé : l'enseignant de ce code a désactivé le choix du mode pour cette conversation. "
-                "Explique-le simplement à l'élève, sans proposer d'alternative de ta part."
+                "Explique-le simplement à l'utilisateur, sans proposer d'alternative de ta part."
             )
 
     resultats = []

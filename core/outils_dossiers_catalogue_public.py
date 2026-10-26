@@ -207,7 +207,7 @@ def gerer_dossier_catalogue_public(
         statut_val = (statut or "").strip()
         if statut_val not in STATUTS_VALIDES:
             return (
-                "Erreur : avant de créer ce dossier, demande explicitement à l'étudiant s'il doit être "
+                "Erreur : avant de créer ce dossier, demande explicitement à l'utilisateur s'il doit être "
                 "\"contribution_libre\" (n'importe qui peut y ranger un document) ou \"privee\" (lui seul) -- "
                 "ne choisis jamais ce statut toi-même. Rappelle cette action avec `statut` valant exactement "
                 "l'un des deux une fois qu'il a répondu."

@@ -117,7 +117,7 @@ def _domaines_autorises(valeurs) -> list[str]:
 
 
 def _options_reseau(configuration: dict, domaines_conversation=()) -> dict:
-    """Règles réseau du workspace : domaines du serveur plus ceux autorisés par l'élève pour cette conversation."""
+    """Règles réseau du workspace : domaines du serveur plus ceux autorisés par l'utilisateur pour cette conversation."""
     base = configuration.get("allowed_domains")
     base = list(base) if isinstance(base, (list, tuple)) else []
     return {
@@ -154,7 +154,7 @@ def _domaines_reseau_configures() -> list[str]:
 
 
 def _domaines_conversation(user_id: str, conversation_id: str) -> list[str]:
-    """Domaines que l'élève a autorisés pour cette conversation."""
+    """Domaines que l'utilisateur a autorisés pour cette conversation."""
     lignes = (
         _client_supabase()
         .table(_TABLE_DOMAINES_CONVERSATION)
@@ -172,12 +172,12 @@ def _domaines_conversation_ou_vide(user_id: str, conversation_id: str) -> list[s
     try:
         return _domaines_conversation(user_id, conversation_id)
     except Exception as e:
-        logging.warning("ERREUR lecture des domaines autorisés par l'élève: %s", type(e).__name__)
+        logging.warning("ERREUR lecture des domaines autorisés par l'utilisateur: %s", type(e).__name__)
         return []
 
 
 def _oublier_domaines_conversation(user_id: str, conversation_id: str) -> None:
-    """Fin des autorisations de l'élève : appelé à la fermeture du workspace."""
+    """Fin des autorisations de l'utilisateur : appelé à la fermeture du workspace."""
     try:
         (
             _client_supabase()
@@ -188,7 +188,7 @@ def _oublier_domaines_conversation(user_id: str, conversation_id: str) -> None:
             .execute()
         )
     except Exception as e:
-        logging.warning("ERREUR suppression des domaines autorisés par l'élève: %s", type(e).__name__)
+        logging.warning("ERREUR suppression des domaines autorisés par l'utilisateur: %s", type(e).__name__)
 
 
 def _normaliser_domaine_demande(valeur) -> tuple[str | None, str | None]:
@@ -204,10 +204,10 @@ def _normaliser_domaine_demande(valeur) -> tuple[str | None, str | None]:
 
 
 def _autoriser_domaine(user_id: str, conversation_id: str, valeur) -> str:
-    """Enregistre un domaine autorisé par l'élève pour cette conversation.
+    """Enregistre un domaine autorisé par l'utilisateur pour cette conversation.
 
     Cette action est dans OUTILS_SENSIBLES : elle ne s'exécute qu'après la
-    confirmation de l'élève, jamais d'elle-même.
+    confirmation de l'utilisateur, jamais d'elle-même.
     """
     domaine, erreur = _normaliser_domaine_demande(valeur)
     if erreur:
@@ -216,14 +216,14 @@ def _autoriser_domaine(user_id: str, conversation_id: str, valeur) -> str:
         configuration = _configuration_domaines()
         maximum = max(0, int(configuration.get("max_user_domains", 10)))
         if maximum == 0:
-            return "Les autorisations de domaines par l'élève sont désactivées sur ce serveur."
+            return "Les autorisations de domaines par l'utilisateur sont désactivées sur ce serveur."
         deja_serveur = _domaines_autorises(configuration.get("allowed_domains"))
         deja_conversation = _domaines_conversation(user_id, conversation_id)
         if domaine in deja_serveur or domaine in deja_conversation:
             return f"{domaine} est déjà joignable depuis le workspace."
         if len(deja_conversation) >= maximum:
             return (
-                f"Limite atteinte : {maximum} domaines déjà autorisés par l'élève pour cette conversation. "
+                f"Limite atteinte : {maximum} domaines déjà autorisés par l'utilisateur pour cette conversation. "
                 "Ferme le workspace pour repartir de zéro."
             )
         (
@@ -239,7 +239,7 @@ def _autoriser_domaine(user_id: str, conversation_id: str, valeur) -> str:
         logging.error("ERREUR enregistrement du domaine autorisé: %s", type(e).__name__)
         return "EXECUTION_CODE_UNAVAILABLE: impossible d'enregistrer l'autorisation. Aucun accès n'a été ajouté."
     return (
-        f"Accès autorisé par l'élève pour cette conversation : {domaine}. "
+        f"Accès autorisé par l'utilisateur pour cette conversation : {domaine}. "
         "Il est joignable dès la prochaine action dans le workspace, même s'il est déjà ouvert. "
         "L'autorisation prend fin à la fermeture du workspace."
     )
@@ -248,7 +248,7 @@ def _autoriser_domaine(user_id: str, conversation_id: str, valeur) -> str:
 def _message_reseau(domaines: list[str], domaines_conversation=()) -> str:
     domaines_conversation = list(domaines_conversation or ())
     invitation = (
-        "Pour un domaine absent de ces listes, utilise demander_acces_reseau : l'élève doit confirmer."
+        "Pour un domaine absent de ces listes, utilise demander_acces_reseau : l'utilisateur doit confirmer."
     )
     if not domaines and not domaines_conversation:
         return (
@@ -260,7 +260,7 @@ def _message_reseau(domaines: list[str], domaines_conversation=()) -> str:
         "Domaines autorisés par le serveur : " + (", ".join(domaines) if domaines else "aucun") + ". "
     )
     if domaines_conversation:
-        texte += "Domaines autorisés par l'élève pour cette conversation : " + ", ".join(domaines_conversation) + ". "
+        texte += "Domaines autorisés par l'utilisateur pour cette conversation : " + ", ".join(domaines_conversation) + ". "
     return texte + "La liste du serveur ne peut pas être modifiée depuis le workspace. " + invitation
 
 
@@ -294,7 +294,7 @@ def _lancer_commande(sandbox, commande: str, timeout, request_timeout):
     """Lance une commande dans le sandbox et renvoie toujours son résultat.
 
     Le SDK E2B lève CommandExitException quand la commande se termine avec un code
-    non nul. Pour l'étudiant, un programme qui échoue est un résultat normal : sa
+    non nul. Pour l'utilisateur, un programme qui échoue est un résultat normal : sa
     sortie et son code de sortie doivent lui revenir, pas une erreur technique.
     Les autres erreurs (délai dépassé, sandbox injoignable) restent des exceptions.
     """
@@ -540,7 +540,7 @@ def gerer_execution_code(
     cette liste (sans ouvrir de workspace ni consommer de quota). À consulter avant de dire qu'un
     accès réseau est impossible (clonage d'un dépôt, installation de paquets).
     Pour un domaine absent de la liste, demander_acces_reseau (paramètre domain, un nom de domaine
-    exact) demande à l'élève de l'autoriser : valable pour cette conversation seulement, effectif
+    exact) demande à l'utilisateur de l'autoriser : valable pour cette conversation seulement, effectif
     dès l'action suivante dans le workspace.
     Les fichiers restent disponibles entre les actions d'une même conversation. Aucune confirmation
     utilisateur n'est demandée, sauf pour demander_acces_reseau. Les commandes et sorties sont bornées par la configuration actuelle.

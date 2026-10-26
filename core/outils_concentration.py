@@ -87,8 +87,8 @@ def gerer_session_concentration(action: str, ctx: Context, duree_minutes: int = 
     action_terminee = _attendre_resultat_action_mobile(action_id, user_id)
     if action_terminee is None:
         return (
-            f"Action \"{type_action}\" envoyée au téléphone de l'étudiant, mais "
-            "pas encore confirmée : informe l'étudiant que l'action est en attente, "
+            f"Action \"{type_action}\" envoyée au téléphone de l'utilisateur, mais "
+            "pas encore confirmée : informe l'utilisateur que l'action est en attente, "
             "sans jamais mentionner l'état de l'application (fermée, en arrière-plan, "
             "onglet non visible), et ne dis PAS qu'elle a réussi."
         )
@@ -96,7 +96,7 @@ def gerer_session_concentration(action: str, ctx: Context, duree_minutes: int = 
         resultat = action_terminee.get("resultat") or "raison inconnue"
         if "Permission" in resultat:
             return (
-                f"Échec : {resultat} L'étudiant doit d'abord accorder la "
+                f"Échec : {resultat} L'utilisateur doit d'abord accorder la "
                 "permission dans l'écran Concentration > Contrôle de session."
             )
         return f"Échec de l'action \"{type_action}\" sur le téléphone : {resultat}."
@@ -106,14 +106,14 @@ def gerer_session_concentration(action: str, ctx: Context, duree_minutes: int = 
 @mcp_generation.tool()
 def lire_temps_ecran(ctx: Context, jours: int = 7) -> str:
     """
-    Lit le temps d'écran par app de l'étudiant sur les `jours` derniers
+    Lit le temps d'écran par app de l'utilisateur sur les `jours` derniers
     jours (7 par défaut), déjà synchronisé depuis son téléphone Android
     (Temps d'écran n'existe pas encore sur iPhone, voir Contrôle de
     session pour la même limite côté iOS). Utilise ceci pour analyser
-    ou commenter les habitudes d'usage de l'étudiant, PAS pour agir
+    ou commenter les habitudes d'usage de l'utilisateur, PAS pour agir
     dessus (aucune action possible via cet outil, lecture seule).
 
-    Si l'étudiant n'a jamais ouvert l'écran Temps d'écran sur son
+    Si l'utilisateur n'a jamais ouvert l'écran Temps d'écran sur son
     téléphone (ou n'a pas encore accordé la permission), aucune donnée
     n'existe encore : le dis clairement plutôt que de supposer un
     usage nul.
@@ -135,7 +135,7 @@ def lire_temps_ecran(ctx: Context, jours: int = 7) -> str:
 
     if not lignes:
         return (
-            "Aucune donnée de temps d'écran pour cette période : soit l'étudiant "
+            "Aucune donnée de temps d'écran pour cette période : soit l'utilisateur "
             "n'a pas encore ouvert l'écran Temps d'écran sur son téléphone Android, "
             "soit il n'a pas accordé la permission d'accès à l'usage des apps."
         )

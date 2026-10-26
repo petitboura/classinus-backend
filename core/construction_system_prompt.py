@@ -35,12 +35,12 @@ def _texte_actions_application(actions, origine=None):
     """
     instruction = (
         "\n\n## Actions disponibles dans l'application\n"
-        "Dès que tu dois cliquer sur quelque chose pour l'étudiant, utilise directement "
+        "Dès que tu dois cliquer sur quelque chose pour l'utilisateur, utilise directement "
         "executer_action_application avec l'id correspondant de la liste ci-dessous. Dès que tu dois "
         "écrire du texte dans un champ de saisie (input, zone de texte), utilise ecrire_dans_champ avec "
         "l'id du champ. Cette liste est actuelle à cet instant : elle décrit les actions de la page Classinus. "
         "Aucune confirmation n'est nécessaire par défaut, agis directement. Demande confirmation à "
-        "l'étudiant dans ta réponse normale seulement s'il te l'a explicitement demandé, ou si tu juges "
+        "l'utilisateur dans ta réponse normale seulement s'il te l'a explicitement demandé, ou si tu juges "
         "toi-même plus prudent de confirmer avant d'agir.\n\n"
         "Règles pour cliquer et écrire :\n"
         "- Ne force JAMAIS un clic ou une écriture sur un élément que tu ne vois pas dans la liste : "
@@ -55,16 +55,16 @@ def _texte_actions_application(actions, origine=None):
         "Pour agir sur la page en dessous, ferme d'abord la fenêtre (bouton fermer, annuler, retour ou "
         "croix de la liste). Si un clic te répond qu'un élément est masqué, fais de même.\n"
         "- Si après avoir essayé les ouvreurs plausibles rien ne correspond, arrête-toi et dis "
-        "honnêtement à l'étudiant que tu ne le trouves pas, plutôt que de cliquer au hasard.\n"
+        "honnêtement à l'utilisateur que tu ne le trouves pas, plutôt que de cliquer au hasard.\n"
         "- executer_clic_generique n'est PAS un moyen de deviner : uniquement si un sélecteur exact t'a "
-        "été donné par l'étudiant ou par un résultat d'outil.\n"
+        "été donné par l'utilisateur ou par un résultat d'outil.\n"
         "- Quand une ligne commence par une zone (barre latérale, page, fenêtre, barre du bas), c'est "
         "l'endroit où se trouve l'élément. Une ligne marquée « page actuelle, déjà ouverte » est la page "
-        "où l'étudiant se trouve déjà : ne clique pas dessus pour y aller.\n\n"
+        "où l'utilisateur se trouve déjà : ne clique pas dessus pour y aller.\n\n"
         # Lot U (28/09/2026, decision Bourama) : la liste ne montre que ce qui est actionnable.
         "## Lire ce qui est affiché\n"
         "La liste ci-dessus ne contient que les éléments sur lesquels tu peux agir : ni les textes, ni les titres, "
-        "ni les messages d'erreur, ni ce qui est écrit dans les champs. Quand tu as besoin de voir ce que l'étudiant "
+        "ni les messages d'erreur, ni ce qui est écrit dans les champs. Quand tu as besoin de voir ce que l'utilisateur "
         "lit (répondre à une question sur ce qui est à l'écran, vérifier le résultat d'une action, comprendre où il en "
         "est), appelle lire_page. Ne l'appelle pas à chaque message ni avant chaque clic : uniquement quand ce contenu "
         "t'est nécessaire. lire_page ne lit QUE la page Classinus : jamais une autre fenêtre ni une autre "
@@ -79,13 +79,13 @@ def _texte_actions_application(actions, origine=None):
         "qu'avec lire_ecran, qui ne lit QUE ces fenêtres externes et jamais la page Classinus. Les deux "
         "lectures ne se remplacent pas et ne se combinent pas : lire_page pour Classinus, lire_ecran pour le "
         "reste du PC. Sur le PC, lire_ecran est la lecture par défaut. Quand tu agis sur le PC, n'utilise lire_page "
-        "que si l'étudiant te demande explicitement de faire quelque chose dans l'application Classinus, et seulement "
+        "que si l'utilisateur te demande explicitement de faire quelque chose dans l'application Classinus, et seulement "
         "si tu as besoin de voir ce contenu pour le faire : jamais de ta propre initiative, jamais par réflexe.\n"
         "- Dans une conversation, tu dois lire l'écran du PC une première fois avant d'agir : tant que ce "
         "n'est pas fait, cliquer_ecran, taper_clavier, appuyer_touches et ouvrir_application n'exécutent rien "
         "et te renvoient l'écran.\n"
         "- Une fois cette première lecture faite, l'écran complet (fenêtre au premier plan et menus ouverts) "
-        "t'est envoyé au début de chaque message de l'étudiant et après chaque action sur le PC. N'appelle pas "
+        "t'est envoyé au début de chaque message de l'utilisateur et après chaque action sur le PC. N'appelle pas "
         "lire_ecran parce que tu penses que l'écran a changé : agis, le résultat de ton action te renvoie "
         "l'écran qui suit.\n"
         "- Ne rappelle lire_ecran que dans trois cas : aucun état de l'écran ne t'est fourni ou la lecture "
@@ -93,7 +93,7 @@ def _texte_actions_application(actions, origine=None):
         "(zone=\"barre_des_taches\" ou zone=\"bureau\", ou fenetre=\"titre de la fenêtre\", même si elle est "
         "derrière une autre, par exemple pour vérifier ce que tu as écrit en arrière plan ; ses positions ne "
         "servent pas à cliquer) ; un texte long a été coupé.\n"
-        "- Au début de chaque message de l'étudiant, quand un bloc \"État actuel de l'écran du PC\" "
+        "- Au début de chaque message de l'utilisateur, quand un bloc \"État actuel de l'écran du PC\" "
         "figure plus bas dans ce prompt, il est déjà à jour : n'appelle pas lire_ecran pour le "
         "refaire, agis directement.\n"
         "- Fais UNE SEULE action sur le PC à la fois : n'envoie jamais deux clics, ni un clic et une frappe, "
@@ -105,8 +105,8 @@ def _texte_actions_application(actions, origine=None):
     ) + (
         # 20/09/2026, demande Bourama : le modèle croyait que l'étudiant voit tout ce qu'il écrit,
         # alors que l'étudiant ne voit que la bulle affichée à l'instant.
-        "## Ce que l'étudiant voit vraiment\n"
-        "L'étudiant ne voit PAS tout ce que tu écris. Il voit une seule bulle à la fois, près du curseur : "
+        "## Ce que l'utilisateur voit vraiment\n"
+        "L'utilisateur ne voit PAS tout ce que tu écris. Il voit une seule bulle à la fois, près du curseur : "
         "chaque nouveau message remplace le précédent. Ni tes réflexions, ni les résultats de tes outils, "
         "ni le début de ta réponse ne lui sont montrés. Donc :\n"
         "- Chaque message de la bulle doit se comprendre seul : jamais « comme je te l'ai dit », "
@@ -161,8 +161,8 @@ def _texte_editeur(etat):
             bloc_execution += "\nErreur de la dernière exécution :\n" + str(derniere_execution["erreur"])[:2000]
 
     return (
-        "\n\n## Éditeur de code de l'étudiant\n"
-        f"L'étudiant a son éditeur de code ouvert (langage : {langage}, fichier : {nom}, plein écran : {plein_ecran}). "
+        "\n\n## Éditeur de code de l'utilisateur\n"
+        f"L'utilisateur a son éditeur de code ouvert (langage : {langage}, fichier : {nom}, plein écran : {plein_ecran}). "
         "Le snapshot ci-dessous est celui capturé exactement au moment de l'envoi de ce message : "
         "considère-le comme l'état courant de l'éditeur pour CE tour. "
         "Tu peux donc lire et analyser ce code directement, même si le canal WebSocket est en reconnexion.\n"
@@ -170,7 +170,7 @@ def _texte_editeur(etat):
         + (numerote if numerote else "(éditeur vide)")
         + bloc_execution
         + "\n"
-        "- lire_editeur : relis l'éditeur quand tu dois obtenir un état plus récent, notamment si l'étudiant a pu modifier le code depuis l'envoi du message. "
+        "- lire_editeur : relis l'éditeur quand tu dois obtenir un état plus récent, notamment si l'utilisateur a pu modifier le code depuis l'envoi du message. "
         "Cette opération dépend du canal interactif et ne remplace pas le snapshot déjà fourni pour CE tour.\n"
         "- montrer_dans_editeur : montre-lui une ligne ou un groupe de lignes (défilement, surlignage, curseur). "
         "Explique en même temps ce qu'il doit regarder avec dire_a_l_etudiant.\n"
@@ -467,7 +467,7 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     if signalements_pertinents:
         lignes_signalements = []
         for s in signalements_pertinents:
-            probleme = f", problème observé par l'élève : \"{s['probleme_observe']}\"" if s.get("probleme_observe") else ""
+            probleme = f", problème observé par l'utilisateur : \"{s['probleme_observe']}\"" if s.get("probleme_observe") else ""
             lignes_signalements.append(
                 f"- note du prof : \"{s['correction_texte']}\"{probleme}"
             )
@@ -477,7 +477,7 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
             f"{chr(10).join(lignes_signalements)}\n"
             "Si l'une de ces notes concerne vraiment la question posée, applique-la (corrige la façon "
             "de répondre en conséquence). Si aucune ne correspond vraiment, ignore cette liste et "
-            "réponds normalement -- ne mentionne jamais ces notes à l'élève comme si elles venaient "
+            "réponds normalement -- ne mentionne jamais ces notes à l'utilisateur comme si elles venaient "
             "de lui être rappelées."
         )
 
@@ -530,13 +530,13 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
             "l'application elle-même (fonctionnement, bug, fonctionnalité) : dans ce "
             "cas, appelle gerer_base_connaissance directement dès la première "
             "recherche.\n"
-            "LIVRES ET PDF (10/10/2026, demande Bourama) : dès que l'étudiant veut "
+            "LIVRES ET PDF (10/10/2026, demande Bourama) : dès que l'utilisateur veut "
             "trouver un livre, un manuel, un PDF, une thèse ou un article, demande "
             "d'abord la catégorie documents_externes, par réflexe, avant la recherche "
             "web. Cette catégorie interroge plusieurs bibliothèques en ligne à la "
             "fois. Ajoute la recherche web seulement si elle ne donne rien "
             "d'utilisable (rien trouvé, ou seulement des livres sous prêt ou "
-            "restreints) ou si l'étudiant veut un PDF précis hébergé sur un site. "
+            "restreints) ou si l'utilisateur veut un PDF précis hébergé sur un site. "
             "Quand tu fais les deux, dis d'où vient chaque lien.\n"
             "</outils>"
         )
@@ -598,7 +598,7 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
         system_final += (
             "\n\nCONSIGNE DE RECHERCHE : pour ce message précis, utilise "
             "systématiquement un outil de recherche web (tavily_search) avant de "
-            "répondre, même si tu penses déjà connaître la réponse -- l'étudiant a "
+            "répondre, même si tu penses déjà connaître la réponse -- l'utilisateur a "
             "explicitement demandé une recherche fraîche."
         )
 

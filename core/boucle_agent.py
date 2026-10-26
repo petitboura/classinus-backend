@@ -137,7 +137,7 @@ def _detecter_appel_repete(historique_appels, nouveaux_appels, tolerance):
 
 def _effort_reflexion(modele, reasoning_effort):
     """Effort de reflexion a envoyer. Un modele DeepSeek sans effort explicite
-    recoit DEEPSEEK_REASONING_EFFORT (sinon l'API reflechit au niveau eleve
+    recoit DEEPSEEK_REASONING_EFFORT (sinon l'API reflechit au niveau utilisateur
     par defaut, tres lent). Un effort explicite est revalide (none, low, high,
     max), sinon retombe sur le defaut. Tout autre modele : valeur inchangee."""
     if str(modele or "").startswith("deepseek"):
@@ -343,7 +343,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
             messages_agent.append({
                 "role": "user",
                 "content": (
-                    "Message de l'étudiant, écrit ou dicté pendant que tu agissais dans "
+                    "Message de l'utilisateur, écrit ou dicté pendant que tu agissais dans "
                     "l'application. Tiens-en compte tout de suite : adapte ou arrête ton action "
                     "si besoin, et réponds-lui brièvement avec dire_a_l_etudiant ou dans ta réponse : "
                     + texte_etudiant

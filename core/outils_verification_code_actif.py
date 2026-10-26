@@ -101,7 +101,7 @@ def verifier_consignes_code_actif(action: str, ctx: Context, nom_notion: str = "
     """
     etudiant_id = ctx.request_context.request.query_params.get("user_id")
     if not etudiant_id:
-        return "Erreur : impossible d'identifier l'élève."
+        return "Erreur : impossible d'identifier l'utilisateur."
     conversation_id = ctx.request_context.request.query_params.get("conversation_id")
     rattachement_id_actif = _rattachement_actif_pour_prompt(conversation_id, etudiant_id)
 
@@ -112,7 +112,7 @@ def verifier_consignes_code_actif(action: str, ctx: Context, nom_notion: str = "
             logging.error(f"ERREUR verifier_consignes_code_actif (comportements) : {e}")
             return "Erreur : impossible de relire les comportements reçus, réessaie."
         if not recus:
-            return "Aucun comportement/skill reçu via le code actif de cet élève en ce moment."
+            return "Aucun comportement/skill reçu via le code actif de cet utilisateur en ce moment."
         lignes = [f"- [id: {c['id']}] {c['nom']} -- {c['description']}" for c in recus]
         return "Comportements reçus, à l'instant présent :\n" + "\n".join(lignes)
 
@@ -123,7 +123,7 @@ def verifier_consignes_code_actif(action: str, ctx: Context, nom_notion: str = "
             if code is None:
                 return "Cet élève n'est rattaché à aucun code avec une structure de notions."
             if isinstance(code, list):
-                return "Cet élève est rattaché à plusieurs codes, impossible de savoir lequel concerne cette question. Réponds avec ton jugement habituel."
+                return "Cet utilisateur est rattaché à plusieurs codes, impossible de savoir lequel concerne cette question. Réponds avec ton jugement habituel."
             try:
                 notions = _toutes_notions_code(code["id"])
             except Exception as e:
@@ -157,7 +157,7 @@ def verifier_consignes_code_actif(action: str, ctx: Context, nom_notion: str = "
             return "Cet élève n'est rattaché à aucun code avec une structure de notions."
         if erreur == "code_ambigu":
             return (
-                "Cet élève est rattaché à plusieurs codes, impossible de savoir lequel "
+                "Cet utilisateur est rattaché à plusieurs codes, impossible de savoir lequel "
                 "concerne cette question. Réponds avec ton jugement habituel."
             )
         if erreur == "notion_introuvable":

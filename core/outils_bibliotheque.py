@@ -141,8 +141,8 @@ def gerer_document_bibliotheque(
     parce qu'il est déjà visible plus tôt dans cette même conversation),
     tu peux directement écrire ce lien dans ta réponse, en markdown, avec
     le vrai nom du fichier comme texte affiché -- il apparaît alors
-    automatiquement en pièce jointe pour l'étudiant, sans appel d'outil
-    supplémentaire. Fais-le à la demande explicite de l'étudiant
+    automatiquement en pièce jointe pour l'utilisateur, sans appel d'outil
+    supplémentaire. Fais-le à la demande explicite de l'utilisateur
     ("donne-moi ce fichier", "envoie-moi le PDF"), ou quand le contexte
     indique clairement qu'il veut le fichier lui-même plutôt qu'un
     résumé -- pas systématiquement à chaque fois qu'un document apparaît
@@ -165,13 +165,13 @@ def gerer_document_bibliotheque(
       largement moins volumineuse). Paramètres : `question` (sujet ou
       mot-clé -- peut rester vide si tu ne filtres que par
       `type_fichier`/`nom_dossier`), `type_fichier` (optionnel, ex.
-      "pdf"/"image"/"audio"/"vidéo" -- à ne remplir QUE si l'étudiant
+      "pdf"/"image"/"audio"/"vidéo" -- à ne remplir QUE si l'utilisateur
       mentionne clairement un type), `nom_dossier` (optionnel -- à ne
-      remplir QUE si l'étudiant mentionne clairement un dossier).
+      remplir QUE si l'utilisateur mentionne clairement un dossier).
       ORDRE DE RECHERCHE (29/09/2026, demande Bourama : tu génères trop
       de documents au lieu de retrouver ceux qui existent déjà) : par
       défaut cette action cherche d'abord les documents PERSONNELS de
-      l'étudiant, puis les documents PARTAGÉS (code prof, copiés depuis
+      l'utilisateur, puis les documents PARTAGÉS (code prof, copiés depuis
       le catalogue public), et laisse de côté les fichiers que TU as
       générés et ceux envoyés dans une conversation. Avant de générer un
       nouveau document ou fichier, cherche TOUJOURS d'abord ce qui existe
@@ -179,10 +179,10 @@ def gerer_document_bibliotheque(
       "chercher" avec `origine` = "genere" (fichiers que tu as déjà
       générés) ou "envoye" (fichiers envoyés dans une conversation) si
       toujours rien. Ne génère un nouveau fichier qu'après ces
-      recherches, sauf si l'étudiant demande explicitement d'en créer un
+      recherches, sauf si l'utilisateur demande explicitement d'en créer un
       nouveau. Paramètre `origine` (optionnel) : "perso", "partage",
       "genere", "envoye" ou "tout". À remplir DIRECTEMENT dès que
-      l'étudiant parle d'un fichier qu'il a envoyé ("le PDF que je t'ai
+      l'utilisateur parle d'un fichier qu'il a envoyé ("le PDF que je t'ai
       envoyé" -> "envoye") ou que tu as généré ("le résumé que tu m'as
       fait" -> "genere"), et "tout" s'il demande de chercher partout.
       Si le résultat signale que des fichiers générés ou envoyés
@@ -195,7 +195,7 @@ def gerer_document_bibliotheque(
       trouvé, JAMAIS son contenu : ne sert qu'à dire à l'utilisateur où
       trouver un document, jamais à citer ou paraphraser ce document
       dans ta réponse. Paramètre : `question`. `nombre` (optionnel,
-      défaut 5, max 20) : nombre de résultats, SEULEMENT si l'étudiant
+      défaut 5, max 20) : nombre de résultats, SEULEMENT si l'utilisateur
       en précise un. Paramètres optionnels de filtre : `dossier_id_
       catalogue_public` (obtenu via gerer_dossier_catalogue_public,
       action "lister" ou "consulter" -- jamais un nom de dossier
@@ -204,7 +204,7 @@ def gerer_document_bibliotheque(
       categorie/classe/specialite va dans le paramètre correspondant,
       PAS seulement dans `question` (ex. "documents du Mali en
       terminale TSE" -> pays="Mali", classe="Terminale",
-      specialite="TSE", question="documents"). RÈGLE 2 : si l'étudiant
+      specialite="TSE", question="documents"). RÈGLE 2 : si l'utilisateur
       n'a pas donné la valeur exacte lui-même, appelle D'ABORD
       gerer_dossier_catalogue_public, action "lister_valeurs_filtres" --
       ne devine JAMAIS une valeur de filtre.
@@ -221,12 +221,12 @@ def gerer_document_bibliotheque(
       "trouver_catalogue_public" ne renverrait rien faute de sujet
       précis à chercher. N'IMPORTE QUI peut ajouter un document au
       catalogue public : cette action n'est JAMAIS exhaustive, toujours
-      plafonnée à 15 entrées PAR APPEL MAX (même si l'étudiant en
+      plafonnée à 15 entrées PAR APPEL MAX (même si l'utilisateur en
       demande plus), les plus récentes -- si l'utilisateur cherche
       quelque chose de précis, utilise "trouver_catalogue_public" à la
       place. Le TOUT PREMIER appel de cette action dans une conversation
       doit être précédé d'une confirmation en langage naturel à
-      l'étudiant (ex. "veux-tu que je te montre les documents récents du
+      l'utilisateur (ex. "veux-tu que je te montre les documents récents du
       catalogue public ?"), sauf s'il a déjà demandé explicitement de
       tout voir/lister -- les appels SUIVANTS (pagination via
       `decalage`, voir "lister" ci-dessous pour la logique, identique
@@ -252,10 +252,10 @@ def gerer_document_bibliotheque(
       précédente) ne contiennent rien de pertinent ET que la réponse
       indique qu'il en reste d'autres, tu peux rappeler "lister"
       toi-même avec `decalage` augmenté de 15 (ex. decalage=15 puis
-      30...) SANS redemander à l'étudiant -- c'est la suite de la même
+      30...) SANS redemander à l'utilisateur -- c'est la suite de la même
       recherche. Arrête-toi dès que la réponse ne signale plus qu'il en
       reste ("c'est fini" veut vraiment dire fini : ne rappelle plus
-      "lister" au-delà, dis simplement à l'étudiant que rien de
+      "lister" au-delà, dis simplement à l'utilisateur que rien de
       pertinent n'a été trouvé). Paramètre optionnel : `decalage`
       (défaut 0).
     - "ajouter_lien" : ajoute un lien. Paramètres : `url`, `titre`.
@@ -454,7 +454,7 @@ def gerer_document_bibliotheque(
             resultat_txt += (
                 f"\n\n(Il en reste d'autres -- tu peux rappeler \"lister_catalogue_public\" avec "
                 f"decalage={decalage_val + len(documents)} si rien de pertinent ici, sans redemander "
-                f"confirmation à l'étudiant.)"
+                f"confirmation à l'utilisateur.)"
             )
         else:
             resultat_txt += "\n\n(C'est fini : plus rien au-delà de cette liste.)"
@@ -500,7 +500,7 @@ def gerer_document_bibliotheque(
             resultat_txt += (
                 f"\n\n(Il en reste d'autres -- tu peux rappeler \"lister\" avec "
                 f"decalage={decalage_val + len(fichiers)} si rien de pertinent ici, sans redemander "
-                f"à l'étudiant.)"
+                f"à l'utilisateur.)"
             )
         else:
             resultat_txt += "\n\n(C'est fini : plus rien au-delà de cette liste.)"

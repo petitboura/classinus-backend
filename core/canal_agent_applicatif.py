@@ -302,7 +302,7 @@ async def _diffuser_et_attendre(
 
     delai_abandon_secondes : delai apres lequel on abandonne l'attente
     (DELAI_ABANDON_SECONDES par defaut). Les actions qui peuvent attendre
-    l'accord de l'etudiant (applications protegees du PC) l'allongent.
+    l'accord de l'utilisateur (applications protegees du PC) l'allongent.
     """
     abandon = max(
         DELAI_STATUT_2_SECONDES + 1,
@@ -381,7 +381,7 @@ def annuler_attentes(user_id: str) -> int:
             continue
         future = _attentes.get(correlation_id)
         if future is not None and not future.done():
-            future.set_result({"erreur": "Arrêt demandé par l'étudiant."})
+            future.set_result({"erreur": "Arrêt demandé par l'utilisateur."})
             nombre += 1
     return nombre
 
@@ -450,10 +450,10 @@ async def demander_pointage_action(user_id: str, action_id: str, on_statut=None)
     Chantier G (mode guidage). Diffuse {montrer_action_id} : demande
     UNIQUEMENT de deplacer le curseur virtuel vers l'element de
     `action_id`, sans jamais l'executer -- pour que Classinus puisse
-    montrer une nouveaute a l'etudiant en l'expliquant dans le chat,
+    montrer une nouveaute a l'utilisateur en l'expliquant dans le chat,
     sans agir a sa place. Jamais de confirmation cote frontend pour ce
     cas (voir lib/canalAgentApplicatif.ts) : un pointage visuel n'a
-    aucun effet sur les donnees de l'etudiant.
+    aucun effet sur les donnees de l'utilisateur.
     """
     correlation_id = str(uuid.uuid4())
     return await _diffuser_et_attendre(
@@ -474,7 +474,7 @@ async def demander_ecriture_champ(user_id: str, action_id: str, texte: str, on_s
     l'element correspondant, VISIBLE et ACTIF, tape le texte reellement
     (avec une frappe visible cote frontend, voir traiterDemandeEcriture
     dans lib/canalAgentApplicatif.ts). Aucune confirmation cote
-    etudiant, meme regle que le reste de ce chantier depuis le
+    utilisateur, meme regle que le reste de ce chantier depuis le
     19/09/2026.
     """
     correlation_id = str(uuid.uuid4())
@@ -516,10 +516,10 @@ async def demander_action_systeme(
     longueur_max_valeur, profondeur_max, delai_max_ms}, voir
     core/outils_action_agent_pc.py).
 
-    Pas de confirmation etudiant pour ce lot (decision Bourama du
+    Pas de confirmation utilisateur pour ce lot (decision Bourama du
     27/09/2026, comme le reste du canal depuis le 19/09/2026), sauf pour
     les applications protegees (08/10/2026) : le plugin PontNatif demande
-    alors l'accord de l'etudiant, d'ou delai_abandon_secondes plus long
+    alors l'accord de l'utilisateur, d'ou delai_abandon_secondes plus long
     pour taper_clavier, appuyer_touches et ouvrir_application.
     """
     correlation_id = str(uuid.uuid4())
@@ -569,7 +569,7 @@ async def demander_action_ecran_telephone(
 async def demander_lecture_page(user_id: str, on_statut=None) -> Any | None:
     """
     Lot U (28/09/2026, decision Bourama : Clovis ne voyait que les elements
-    cliquables, jamais ce que l'etudiant lit). Meme principe que
+    cliquables, jamais ce que l'utilisateur lit). Meme principe que
     demander_ecriture_champ, mais en lecture seule : diffuse
     {lire_page, longueur_max} a toutes les connexions actives de user_id,
     la premiere qui repond renvoie le texte visible de la page
@@ -594,7 +594,7 @@ async def demander_action_editeur(user_id: str, operation: dict[str, Any], on_st
     connexions actives de user_id, la premiere connexion qui a
     l'editeur monte execute l'operation (lire, ecrire ou montrer, voir
     traiterDemandeEditeur dans lib/canalAgentApplicatif.ts) et repond.
-    Aucune confirmation cote etudiant : c'est l'IA qui decide, selon la
+    Aucune confirmation cote utilisateur : c'est l'IA qui decide, selon la
     conversation, de demander avant d'ecrire ou non.
     """
     correlation_id = str(uuid.uuid4())
@@ -736,7 +736,7 @@ def debuter_tour(user_id: str) -> None:
 
 def terminer_tour(user_id: str) -> list[str]:
     """
-    Fin d'un tour de conversation. Renvoie les messages de l'etudiant que
+    Fin d'un tour de conversation. Renvoie les messages de l'utilisateur que
     la boucle n'a jamais eu l'occasion de lire (arrives pendant le tout
     dernier appel au modele, ou sur un chemin de reprise sans injection) :
     ils sont retires de la file et doivent etre renvoyes au frontend.
@@ -779,7 +779,7 @@ async def accuser_message_etudiant(user_id: str, appareil_id: str, id_message: A
         async with verrou_envoi:
             await websocket.send_json({"accuse_message_etudiant": id_message, "pris_en_compte": pris_en_compte})
     except Exception as e:
-        logging.error(f"ERREUR accuse message etudiant canal agent applicatif (user={user_id}, appareil={appareil_id}) : {e}")
+        logging.error(f"ERREUR accuse message utilisateur canal agent applicatif (user={user_id}, appareil={appareil_id}) : {e}")
 
 
 async def _renvoyer_messages_non_lus(user_id: str, textes: list[str]) -> None:
@@ -795,7 +795,7 @@ async def _renvoyer_messages_non_lus(user_id: str, textes: list[str]) -> None:
             async with verrou_envoi:
                 await websocket.send_json({"message_etudiant_renvoye": texte})
         except Exception as e:
-            logging.error(f"ERREUR renvoi message etudiant non lu (user={user_id}, appareil={cle[1]}) : {e}")
+            logging.error(f"ERREUR renvoi message utilisateur non lu (user={user_id}, appareil={cle[1]}) : {e}")
 
 
 def renvoyer_messages_non_lus(user_id: str, textes: list[str]) -> None:
@@ -805,4 +805,4 @@ def renvoyer_messages_non_lus(user_id: str, textes: list[str]) -> None:
     try:
         asyncio.run_coroutine_threadsafe(_renvoyer_messages_non_lus(user_id, textes), _boucle_evenements)
     except Exception as e:
-        logging.error(f"ERREUR planification renvoi message etudiant non lu (user={user_id}) : {e}")
+        logging.error(f"ERREUR planification renvoi message utilisateur non lu (user={user_id}) : {e}")

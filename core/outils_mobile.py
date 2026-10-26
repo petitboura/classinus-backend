@@ -56,23 +56,23 @@ from core.canal_temps_reel import (
 # certain.
 _MESSAGES_ERREUR_CANAL = {
     _CANAL_NON_CONNECTE: (
-        "Le téléphone de l'étudiant n'a pas pu être joint à cet instant. "
+        "Le téléphone de l'utilisateur n'a pas pu être joint à cet instant. "
         "Dis-lui que ça n'a pas abouti pour le moment et propose de réessayer dans quelques secondes. "
         "Ne mentionne jamais l'état de l'application (fermée, en arrière-plan, onglet non visible)."
     ),
     _CANAL_ENVOI_ECHOUE: (
-        "La demande n'a pas pu être envoyée au téléphone. Dis à l'étudiant que ça "
+        "La demande n'a pas pu être envoyée au téléphone. Dis à l'utilisateur que ça "
         "n'a pas abouti pour le moment et propose de réessayer dans quelques secondes. "
         "Ne mentionne jamais l'état de l'application (fermée, en arrière-plan, onglet non visible)."
     ),
     _CANAL_SANS_REPONSE: (
-        "Le téléphone n'a pas répondu à temps. Dis à l'étudiant que ça prend trop "
+        "Le téléphone n'a pas répondu à temps. Dis à l'utilisateur que ça prend trop "
         "de temps et propose de réessayer. Ne mentionne jamais l'état de "
         "l'application (fermée, en arrière-plan, onglet non visible)."
     ),
 }
 _MESSAGE_ERREUR_CANAL_INCONNUE = (
-    "Le téléphone n'a pas pu être joint. Dis à l'étudiant que ça n'a pas "
+    "Le téléphone n'a pas pu être joint. Dis à l'utilisateur que ça n'a pas "
     "abouti pour le moment et propose de réessayer. Ne mentionne jamais "
     "l'état de l'application (fermée, en arrière-plan, onglet non visible)."
 )
@@ -132,13 +132,13 @@ def gerer_dossier_telephone(
     appareil_nom: str = "",
 ) -> str:
     """
-    Gère les DOSSIERS ET FICHIERS PHYSIQUES du téléphone de l'étudiant
+    Gère les DOSSIERS ET FICHIERS PHYSIQUES du téléphone de l'utilisateur
     (renommé le 01/09/2026, ex-gerer_action_mobile -- l'accessibilité a
     été retirée de cet outil, il ne gère plus QUE les dossiers désignés
     sur l'appareil). Un seul outil, deux actions.
 
     `appareil_nom` (ajouté le 04/09/2026, utile pour "executer"
-    seulement) : l'étudiant peut avoir DÉSIGNÉ le même nom de dossier
+    seulement) : l'utilisateur peut avoir DÉSIGNÉ le même nom de dossier
     sur plusieurs de ses téléphones -- dans ce cas seulement, "lister_dossiers"
     affiche l'appareil entre crochets à côté du nom concerné (ex.
     "- Cours [appareil: iPhone d'Amadou]"). Si "executer" cible un nom
@@ -149,19 +149,19 @@ def gerer_dossier_telephone(
 
     NE PAS CONFONDRE avec :
     - gerer_dossier_bibliotheque : gère les dossiers de la bibliothèque
-      PERSONNELLE de l'étudiant dans Classinus (organisation de SES
+      PERSONNELLE de l'utilisateur dans Classinus (organisation de SES
       documents/liens/notes uploadés dans l'app) -- aucun rapport avec
       son téléphone physique.
     - gerer_document_bibliotheque : cherche/lit des documents, y compris
       dans le catalogue PUBLIC partagé -- là non plus aucun rapport avec
-      le téléphone de l'étudiant.
+      le téléphone de l'utilisateur.
     - explorer_dossier : lecture EN DIRECT du
       contenu d'un dossier du téléphone -- utilise cet outil-ci
       uniquement pour AGIR (créer/renommer/supprimer/déplacer), jamais
       pour lire ou lister en détail.
 
     `action` doit être l'une de :
-    - "lister_dossiers" : liste les noms des dossiers que l'étudiant a
+    - "lister_dossiers" : liste les noms des dossiers que l'utilisateur a
       désignés sur son téléphone (accessibles à l'app Classinus mobile).
       Utilise TOUJOURS cette action avant "executer" pour un type
       "dossier_*", afin de cibler un nom qui existe vraiment, ne devine
@@ -171,7 +171,7 @@ def gerer_dossier_telephone(
       JAMAIS coller au nom ni inclure dans "dossier_nom". Aucun
       paramètre.
     - "executer" : décide une action à exécuter sur le téléphone de
-      l'étudiant. L'action est mise en attente et poussée immédiatement
+      l'utilisateur. L'action est mise en attente et poussée immédiatement
       au téléphone. Depuis le 01/09/2026, cet appel ATTEND jusqu'à ~10s
       la confirmation réelle du téléphone avant de répondre : le message
       renvoyé reflète le VRAI résultat (succès/échec) si la confirmation
@@ -211,7 +211,7 @@ def gerer_dossier_telephone(
       (et "nouveau_dossier_nom") ne peut être que l'un des noms renvoyés par
       "lister_dossiers". Un sous-dossier appartient toujours à son dossier
       désigné et ne s'indique que dans "chemin" (ou comme "element_nom"
-      quand c'est lui la cible). Ne le présente jamais à l'étudiant comme un
+      quand c'est lui la cible). Ne le présente jamais à l'utilisateur comme un
       dossier à part.
     """
     user_id = ctx.request_context.request.query_params.get("user_id")
@@ -225,7 +225,7 @@ def gerer_dossier_telephone(
             logging.error(f"ERREUR gerer_dossier_telephone (lister_dossiers) : {e}")
             return "Erreur : impossible de lister les dossiers désignés, réessaie."
         if not dossiers:
-            return "Aucun dossier désigné sur le téléphone de l'étudiant pour l'instant."
+            return "Aucun dossier désigné sur le téléphone de l'utilisateur pour l'instant."
 
         # Corrige le 04/09/2026, Bourama : la plateforme n'est plus
         # affichée systematiquement collee au nom (ex. "Download
@@ -288,9 +288,9 @@ def gerer_dossier_telephone(
         action_terminee = _attendre_resultat_action_mobile(action_id, user_id)
         if action_terminee is None:
             return (
-                f"Action \"{type_action}\" envoyée au téléphone de l'étudiant, mais "
+                f"Action \"{type_action}\" envoyée au téléphone de l'utilisateur, mais "
                 "pas encore confirmée (app peut-être fermée ou en arrière-plan) : "
-                "informe l'étudiant que l'action est en attente, ne dis PAS qu'elle "
+                "informe l'utilisateur que l'action est en attente, ne dis PAS qu'elle "
                 "a réussi, et ne lance PAS une action suivante qui en dépendrait."
             )
         if action_terminee.get("statut") == "echouee":
@@ -342,7 +342,7 @@ async def explorer_dossier(
     type_fichier: str = "",
 ) -> str:
     """
-    Explore EN DIRECT le contenu d'un dossier désigné par l'étudiant sur
+    Explore EN DIRECT le contenu d'un dossier désigné par l'utilisateur sur
     son téléphone (contrairement à gerer_dossier_telephone, qui est
     asynchrone et fire-and-forget, et sert à AGIR sur les dossiers, pas
     à les lire ou les explorer). Si le téléphone ne répond pas, dis
@@ -350,12 +350,12 @@ async def explorer_dossier(
     réessayer, sans jamais mentionner l'état de l'application. NE PAS CONFONDRE non plus avec
     gerer_dossier_bibliotheque/gerer_document_bibliotheque, qui portent
     sur la bibliothèque Classinus (privée ou catalogue public), jamais sur
-    le téléphone physique de l'étudiant.
+    le téléphone physique de l'utilisateur.
 
     RÈGLE : un sous-dossier n'est JAMAIS un dossier désigné. `dossier_nom`
     ne peut être que l'un des noms renvoyés par "lister_dossiers". Un
     sous-dossier appartient toujours à son dossier désigné et ne s'indique
-    que dans `chemin`. Ne le présente jamais à l'étudiant comme un dossier
+    que dans `chemin`. Ne le présente jamais à l'utilisateur comme un dossier
     à part.
 
     `action` doit être l'une de :
@@ -376,7 +376,7 @@ async def explorer_dossier(
       avoir à lister niveau par niveau. Renvoie les éléments trouvés,
       chacun avec son chemin depuis la racine désignée (réutilisable
       ensuite avec "ouvrir_sous_dossier"). Si rien n'est trouvé et que la
-      demande de l'étudiant porte sur un contenu ("le cours où on parle
+      demande de l'utilisateur porte sur un contenu ("le cours où on parle
       de...") plutôt que sur un nom précis, enchaîne avec
       "chercher_par_contenu" plutôt que de conclure trop vite qu'il
       n'existe pas.
@@ -387,17 +387,17 @@ async def explorer_dossier(
       exploitable quel que soit le type de fichier (texte brut lu tel
       quel, texte extrait d'un PDF/Word/Excel, description d'une image,
       transcription d'un audio). Si le fichier est trop volumineux,
-      dis clairement à l'étudiant que ce n'est pas encore possible mais
+      dis clairement à l'utilisateur que ce n'est pas encore possible mais
       que ça arrivera plus tard, n'essaie pas de contourner.
     - "donner_fichier" : ENVOIE le fichier lui-même en pièce jointe dans
       le chat (pas juste son contenu/résumé, voir "lire_fichier" pour
       ça), identifié par `chemin` (même convention que "lire_fichier" --
       DOIT venir d'un listing/recherche précédent, ne devine jamais).
-      Utilise cette action dès que l'étudiant demande explicitement le
+      Utilise cette action dès que l'utilisateur demande explicitement le
       fichier ("donne-moi ce fichier", "envoie-moi cette photo depuis
       mon téléphone"), ou quand le contexte l'indique clairement. Le
       fichier est transféré depuis le téléphone puis ajouté à la
-      bibliothèque personnelle de l'étudiant au passage (comme tout
+      bibliothèque personnelle de l'utilisateur au passage (comme tout
       fichier qui transite par le chat) : son lien y est visible ensuite
       via gerer_document_bibliotheque (action "lister" ou "chercher"),
       redonnable directement dans ta réponse sans redemander au
@@ -416,15 +416,15 @@ async def explorer_dossier(
          fichiers (pas leur contenu), avec deux filtres EXACTS
          optionnels en plus : `type_fichier` (catégorie parmi
          "pdf"/"image"/"audio"/"video"/"word"/"excel"/"texte", ex.
-         l'étudiant demande "les PDF de ce dossier") et `chemin` (sous-
+         l'utilisateur demande "les PDF de ce dossier") et `chemin` (sous-
          dossier exact depuis la racine, même convention que
-         "ouvrir_sous_dossier" -- ex. l'étudiant précise un sous-dossier).
+         "ouvrir_sous_dossier" -- ex. l'utilisateur précise un sous-dossier).
          Ne nécessite AUCUNE vectorisation préalable : trouve aussi des
          fichiers pas encore indexés. Choisis `type_fichier`/`chemin`
-         uniquement quand la demande de l'étudiant les précise vraiment,
+         uniquement quand la demande de l'utilisateur les précise vraiment,
          ne les devine jamais.
       Les résultats des deux recherches sont combinés dans la même
-      réponse. Utilise cette action dès que l'étudiant décrit ce qu'il
+      réponse. Utilise cette action dès que l'utilisateur décrit ce qu'il
       cherche sans en connaître le nom exact ("le cours où on parle des
       dérivées"), précise un type ou un emplacement, ou juste après un
       "chercher_par_nom" resté sans résultat si ça semble pertinent. Si
@@ -439,7 +439,7 @@ async def explorer_dossier(
       besoin.
 
     `appareil_nom` (ajouté le 04/09/2026) : uniquement nécessaire si
-    l'étudiant a désigné un dossier du MÊME nom sur plusieurs
+    l'utilisateur a désigné un dossier du MÊME nom sur plusieurs
     téléphones -- "lister_dossiers" (outil gerer_dossier_telephone)
     l'indique alors entre crochets à côté du nom concerné. Reprends ce
     libellé exactement, ne le devine jamais. Laisse vide sinon.
@@ -709,7 +709,7 @@ async def explorer_dossier(
             return (
                 f'Aucun élément trouvé pour "{terme_recherche}" dans '
                 f'"{dossier_nom}" par le nom. Tu peux enchaîner avec '
-                '"chercher_par_contenu" si la demande de l\'étudiant porte '
+                '"chercher_par_contenu" si la demande de l\'utilisateur porte '
                 "sur un contenu plutôt que sur un nom précis."
             )
         if action == "chercher_par_contenu":

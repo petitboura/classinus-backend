@@ -1079,7 +1079,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "ecrire_dans_editeur": {"label": "Écrire dans l'éditeur", "icone": "PenLine", "onglet": None},
     # Chantier P (canal en direct, 19/09/2026) : commentaire libre pendant
     # une action, meme rappel de cache 24h.
-    "dire_a_l_etudiant": {"label": "Message en direct à l'étudiant", "icone": "MessageCircle", "onglet": None},
+    "dire_a_l_etudiant": {"label": "Message en direct à l'utilisateur", "icone": "MessageCircle", "onglet": None},
     # Demo (20/09/2026) : ouverture du canal en direct depuis le chat
     # normal, meme rappel de cache 24h.
     "ouvrir_canal_en_direct": {"label": "Ouverture du canal en direct", "icone": "Radio", "onglet": None},

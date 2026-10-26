@@ -65,20 +65,20 @@ def _peut_echanger_messages(moi: dict, cible: dict) -> bool:
     if role_moi == "enseignant" and role_cible == "etablissement":
         return moi.get("etablissement_id") == cible.get("user_id")
 
-    if role_moi == "enseignant" and role_cible == "etudiant":
+    if role_moi == "enseignant" and role_cible == "utilisateur":
         return cible.get("enseignant_id") == moi.get("user_id")
-    if role_moi == "etudiant" and role_cible == "enseignant":
+    if role_moi == "utilisateur" and role_cible == "enseignant":
         return moi.get("enseignant_id") == cible.get("user_id")
 
-    if role_moi == "etudiant" and role_cible == "etudiant":
+    if role_moi == "utilisateur" and role_cible == "utilisateur":
         if moi.get("user_id") == cible.get("user_id"):
             return False
         etab_moi = _etablissement_de_etudiant(moi)
         return bool(etab_moi) and etab_moi == _etablissement_de_etudiant(cible)
 
-    if role_moi == "etudiant" and role_cible == "etablissement":
+    if role_moi == "utilisateur" and role_cible == "etablissement":
         return _etablissement_de_etudiant(moi) == cible.get("user_id")
-    if role_moi == "etablissement" and role_cible == "etudiant":
+    if role_moi == "etablissement" and role_cible == "utilisateur":
         return _etablissement_de_etudiant(cible) == moi.get("user_id")
 
     return False
@@ -113,7 +113,7 @@ def _contacts_autorises(moi: dict) -> List[dict]:
         resultats += _profils_par_colonne("etablissement_id", user_id, ("enseignant",))
         # étudiants de tous ses enseignants
         for ens in _profils_par_colonne("etablissement_id", user_id, ("enseignant",)):
-            resultats += _profils_par_colonne("enseignant_id", ens["user_id"], ("etudiant",))
+            resultats += _profils_par_colonne("enseignant_id", ens["user_id"], ("utilisateur",))
 
     elif role_moi == "enseignant":
         etablissement_id = moi.get("etablissement_id")
@@ -125,9 +125,9 @@ def _contacts_autorises(moi: dict) -> List[dict]:
                     "role": "etablissement",
                 }
             )
-        resultats += _profils_par_colonne("enseignant_id", user_id, ("etudiant",))
+        resultats += _profils_par_colonne("enseignant_id", user_id, ("utilisateur",))
 
-    elif role_moi == "etudiant":
+    elif role_moi == "utilisateur":
         enseignant_id = moi.get("enseignant_id")
         enseignant = _lire_profil_role(enseignant_id) if enseignant_id else None
         if enseignant_id:
@@ -145,7 +145,7 @@ def _contacts_autorises(moi: dict) -> List[dict]:
             )
             # tous les étudiants de l'établissement (tous enseignants confondus)
             for ens in _profils_par_colonne("etablissement_id", etablissement_id, ("enseignant",)):
-                resultats += _profils_par_colonne("enseignant_id", ens["user_id"], ("etudiant",))
+                resultats += _profils_par_colonne("enseignant_id", ens["user_id"], ("utilisateur",))
 
     return [r for r in resultats if r.get("user_id") != user_id]
 

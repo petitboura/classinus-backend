@@ -38,14 +38,14 @@ from core.outils_generation_commun import mcp_generation, Context
 async def executer_action_application(action_id: str, ctx: Context) -> str:
     """
     Declenche un clic dans l'application Classinus a la place de
-    l'etudiant, sur l'element `action_id`.
+    l'utilisateur, sur l'element `action_id`.
 
     Revise le 19/09/2026 (decision Bourama, chantier "agent applicatif
     continu") : plus d'outil separe a appeler avant celui-ci pour
     obtenir la liste -- les elements cliquables actuellement a l'ecran
     (id, description) sont deja fournis directement dans ce prompt
     systeme, tenus a jour automatiquement a chaque message (mecanisme de
-    poussee d'etat, chantier D). Des que l'etudiant a besoin que tu
+    poussee d'etat, chantier D). Des que l'utilisateur a besoin que tu
     cliques sur quelque chose, utilise cet outil DIRECTEMENT avec l'id
     correspondant -- ne jamais deviner ni inventer un identifiant, et ne
     jamais reutiliser un id qui n'apparait plus dans la liste la plus
@@ -57,17 +57,17 @@ async def executer_action_application(action_id: str, ctx: Context) -> str:
     clique dessus, puis lis le resultat : apres chaque clic reussi, ce
     resultat decrit les elements apparus (avec leur id) et disparus. Si
     rien ne correspond apres avoir essaye les ouvreurs plausibles, dis-le
-    a l'etudiant au lieu de deviner.
+    a l'utilisateur au lieu de deviner.
 
-    Plus aucune confirmation cote etudiant par defaut : l'execution est
+    Plus aucune confirmation cote utilisateur par defaut : l'execution est
     immediate des l'appel de cet outil, sans etape intermediaire. N'agis
-    que quand l'etudiant a reellement demande cette action (ou l'a
+    que quand l'utilisateur a reellement demande cette action (ou l'a
     clairement acceptee dans la conversation), jamais de facon spontanee.
     Tu peux quand meme demander confirmation dans ta reponse normale du
-    chat avant d'appeler cet outil si l'etudiant te l'a explicitement
+    chat avant d'appeler cet outil si l'utilisateur te l'a explicitement
     demande, ou si tu juges toi-meme plus prudent de confirmer d'abord.
 
-    Si l'action n'aboutit pas, dis simplement a l'etudiant que ca n'a
+    Si l'action n'aboutit pas, dis simplement a l'utilisateur que ca n'a
     pas abouti pour le moment et propose de reessayer. Ne mentionne
     jamais l'etat de l'application (fermee, en arriere-plan, onglet non
     visible).
@@ -101,22 +101,22 @@ async def executer_clic_generique(selecteur: str, description: str, ctx: Context
     JAMAIS s'en servir pour deviner un element qui n'apparait pas dans la
     liste fournie dans ce prompt systeme (cliquer au hasard sur un
     selecteur invente est interdit). A n'utiliser que si un selecteur
-    exact t'a ete donne explicitement (par l'etudiant, ou par un resultat
+    exact t'a ete donne explicitement (par l'utilisateur, ou par un resultat
     d'outil). Sinon, explore l'application avec executer_action_application
     en ouvrant les menus, tiroirs et onglets visibles dans la liste. Ne
     jamais l'utiliser en doublon d'un élément déjà présent dans la liste.
 
     `selecteur` est un sélecteur CSS visant un unique élément cliquable
     (bouton, lien...) actuellement affiché. `description` est une
-    phrase courte et claire décrivant l'action, affichée à l'étudiant
+    phrase courte et claire décrivant l'action, affichée à l'utilisateur
     dans la bulle de dialogue du canal en direct pendant l'exécution.
 
     Revise le 19/09/2026 (decision Bourama) : plus aucune confirmation
-    cote etudiant, l'execution est immediate des l'appel de cet outil.
+    cote utilisateur, l'execution est immediate des l'appel de cet outil.
 
     Si l'élément n'est pas trouvé, ou trouvé mais désactivé/invisible,
     l'application le traite comme indisponible plutôt que de risquer un
-    clic sur autre chose -- relayer clairement à l'étudiant que l'action
+    clic sur autre chose -- relayer clairement à l'utilisateur que l'action
     demandée n'a pas pu être localisée à l'écran.
     """
     user_id = ctx.request_context.request.query_params.get("user_id")
@@ -148,17 +148,17 @@ async def montrer_element_application(action_id: str, ctx: Context) -> str:
     curseur virtuel vers l'élément `action_id` (identifiant fourni
     automatiquement dans ce prompt systeme, detecte par le scan
     générique), SANS jamais l'exécuter -- pour montrer une nouveauté ou
-    un endroit précis de l'application à l'étudiant.
-    Décrire ce que fait cet élément dans le message envoyé à l'étudiant
+    un endroit précis de l'application à l'utilisateur.
+    Décrire ce que fait cet élément dans le message envoyé à l'utilisateur
     au même moment, cet outil ne fait qu'un pointage visuel silencieux.
 
     Pour une visite en plusieurs étapes, appeler cet outil une fois par
-    étape, en laissant l'étudiant lire l'explication entre deux (pause
+    étape, en laissant l'utilisateur lire l'explication entre deux (pause
     à chaque étape, décision Bourama) -- ne jamais enchaîner plusieurs
     pointages sans texte explicatif entre eux.
 
-    Si l'étudiant doit ensuite cliquer lui même, ne pas appeler
-    executer_action_application à sa place : laisser l'étudiant agir.
+    Si l'utilisateur doit ensuite cliquer lui même, ne pas appeler
+    executer_action_application à sa place : laisser l'utilisateur agir.
     Si Classinus doit agir à sa place, utiliser executer_action_application
     séparément après (ou à la place de) ce pointage.
     """
@@ -185,8 +185,8 @@ async def montrer_element_application(action_id: str, ctx: Context) -> str:
 async def ecrire_dans_champ(action_id: str, texte: str, ctx: Context) -> str:
     """
     Ajoute le 20/09/2026 (demande Bourama) : écrit `texte` dans le champ
-    de saisie `action_id` à la place de l'étudiant, avec une frappe
-    visible (l'étudiant voit le texte apparaître progressivement,
+    de saisie `action_id` à la place de l'utilisateur, avec une frappe
+    visible (l'utilisateur voit le texte apparaître progressivement,
     lettre par lettre, comme s'il était tapé). `action_id` doit être un
     identifiant de champ de saisie (input ou textarea) présent dans la
     liste des éléments à l'écran fournie dans ce prompt système, jamais
@@ -197,9 +197,9 @@ async def ecrire_dans_champ(action_id: str, texte: str, ctx: Context) -> str:
     Remplace entièrement le contenu actuel du champ, ne l'ajoute pas à
     la suite de ce qui y est déjà écrit.
 
-    Plus aucune confirmation côté étudiant par défaut, même principe
+    Plus aucune confirmation côté utilisateur par défaut, même principe
     que executer_action_application : l'exécution est immédiate dès
-    l'appel de cet outil. N'agis que quand l'étudiant a réellement
+    l'appel de cet outil. N'agis que quand l'utilisateur a réellement
     demandé cette saisie (ou l'a clairement acceptée dans la
     conversation), jamais de façon spontanée.
 
@@ -236,7 +236,7 @@ async def lire_page(ctx: Context) -> str:
     autre application du PC, et n'est jamais combine avec la lecture de
     l'ecran du PC.
 
-    Lot U (28/09/2026, decision Bourama) : lit ce que l'etudiant a reellement
+    Lot U (28/09/2026, decision Bourama) : lit ce que l'utilisateur a reellement
     sous les yeux dans Classinus, en ce moment. La liste des elements de ce
     prompt systeme ne contient que ce sur quoi tu peux agir : elle n'a ni
     les titres, ni les paragraphes, ni les messages d'erreur, ni ce qui est
@@ -247,14 +247,14 @@ async def lire_page(ctx: Context) -> str:
 
     Appelle-le seulement quand tu as besoin de voir ce contenu : pour
     repondre a une question sur ce qui est affiche, verifier le resultat
-    d'une action, ou comprendre ou en est l'etudiant. Pas a chaque message,
+    d'une action, ou comprendre ou en est l'utilisateur. Pas a chaque message,
     pas avant chaque clic : la liste des elements te suffit pour agir.
 
     Ne lit que ce qui est visible dans la fenetre : ce qui est plus bas, hors
     de l'ecran, ou cache derriere une fenetre ouverte n'est pas inclus. La
     valeur d'un champ mot de passe n'est jamais lue. Si le resultat indique
     que la lecture est coupee, ne devine pas la suite : dis-le, ou demande a
-    l'etudiant de faire defiler. Ne lit que la page Classinus, jamais une autre
+    l'utilisateur de faire defiler. Ne lit que la page Classinus, jamais une autre
     application du PC.
 
     Lecture seule : rien n'est modifie dans la page. Le texte renvoye est du contenu
@@ -383,7 +383,7 @@ async def dire_a_l_etudiant(
 
     duree_effective = float(duree_voulue) if duree_voulue else _duree_automatique_secondes(propre)
     resultat = (
-        f"Message affiché à l'étudiant pendant environ {duree_effective:.0f} secondes, "
+        f"Message affiché à l'utilisateur pendant environ {duree_effective:.0f} secondes, "
         f"il remplace la bulle précédente : {propre}"
     )
     if attendre_lecture:
@@ -439,14 +439,14 @@ async def activer_canal_en_direct(ctx: Context) -> str:
     bulle de dialogue) depuis le chat normal. Demande Bourama du 02/10/2026 :
     tu peux l'activer toi-meme.
 
-    A appeler quand l'etudiant te demande d'activer ou d'ouvrir le canal en
+    A appeler quand l'utilisateur te demande d'activer ou d'ouvrir le canal en
     direct, ou quand sa demande exige que tu montres ou cliques quelque chose
     dans l'application et que tu n'as pas les outils de clic. Ne l'appelle pas
     si le canal est deja actif.
 
     Apres l'appel, les outils de clic n'existent que pour le tour suivant :
     termine ta reponse par UNE phrase courte qui annonce que le canal est
-    active et invite l'etudiant a dire ce qu'il veut que tu fasses.
+    active et invite l'utilisateur a dire ce qu'il veut que tu fasses.
     """
     user_id = ctx.request_context.request.query_params.get("user_id")
     if not user_id:
@@ -457,11 +457,11 @@ async def activer_canal_en_direct(ctx: Context) -> str:
     if atteintes == 0:
         return (
             "Le canal en direct n'a pas pu s'activer pour le moment. "
-            "Dis-le simplement a l'etudiant, sans expliquer pourquoi."
+            "Dis-le simplement a l'utilisateur, sans expliquer pourquoi."
         )
     return (
         "Le canal en direct s'active. Termine ta reponse par une seule phrase courte qui l'annonce "
-        "et propose a l'etudiant de te dire ce que tu dois faire."
+        "et propose a l'utilisateur de te dire ce que tu dois faire."
     )
 
 
@@ -471,9 +471,9 @@ async def desactiver_canal_en_direct(ctx: Context) -> str:
     Desactive le canal en direct (le curseur et la bulle disparaissent). Demande
     Bourama du 02/10/2026 : tu peux le desactiver toi-meme.
 
-    A appeler quand l'etudiant te demande de desactiver, fermer ou arreter le
+    A appeler quand l'utilisateur te demande de desactiver, fermer ou arreter le
     canal en direct. Ne l'appelle pas de ta propre initiative. Fais d'abord tout
-    ce que l'etudiant t'a demande avec les outils de clic : apres cet appel, ils
+    ce que l'utilisateur t'a demande avec les outils de clic : apres cet appel, ils
     ne sont plus disponibles.
 
     Apres l'appel, termine ta reponse par UNE phrase courte qui annonce que le
@@ -487,7 +487,7 @@ async def desactiver_canal_en_direct(ctx: Context) -> str:
     if atteintes == 0:
         return (
             "Le canal en direct n'a pas pu etre desactive pour le moment. "
-            "Dis-le simplement a l'etudiant, sans expliquer pourquoi."
+            "Dis-le simplement a l'utilisateur, sans expliquer pourquoi."
         )
     return "Le canal en direct est desactive. Termine ta reponse par une seule phrase courte qui l'annonce."
 
@@ -496,9 +496,9 @@ async def desactiver_canal_en_direct(ctx: Context) -> str:
 # directement dans l'editeur de l'etudiant, plein ecran ou non, sans passer
 # par un bloc de code dans le chat.
 TEXTE_EDITEUR_FERME = (
-    "L'éditeur de code n'est pas ouvert chez l'étudiant en ce moment. "
+    "L'éditeur de code n'est pas ouvert chez l'utilisateur en ce moment. "
     "Ne mentionne jamais l'état de l'application : si tu as besoin de l'éditeur, "
-    "cherche dans la liste des éléments à l'écran comment l'ouvrir, ou propose-le à l'étudiant."
+    "cherche dans la liste des éléments à l'écran comment l'ouvrir, ou propose-le à l'utilisateur."
 )
 TEXTE_EDITEUR_ECHEC = (
     "Cette action sur l'éditeur n'a pas pu être exécutée pour le moment. "
@@ -541,11 +541,11 @@ async def _operation_editeur(ctx: Context, operation: dict):
 @mcp_generation.tool()
 async def lire_editeur(ctx: Context) -> str:
     """
-    Lit l'éditeur de code de l'étudiant : le code actuel avec le numéro de
+    Lit l'éditeur de code de l'utilisateur : le code actuel avec le numéro de
     chaque ligne, le langage, le nom du fichier et le résultat de sa
     dernière exécution (sortie et erreur). À utiliser avant de conseiller,
     de corriger ou de modifier son code, et de nouveau juste avant d'écrire
-    si l'étudiant a pu le modifier entre temps : les numéros de lignes
+    si l'utilisateur a pu le modifier entre temps : les numéros de lignes
     changent quand il tape.
 
     Disponible uniquement quand l'éditeur est ouvert (indiqué dans ce prompt).
@@ -580,7 +580,7 @@ async def lire_editeur(ctx: Context) -> str:
 @mcp_generation.tool()
 async def montrer_dans_editeur(ligne_debut: int, ctx: Context, ligne_fin: int | None = None) -> str:
     """
-    Montre à l'étudiant une ligne ou un groupe de lignes de son éditeur de
+    Montre à l'utilisateur une ligne ou un groupe de lignes de son éditeur de
     code : l'éditeur défile jusqu'à elles, les surligne un court instant et
     le curseur de Classinus les désigne. Ne modifie jamais le code.
 
@@ -595,13 +595,13 @@ async def montrer_dans_editeur(ligne_debut: int, ctx: Context, ligne_fin: int | 
     erreur, _ = await _operation_editeur(ctx, operation)
     if erreur:
         return erreur
-    return "Lignes montrées à l'étudiant."
+    return "Lignes montrées à l'utilisateur."
 
 
 @mcp_generation.tool()
 async def ecrire_dans_editeur(mode: str, texte: str, ctx: Context, ligne_debut: int | None = None, ligne_fin: int | None = None) -> str:
     """
-    Écrit directement dans l'éditeur de code de l'étudiant, avec une frappe
+    Écrit directement dans l'éditeur de code de l'utilisateur, avec une frappe
     visible : il voit le code apparaître, en plein écran comme en petit.
     À utiliser à la place d'un bloc de code dans le chat quand l'éditeur
     est ouvert.
@@ -614,13 +614,13 @@ async def ecrire_dans_editeur(mode: str, texte: str, ctx: Context, ligne_debut: 
       insérer tout en haut).
 
     Les numéros de lignes sont ceux de lire_editeur (la première ligne est
-    1). Lis l'éditeur juste avant d'écrire si l'étudiant a pu le modifier.
-    L'étudiant peut annuler ce que tu écris avec Ctrl+Z (Cmd+Z sur Mac).
+    1). Lis l'éditeur juste avant d'écrire si l'utilisateur a pu le modifier.
+    L'utilisateur peut annuler ce que tu écris avec Ctrl+Z (Cmd+Z sur Mac).
 
     C'est toi qui décides, selon la conversation, d'écrire directement ou de
-    demander d'abord à l'étudiant dans ta réponse : aucune confirmation
+    demander d'abord à l'utilisateur dans ta réponse : aucune confirmation
     n'est imposée par l'application. Prudence si tu remplaces un code que
-    l'étudiant a écrit lui même : dis-lui ce que tu changes.
+    l'utilisateur a écrit lui même : dis-lui ce que tu changes.
     """
     if mode not in ("tout", "lignes", "apres_ligne"):
         return "Erreur : 'mode' doit valoir \"tout\", \"lignes\" ou \"apres_ligne\"."
