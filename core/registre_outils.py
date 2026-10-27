@@ -1567,3 +1567,31 @@ FOURNISSEURS_PARAMETRES_PAR_PREFIXE = {
         "project_id": "supabase_list_projects",
     },
 }
+
+# ---------------------------------------------------------------------------
+# Regle GENERALE des identifiants (27/10/2026, demande Bourama) : elle
+# s'applique toute seule a TOUT serveur MCP, integre ou personnalise, y
+# compris ceux qui seront ajoutes plus tard. Quand un outil exige un
+# parametre obligatoire qui est un identifiant (workflowId, service_id,
+# project-id, ou simplement id), le module core/completion_outils.py lit le
+# schema reel de l'outil, cherche dans le MEME serveur l'outil de lecture qui
+# fournit cet identifiant (list_workflows pour workflowId) et le donne avec.
+# Les regles ecrites a la main plus haut (FOURNISSEURS_PARAMETRES_PAR_PREFIXE,
+# DEPENDANCES_OUTILS) restent prioritaires : la regle generale ne fait que
+# completer ce qu'elles ne couvrent pas. Donnees pures, rien a coder pour
+# ajuster.
+# ---------------------------------------------------------------------------
+
+# Verbes (premier mot du vrai nom de l'outil, sans le prefixe de Classinus) des
+# outils de lecture qui peuvent fournir un identifiant.
+VERBES_FOURNISSEURS_IDENTIFIANTS = ("list", "search", "find", "query", "lookup", "browse")
+
+# Mots interchangeables pour les identifiants : un serveur qui appelle
+# « workspace » ce qu'un outil appelle « team » reste couvert. Utilise
+# seulement quand aucun outil ne porte exactement le nom de l'identifiant.
+SYNONYMES_IDENTIFIANTS = (
+    {"team", "workspace", "organization", "org", "owner", "account"},
+)
+
+# Nombre maximal d'outils fournisseurs ajoutes pour un seul identifiant.
+PLAFOND_FOURNISSEURS_PAR_IDENTIFIANT = 3

@@ -742,6 +742,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     liens = completer_outils_trouves(
                         trouves, catalogue_complet,
                         deja_en_main | {o["function"]["name"] for o in trouves_total} | {o["function"]["name"] for o in trouves},
+                        table_routage_complet,
                     )
                     trouves_total.extend(trouves)
                     trouves_total.extend(lien["outil"] for lien in liens)
@@ -781,7 +782,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     )
                     # Ordre d'appel : si un outil donne ici en exige un autre pour obtenir
                     # un identifiant (projectId...), on le dit au modele.
-                    prerequis = prerequis_parmi(trouves_total)
+                    prerequis = prerequis_parmi(trouves_total, table_routage_complet)
                     if prerequis:
                         a_appeler_d_abord = ", ".join(f"{nom} (pour {', '.join(exigeants)})" for nom, exigeants in prerequis.items())
                         contenu_reponse += (
