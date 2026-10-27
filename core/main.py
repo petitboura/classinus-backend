@@ -8,6 +8,7 @@ from google import genai
 from google.genai import types
 from core.skills_catalogue import lister_catalogue_skills
 from core.lecture_media_conversation import media_joint_present
+from core.lecture_document_conversation import document_joint_present
 from etat_connexions import bloc_prompt_pour_utilisateur as bloc_connexions_pour_utilisateur
 from comportements_etudiants import (
     lister_comportements as lister_comportements_etudiant,
@@ -812,6 +813,11 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # l'envoi, c'est le modèle qui décide. Le message ne contient que ses
         # informations ; l'outil pour le lire doit donc être réellement branché.
         outils_forces_contexte.append("lire_media_conversation")
+    if document_joint_present(message_utilisateur, historique):
+        # 27/10/2026, demande de Bourama : un document joint n'est plus lu à l'envoi, c'est
+        # le modèle qui décide. Le message ne contient que ses informations ; l'outil pour
+        # le lire doit donc être réellement branché.
+        outils_forces_contexte.append("lire_document_conversation")
     if code_id_actif:
         # 12/09/2026, demande explicite Bourama, obligation d'appel : si
         # l'outil n'est pas dans outils_forces_contexte, rien ne garantit

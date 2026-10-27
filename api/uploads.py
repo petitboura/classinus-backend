@@ -36,6 +36,7 @@ from conversion_pdf import conversion_disponible, convertir_en_pdf  # noqa: E402
 from core.erreurs import erreur_api
 from core.limites_media import duree_max_video_secondes, taille_max_audio_octets, taille_max_video_octets
 from core.lecture_media_conversation import lire_infos as lire_infos_media, resume_infos as resume_infos_media
+from core.lecture_document_conversation import infos_document, resume_infos as resume_infos_document
 
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 
@@ -361,6 +362,88 @@ async def uploader_document_chat(
             logging.warning(f"Aperçu PDF échoué pour document chat {fichier.filename} (extraction/stockage OK quand même) : {e}")
 
     return {"texte": texte, "tronque": tronque, "lisible": lisible, "url": url_document, "url_apercu": url_apercu}
+
+
+# Document ou fichier JOINT à une conversation (27/10/2026, demande Bourama)
+#
+# Contrairement à /document-chat ci-dessus (qui extrait le texte DÈS l'envoi et
+# l'injecte dans le message), cette route enregistre seulement le fichier et
+# renvoie ses informations peu coûteuses (type, taille, nombre de pages). C'est
+# l'IA qui décide ensuite de le lire, avec l'outil lire_document_conversation
+# (core/lecture_document_conversation.py), ou de le copier dans l'espace
+# d'exécution de code (gerer_execution_code, action importer_fichier). L'original
+# n'est jamais modifié. L'ancienne route /document-chat reste en place : les
+# anciennes versions de l'application (Android, ordinateur) l'appellent encore.
+
+@router.post("/fichier-chat")
+async def uploader_fichier_chat(
+    fichier: UploadFile = File(...),
+    utilisateur=Depends(utilisateur_courant),
+):
+    """
+    Enregistre un fichier joint (origine "chat") et renvoie {"url", "nom", "famille",
+    "taille_octets", "pages", "unite", "feuilles", "resume", "url_apercu"}.
+    """
+    import asyncio
+
+    contenu = await fichier.read()
+    if len(contenu) > TAILLE_MAX_DOCUMENT_OCTETS:
+        raise erreur_api(400, "DOCUMENT_TROP_LOURD_15_MO_MAX")
+    if len(contenu) == 0:
+        raise erreur_api(400, "FICHIER_VIDE")
+
+    nom_fichier = fichier.filename or "document"
+    extension = extension_fichier(nom_fichier) or "bin"
+    type_mime = fichier.content_type
+    if not type_mime or type_mime == "application/octet-stream":
+        type_mime = mimetypes.guess_type(nom_fichier)[0] or "application/octet-stream"
+
+    # Un échec d'enregistrement ne doit pas être silencieux ici : sans lien réel,
+    # l'IA ne pourrait jamais lire le fichier (contrairement à l'ancien chemin,
+    # où le texte était déjà extrait et injecté dans le message).
+    try:
+        ligne = await asyncio.to_thread(
+            enregistrer_fichier,
+            contenu=contenu,
+            nom_fichier=nom_fichier,
+            type_mime=type_mime,
+            niveau="utilisateur",
+            uploade_par=utilisateur.id,
+            user_id=utilisateur.id,
+            description="Document envoyé en conversation",
+            origine="chat",
+        )
+    except Exception as e:
+        logging.error(f"ERREUR enregistrement fichier joint {nom_fichier} : {e}")
+        raise erreur_api(500, "MEDIA_ENREGISTREMENT_ECHOUE")
+
+    infos = await asyncio.to_thread(infos_document, nom_fichier, contenu, type_mime)
+
+    # Aperçu PDF des formats Office : même mécanisme et même règle que /document-chat
+    # (best-effort, le fichier et son lien restent utilisables sans aperçu).
+    url_apercu = None
+    if extension in EXTENSIONS_AVEC_APERCU and conversion_disponible():
+        try:
+            pdf_bytes = await asyncio.to_thread(convertir_en_pdf, contenu, nom_fichier)
+            chemin_apercu = f"apercus/{uuid.uuid4()}.pdf"
+            stockage_r2.from_("images-publiques").upload(
+                chemin_apercu, pdf_bytes, {"content-type": "application/pdf"}
+            )
+            url_apercu = stockage_r2.from_("images-publiques").get_public_url(chemin_apercu)
+        except Exception as e:
+            logging.warning(f"Aperçu PDF échoué pour fichier joint {nom_fichier} (enregistrement OK quand même) : {e}")
+
+    return {
+        "url": ligne["url_publique"],
+        "nom": nom_fichier,
+        "famille": infos["famille"],
+        "taille_octets": infos["taille_octets"],
+        "pages": infos["pages"],
+        "unite": infos["unite"],
+        "feuilles": infos["feuilles"],
+        "resume": resume_infos_document(infos),
+        "url_apercu": url_apercu,
+    }
 
 
 # --- Zip (26/09/2026, chantier "zip en conversation", plan validé par

@@ -234,7 +234,7 @@ def extraire_texte_office_ancien(contenu_bytes, nom_fichier):
     return extraire_texte_pdf(convertir_en_pdf(contenu_bytes, nom_fichier or "document"))
 
 
-def lire_fichier(nom_fichier, contenu_bytes, type_mime):
+def lire_fichier(nom_fichier, contenu_bytes, type_mime, limite=LONGUEUR_MAX_TEXTE_EXTRAIT):
     """Point d'entrée unique de lecture d'un fichier joint, quel que soit
     son format. Renvoie {"texte", "tronque", "raison"} :
     - texte lu et raison None en cas de succès ;
@@ -269,7 +269,9 @@ def lire_fichier(nom_fichier, contenu_bytes, type_mime):
     texte = (texte or "").strip()
     if not texte:
         return {"texte": None, "tronque": False, "raison": "AUCUN_TEXTE_TROUVE"}
-    tronque = len(texte) > LONGUEUR_MAX_TEXTE_EXTRAIT
+    # limite=None : texte complet, sans troncature (lecture à la demande par tranches,
+    # core/lecture_document_conversation.py). Les autres appels gardent la limite d'origine.
+    tronque = limite is not None and len(texte) > limite
     if tronque:
-        texte = texte[:LONGUEUR_MAX_TEXTE_EXTRAIT]
+        texte = texte[:limite]
     return {"texte": texte, "tronque": tronque, "raison": None}

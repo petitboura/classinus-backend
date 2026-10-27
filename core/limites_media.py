@@ -49,3 +49,31 @@ def tranche_transcription_secondes() -> int:
 
 def images_max_par_appel() -> int:
     return _entier_env("MEDIA_IMAGES_MAX", 8)
+
+
+# Documents et fichiers joints lus à la demande de l'IA (27/10/2026, demande
+# Bourama) : mêmes règles que les médias, valeurs modifiables par variable
+# d'environnement, valeur absente ou invalide = défaut.
+#
+# - DOCUMENT_TRANCHE_CARACTERES : texte renvoyé par appel de lire_document_conversation
+#   (30000 par défaut, la même taille que l'ancienne lecture à l'envoi)
+# - DOCUMENT_PAGES_MAX_PAR_APPEL : nombre maximal de pages lues par appel (15 par défaut)
+# - DOCUMENT_RECHERCHE_RESULTATS_MAX : nombre maximal d'extraits renvoyés par une recherche (20 par défaut)
+# - EXECUTION_CODE_IMPORT_TAILLE_MAX_MO : taille maximale d'un fichier joint copié dans
+#   l'espace d'exécution de code (15 par défaut, la limite d'envoi d'un document)
+
+
+def tranche_document_caracteres() -> int:
+    return _entier_env("DOCUMENT_TRANCHE_CARACTERES", 30000)
+
+
+def pages_max_par_appel_document() -> int:
+    return _entier_env("DOCUMENT_PAGES_MAX_PAR_APPEL", 15)
+
+
+def resultats_max_recherche_document() -> int:
+    return _entier_env("DOCUMENT_RECHERCHE_RESULTATS_MAX", 20)
+
+
+def taille_max_import_code_octets() -> int:
+    return _entier_env("EXECUTION_CODE_IMPORT_TAILLE_MAX_MO", 15) * 1024 * 1024

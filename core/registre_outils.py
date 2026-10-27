@@ -744,6 +744,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "gerer_execution_code:run_code": {"label": "Exécution de code", "icone": "Play", "onglet": None},
     "gerer_execution_code:run_command": {"label": "Commande shell", "icone": "Terminal", "onglet": None},
     "gerer_execution_code:write_file": {"label": "Ajout d'un fichier", "icone": "FilePlus", "onglet": None},
+    "gerer_execution_code:importer_fichier": {"label": "Import de fichier", "icone": "FilePlus", "onglet": None},
     "gerer_execution_code:read_file": {"label": "Lecture de fichier", "icone": "FileText", "onglet": None},
     "gerer_execution_code:list_files": {"label": "Liste des fichiers", "icone": "FolderOpen", "onglet": None},
     "gerer_execution_code:download_files": {"label": "Export de fichiers", "icone": "Download", "onglet": None},
@@ -815,6 +816,8 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "gerer_fichier_conversation": {"label": "Fichiers du chat", "icone": "Paperclip", "onglet": None},
     # Ajouté 26/10/2026 : lecture, à la demande du modèle, d'une vidéo ou d'un audio joint.
     "lire_media_conversation": {"label": "Lecture d'une vidéo ou d'un audio joint", "icone": "FileSearch", "onglet": "rechercher"},
+    # Ajouté 27/10/2026 : lecture, à la demande du modèle, d'un document joint.
+    "lire_document_conversation": {"label": "Lecture d'un document joint", "icone": "FileSearch", "onglet": "rechercher"},
     # Composites "nom_outil:action" (28/08, bug remonté par Bourama :
     # l'entrée générique ci-dessus s'affichait pour TOUTES les actions
     # de cet outil, y compris chercher_publique/trouver_catalogue_public/
@@ -1309,6 +1312,8 @@ CATEGORIES_OUTILS = {
     # Vidéo ou audio joint par l'étudiant (26/10/2026) : catégorie à part, pour ne pas
     # tirer les trois gros outils de la bibliothèque quand on veut seulement lire un média.
     "media_joint": ["lire_media_conversation"],
+    # Document joint par l'étudiant (27/10/2026) : catégorie à part, même raison que media_joint.
+    "document_joint": ["lire_document_conversation"],
     "catalogue_public": [
         "gerer_entree_catalogue_public", "gerer_dossier_catalogue_public",
         "gerer_programme_catalogue_public",  # 22/09/2026

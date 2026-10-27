@@ -86,6 +86,53 @@ def _chemin_distant(chemin: str) -> str:
     return f"{_ROOT}/{_chemin_relatif_sur(chemin)}"
 
 
+# Dossier du workspace où l'action importer_fichier dépose les fichiers joints du chat
+# (27/10/2026, demande Bourama). L'original reste intact dans la conversation.
+_DOSSIER_IMPORT = "fichiers_joints"
+
+
+def _nom_fichier_sur(nom) -> str:
+    """Dernier segment d'un nom de fichier, sans séparateur ni caractère interdit."""
+    base = str(nom or "").replace("\\", "/").split("/")[-1].strip()
+    base = "".join(c for c in base if c.isprintable() and c not in '<>:"|?*').strip(". ")
+    return base[:150] or "fichier"
+
+
+def _preparer_import(user_id: str, url_fichier: str, path: str):
+    """
+    Retrouve le fichier joint (par son lien réel, le compte et l'origine chat) et choisit sa
+    destination dans le workspace. Renvoie ((chemin_relatif, octets), None) ou (None, message).
+    Tout se fait AVANT la réservation de quota : un lien invalide ne consomme rien.
+    """
+    from core.lecture_media_conversation import formater_taille, retrouver_fichier
+    from core.limites_media import taille_max_import_code_octets
+
+    url = (url_fichier or "").strip()
+    if not url:
+        return None, "url_fichier manquant (le lien réel indiqué juste après le fichier joint)."
+    try:
+        trouve = retrouver_fichier(url, user_id)
+    except Exception as e:
+        logging.error("ERREUR relecture du fichier joint à importer: %s", type(e).__name__)
+        return None, "Impossible de relire ce fichier pour le moment, réessaie."
+    if trouve is None:
+        return None, "Ce fichier est introuvable, ou ne t'appartient pas."
+    ligne, octets = trouve
+    maximum = taille_max_import_code_octets()
+    if len(octets) > maximum:
+        return None, (
+            f"Ce fichier fait {formater_taille(len(octets))}, au-delà de la limite de "
+            f"{formater_taille(maximum)} pour l'espace d'exécution de code."
+        )
+    destination = (path or "").strip() or f"{_DOSSIER_IMPORT}/{_nom_fichier_sur(ligne.get('nom_fichier'))}"
+    try:
+        relatif = _chemin_relatif_sur(destination)
+    except ValueError as e:
+        return None, f"Chemin refusé : {e}"
+    return (relatif, octets), None
+
+
+
 def _tronquer(texte: str, maximum: int) -> str:
     texte = texte if isinstance(texte, str) else str(texte)
     maximum = max(100, int(maximum))
@@ -421,7 +468,7 @@ def _fichiers_workspace(sandbox, configuration: dict) -> str:
 
 
 def _executer_action(sandbox, action: str, language: str, code: str, command: str,
-                     path: str, content: str, configuration: dict) -> str:
+                     path: str, content: str, configuration: dict, fichier_importe=None) -> str:
     max_chars = max(1000, int(configuration.get("max_output_chars", 20000)))
     max_bytes = max(1024, int(configuration.get("max_file_bytes", 1048576)))
     max_command_chars = max(256, int(configuration.get("max_command_chars", 10000)))
@@ -462,6 +509,29 @@ def _executer_action(sandbox, action: str, language: str, code: str, command: st
             return "Impossible de préparer le dossier du fichier."
         sandbox.files.write(distant, content)
         return f"Fichier écrit : {_chemin_relatif_sur(path)} ({taille} octets)."
+
+    if action == "importer_fichier":
+        # Copie d'un fichier joint du chat dans le workspace (27/10/2026, demande Bourama).
+        # Les octets ont déjà été retrouvés et contrôlés par _preparer_import.
+        if fichier_importe is None:
+            return "Aucun fichier à importer."
+        relatif, octets = fichier_importe
+        distant = _chemin_distant(relatif)
+        parent = str(PurePosixPath(distant).parent)
+        resultat_mkdir = _lancer_commande(
+            sandbox,
+            f"mkdir -p -- {shlex.quote(parent)}",
+            timeout_fichier,
+            timeout_fichier + 10,
+        )
+        if getattr(resultat_mkdir, "exit_code", 1) != 0:
+            return "Impossible de préparer le dossier du fichier."
+        sandbox.files.write(distant, octets)
+        return (
+            f"Fichier importé dans le workspace : {relatif} ({len(octets)} octets). "
+            "L'original reste intact dans la conversation : travaille sur cette copie et écris "
+            "tes résultats dans d'autres fichiers."
+        )
 
     if action == "read_file":
         distant = _chemin_distant(path)
@@ -522,7 +592,7 @@ def _message_refus(reservation: dict) -> str:
 
 @mcp_execution_code.tool()
 def gerer_execution_code(
-    action: Literal["run_code", "run_command", "write_file", "read_file", "list_files", "download_files", "network", "demander_acces_reseau", "close"],
+    action: Literal["run_code", "run_command", "write_file", "read_file", "list_files", "download_files", "importer_fichier", "network", "demander_acces_reseau", "close"],
     ctx: Context,
     language: Literal["python", "javascript", "typescript", "bash"] = "python",
     code: str = "",
@@ -530,12 +600,17 @@ def gerer_execution_code(
     path: str = "",
     content: str = "",
     domain: str = "",
+    url_fichier: str = "",
 ) -> str:
     """Execute du code ou gère les fichiers d'un workspace Linux isolé propre à cette conversation.
 
     Actions : run_code exécute du code en Python, JavaScript, TypeScript ou Bash;
     run_command lance une commande shell; write_file/read_file/list_files gèrent les fichiers;
-    download_files prépare une archive ZIP; close ferme le workspace.
+    download_files prépare une archive ZIP; close ferme le workspace;
+    importer_fichier copie dans le workspace un fichier que l'étudiant a joint à la conversation
+    (paramètre url_fichier : le lien réel indiqué entre crochets après le fichier, jamais inventé),
+    dans fichiers_joints/<nom> ou au chemin donné dans path. L'original reste intact : travaille
+    sur la copie, écris tes résultats dans d'autres fichiers, puis utilise download_files.
     Le réseau sortant est limité à une liste de domaines configurée côté serveur : network renvoie
     cette liste (sans ouvrir de workspace ni consommer de quota). À consulter avant de dire qu'un
     accès réseau est impossible (clonage d'un dépôt, installation de paquets).
@@ -572,10 +647,21 @@ def gerer_execution_code(
         except ValueError as e:
             return f"Chemin refusé : {e}"
 
+    fichier_importe = None
+    if action == "importer_fichier":
+        fichier_importe, erreur_import = _preparer_import(user_id, url_fichier, path)
+        if erreur_import:
+            return erreur_import
+
     try:
+        # Côté base de données, importer_fichier compte comme une écriture de fichier : la liste
+        # des actions acceptées par la réservation n'a pas besoin de changer.
         reservation = _rpc_objet(
             "execution_code_reserver",
-            {"p_user_id": user_id, "p_conversation_id": conversation_id, "p_action": action},
+            {
+                "p_user_id": user_id, "p_conversation_id": conversation_id,
+                "p_action": "write_file" if action == "importer_fichier" else action,
+            },
         )
     except Exception as e:
         logging.error("ERREUR réservation exécution code: %s", type(e).__name__)
@@ -679,7 +765,7 @@ def gerer_execution_code(
                 garder = False
                 raise RuntimeError("Impossible d'enregistrer le workspace dans Classinus.")
 
-        resultat = _executer_action(sandbox, action, language, code, command, path, content, configuration)
+        resultat = _executer_action(sandbox, action, language, code, command, path, content, configuration, fichier_importe)
         garder = True
     except Exception as e:
         logging.warning(
