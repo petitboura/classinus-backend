@@ -711,6 +711,13 @@ OUTILS_SENSIBLES = {
     # format "nom_outil:action" expliqué au-dessus pour
     # gerer_document_bibliotheque:supprimer).
     "gerer_dossier_bibliotheque:supprimer",
+    # 28/10/2026 : actions réelles du serveur diagnostic Class-Tech
+    # (palier 100 %, sans root). Bip, vibration, appli photo : effet
+    # physique. revoquer_permission : retire vraiment un accès.
+    "tester_haut_parleur",
+    "tester_vibreur",
+    "tester_camera",
+    "revoquer_permission",
 }
 
 
@@ -1181,6 +1188,21 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "ping_serveur": {"label": "Ping serveur", "icone": "Satellite", "onglet": None},
     "verifier_chaine": {"label": "Vérification", "icone": "Stethoscope", "onglet": None},
     "resumer_symptome": {"label": "Résumé du symptôme", "icone": "ClipboardList", "onglet": None},
+    # 28/10/2026 : palier 100 % (tests matériel, perf, sécurité).
+    "tester_ecran_tactile": {"label": "Test écran tactile", "icone": "Smartphone", "onglet": None},
+    "tester_gps": {"label": "Test GPS", "icone": "MapPin", "onglet": None},
+    "tester_micro": {"label": "Test micro", "icone": "Mic", "onglet": None},
+    "tester_haut_parleur": {"label": "Test haut-parleur", "icone": "Volume2", "onglet": None},
+    "tester_vibreur": {"label": "Test vibreur", "icone": "Vibrate", "onglet": None},
+    "tester_camera": {"label": "Test caméra", "icone": "Camera", "onglet": None},
+    "tester_boutons": {"label": "Test boutons", "icone": "Power", "onglet": None},
+    "analyser_memoire_vive": {"label": "Mémoire vive", "icone": "MemoryStick", "onglet": None},
+    "analyser_cpu": {"label": "Processeur (CPU)", "icone": "Cpu", "onglet": None},
+    "analyser_applications_gourmandes": {"label": "Applis gourmandes", "icone": "Gauge", "onglet": None},
+    "lister_permissions_risquees": {"label": "Permissions à risque", "icone": "KeyRound", "onglet": None},
+    "revoquer_permission": {"label": "Retirer une permission", "icone": "ShieldOff", "onglet": None},
+    "verifier_securite": {"label": "Sécurité du téléphone", "icone": "ShieldCheck", "onglet": None},
+    "verifier_mises_a_jour": {"label": "Mises à jour", "icone": "RefreshCw", "onglet": None},
 
 }
 
