@@ -721,6 +721,28 @@ OUTILS_SENSIBLES = {
     "tester_vibreur",
     "tester_camera",
     "revoquer_permission",
+    # 28/10/2026 : palier root DESACTIVE (19 outils, confirmation
+    # exigee pour chacun, meme les lectures : un telephone roote
+    # expose tout le systeme). Activation seulement sur ordre de Bourama.
+    "root_verifier_acces",
+    "root_lire_infos_root",
+    "root_lister_fichiers_systeme",
+    "root_lire_fichier_systeme",
+    "root_lire_erreurs_noyau",
+    "root_lire_paniques_passees",
+    "root_lire_partitions",
+    "root_verifier_integrite",
+    "root_lire_batterie_brute",
+    "root_lire_temperatures",
+    "root_reinitialiser_stats_batterie",
+    "root_lire_firmware",
+    "root_valider_slot_demarre",
+    "root_lister_processus",
+    "root_lire_wakelocks",
+    "root_nettoyer_fichiers_crash",
+    "root_vider_cache_dalvik",
+    "root_forcer_trim",
+    "root_redemarrer",
 }
 
 
@@ -1222,6 +1244,26 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "revoquer_permission": {"label": "Retirer une permission", "icone": "ShieldOff", "onglet": None},
     "verifier_securite": {"label": "Sécurité du téléphone", "icone": "ShieldCheck", "onglet": None},
     "verifier_mises_a_jour": {"label": "Mises à jour", "icone": "RefreshCw", "onglet": None},
+    # 28/10/2026 : palier root DESACTIVE (19 outils, voir sensibles).
+    "root_verifier_acces": {"label": "Vérifier le root", "icone": "KeyRound", "onglet": None},
+    "root_lire_infos_root": {"label": "Infos root", "icone": "Info", "onglet": None},
+    "root_lister_fichiers_systeme": {"label": "Dossiers système", "icone": "FolderTree", "onglet": None},
+    "root_lire_fichier_systeme": {"label": "Fichier système", "icone": "FileText", "onglet": None},
+    "root_lire_erreurs_noyau": {"label": "Erreurs noyau", "icone": "Bug", "onglet": None},
+    "root_lire_paniques_passees": {"label": "Paniques passées", "icone": "History", "onglet": None},
+    "root_lire_partitions": {"label": "Partitions", "icone": "HardDrive", "onglet": None},
+    "root_verifier_integrite": {"label": "Intégrité système", "icone": "ShieldCheck", "onglet": None},
+    "root_lire_batterie_brute": {"label": "Batterie brute", "icone": "BatteryCharging", "onglet": None},
+    "root_lire_temperatures": {"label": "Températures", "icone": "Thermometer", "onglet": None},
+    "root_reinitialiser_stats_batterie": {"label": "RAZ stats batterie", "icone": "RotateCcw", "onglet": None},
+    "root_lire_firmware": {"label": "Firmware", "icone": "Cpu", "onglet": None},
+    "root_valider_slot_demarre": {"label": "Valider slot A/B", "icone": "Check", "onglet": None},
+    "root_lister_processus": {"label": "Processus", "icone": "Activity", "onglet": None},
+    "root_lire_wakelocks": {"label": "Wakelocks", "icone": "Zap", "onglet": None},
+    "root_nettoyer_fichiers_crash": {"label": "Nettoyer crashs", "icone": "Trash2", "onglet": None},
+    "root_vider_cache_dalvik": {"label": "Vider cache Dalvik", "icone": "Trash", "onglet": None},
+    "root_forcer_trim": {"label": "Forcer TRIM", "icone": "Sparkles", "onglet": None},
+    "root_redemarrer": {"label": "Redémarrer", "icone": "Power", "onglet": None},
 
 }
 
@@ -1255,6 +1297,7 @@ VERBES_ACTIONS = {
     "analyser": ("Analyse", "Activity"),
     "revoquer": ("Retrait", "ShieldOff"),
     "verifier": ("Vérification", "Check"),
+    "root": ("Root", "ShieldAlert"),
     "ouvrir": ("Ouverture", "Eye"),
     "explorer": ("Exploration", "Eye"),
     "creer": ("Création", "Plus"),
