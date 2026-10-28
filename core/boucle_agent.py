@@ -810,6 +810,16 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                         contenu_reponse = "Aucun outil correspondant à ces besoins n'existe dans le catalogue de Classinus."
                         statut_fin = f"{nom_lisible_demande} : rien trouvé"
                     resultat_affichage = "\n".join(lignes_detail)
+                # Serveur MCP externe (27/10/2026, demande de Bourama) : quand rien ne répond au besoin,
+                # ou quand l'utilisateur demande lui-même d'ajouter un serveur MCP, l'IA cherche le
+                # serveur officiel de l'outil et le propose dans une carte. Seulement pour un compte
+                # connecté (etats_services vide sans compte) : ajouter un serveur exige un compte.
+                if etats_services and etat_connexions.doit_proposer_serveur_mcp(
+                    [r["besoin"] for r in recherches_valides], bool(trouves_total), bool(propositions),
+                ):
+                    contenu_reponse = (
+                        contenu_reponse + " " + etat_connexions.texte_serveur_inconnu(aucun_outil=not trouves_total)
+                    ).strip()
                 if propositions:
                     texte_props = " ".join(
                         etat_connexions.texte_proposition(e, etats_services.get(e["service"]))

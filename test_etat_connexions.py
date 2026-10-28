@@ -94,6 +94,34 @@ class TextesPourLIA(unittest.TestCase):
         self.assertIn("Ne dis jamais qu'il n'existe pas", texte)
         self.assertNotIn("--", texte)
 
+    def test_serveur_inconnu_demande_le_bloc_et_jamais_de_jeton_dans_le_chat(self):
+        texte = ec.texte_serveur_inconnu()
+        self.assertIn("```serveurmcp", texte)
+        self.assertIn("site officiel", texte)
+        self.assertIn("tu n'ajoutes jamais rien", texte)
+        self.assertIn("ne demandes jamais de jeton dans le chat", texte)
+        self.assertNotIn("--", texte)
+
+    def test_quand_proposer_un_serveur_mcp(self):
+        # Rien trouvé du tout : on propose de chercher un serveur.
+        self.assertTrue(ec.doit_proposer_serveur_mcp(["envoyer un mail"], False, False))
+        # Des outils ou un service de la liste répondent déjà : on ne propose rien de plus.
+        self.assertFalse(ec.doit_proposer_serveur_mcp(["déployer un site"], True, False))
+        self.assertFalse(ec.doit_proposer_serveur_mcp(["déployer un site"], False, True))
+        # L'utilisateur demande lui-même d'ajouter un serveur MCP : toujours.
+        self.assertTrue(ec.doit_proposer_serveur_mcp(["ajouter un serveur MCP"], True, True))
+
+    def test_serveur_inconnu_change_de_debut_selon_le_cas(self):
+        self.assertIn("Aucun outil de Classinus", ec.texte_serveur_inconnu(aucun_outil=True))
+        texte = ec.texte_serveur_inconnu(aucun_outil=False)
+        self.assertNotIn("Aucun outil de Classinus", texte)
+        self.assertIn("Si l'utilisateur veut ajouter", texte)
+
+    def test_le_prompt_dit_a_l_ia_de_proposer_un_serveur_sans_l_ajouter_elle_meme(self):
+        texte = ec.texte_prompt_connexions(_etats(), [])
+        self.assertIn("serveur MCP", texte)
+        self.assertIn("c'est lui qui", texte)
+
     def test_la_proposition_distingue_une_connexion_expiree(self):
         entree = next(s for s in r.SERVICES_CONNECTABLES if s["service"] == "vercel_mcp")
         self.assertIn("expiré", ec.texte_proposition(entree, ec.A_RECONNECTER))

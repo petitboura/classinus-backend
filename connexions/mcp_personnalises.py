@@ -33,6 +33,7 @@ from connexions.mcp_reseau_securise import (
     resoudre_adresses_publiques,
     verifier_ip_publique,
 )
+from connexions.mcp_site_officiel import adresse_du_site_officiel, hote_de
 
 router = APIRouter(prefix="/api/mcp-personnalises", tags=["MCP personnalisés"])
 _SUPABASE = create_client(
@@ -73,6 +74,15 @@ PAGES_MAX_DECOUVERTE = max(1, int(_nombre_env("MCP_PERSO_PAGES_MAX_DECOUVERTE", 
 # Nombre d'outils montrés dans l'aperçu du test d'un serveur (la réponse reste légère).
 APERCU_MAX_OUTILS_TEST = max(1, int(_nombre_env("MCP_PERSO_APERCU_MAX_OUTILS_TEST", 50)))
 NOMBRE_MAX_SERVEURS_PAR_COMPTE = 10
+# Sondage d'une adresse proposée par l'IA (27/10/2026) : délai d'attente, mémoire du résultat
+# et nombre de sondages par compte, pour qu'un compte ne serve pas à interroger le web en masse.
+DELAI_SONDAGE = _nombre_env("MCP_PERSO_DELAI_SONDAGE_SECONDES", 10)
+DUREE_CACHE_SONDAGE = _nombre_env("MCP_PERSO_DUREE_CACHE_SONDAGE_SECONDES", 300)
+SONDAGES_MAX_PAR_FENETRE = int(_nombre_env("MCP_PERSO_SONDAGES_MAX", 20))
+FENETRE_SONDAGES_SECONDES = _nombre_env("MCP_PERSO_FENETRE_SONDAGES_SECONDES", 600)
+_CACHE_SONDAGES: dict[str, tuple[float, dict]] = {}
+_SONDAGES_PAR_COMPTE: dict[str, list[float]] = {}
+_VERROU_SONDAGES = threading.Lock()
 _PREFIXE_OUTILS = "custommcp_"
 _CACHE_OUTILS: dict[tuple, dict] = {}
 _CACHE_ECHECS: dict[tuple, float] = {}
@@ -92,6 +102,14 @@ class ServeurPayload(BaseModel):
 
 class ActifPayload(BaseModel):
     actif: bool
+
+
+class SondagePayload(BaseModel):
+    url: str = Field(min_length=8, max_length=2048)
+    # Site officiel de l'outil, tel que l'IA l'a trouvé ; sert seulement à comparer les domaines.
+    site_officiel: str | None = Field(default=None, max_length=2048)
+    # Page où l'utilisateur crée son jeton, telle que l'IA l'a trouvée : on dit si elle est officielle.
+    lien_jeton: str | None = Field(default=None, max_length=2048)
 
 
 def _erreur(code: str, message: str, statut: int = 400):
@@ -701,6 +719,100 @@ def obtenir_token_oauth(serveur_id: str, user_id: str) -> str | None:
     return ligne.get("access_token")
 
 
+def _statut_sans_authentification(url: str) -> int | None:
+    """Code HTTP renvoyé quand on se présente sans aucun jeton ; None si le serveur ne répond pas."""
+    try:
+        reponse = requete_securisee(
+            "POST", url, timeout=min(DELAI_SONDAGE, 8),
+            json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+                "protocolVersion": "2025-03-26", "capabilities": {},
+                "clientInfo": {"name": "Classinus", "version": "1.0"},
+            }},
+            headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+        )
+        return reponse.status_code
+    except Exception as exc:
+        logging.info("Sondage MCP sans réponse (hôte %s, type %s).", hote_de(url), type(exc).__name__)
+        return None
+
+
+def _autorisation_en_un_clic_possible(url: str) -> bool:
+    """Vrai si le serveur annonce l'autorisation en un clic (même condition que demarrer_oauth)."""
+    try:
+        emetteurs = _metadata_resource(url).get("authorization_servers") or []
+        if not emetteurs or not isinstance(emetteurs[0], str):
+            return False
+        return bool(_metadata_serveur_autorisation(emetteurs[0]).get("registration_endpoint"))
+    except Exception:
+        return False
+
+
+def _sonder_reseau(url: str) -> dict:
+    """
+    Dit comment se connecter à ce serveur, en l'interrogeant sans aucun jeton :
+    "none" s'il répond librement, "oauth" s'il demande une autorisation que Classinus sait lancer,
+    "bearer" s'il demande un jeton, "inconnu" si sa réponse n'est pas celle d'un serveur MCP.
+    """
+    try:
+        _lister_outils_reseau(url, {}, delai=DELAI_SONDAGE)
+        return {"joignable": True, "acces": "none"}
+    except ValueError:
+        pass
+    statut = _statut_sans_authentification(url)
+    if statut is None:
+        return {"joignable": False, "acces": "inconnu"}
+    if statut in (401, 403):
+        return {"joignable": True, "acces": "oauth" if _autorisation_en_un_clic_possible(url) else "bearer"}
+    return {"joignable": True, "acces": "inconnu"}
+
+
+def _sondage_autorise(user_id: str) -> bool:
+    maintenant = time.time()
+    with _VERROU_SONDAGES:
+        recents = [t for t in _SONDAGES_PAR_COMPTE.get(user_id, []) if t > maintenant - FENETRE_SONDAGES_SECONDES]
+        if len(recents) >= SONDAGES_MAX_PAR_FENETRE:
+            _SONDAGES_PAR_COMPTE[user_id] = recents
+            return False
+        recents.append(maintenant)
+        _SONDAGES_PAR_COMPTE[user_id] = recents
+        if len(_SONDAGES_PAR_COMPTE) > 2000:
+            for cle in [c for c, ts in _SONDAGES_PAR_COMPTE.items() if not ts or ts[-1] <= maintenant - FENETRE_SONDAGES_SECONDES]:
+                _SONDAGES_PAR_COMPTE.pop(cle, None)
+        return True
+
+
+def sonder_serveur(url: str, site_officiel: str | None, user_id: str, lien_jeton: str | None = None) -> dict:
+    """
+    Ce que la carte du chat montre avant que l'utilisateur décide : domaine réel, adresse du site
+    officiel ou non, joignable ou non, et façon de se connecter. Lève ValueError si l'adresse est
+    refusée (HTTPS public seulement). Un serveur qui répond est gardé en mémoire quelques minutes ;
+    un serveur muet ne l'est pas, pour qu'un nouvel essai soit possible tout de suite.
+    """
+    cible = valider_url_mcp(url)
+    maintenant = time.time()
+    with _VERROU_SONDAGES:
+        en_memoire = _CACHE_SONDAGES.get(cible)
+        resultat = dict(en_memoire[1]) if en_memoire and en_memoire[0] > maintenant else None
+    if resultat is None:
+        if not _sondage_autorise(user_id):
+            _erreur("MCP_SONDAGE_LIMITE", "Trop de vérifications de serveurs en peu de temps. Réessaie dans quelques minutes.", 429)
+        resultat = _sonder_reseau(cible)
+        if resultat["joignable"]:
+            with _VERROU_SONDAGES:
+                _CACHE_SONDAGES[cible] = (time.time() + DUREE_CACHE_SONDAGE, dict(resultat))
+                if len(_CACHE_SONDAGES) > 200:
+                    for cle in [c for c, (exp, _) in _CACHE_SONDAGES.items() if exp <= time.time()]:
+                        _CACHE_SONDAGES.pop(cle, None)
+    return {
+        "url": cible,
+        "domaine": hote_de(cible),
+        "officiel": adresse_du_site_officiel(cible, site_officiel),
+        # Un lien de jeton officiel est sur le site officiel de l'outil, jamais ailleurs.
+        "lien_jeton_officiel": bool(lien_jeton) and adresse_du_site_officiel(lien_jeton, site_officiel),
+        **resultat,
+    }
+
+
 def _config_publique(ligne: dict, user_id: str) -> dict:
     connecte = False
     if ligne.get("auth_type") in ("none", "bearer"):
@@ -874,6 +986,15 @@ def tester_serveur(serveur_id: str, utilisateur=Depends(utilisateur_courant)):
         ]}
     except ValueError as exc:
         _erreur("MCP_TEST_ECHOUE", str(exc), 502)
+
+
+@router.post("/sonder")
+def sonder(payload: SondagePayload, utilisateur=Depends(utilisateur_courant)):
+    """Vérifie une adresse proposée par l'IA, sans rien enregistrer (27/10/2026)."""
+    try:
+        return sonder_serveur(payload.url, payload.site_officiel, utilisateur.id, payload.lien_jeton)
+    except ValueError as exc:
+        _erreur("MCP_URL_INVALIDE", str(exc))
 
 
 @router.post("/{serveur_id}/demarrer-oauth")
