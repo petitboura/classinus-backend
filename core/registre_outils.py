@@ -711,6 +711,9 @@ OUTILS_SENSIBLES = {
     # format "nom_outil:action" expliqué au-dessus pour
     # gerer_document_bibliotheque:supprimer).
     "gerer_dossier_bibliotheque:supprimer",
+    # 28/10/2026 : action réelle du palier 80 % (vide les caches, qui
+    # se reconstruisent seuls ensuite, jamais les données des applis).
+    "vider_cache_applis",
     # 28/10/2026 : actions réelles du serveur diagnostic Class-Tech
     # (palier 100 %, sans root). Bip, vibration, appli photo : effet
     # physique. revoquer_permission : retire vraiment un accès.
@@ -1188,6 +1191,22 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "ping_serveur": {"label": "Ping serveur", "icone": "Satellite", "onglet": None},
     "verifier_chaine": {"label": "Vérification", "icone": "Stethoscope", "onglet": None},
     "resumer_symptome": {"label": "Résumé du symptôme", "icone": "ClipboardList", "onglet": None},
+    # 28/10/2026 : palier 80 % (pont ADB, batterie, stockage, applis,
+    # système, réseau, capteurs).
+    "detecter_telephone": {"label": "Détecter le phone", "icone": "Smartphone", "onglet": None},
+    "lire_batterie": {"label": "Batterie", "icone": "BatteryMedium", "onglet": None},
+    "lire_conso_batterie": {"label": "Conso batterie", "icone": "BatteryCharging", "onglet": None},
+    "lire_stockage": {"label": "Stockage", "icone": "HardDrive", "onglet": None},
+    "lister_gros_fichiers": {"label": "Gros fichiers", "icone": "Files", "onglet": None},
+    "vider_cache_applis": {"label": "Vider les caches", "icone": "Trash2", "onglet": None},
+    "lister_applis": {"label": "Applis installées", "icone": "LayoutGrid", "onglet": None},
+    "lire_crashs_recents": {"label": "Plantages d'applis", "icone": "Bug", "onglet": None},
+    "lister_applis_inutilisees": {"label": "Applis inutilisées", "icone": "Archive", "onglet": None},
+    "lire_version_systeme": {"label": "Version Android", "icone": "Info", "onglet": None},
+    "lire_erreurs_recentes": {"label": "Erreurs récentes", "icone": "ScrollText", "onglet": None},
+    "lire_etat_reseau": {"label": "Réseau", "icone": "Wifi", "onglet": None},
+    "lire_infos_wifi": {"label": "Détails wifi", "icone": "Signal", "onglet": None},
+    "tester_capteurs": {"label": "Test capteurs", "icone": "Radar", "onglet": None},
     # 28/10/2026 : palier 100 % (tests matériel, perf, sécurité).
     "tester_ecran_tactile": {"label": "Test écran tactile", "icone": "Smartphone", "onglet": None},
     "tester_gps": {"label": "Test GPS", "icone": "MapPin", "onglet": None},
@@ -1229,6 +1248,13 @@ VERBES_ACTIONS = {
     "lister": ("Liste", "List"),
     "consulter": ("Consultation", "Eye"),
     "lire": ("Lecture", "Eye"),
+    # 28/10/2026 : verbes des outils diagnostic Class-Tech (80 et 100).
+    "detecter": ("Détection", "Search"),
+    "tester": ("Test", "FlaskConical"),
+    "vider": ("Nettoyage", "Trash2"),
+    "analyser": ("Analyse", "Activity"),
+    "revoquer": ("Retrait", "ShieldOff"),
+    "verifier": ("Vérification", "Check"),
     "ouvrir": ("Ouverture", "Eye"),
     "explorer": ("Exploration", "Eye"),
     "creer": ("Création", "Plus"),
@@ -1430,8 +1456,21 @@ CATEGORIES_OUTILS = {
         "list_recent_files", "get_file_metadata", "create_file", "copy_file",
     ],
     # 28/10/2026 : outils du serveur diagnostic Class-Tech.
+    # Elargie le 28/10/2026 : base + palier 80 % + palier 100 %. Un nom
+    # pas encore exposé par le serveur reste sans effet (le filtre
+    # outils_de_la_categorie croise avec les outils réels).
     "diagnostic_classtech": [
         "ping_serveur", "verifier_chaine", "resumer_symptome",
+        "detecter_telephone", "lire_batterie", "lire_conso_batterie",
+        "lire_stockage", "lister_gros_fichiers", "vider_cache_applis",
+        "lister_applis", "lire_crashs_recents", "lister_applis_inutilisees",
+        "lire_version_systeme", "lire_erreurs_recentes", "lire_etat_reseau",
+        "lire_infos_wifi", "tester_capteurs",
+        "tester_ecran_tactile", "tester_gps", "tester_micro",
+        "tester_haut_parleur", "tester_vibreur", "tester_camera",
+        "tester_boutons", "analyser_memoire_vive", "analyser_cpu",
+        "analyser_applications_gourmandes", "lister_permissions_risquees",
+        "revoquer_permission", "verifier_securite", "verifier_mises_a_jour",
     ],
 }
 
