@@ -88,6 +88,7 @@ _CACHE_OUTILS: dict[tuple, dict] = {}
 _CACHE_ECHECS: dict[tuple, float] = {}
 _CHARGEMENTS_EN_COURS: dict[tuple, object] = {}
 _NOMS_SERVEURS_PAR_OUTIL: dict[str, str] = {}
+_URLS_SERVEURS_PAR_OUTIL: dict[str, str] = {}
 _VERROU_CATALOGUE = threading.Lock()
 _POOL_DECOUVERTE = ThreadPoolExecutor(max_workers=int(_nombre_env("MCP_PERSO_TACHES_DECOUVERTE", 8)), thread_name_prefix="mcp-perso")
 
@@ -274,6 +275,11 @@ def nom_serveur_pour_outil(nom_outil: str) -> str | None:
     return _NOMS_SERVEURS_PAR_OUTIL.get(nom_outil)
 
 
+def url_serveur_pour_outil(nom_outil: str) -> str | None:
+    """Adresse du serveur qui propose cet outil, pour afficher son logo dans le chat (None si inconnu)."""
+    return _URLS_SERVEURS_PAR_OUTIL.get(nom_outil)
+
+
 def _invalider_cache_serveur(serveur_id: str):
     with _VERROU_CATALOGUE:
         for table in (_CACHE_OUTILS, _CACHE_ECHECS, _CHARGEMENTS_EN_COURS):
@@ -391,6 +397,7 @@ def _avec_routes(serveur: dict, user_id: str, outils: list[dict]) -> list[dict]:
     resultat = []
     for outil in outils:
         _NOMS_SERVEURS_PAR_OUTIL[outil["nom"]] = serveur["nom"]
+        _URLS_SERVEURS_PAR_OUTIL[outil["nom"]] = serveur["url"]
         resultat.append({
             **outil,
             "route": {

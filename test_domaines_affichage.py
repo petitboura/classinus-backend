@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from core.domaines_affichage import domaine_de_adresse, domaines_de_l_appel, langage_de_l_appel  # noqa: E402
+from core.domaines_affichage import domaine_de_adresse, domaine_site_serveur, domaines_de_l_appel, langage_de_l_appel  # noqa: E402
 
 
 def _sources():
@@ -32,7 +32,35 @@ class TestDomaineDeAdresse(unittest.TestCase):
             self.assertIsNone(domaine_de_adresse(valeur), repr(valeur))
 
 
+class TestDomaineSiteServeur(unittest.TestCase):
+    def test_retire_les_sous_domaines_du_serveur(self):
+        self.assertEqual(domaine_site_serveur("https://mcp.linear.app/mcp"), "linear.app")
+        self.assertEqual(domaine_site_serveur("https://www.huggingface.co/mcp"), "huggingface.co")
+
+    def test_domaine_public_a_deux_niveaux(self):
+        self.assertEqual(domaine_site_serveur("https://mcp.exemple.co.uk/sse"), "exemple.co.uk")
+
+    def test_plateforme_d_hebergement_garde_le_sous_domaine(self):
+        self.assertEqual(domaine_site_serveur("https://mon-serveur.onrender.com/mcp"), "mon-serveur.onrender.com")
+
+    def test_rien_d_exploitable(self):
+        for valeur in (None, "", "https://192.168.1.5/mcp", "https://[::1]/mcp", "pas une adresse"):
+            self.assertIsNone(domaine_site_serveur(valeur), repr(valeur))
+
+
 class TestDomainesParOutil(unittest.TestCase):
+    def test_outil_d_un_serveur_mcp_personnalise(self):
+        try:
+            from connexions import mcp_personnalises as mcp
+        except Exception as erreur:  # dépendances absentes de cet environnement
+            raise unittest.SkipTest(f"mcp_personnalises non importable ici : {erreur}")
+        mcp._URLS_SERVEURS_PAR_OUTIL["custommcp_test_logo"] = "https://mcp.linear.app/mcp"
+        try:
+            self.assertEqual(domaines_de_l_appel("custommcp_test_logo", {}), ["linear.app"])
+            self.assertEqual(domaines_de_l_appel("custommcp_inconnu", {}), [])
+        finally:
+            mcp._URLS_SERVEURS_PAR_OUTIL.pop("custommcp_test_logo", None)
+
     def test_youtube(self):
         self.assertEqual(domaines_de_l_appel("rechercher_video", {"requete": "pi"}), ["youtube.com"])
         self.assertEqual(domaines_de_l_appel("lire_video", {}), ["youtube.com"])
