@@ -79,6 +79,7 @@ from historique_conversation import (
 from historique_reponses_qcm import reponses_qcm_a_injecter
 from execution_outils import _resultat_pour_affichage
 from boucle_agent import _agent_groq, _capturer_reponse, _ajouter_segment_texte
+from erreur_tour import evenement_echec
 
 logging.basicConfig(level=logging.INFO)
 
@@ -195,7 +196,7 @@ def _messages_agent_avec_locale(messages_agent, langue_interface):
     return messages
 
 
-def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None, effort_reflexion=None, arret_tour=None, message_enregistre=None, client=None, libelles_client=None, origine=None, langue_interface="fr", contexte_video=None):
+def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None, effort_reflexion=None, arret_tour=None, message_enregistre=None, client=None, libelles_client=None, origine=None, langue_interface="fr", contexte_video=None, erreurs_typees=False):
     """
     Generateur d'evenements. Chaque element produit est un dictionnaire :
     - {"type": "statut", "texte": "..."}         -> un outil MCP est en cours d'utilisation (ou, depuis le 11/09/2026, Gemini en train de lire une image/video jointe)
@@ -251,6 +252,12 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
       l'utilisateur tape autre chose a la place (ajustement, "j'arrete"...), ce texte doit
       passer par CE MEME chemin plutot que par un nouveau message normal, pour que le modele
       garde tout le contexte deja accumule (voir chat.py cote frontend, reprendreAgent()).
+    - {"type": "erreur_tour", "code": "delai" | "forte_demande" | "serveur", "etat_reprise": {...} | None}
+      -> le tour a echoue (voir core/erreur_tour.py). Envoye a la place de la phrase d'excuse
+      uniquement quand l'appelant passe erreurs_typees=True (le chat du site) ; les autres
+      appelants gardent la phrase d'excuse en evenement "reponse". etat_reprise est present si
+      au moins un outil avait tourne : le chat propose alors "Continuer" via
+      chat(reprise={"etat_reprise": ..., "type": "continuer_agent"}), sans rien rejouer.
     - {"type": "meta", "message_id_user": ..., "message_id_assistant": ...,
       "created_at_assistant": ...}                -> DERNIER evenement emis, une fois
       l'echange persiste dans historique_conversations (voir _sauvegarder_echange).
@@ -475,7 +482,13 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             )
         except Exception as e:
             logging.error(f"ERREUR GROQ (reprise apres limite/répétition) {modele_reprise}: {e}")
-            yield {"type": "reponse", "texte": ("Something went wrong. Please try again shortly." if langue_interface == "en" else MESSAGE_ERREUR)}
+            evenement = evenement_echec(
+                e, langue_interface, erreurs_typees,
+                messages_agent=messages_agent, outils_mcp=outils_mcp, table_routage=table_routage,
+                modele=modele_reprise, reasoning_effort=reasoning_effort_reprise, agent_nom=etat.get("agent_nom"),
+            )
+            if evenement:
+                yield evenement
         return
 
     if reprise is not None:
@@ -576,7 +589,13 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             )
         except Exception as e:
             logging.error(f"ERREUR GROQ (reprise apres confirmation) {modele_reprise}: {e}")
-            yield {"type": "reponse", "texte": ("Something went wrong. Please try again shortly." if langue_interface == "en" else MESSAGE_ERREUR)}
+            evenement = evenement_echec(
+                e, langue_interface, erreurs_typees,
+                messages_agent=messages_agent, outils_mcp=outils_mcp, table_routage=table_routage,
+                modele=modele_reprise, reasoning_effort=reasoning_effort_reprise, agent_nom=etat.get("agent_nom"),
+            )
+            if evenement:
+                yield evenement
         return
 
     # --- Chemin normal : nouvelle question --------------------------------
@@ -1595,8 +1614,14 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
             except Exception as e:
                 logging.error(f"ERREUR MODELE PREMIUM AVEC OUTILS ({modele_force}) : {e}")
-                if not reponse_accumulee:
-                    yield {"type": "reponse", "texte": ("Something went wrong. Please try again shortly." if langue_interface == "en" else MESSAGE_ERREUR)}
+                evenement = evenement_echec(
+                    e, langue_interface, erreurs_typees, avec_texte=not reponse_accumulee,
+                    messages_agent=messages_agent, nb_messages_depart=len(messages_base), outils_mcp=outils_mcp,
+                    table_routage=table_routage, modele=modele_force, reasoning_effort=effort_reflexion,
+                    agent_nom=_nom_agent(agent_id),
+                )
+                if evenement:
+                    yield evenement
             return
 
         messages_premium = [
@@ -1625,8 +1650,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
         except Exception as e:
             logging.error(f"ERREUR MODELE PREMIUM ({modele_force}) : {e}")
-            if not reponse_accumulee:
-                yield {"type": "reponse", "texte": ("Something went wrong. Please try again shortly." if langue_interface == "en" else MESSAGE_ERREUR)}
+            evenement = evenement_echec(e, langue_interface, erreurs_typees, avec_texte=not reponse_accumulee)
+            if evenement:
+                yield evenement
         return
 
     client_groq = Groq(api_key=get_secret("GROQ_API_KEY"), max_retries=0)
@@ -1647,6 +1673,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     _cle_deepseek = get_secret("DEEPSEEK_API_KEY")
     client_deepseek = OpenAI(api_key=_cle_deepseek, base_url="https://api.deepseek.com") if _cle_deepseek else None
 
+    derniere_erreur = None
     for _passage in range(MAX_PASSAGES_CASCADE):
         tout_est_timeout = True
 
@@ -1697,6 +1724,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
                 return
             except Exception as e:
+                derniere_erreur = e
                 if not _est_timeout(e):
                     tout_est_timeout = False
                     logging.error(f"ERREUR DEEPSEEK {DEEPSEEK_PRIMARY}: {e}")
@@ -1725,6 +1753,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
             return
         except Exception as e:
+            derniere_erreur = e
             if not _est_timeout(e):
                 tout_est_timeout = False
                 logging.error(f"ERREUR GROQ {GROQ_PRIMARY}: {e}")
@@ -1779,6 +1808,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
                 return
             except Exception as e:
+                derniere_erreur = e
                 if not _est_timeout(e):
                     tout_est_timeout = False
                     logging.error(f"ERREUR GROQ {model}: {e}")
@@ -1903,6 +1933,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 forcer_cloture_sujets_en_arriere_plan(system_final, historique, conversation_id)
             return
         except Exception as e:
+            derniere_erreur = e
             if not _est_timeout(e):
                 tout_est_timeout = False
             logging.error(f"ERREUR GEMINI: {e}")
@@ -1917,5 +1948,18 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
 
     # Echec complet : on ne persiste jamais un message d'erreur technique
     # en memoire (polluerait le resume avec du bruit sans valeur).
-    yield {"type": "reponse", "texte": ("Something went wrong. Please try again shortly." if langue_interface == "en" else MESSAGE_ERREUR)}
+    # La reprise repart du modele principal, avec l'identite qui lui correspond (le dernier
+    # maillon essaye avait remplace le bloc d'identite).
+    modele_reprise_echec = DEEPSEEK_PRIMARY if client_deepseek else GROQ_PRIMARY
+    if erreurs_typees:
+        messages_agent[0] = message_systeme(systeme_base, modele_reprise_echec)
+    evenement = evenement_echec(
+        derniere_erreur, langue_interface, erreurs_typees,
+        messages_agent=messages_agent, nb_messages_depart=len(messages_base), outils_mcp=outils_mcp,
+        table_routage=table_routage, modele=modele_reprise_echec,
+        reasoning_effort=effort_reflexion if client_deepseek else MODELES_AVEC_REASONING_EFFORT.get(GROQ_PRIMARY),
+        agent_nom=agent_nom,
+    )
+    if evenement:
+        yield evenement
 
