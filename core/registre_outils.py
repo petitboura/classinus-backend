@@ -147,6 +147,15 @@ def _url_notion(get_secret, user_id, agent_id, conversation_id=None):
     return "https://mcp.notion.com/mcp"
 
 
+def _url_diagnostic_classtech(get_secret, user_id, agent_id, conversation_id=None):
+    # 28/10/2026 (demande Bourama) : serveur d'outils MCP Class-Tech
+    # (diagnostic téléphone puis PC). Serveur public sans
+    # authentification : pas de headers_builder. URL prévue du service
+    # Render class-tech-outils, à corriger ici si le service déployé a
+    # une autre adresse.
+    return "https://class-tech-outils.onrender.com/mcp/diagnostic"
+
+
 def _headers_notion(get_secret, user_id, agent_id):
     # agent_id fait partie de la signature commune a tous les *_builder
     # (voir docstring en tete de fichier) mais n'est plus utilise ici :
@@ -504,6 +513,13 @@ SERVEURS_MCP = [
         "headers_builder": _headers_netlify_mcp,
         "necessite_utilisateur": True,
         "prefixe_outils": "netlify_",
+    },
+    {
+        "nom": "diagnostic_classtech",
+        "url_builder": _url_diagnostic_classtech,
+        # Pas de headers_builder : serveur public (phase test).
+        # Pas de necessite_utilisateur : dispo pour tout le monde.
+        # Pas d'outils_autorises : tous les outils du serveur exposés.
     },
 ]
 
@@ -1152,12 +1168,20 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "enregistrer_note_signalement": {"label": "Note sur un signalement", "icone": "NotebookPen", "onglet": None},
     "rattacher_signalement_notion": {"label": "Rattacher un signalement", "icone": "Link", "onglet": None},
 
+
     # Atelier vidéo contextuel : les outils sont pilotés par Clovis, jamais
     # sélectionnés manuellement dans le menu d'outils.
     "video_lister_outils": {"label": "Recherche des capacités vidéo", "icone": "Clapperboard", "onglet": None},
     "video_executer_outil": {"label": "Montage vidéo", "icone": "Film", "onglet": None},
     # 26/10/2026 : copie un fichier joint (vidéo, audio, image) dans l'espace de montage.
     "video_importer_fichier_conversation": {"label": "Import d'un fichier joint pour le montage", "icone": "Paperclip", "onglet": None},
+
+    # 28/10/2026 : outils du serveur diagnostic Class-Tech (onglet None :
+    # pas de bouton menu, affichés quand ils s'exécutent dans le fil).
+    "ping_serveur": {"label": "Ping serveur", "icone": "Satellite", "onglet": None},
+    "verifier_chaine": {"label": "Vérification", "icone": "Stethoscope", "onglet": None},
+    "resumer_symptome": {"label": "Résumé du symptôme", "icone": "ClipboardList", "onglet": None},
+
 }
 
 # --- Verbes des actions (24/09/2026, demande Bourama : regroupement des
@@ -1383,6 +1407,10 @@ CATEGORIES_OUTILS = {
         "search_files", "read_file_content", "download_file_content",
         "list_recent_files", "get_file_metadata", "create_file", "copy_file",
     ],
+    # 28/10/2026 : outils du serveur diagnostic Class-Tech.
+    "diagnostic_classtech": [
+        "ping_serveur", "verifier_chaine", "resumer_symptome",
+    ],
 }
 
 # Categories reconnues par prefixe de nom d'outil plutot que par liste
@@ -1522,7 +1550,7 @@ INDEX_CATEGORIES_OUTILS = (
     f"{_sources_documents_externes_pour_index()}), base_connaissance (Classinus lui même), "
     "pedagogie (avancement, signalements), configuration (règles, style, procédures, comportements), skills, memoire, "
     "telephone_etudiant (mobile, écran, concentration), historique "
-    "(conversations passées), agent_applicatif (actions dans l'appli), minuteur (minuteurs dans le chat)."
+    "(conversations passées), agent_applicatif (actions dans l'appli), minuteur (minuteurs dans le chat), diagnostic_classtech (diagnostic téléphone et PC)."
 )
 
 
