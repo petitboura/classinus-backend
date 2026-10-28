@@ -125,6 +125,11 @@ if higgsfield_api_disponible():
         garder le MÊME personnage ou le même style d'une vidéo à l'autre, redonne
         à chaque fois les mêmes images de référence. Des sons seuls ne suffisent
         pas : il faut au moins une image ou une vidéo.
+        Règles officielles de Higgsfield sur les références : chaque vidéo de
+        référence est coupée à 15 secondes, et les sons sont ramenés à 2 à 15
+        secondes par fichier, 15 secondes au total. Si une vidéo ou un son de
+        l'étudiant est plus long, dis-le-lui avant de lancer et propose de ne
+        garder que le passage utile.
 
         Chaque utilisateur a un nombre limité de générations par jour. Génération
         payante : si l'utilisateur hésite, appelle d'abord estimer_cout_higgsfield.
