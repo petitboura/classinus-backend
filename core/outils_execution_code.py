@@ -467,6 +467,39 @@ def _fichiers_workspace(sandbox, configuration: dict) -> str:
     return f"Archive du workspace prête : {url}\nFichiers inclus : {len(fichiers)}.{avertissement}"
 
 
+def _lire_octets_fichier(sandbox, distant: str, timeout: int, limite: int):
+    """Lit un fichier du workspace en octets, par morceaux d'abord.
+
+    Test réel du 28/10/2026 : la lecture d'un seul bloc (format bytes) échoue avec ReadError
+    pour un fichier binaire de plus de 4 Mo environ. La lecture par morceaux (format stream)
+    ne garde pas toute la réponse d'un coup. En cas d'échec, on retente en un seul bloc, et
+    le détail de l'erreur est écrit dans les logs pour le diagnostic. Renvoie None si illisible.
+    """
+    for mode in ("stream", "bytes"):
+        try:
+            if mode == "stream":
+                morceaux, total = [], 0
+                with sandbox.files.read(distant, format="stream", request_timeout=timeout) as flux:
+                    for morceau in flux:
+                        total += len(morceau)
+                        if total > limite:
+                            logging.warning("ERREUR lecture fichier workspace : plus gros que la limite configurée")
+                            return None
+                        morceaux.append(bytes(morceau))
+                return b"".join(morceaux)
+            contenu = sandbox.files.read(distant, format="bytes", request_timeout=timeout)
+            if isinstance(contenu, str):
+                contenu = contenu.encode("utf-8")
+            if isinstance(contenu, (bytes, bytearray)):
+                return bytes(contenu)
+        except Exception as erreur:
+            logging.warning(
+                "ERREUR lecture fichier workspace (%s) : %s %s",
+                mode, type(erreur).__name__, str(erreur)[:200],
+            )
+    return None
+
+
 def _fichier_seul_workspace(sandbox, configuration: dict, path: str) -> str:
     """Publie UN fichier du workspace avec son propre lien, sans archive ZIP.
 
@@ -496,10 +529,8 @@ def _fichier_seul_workspace(sandbox, configuration: dict, path: str) -> str:
             f"Le fichier {relatif} fait {taille} octets, au-dessus de la limite de {limite} octets "
             "configurée pour la sortie d'un fichier."
         )
-    contenu = sandbox.files.read(distant, format="bytes", request_timeout=timeout)
-    if isinstance(contenu, str):
-        contenu = contenu.encode("utf-8")
-    if not isinstance(contenu, (bytes, bytearray)):
+    contenu = _lire_octets_fichier(sandbox, distant, timeout, limite)
+    if contenu is None:
         return f"Impossible de lire le fichier : {relatif}"
     from core.generation_code import generer_zip_depuis_fichiers
     url = generer_zip_depuis_fichiers("execution_code", {relatif: bytes(contenu)}, toujours_zip=False)
