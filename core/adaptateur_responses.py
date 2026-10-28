@@ -1,15 +1,18 @@
 """
-Adaptateur GPT (OpenAI) et Grok (xAI) pour la boucle d'agent (20/10/2026).
+Adaptateur GPT (OpenAI), Grok (xAI) et Meta pour la boucle d'agent (20/10/2026, Meta le 28/10/2026 sur staging en Bientôt).
 
-Les deux fournisseurs parlent l'API Responses (POST /v1/responses), avec le même SDK openai :
-seule l'adresse change pour xAI. Pourquoi Responses et pas Chat Completions :
+Les trois fournisseurs parlent l'API Responses (POST /v1/responses), avec le même SDK openai :
+seule l'adresse change pour xAI et Meta. Pourquoi Responses et pas Chat Completions :
 - GPT-6 : OpenAI indique que les appels d'outils passent par Responses (voir le diagnostic du
   20/10/2026, sources secondaires, à confirmer au premier test réel).
 - Grok : xAI déclare Chat Completions obsolète pour ses modèles à raisonnement, car il ne sait
   pas rendre le raisonnement chiffré du tour précédent ; chaque tour d'outil l'oublierait.
+- Meta : même API Responses (https://api.meta.ai/v1). Identifiants standards seulement,
+  jamais "-contributor" : ces variantes entraîneraient les modèles Meta avec les données
+  reçues, et les échanges des élèves ne doivent pas servir à entraîner des modèles.
 
 Le raisonnement est renvoyé au modèle à chaque tour d'outil (éléments reasoning rangés dans
-fournisseur_etat, voir core/adaptateur_commun.py). OpenAI est appelé sans stockage (store=false) :
+fournisseur_etat, voir core/adaptateur_commun.py). OpenAI et Meta sont appelés sans stockage (store=false) :
 les échanges des élèves ne restent pas chez le fournisseur.
 """
 
@@ -30,6 +33,7 @@ except ImportError:
     )
 
 ADRESSE_XAI = "https://api.x.ai/v1"
+ADRESSE_META = "https://api.meta.ai/v1"
 
 TYPES_ELEMENTS_A_REJOUER = ("reasoning", "function_call")
 
@@ -108,14 +112,19 @@ def _en_dict(element):
 
 class ClientResponses(ClientCompatible):
     """
-    `fournisseur` : "openai" ou "xai". Les différences entre les deux sont isolées ici :
+    `fournisseur` : "openai", "xai" ou "meta". Les différences entre eux sont isolées ici :
     adresse, stockage et chiffrement du raisonnement, résumé du raisonnement.
     """
 
     def __init__(self, cle_api, fournisseur):
         super().__init__()
         self.fournisseur = fournisseur
-        adresse = ADRESSE_XAI if fournisseur == "xai" else None
+        if fournisseur == "xai":
+            adresse = ADRESSE_XAI
+        elif fournisseur == "meta":
+            adresse = ADRESSE_META
+        else:
+            adresse = None
         self._client = OpenAI(
             api_key=cle_api, base_url=adresse, timeout=DELAI_APPEL_FOURNISSEUR_SECONDES, max_retries=1,
         )
@@ -129,8 +138,8 @@ class ClientResponses(ClientCompatible):
         raisonnement = {}
         if effort:
             raisonnement["effort"] = effort
-        if self.fournisseur == "openai":
-            # Sans stockage chez OpenAI, le raisonnement ne se retrouve qu'en le demandant
+        if self.fournisseur in ("openai", "meta"):
+            # Sans stockage chez le fournisseur, le raisonnement ne se retrouve qu'en le demandant
             # chiffré, pour le renvoyer au tour suivant.
             arguments["store"] = False
             arguments["include"] = ["reasoning.encrypted_content"]
@@ -145,6 +154,7 @@ class ClientResponses(ClientCompatible):
         Ouvre le flux. Le résumé du raisonnement est refusé par OpenAI aux organisations non
         vérifiées : dans ce cas on rouvre sans résumé plutôt que de faire échouer le message.
         """
+        # Résumé du raisonnement : OpenAI seulement (Meta ne le propose pas, à confirmer au test réel).
         avec_resume = self.fournisseur == "openai"
         try:
             return self._client.responses.create(
@@ -163,6 +173,7 @@ class ClientResponses(ClientCompatible):
         # max_completion_tokens, timeout et stream de la boucle sont volontairement ignorés :
         # la réserve de 4096 jetons de la cascade tronquerait un modèle qui réfléchit, et le
         # délai de 10 s est trop court (voir core/adaptateur_commun.py).
+        # Meta, comme xAI : seul le raisonnement chiffré est rejoué entre les tours d'outils.
         instructions, entree = _convertir_messages(
             messages, rejouer_raisonnement_sans_chiffrement=(self.fournisseur == "openai")
         )
@@ -218,7 +229,7 @@ class ClientResponses(ClientCompatible):
                     flux_api.close()
                 except Exception:
                     pass
-        verifier_reponse_non_vide(a_repondu, "OpenAI/xAI", fin)
+        verifier_reponse_non_vide(a_repondu, {"openai": "OpenAI", "xai": "xAI", "meta": "Meta"}.get(self.fournisseur, self.fournisseur), fin)
         if nombre_appels:
             fin = "tool_calls"
             self._etat_dernier_tour = {"elements": elements}

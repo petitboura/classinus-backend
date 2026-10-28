@@ -1,5 +1,5 @@
 """
-Fabrique des clients avec outils pour les modèles Claude, GPT, Gemini et Grok (20/10/2026).
+Fabrique des clients avec outils pour les modèles Claude, GPT, Gemini, Grok et Meta (20/10/2026, Meta le 28/10/2026).
 
 Chaque client expose le même appel que le SDK OpenAI (client.chat.completions.create), ce qui
 permet à la boucle d'agent (core/boucle_agent.py:_agent_groq) de s'en servir sans rien changer :
@@ -21,7 +21,7 @@ except ImportError:
 def modele_a_des_outils(modele_id):
     """
     Vrai si ce modèle du sélecteur reçoit les outils : DeepSeek (client OpenAI, voir core/main.py)
-    ou Claude, GPT, Gemini et Grok (adaptateurs), à condition que la clé API du fournisseur existe.
+    ou Claude, GPT, Gemini, Grok et Meta (adaptateurs), à condition que la clé API du fournisseur existe.
     Sans clé, le modèle retombe sur le chemin texte seul.
     """
     distributeur = distributeur_du_modele(modele_id)
@@ -31,7 +31,7 @@ def modele_a_des_outils(modele_id):
 
 
 def client_avec_outils(modele_id):
-    """Client avec outils pour un modèle Claude, GPT, Gemini ou Grok, ou None (DeepSeek : voir core/main.py)."""
+    """Client avec outils pour un modèle Claude, GPT, Gemini, Grok ou Meta, ou None (DeepSeek : voir core/main.py)."""
     if distributeur_du_modele(modele_id) not in DISTRIBUTEURS_AVEC_ADAPTATEUR or not modele_a_des_outils(modele_id):
         return None
     distributeur = distributeur_du_modele(modele_id)
@@ -53,4 +53,6 @@ def client_avec_outils(modele_id):
         from adaptateur_responses import ClientResponses
     except ImportError:
         from core.adaptateur_responses import ClientResponses
-    return ClientResponses(cle, "xai" if distributeur == "grok" else "openai")
+    # Meta a son propre fournisseur ("meta", adresse https://api.meta.ai/v1) : sans cette
+    # correspondance, un modèle Meta partirait chez OpenAI avec la clé Meta (28/10/2026).
+    return ClientResponses(cle, {"grok": "xai", "meta": "meta"}.get(distributeur, "openai"))

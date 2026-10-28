@@ -24,6 +24,7 @@ NOMS_FOURNISSEURS = {
     "gemini": "Google",
     "deepseek": "DeepSeek",
     "grok": "xAI",
+    "meta": "Meta",
 }
 
 # Modèles de la cascade (core/constantes_agent.py), qui ne sont pas tous dans la

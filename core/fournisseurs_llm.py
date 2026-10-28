@@ -7,9 +7,9 @@ Contexte (voir page Notion "Pricing -- Agent Maths", 01/08/2026) : un agent
 peut debloquer un `distributeur` (fournisseur) + un `palier` (qualite de
 modele). La hierarchie des distributeurs est CUMULATIVE DESCENDANTE :
 
-    claude > gpt > gemini > deepseek > grok
+    claude > gpt > gemini > deepseek > grok > meta
 
-debloquer "claude" donne aussi acces a gpt/gemini/deepseek/grok. Le palier est
+debloquer "claude" donne aussi acces a gpt/gemini/deepseek/grok/meta. Le palier est
 lui aussi cumulatif ascendant (pro >= avance >= essentiel) : un agent en
 "pro" peut choisir un modele "essentiel" du meme distributeur si l'usager
 veut une reponse plus rapide/moins chere.
@@ -41,7 +41,7 @@ def get_secret(key):
 
 
 # Ordre = hierarchie cumulative descendante (voir docstring plus haut).
-ORDRE_DISTRIBUTEURS = ["claude", "gpt", "gemini", "deepseek", "grok"]
+ORDRE_DISTRIBUTEURS = ["claude", "gpt", "gemini", "deepseek", "grok", "meta"]
 
 # Ordre = hierarchie cumulative ascendante.
 ORDRE_PALIERS = ["essentiel", "avance", "pro", "specialise"]
@@ -105,6 +105,15 @@ HIERARCHIE_MODELES = {
         "avance": {"id": "deepseek-v4-flash", "label": "DeepSeek V4 Flash"},
         "pro": {"id": "deepseek-v4-pro", "label": "DeepSeek V4 Pro"},
     },
+    "meta": {
+        # Meta, ajouté le 28/10/2026 sur staging en Bientôt (demande de Bourama) : Muse
+        # Spark 1.3 au niveau avance, Muse Wonder (en préversion, plus cher) au niveau pro,
+        # affiché tout en haut. Jamais de niveau essentiel : Meta ne propose que ces deux
+        # modèles. Identifiants standards seulement, jamais "-contributor" (les données des
+        # élèves ne doivent pas entraîner les modèles Meta).
+        "avance": {"id": "muse-spark-1.3", "label": "Muse Spark 1.3"},
+        "pro": {"id": "muse-wonder", "label": "Muse Wonder"},
+    },
 }
 
 # Gating pattern (voir principe etabli sur les autres fonctionnalites de
@@ -116,6 +125,7 @@ VARIABLES_CLE_PAR_DISTRIBUTEUR = {
     "gemini": "GOOGLE_API_KEY",  # reprend la cle Gemini deja utilisee par main.py si presente
     "grok": "XAI_API_KEY",
     "deepseek": "DEEPSEEK_API_KEY",
+    "meta": "MODEL_API_KEY",
 }
 
 
@@ -152,7 +162,7 @@ def _distributeur_disponible(distributeur, config=None):
 # encore). Depuis le 15/10/2026 le statut Bientôt se règle dans Supabase, colonne
 # bientot de la table fournisseurs_llm. Cette liste ne sert plus que si Supabase ne
 # répond pas ou si les tables sont vides.
-DISTRIBUTEURS_BIENTOT = ["claude", "gpt", "gemini", "grok"]
+DISTRIBUTEURS_BIENTOT = ["claude", "gpt", "gemini", "grok", "meta"]
 
 # Mot affiché sur les modèles Bientôt, par langue. Valeur de repli : le texte se règle
 # dans la table textes_modeles_llm de Supabase (cle = bientot).
@@ -561,6 +571,29 @@ def _stream_grok(modele_id, system_prompt, messages):
             yield delta
 
 
+def _stream_meta(modele_id, system_prompt, messages):
+    # Meta : API compatible OpenAI, seule la base_url change
+    # (https://api.meta.ai/v1, clé MODEL_API_KEY). Texte seul, comme les
+    # autres : pas d'outils sur ce chemin (la boucle avec outils passe par
+    # ClientResponses, voir core/adaptateur_responses.py). Sans cette
+    # fonction, un modèle Meta sans clé ferait planter le repli texte seul
+    # (generer_reponse_premium ne trouverait pas son distributeur).
+    # Identifiants standards seulement, jamais "-contributor" : les échanges
+    # des élèves ne doivent pas entraîner les modèles Meta.
+    from openai import OpenAI
+    client = OpenAI(api_key=get_secret("MODEL_API_KEY"), base_url="https://api.meta.ai/v1")
+    messages_openai = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + messages
+    flux = client.chat.completions.create(
+        model=modele_id,
+        messages=messages_openai,
+        stream=True,
+    )
+    for morceau in flux:
+        delta = morceau.choices[0].delta.content if morceau.choices else None
+        if delta:
+            yield delta
+
+
 def _stream_gemini(modele_id, system_prompt, messages):
     # Reutilise le client google-genai deja initialise ailleurs dans le
     # projet (voir core/main.py) -- instancie ici localement pour garder
@@ -587,6 +620,7 @@ _STREAMERS_PAR_DISTRIBUTEUR = {
     "gpt": _stream_gpt,
     "deepseek": _stream_deepseek,
     "grok": _stream_grok,
+    "meta": _stream_meta,
     "gemini": _stream_gemini,
 }
 
