@@ -120,6 +120,25 @@ class _BucketLogique:
             logging.error(f"ERREUR R2 STORAGE (download {self._bucket_logique}/{chemin}) : {e}")
             raise
 
+    def download_to_file(self, chemin: str, destination):
+        """Télécharge un objet R2 par morceaux vers un fichier local sans charger tout l'objet en mémoire."""
+        try:
+            reponse = _client.get_object(
+                Bucket=R2_BUCKET_NAME,
+                Key=_cle_objet(self._bucket_logique, chemin),
+            )
+            corps = reponse["Body"]
+            try:
+                with open(destination, "wb") as sortie:
+                    for morceau in corps.iter_chunks(chunk_size=1024 * 1024):
+                        if morceau:
+                            sortie.write(morceau)
+            finally:
+                corps.close()
+        except Exception as e:
+            logging.error(f"ERREUR R2 STORAGE (download vers fichier {self._bucket_logique}/{chemin}) : {e}")
+            raise
+
     def remove(self, chemins: list[str]):
         """Équivalent de supabase.storage.from_(BUCKET).remove([chemin, ...])."""
         if not chemins:
@@ -129,6 +148,33 @@ class _BucketLogique:
             _client.delete_objects(Bucket=R2_BUCKET_NAME, Delete={"Objects": objets})
         except Exception as e:
             logging.error(f"ERREUR R2 STORAGE (remove {self._bucket_logique}/{chemins}) : {e}")
+            raise
+
+    def lister(self, prefixe: str) -> list[str]:
+        """
+        Chemins logiques (sans le nom du bucket logique) de tous les objets dont
+        le chemin commence par `prefixe`. Parcourt toutes les pages de résultats
+        (R2 en renvoie 1000 au maximum à la fois).
+        """
+        racine = _cle_objet(self._bucket_logique, "")
+        chemins: list[str] = []
+        jeton = None
+        try:
+            while True:
+                arguments = {
+                    "Bucket": R2_BUCKET_NAME,
+                    "Prefix": _cle_objet(self._bucket_logique, prefixe),
+                }
+                if jeton:
+                    arguments["ContinuationToken"] = jeton
+                reponse = _client.list_objects_v2(**arguments)
+                for objet in reponse.get("Contents", []):
+                    chemins.append(objet["Key"][len(racine):])
+                if not reponse.get("IsTruncated"):
+                    return chemins
+                jeton = reponse.get("NextContinuationToken")
+        except Exception as e:
+            logging.error(f"ERREUR R2 STORAGE (lister {self._bucket_logique}/{prefixe}) : {e}")
             raise
 
     def get_public_url(self, chemin: str) -> str:

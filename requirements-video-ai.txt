@@ -1,0 +1,5 @@
+# Dépendances optionnelles des capacités IA avancées de mcp-video.
+# Profil volontairement séparé : Whisper, Demucs, PyTorch et Real-ESRGAN
+# sont lourds et doivent être validés sur un worker dédié avant d'être ajoutés
+# à l'image du backend principal Railway.
+mcp-video[ai]==1.2.1

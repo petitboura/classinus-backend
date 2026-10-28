@@ -649,6 +649,27 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
             logging.error(f"ERREUR SUPABASE (export {table} pour {user_id}) : {e}")
             export[cle_export] = {"erreur": "recuperation impossible, reessayer plus tard"}
 
+    try:
+        ids_skills =[row["id"] for row in (supabase.table("skills").select("id").eq("owner_id", user_id).execute().data or [])]
+        fichiers_skills = (supabase.table("skill_files").select("*").in_("skill_id", ids_skills).execute().data or []) if ids_skills else []
+        for fichier in fichiers_skills:
+            # Le texte des skills n'est que dans R2 : on l'ajoute à l'export.
+            try:
+                brut = stockage_r2.from_(config_skills.BUCKET).download(fichier["cle_stockage"])
+                try:
+                    fichier["contenu"] = brut.decode("utf-8")
+                except UnicodeDecodeError:
+                    fichier["contenu"] = None
+                    fichier["contenu_non_texte"] = True
+            except Exception as e:
+                logging.error(f"ERREUR R2 (export fichier skill {fichier.get('cle_stockage')} pour {user_id}) : {e}")
+                fichier["contenu"] = None
+                fichier["erreur"] = "lecture impossible, reessayer plus tard"
+        export["fichiers_skills_independants"] = fichiers_skills
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (export skill_files pour {user_id}) : {e}")
+        export["fichiers_skills_independants"] = {"erreur": "recuperation impossible, reessayer plus tard"}
+
     # Exécution de code : exporter des métadonnées, jamais l'ID E2B ni le contenu du workspace.
     try:
         res = (
@@ -730,6 +751,15 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
     except Exception as e:
         logging.error(f"ERREUR SUPABASE (export higgsfield_usage pour {user_id}) : {e}")
         export["generations_higgsfield"] = {"erreur": "recuperation impossible, reessayer plus tard"}
+    # Vidéos du montage : noms, tailles, durées et nombre de fichiers produits
+    # (pas le contenu des vidéos), voir core/video_workspaces.py.
+    try:
+        from core.video_workspaces import lister_videos_utilisateur
+
+        export["videos_montage"] = lister_videos_utilisateur(user_id)
+    except Exception as e:
+        logging.error(f"ERREUR export vidéos du montage pour {user_id} : {e}")
+        export["videos_montage"] = {"erreur": "recuperation impossible, reessayer plus tard"}
     # Serveurs MCP ajoutés par l'élève : nom, adresse, mode d'authentification et dates,
     # JAMAIS le jeton Bearer ni les jetons OAuth.
     try:

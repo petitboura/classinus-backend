@@ -254,7 +254,7 @@ class TestConfirmationDeLEleve(unittest.TestCase):
 
     def test_seule_la_demande_d_acces_est_sensible(self):
         self.assertTrue(_est_outil_sensible(self._appel(action="demander_acces_reseau", domain="gitlab.com")))
-        for action in ("network", "run_code", "run_command", "write_file", "read_file", "list_files", "download_files", "close"):
+        for action in ("network", "run_code", "run_command", "write_file", "read_file", "list_files", "download_files", "importer_fichier", "close"):
             with self.subTest(action=action):
                 self.assertFalse(_est_outil_sensible(self._appel(action=action)))
 
@@ -354,8 +354,10 @@ class TestSchemaDeLOutil(unittest.TestCase):
         # network ne passe jamais par execution_code_reserver : la liste blanche SQL n'a pas à la contenir.
         with open("migrations/2026_10_23_execution_code_e2b.sql", encoding="utf-8") as fichier:
             migration = fichier.read()
+        # importer_fichier (27/10/2026) est réservé comme une écriture de fichier (write_file) : le code
+        # envoie p_action = write_file, la liste blanche SQL n'a donc pas à la contenir non plus.
         for action in actions:
-            if action not in ("network", "demander_acces_reseau"):
+            if action not in ("network", "demander_acces_reseau", "importer_fichier"):
                 self.assertIn(f"'{action}'", migration)
 
     def test_les_langages_non_implementes_ne_sont_pas_annonces(self):

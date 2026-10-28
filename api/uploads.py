@@ -23,16 +23,20 @@ import sys
 import subprocess
 import tempfile
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from google import genai
 
 from api.auth import supabase, utilisateur_courant, get_secret
 from core import stockage_r2
+from core.video_workspaces import enregistrer_video
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "core"))
 from bibliotheque_fichiers import enregistrer_fichier, indexer_fichier_existant  # noqa: E402
 from conversion_pdf import conversion_disponible, convertir_en_pdf  # noqa: E402
 from core.erreurs import erreur_api
+from core.limites_media import duree_max_video_secondes, taille_max_audio_octets, taille_max_video_octets
+from core.lecture_media_conversation import lire_infos as lire_infos_media, resume_infos as resume_infos_media
+from core.lecture_document_conversation import infos_document, resume_infos as resume_infos_document
 
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 
@@ -360,6 +364,88 @@ async def uploader_document_chat(
     return {"texte": texte, "tronque": tronque, "lisible": lisible, "url": url_document, "url_apercu": url_apercu}
 
 
+# Document ou fichier JOINT à une conversation (27/10/2026, demande Bourama)
+#
+# Contrairement à /document-chat ci-dessus (qui extrait le texte DÈS l'envoi et
+# l'injecte dans le message), cette route enregistre seulement le fichier et
+# renvoie ses informations peu coûteuses (type, taille, nombre de pages). C'est
+# l'IA qui décide ensuite de le lire, avec l'outil lire_document_conversation
+# (core/lecture_document_conversation.py), ou de le copier dans l'espace
+# d'exécution de code (gerer_execution_code, action importer_fichier). L'original
+# n'est jamais modifié. L'ancienne route /document-chat reste en place : les
+# anciennes versions de l'application (Android, ordinateur) l'appellent encore.
+
+@router.post("/fichier-chat")
+async def uploader_fichier_chat(
+    fichier: UploadFile = File(...),
+    utilisateur=Depends(utilisateur_courant),
+):
+    """
+    Enregistre un fichier joint (origine "chat") et renvoie {"url", "nom", "famille",
+    "taille_octets", "pages", "unite", "feuilles", "resume", "url_apercu"}.
+    """
+    import asyncio
+
+    contenu = await fichier.read()
+    if len(contenu) > TAILLE_MAX_DOCUMENT_OCTETS:
+        raise erreur_api(400, "DOCUMENT_TROP_LOURD_15_MO_MAX")
+    if len(contenu) == 0:
+        raise erreur_api(400, "FICHIER_VIDE")
+
+    nom_fichier = fichier.filename or "document"
+    extension = extension_fichier(nom_fichier) or "bin"
+    type_mime = fichier.content_type
+    if not type_mime or type_mime == "application/octet-stream":
+        type_mime = mimetypes.guess_type(nom_fichier)[0] or "application/octet-stream"
+
+    # Un échec d'enregistrement ne doit pas être silencieux ici : sans lien réel,
+    # l'IA ne pourrait jamais lire le fichier (contrairement à l'ancien chemin,
+    # où le texte était déjà extrait et injecté dans le message).
+    try:
+        ligne = await asyncio.to_thread(
+            enregistrer_fichier,
+            contenu=contenu,
+            nom_fichier=nom_fichier,
+            type_mime=type_mime,
+            niveau="utilisateur",
+            uploade_par=utilisateur.id,
+            user_id=utilisateur.id,
+            description="Document envoyé en conversation",
+            origine="chat",
+        )
+    except Exception as e:
+        logging.error(f"ERREUR enregistrement fichier joint {nom_fichier} : {e}")
+        raise erreur_api(500, "MEDIA_ENREGISTREMENT_ECHOUE")
+
+    infos = await asyncio.to_thread(infos_document, nom_fichier, contenu, type_mime)
+
+    # Aperçu PDF des formats Office : même mécanisme et même règle que /document-chat
+    # (best-effort, le fichier et son lien restent utilisables sans aperçu).
+    url_apercu = None
+    if extension in EXTENSIONS_AVEC_APERCU and conversion_disponible():
+        try:
+            pdf_bytes = await asyncio.to_thread(convertir_en_pdf, contenu, nom_fichier)
+            chemin_apercu = f"apercus/{uuid.uuid4()}.pdf"
+            stockage_r2.from_("images-publiques").upload(
+                chemin_apercu, pdf_bytes, {"content-type": "application/pdf"}
+            )
+            url_apercu = stockage_r2.from_("images-publiques").get_public_url(chemin_apercu)
+        except Exception as e:
+            logging.warning(f"Aperçu PDF échoué pour fichier joint {nom_fichier} (enregistrement OK quand même) : {e}")
+
+    return {
+        "url": ligne["url_publique"],
+        "nom": nom_fichier,
+        "famille": infos["famille"],
+        "taille_octets": infos["taille_octets"],
+        "pages": infos["pages"],
+        "unite": infos["unite"],
+        "feuilles": infos["feuilles"],
+        "resume": resume_infos_document(infos),
+        "url_apercu": url_apercu,
+    }
+
+
 # --- Zip (26/09/2026, chantier "zip en conversation", plan validé par
 # Bourama) : contrairement à document-chat ci-dessus (extraction
 # synchrone, bloquante), une archive peut contenir beaucoup de fichiers
@@ -522,6 +608,92 @@ async def uploader_audio_chat(
     return {"texte": texte, "url": url_audio}
 
 
+# Vidéo ou audio JOINT à une conversation (26/10/2026, demande Bourama)
+#
+# Contrairement aux images et aux documents, une vidéo ou un audio joint n'est
+# PLUS lu à l'envoi : cette route enregistre seulement le fichier et renvoie ses
+# informations peu coûteuses (durée, taille, résolution, son). C'est le modèle
+# qui décide ensuite de le lire, avec l'outil lire_media_conversation
+# (core/lecture_media_conversation.py : transcription, images, ou les deux, sur
+# le passage de son choix). Limites : core/limites_media.py (modifiables par
+# variables d'environnement). Les routes /audio-chat (dictée vocale) et
+# /video-chat plus bas restent inchangées.
+
+@router.post("/media-chat")
+async def uploader_media_chat(
+    fichier: UploadFile = File(...),
+    utilisateur=Depends(utilisateur_courant),
+):
+    """
+    Enregistre une vidéo ou un audio joint (origine "chat") et renvoie
+    {"url", "nom", "type", "duree_secondes", "taille_octets", "a_audio",
+    "largeur", "hauteur", "resume"}.
+    """
+    type_mime = fichier.content_type or ""
+    est_video = type_mime.startswith("video/")
+    est_audio = type_mime.startswith("audio/")
+    if not (est_video or est_audio):
+        raise erreur_api(400, "TYPE_DE_FICHIER_NON_SUPPORTE")
+    if est_video and type_mime not in TYPES_VIDEO_AUTORISES:
+        raise erreur_api(400, "FORMAT_NON_SUPPORTE_MP4_WEBM_OU")
+
+    taille_max = taille_max_video_octets() if est_video else taille_max_audio_octets()
+    contenu = await fichier.read()
+    if len(contenu) > taille_max:
+        raise erreur_api(400, "MEDIA_TROP_LOURD", maximum=taille_max // (1024 * 1024))
+    if len(contenu) == 0:
+        raise erreur_api(400, "FICHIER_VIDE")
+
+    nom_fichier = fichier.filename or ("video" if est_video else "audio")
+    extension = nom_fichier.rsplit(".", 1)[-1].lower() if "." in nom_fichier else ("mp4" if est_video else "webm")
+    with tempfile.NamedTemporaryFile(suffix=f".{extension}", delete=False) as f_media:
+        f_media.write(contenu)
+        chemin_media = f_media.name
+    try:
+        try:
+            infos = await asyncio.to_thread(lire_infos_media, chemin_media, len(contenu))
+        except Exception as e:
+            logging.error(f"ERREUR FFPROBE (média joint {nom_fichier}) : {e}")
+            raise erreur_api(500, "VIDEO_ILLISIBLE_REESSAIE_AVEC_UN_AUTRE")
+    finally:
+        if os.path.exists(chemin_media):
+            os.remove(chemin_media)
+
+    if est_video and infos["duree_secondes"] > duree_max_video_secondes():
+        raise erreur_api(400, "VIDEO_TROP_LONGUE", duree=int(infos["duree_secondes"]), maximum=duree_max_video_secondes())
+
+    # Un échec d'enregistrement ne doit pas être silencieux ici : sans lien réel,
+    # le modèle ne pourrait jamais lire le fichier (contrairement à l'ancien chemin,
+    # où le texte était déjà extrait).
+    try:
+        ligne = await asyncio.to_thread(
+            enregistrer_fichier,
+            contenu=contenu,
+            nom_fichier=nom_fichier,
+            type_mime=type_mime,
+            niveau="utilisateur",
+            uploade_par=utilisateur.id,
+            user_id=utilisateur.id,
+            description="Vidéo envoyée en conversation" if est_video else "Audio envoyé en conversation",
+            origine="chat",
+        )
+    except Exception as e:
+        logging.error(f"ERREUR enregistrement média joint {nom_fichier} : {e}")
+        raise erreur_api(500, "MEDIA_ENREGISTREMENT_ECHOUE")
+
+    return {
+        "url": ligne["url_publique"],
+        "nom": nom_fichier,
+        "type": "video" if est_video else "audio",
+        "duree_secondes": infos["duree_secondes"],
+        "taille_octets": infos["taille_octets"],
+        "a_audio": infos["a_audio"],
+        "largeur": infos["largeur"],
+        "hauteur": infos["hauteur"],
+        "resume": resume_infos_media(infos),
+    }
+
+
 # --- Vidéo : extraction audio (transcription) + frames (analyse visuelle) -
 #
 # Contrairement au transcript YouTube (core/main.py:_lire_url, qui lit des
@@ -597,6 +769,71 @@ def _extraire_frames_video(chemin_video, duree, nb_frames=NB_FRAMES_VIDEO):
                 with open(chemin_frame, "rb") as f:
                     frames.append(f.read())
     return frames
+
+
+@router.post("/video-workspace")
+async def uploader_video_espace(
+    fichier: UploadFile = File(...),
+    conversation_id: str = Form(...),
+    utilisateur=Depends(utilisateur_courant),
+):
+    """Dépose une source originale dans l'espace de montage de la conversation.
+
+    Contrairement à /video-chat, cet endpoint ne transcrit ni n'échantillonne
+    la vidéo : elle sera découpée/analyée uniquement en fonction de la demande.
+    L'identifiant retourné est opaque et réutilisable seulement avec le même
+    compte et la même conversation.
+    """
+    if not conversation_id or len(conversation_id) > 256:
+        raise erreur_api(400, "CONVERSATION_INVALIDE")
+    if fichier.content_type not in TYPES_VIDEO_AUTORISES:
+        raise erreur_api(400, "FORMAT_NON_SUPPORTE_MP4_WEBM_OU")
+
+    # Lire au plus la limite + 1 octet évite de charger un upload arbitrairement
+    # volumineux en mémoire avant de pouvoir le refuser.
+    contenu = await fichier.read(taille_max_video_octets() + 1)
+    if not contenu:
+        raise erreur_api(400, "FICHIER_VIDE")
+    if len(contenu) > taille_max_video_octets():
+        raise erreur_api(400, "MEDIA_TROP_LOURD", maximum=taille_max_video_octets() // (1024 * 1024))
+
+    extension = TYPES_VIDEO_AUTORISES[fichier.content_type]
+    chemin_temporaire = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=f".{extension}", delete=False) as temporaire:
+            temporaire.write(contenu)
+            chemin_temporaire = temporaire.name
+        try:
+            duree = _duree_video(chemin_temporaire)
+        except Exception as e:
+            logging.error(f"ERREUR FFPROBE (espace montage vidéo) : {e}")
+            raise erreur_api(400, "VIDEO_ILLISIBLE_REESSAIE_AVEC_UN_AUTRE")
+        if not duree or duree <= 0:
+            raise erreur_api(400, "VIDEO_ILLISIBLE_REESSAIE_AVEC_UN_AUTRE")
+        if duree > duree_max_video_secondes():
+            raise erreur_api(400, "VIDEO_TROP_LONGUE", duree=int(duree), maximum=duree_max_video_secondes())
+
+        try:
+            enregistrement = enregistrer_video(
+                user_id=str(utilisateur.id),
+                conversation_id=conversation_id,
+                nom=fichier.filename or f"video.{extension}",
+                mime=fichier.content_type,
+                contenu=contenu,
+                duree_secondes=duree,
+            )
+        except RuntimeError as e:
+            logging.error("Stockage R2 indisponible pour l'atelier vidéo : %s", e)
+            raise erreur_api(503, "STOCKAGE_VIDEO_TEMPORAIREMENT_INDISPONIBLE") from e
+        enregistrement["source_path"] = f"uploads/{enregistrement['video_id']}.{extension}"
+        enregistrement["duree_secondes"] = round(duree, 3)
+        return enregistrement
+    finally:
+        if chemin_temporaire and os.path.exists(chemin_temporaire):
+            try:
+                os.remove(chemin_temporaire)
+            except OSError:
+                logging.warning("Impossible de supprimer le fichier temporaire de l'espace montage vidéo.")
 
 
 @router.post("/video-chat")

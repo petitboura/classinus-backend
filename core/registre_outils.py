@@ -68,6 +68,21 @@ def _url_generation(get_secret, user_id, agent_id, conversation_id=None):
     return url
 
 
+def _url_video(get_secret, user_id, agent_id, conversation_id=None):
+    # Serveur dédié au montage vidéo (core/serveur_mcp_video.py).
+    # Interrogé avec un contexte vidéo, ou sans vidéo jointe si le registre plateforme l'active.
+    port = os.environ.get("PORT", "8000")
+    from urllib.parse import urlencode
+    params = urlencode({"user_id": user_id or "", "conversation_id": conversation_id or ""})
+    return f"http://localhost:{port}/mcp/video/?{params}"
+
+
+def _headers_video(get_secret, user_id, agent_id):
+    # Jeton serveur-à-serveur : aucune clé ne passe dans l'URL.
+    secret = get_secret("SUPABASE_SECRET")
+    return {"Authorization": f"Bearer {secret}"} if secret else None
+
+
 def _url_github(get_secret, user_id, agent_id, conversation_id=None):
     # Même logique que _url_generation ci-dessus -- serveur MCP interne
     # (core/serveur_mcp_github.py), pas un tiers externe.
@@ -296,6 +311,16 @@ SERVEURS_MCP = [
         "url_builder": _url_execution_code,
         "headers_builder": _headers_execution_code,
         "necessite_utilisateur": True,
+    },
+    {
+        "nom": "video",
+        "url_builder": _url_video,
+        "headers_builder": _headers_video,
+        "necessite_utilisateur": True,
+        # Avec un contexte vidéo validé : forcé, comme avant. Sans vidéo jointe : proposé
+        # via demander_outils (catégorie montage_video) quand le registre plateforme le
+        # déclare disponible (migrations/2026_10_24_outils_montage_video.sql).
+        # Ne pas ajouter ce serveur au menu d'outils manuel.
     },
     {
         "nom": "github",
@@ -721,6 +746,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "gerer_execution_code:run_code": {"label": "Exécution de code", "icone": "Play", "onglet": None},
     "gerer_execution_code:run_command": {"label": "Commande shell", "icone": "Terminal", "onglet": None},
     "gerer_execution_code:write_file": {"label": "Ajout d'un fichier", "icone": "FilePlus", "onglet": None},
+    "gerer_execution_code:importer_fichier": {"label": "Import de fichier", "icone": "FilePlus", "onglet": None},
     "gerer_execution_code:read_file": {"label": "Lecture de fichier", "icone": "FileText", "onglet": None},
     "gerer_execution_code:list_files": {"label": "Liste des fichiers", "icone": "FolderOpen", "onglet": None},
     "gerer_execution_code:download_files": {"label": "Export de fichiers", "icone": "Download", "onglet": None},
@@ -790,6 +816,10 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # manuellement (onglet=None), même logique que les autres outils
     # consolidés par action.
     "gerer_fichier_conversation": {"label": "Fichiers du chat", "icone": "Paperclip", "onglet": None},
+    # Ajouté 26/10/2026 : lecture, à la demande du modèle, d'une vidéo ou d'un audio joint.
+    "lire_media_conversation": {"label": "Lecture d'une vidéo ou d'un audio joint", "icone": "FileSearch", "onglet": "rechercher"},
+    # Ajouté 27/10/2026 : lecture, à la demande du modèle, d'un document joint.
+    "lire_document_conversation": {"label": "Lecture d'un document joint", "icone": "FileSearch", "onglet": "rechercher"},
     # Composites "nom_outil:action" (28/08, bug remonté par Bourama :
     # l'entrée générique ci-dessus s'affichait pour TOUTES les actions
     # de cet outil, y compris chercher_publique/trouver_catalogue_public/
@@ -1121,6 +1151,13 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "consulter_signalement": {"label": "Consultation d'un signalement", "icone": "Flag", "onglet": None},
     "enregistrer_note_signalement": {"label": "Note sur un signalement", "icone": "NotebookPen", "onglet": None},
     "rattacher_signalement_notion": {"label": "Rattacher un signalement", "icone": "Link", "onglet": None},
+
+    # Atelier vidéo contextuel : les outils sont pilotés par Clovis, jamais
+    # sélectionnés manuellement dans le menu d'outils.
+    "video_lister_outils": {"label": "Recherche des capacités vidéo", "icone": "Clapperboard", "onglet": None},
+    "video_executer_outil": {"label": "Montage vidéo", "icone": "Film", "onglet": None},
+    # 26/10/2026 : copie un fichier joint (vidéo, audio, image) dans l'espace de montage.
+    "video_importer_fichier_conversation": {"label": "Import d'un fichier joint pour le montage", "icone": "Paperclip", "onglet": None},
 }
 
 # --- Verbes des actions (24/09/2026, demande Bourama : regroupement des
@@ -1263,6 +1300,10 @@ CATEGORIES_OUTILS = {
     # generer_code (qui écrit du code sans l'exécuter) reste dans
     # generation_documents.
     "execution_code": ["gerer_execution_code"],
+    # Montage vidéo (24/10/2026, demande Bourama) : disponible sans vidéo jointe, via
+    # demander_outils comme les autres catégories. Distinct de recherche_web
+    # (rechercher_video, lire_video = vidéos du web) et de higgsfield (génération IA).
+    "montage_video": ["video_lister_outils", "video_executer_outil", "video_importer_fichier_conversation"],
     # rechercher_image range ici (avec Tavily), pas dans generation_documents :
     # onglet="rechercher" dans REGISTRE_AFFICHAGE_OUTILS ci-dessus, c'est une
     # recherche d'image EXISTANTE sur le web, pas une creation (voir
@@ -1275,6 +1316,11 @@ CATEGORIES_OUTILS = {
         "gerer_document_bibliotheque", "gerer_dossier_bibliotheque",
         "gerer_fichier_conversation",
     ],
+    # Vidéo ou audio joint par l'étudiant (26/10/2026) : catégorie à part, pour ne pas
+    # tirer les trois gros outils de la bibliothèque quand on veut seulement lire un média.
+    "media_joint": ["lire_media_conversation"],
+    # Document joint par l'étudiant (27/10/2026) : catégorie à part, même raison que media_joint.
+    "document_joint": ["lire_document_conversation"],
     "catalogue_public": [
         "gerer_entree_catalogue_public", "gerer_dossier_catalogue_public",
         "gerer_programme_catalogue_public",  # 22/09/2026
@@ -1467,6 +1513,8 @@ INDEX_CATEGORIES_OUTILS = (
     "par exemple Render ou un CRM ; le nom du serveur figure dans la description de chaque outil), "
     "generation_documents, "
     "execution_code (lancer du code et des commandes, gérer des fichiers dans un espace de travail), "
+    "montage_video (créer ou modifier une vidéo : couper, assembler, sous-titrer, effets, animations ; "
+    "pas pour chercher une vidéo sur le web), "
     "recherche_web (web, actualité, images et vidéos ; pas le premier réflexe "
     "pour trouver un livre ou un PDF), bibliotheque (documents/dossiers "
     "personnels), catalogue_public, documents_externes (TOUT livre, manuel, PDF, "
@@ -1527,6 +1575,7 @@ GROUPES_OUTILS = {
         "rechercher_document_externe", "lire_document_externe", "lire_document_internet_archive",
     ],
     "video": ["rechercher_video", "lire_video"],
+    "montage_video": ["video_lister_outils", "video_executer_outil", "video_importer_fichier_conversation"],
     "conversations_passees": ["lister_conversations_historique", "lire_conversation_historique"],
     "bibliotheque": [
         "gerer_document_bibliotheque", "gerer_dossier_bibliotheque", "gerer_fichier_conversation",

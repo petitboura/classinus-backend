@@ -86,6 +86,7 @@ from api.rendu_animation import router as rendu_animation_router  # 07/10/2026
 from core.rendu_animation_travaux import nettoyer_anciens_fichiers
 from core.serveur_mcp_generation import mcp_generation
 from core.outils_execution_code import mcp_execution_code, mettre_en_pause_sandboxes_inactifs
+from core.serveur_mcp_video import mcp_video as mcp_video_editor
 from core.serveur_mcp_netlify import mcp_netlify
 from core.notifications_push import traiter_rappels_echus, un_canal_push_disponible
 from core.minuteurs import traiter_minuteurs_a_notifier
@@ -432,6 +433,7 @@ async def _lifespan(app: FastAPI):
     async with (
         mcp_generation.session_manager.run(),
         mcp_execution_code.session_manager.run(),
+        mcp_video_editor.session_manager.run(),
         mcp_github.session_manager.run(),
         mcp_netlify.session_manager.run(),
         mcp_public.session_manager.run(),
@@ -514,6 +516,10 @@ app.add_middleware(SlowAPIMiddleware)
 # le point d'entree final est bien /mcp/generation, sans /mcp en trop.
 app.mount("/mcp/generation", mcp_generation.streamable_http_app(stateless_http=True, streamable_http_path="/"))
 app.mount("/mcp/execution-code", mcp_execution_code.streamable_http_app(stateless_http=True, streamable_http_path="/"))
+
+# Serveur de montage contextuel : réservé aux comptes/conversations via le bearer
+# interne transmis par core/registre_outils.py. Il n'est appelé que sur un tour vidéo.
+app.mount("/mcp/video", mcp_video_editor.streamable_http_app(stateless_http=True, streamable_http_path="/"))
 
 # Serveur MCP interne (exploration/lecture/écriture GitHub) : voir
 # core/serveur_mcp_github.py, monté de la même façon que "generation"

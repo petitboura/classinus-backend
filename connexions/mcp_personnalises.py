@@ -21,7 +21,7 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from mcp import ClientSession
+from mcp import ClientSession, types as types_mcp
 from mcp.client.streamable_http import streamable_http_client
 from supabase import create_client, ClientOptions
 from client_http_supabase import nouveau_client_http_supabase
@@ -64,7 +64,14 @@ DELAI_DECOUVERTE_AJOUT = _nombre_env("MCP_PERSO_DELAI_DECOUVERTE_AJOUT_SECONDES"
 # Temps pendant lequel l'envoi d'un message accepte d'attendre la découverte des outils.
 ATTENTE_MAX_CHAT = _nombre_env("MCP_PERSO_ATTENTE_CHAT_SECONDES", 1.5)
 ATTENTE_MAX_INTERFACE = _nombre_env("MCP_PERSO_ATTENTE_INTERFACE_SECONDES", 6)
-TAILLE_MAX_OUTILS_PAR_SERVEUR = 50
+# Plafond de sécurité du nombre d'outils lus par serveur, modifiable sans toucher au code.
+# Les outils lus ne sont pas tous envoyés au modèle : seuls ceux que demander_outils retrouve
+# le sont. Lire beaucoup d'outils ne coûte donc ni jetons ni temps de réponse au modèle.
+TAILLE_MAX_OUTILS_PAR_SERVEUR = max(1, int(_nombre_env("MCP_PERSO_TAILLE_MAX_OUTILS_PAR_SERVEUR", 500)))
+# Nombre maximal de pages lues pour un serveur qui répond par pages (curseur de pagination MCP).
+PAGES_MAX_DECOUVERTE = max(1, int(_nombre_env("MCP_PERSO_PAGES_MAX_DECOUVERTE", 20)))
+# Nombre d'outils montrés dans l'aperçu du test d'un serveur (la réponse reste légère).
+APERCU_MAX_OUTILS_TEST = max(1, int(_nombre_env("MCP_PERSO_APERCU_MAX_OUTILS_TEST", 50)))
 NOMBRE_MAX_SERVEURS_PAR_COMPTE = 10
 _PREFIXE_OUTILS = "custommcp_"
 _CACHE_OUTILS: dict[tuple, dict] = {}
@@ -153,21 +160,45 @@ def _headers_serveur(serveur: dict, user_id: str) -> dict | None:
     return None
 
 
-async def _lister_outils_async(url: str, headers: dict | None):
+async def _lister_outils_async(url: str, headers: dict | None, collecte: list | None = None):
+    # `collecte` reçoit les outils page après page : si le délai tombe en cours de route,
+    # l'appelant garde les pages déjà lues au lieu de tout perdre.
+    outils = collecte if collecte is not None else []
     # Client sans redirection et à adresse vérifiée (voir mcp_reseau_securise).
     async with creer_client_http_mcp(headers=headers) as client:
         async with streamable_http_client(url, http_client=client) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
-                resultat = await session.list_tools()
-                return list(resultat.tools or [])
+                curseur = None
+                curseurs_vus = set()
+                for _ in range(PAGES_MAX_DECOUVERTE):
+                    # Première page : même appel qu'avant (sans paramètre). Les suivantes
+                    # reprennent le curseur donné par le serveur (pagination MCP).
+                    parametres = types_mcp.PaginatedRequestParams(cursor=curseur) if curseur else None
+                    resultat = await session.list_tools(params=parametres)
+                    outils.extend(resultat.tools or [])
+                    curseur = getattr(resultat, "next_cursor", None)
+                    # Arrêt : plus de page, curseur déjà vu (serveur qui boucle) ou plafond atteint.
+                    if not curseur or curseur in curseurs_vus or len(outils) >= TAILLE_MAX_OUTILS_PAR_SERVEUR:
+                        break
+                    curseurs_vus.add(curseur)
+                return list(outils)
 
 
 def _lister_outils_reseau(url: str, headers: dict | None, delai: float = DELAI_DECOUVERTE_AJOUT):
     adresse = valider_url_mcp(url)
+    collecte: list = []
     try:
-        return asyncio.run(asyncio.wait_for(_lister_outils_async(adresse, headers), timeout=delai))
+        return asyncio.run(asyncio.wait_for(_lister_outils_async(adresse, headers, collecte), timeout=delai))
     except Exception as exc:
+        if collecte:
+            # Serveur à plusieurs pages dont une page suivante est lente ou en erreur : les pages
+            # déjà lues restent utilisables, la liste complète revient au prochain renouvellement.
+            logging.info(
+                "Découverte MCP personnalisée partielle (hôte %s, %d outils lus, type %s).",
+                urlparse(adresse).hostname, len(collecte), type(exc).__name__,
+            )
+            return list(collecte)
         logging.info("Découverte MCP personnalisée impossible (hôte %s, type %s).", urlparse(adresse).hostname, type(exc).__name__)
         raise ValueError("Impossible de joindre ce serveur MCP. Vérifie son URL, son accessibilité et son authentification.")
 
@@ -835,10 +866,11 @@ def tester_serveur(serveur_id: str, utilisateur=Depends(utilisateur_courant)):
     if headers is None:
         _erreur("MCP_NON_CONNECTE", "Connecte ce serveur MCP avant de tester ses outils.")
     try:
-        outils = _lister_outils_reseau(serveur["url"], headers)
+        # Même plafond que celui du chat : le nombre annoncé est celui des outils réellement utilisables.
+        outils = _lister_outils_reseau(serveur["url"], headers)[:TAILLE_MAX_OUTILS_PAR_SERVEUR]
         return {"connecte": True, "nombre_outils": len(outils), "outils": [
             {"nom": str(getattr(o, "name", "")), "description": str(getattr(o, "description", "") or "")[:500]}
-            for o in outils[:TAILLE_MAX_OUTILS_PAR_SERVEUR]
+            for o in outils[:APERCU_MAX_OUTILS_TEST]
         ]}
     except ValueError as exc:
         _erreur("MCP_TEST_ECHOUE", str(exc), 502)

@@ -11,7 +11,9 @@
     "fonts-liberation",
     "ffmpeg",
     "tesseract-ocr",
-    "tesseract-ocr-fra"
+    "tesseract-ocr-fra",
+    "nodejs",
+    "npm"
   ],
   "deploy": {
     "aptPackages": [
@@ -25,7 +27,9 @@
       "fonts-dejavu-core",
       "ffmpeg",
       "tesseract-ocr",
-      "tesseract-ocr-fra"
+      "tesseract-ocr-fra",
+      "nodejs",
+      "npm"
     ]
   }
 }
