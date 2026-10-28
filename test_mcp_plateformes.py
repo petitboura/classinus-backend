@@ -119,9 +119,16 @@ class TestGoogleWorkspaceMcpConfiguration(unittest.TestCase):
 
 class TestCategoriesSeparees(unittest.TestCase):
     def test_chaque_serveur_a_sa_categorie(self):
+        # La liste complete garde toutes les categories (retrouver les outils d'un service) ;
+        # l'index et l'enum montres a l'IA n'ont que celles des services visibles dans l'ecran
+        # Connexions du site (28/10/2026). Voir test_etat_connexions pour le detail des services masques.
         for categorie in ("vercel", "railway", "supabase", "higgsfield", "google_gmail", "google_docs", "google_sheets", "google_slides", "google_calendar", "google_chat", "google_classroom", "google_people", "microsoft_mcp", "render_mcp", "cloudflare_mcp", "netlify_mcp"):
             self.assertIn(categorie, r.NOMS_CATEGORIES_OUTILS)
-            self.assertIn(categorie, r.INDEX_CATEGORIES_OUTILS)
+            if categorie in r.CATEGORIES_SERVICES_MASQUES:
+                self.assertNotIn(categorie, r.NOMS_CATEGORIES_PROPOSEES_A_L_IA)
+            else:
+                self.assertIn(categorie, r.NOMS_CATEGORIES_PROPOSEES_A_L_IA)
+                self.assertIn(categorie, r.INDEX_CATEGORIES_OUTILS)
 
     def test_une_categorie_ne_renvoie_que_ses_outils(self):
         candidats = [_outil(n) for n in (

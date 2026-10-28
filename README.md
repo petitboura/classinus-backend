@@ -230,6 +230,8 @@ instance du serveur).
 
 ## Variables d'environnement / secrets nécessaires
 
+Le backend est hébergé sur Render. Toutes les variables d'environnement doivent être configurées dans Render, qui est la seule source de vérité.
+
 | Variable | Utilisée par |
 |---|---|
 | `SUPABASE_URL` / `SUPABASE_SECRET` | tout le projet |

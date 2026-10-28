@@ -14,6 +14,7 @@ Outils concernés :
   quand l'étudiant n'en a nommé aucune (le chat montre alors une rangée de logos) ;
 - lecture d'un document Internet Archive : archive.org ;
 - lecture d'un fichier externe : le site du lien ;
+- outil d'un serveur MCP personnalisé : le site du serveur (28/10/2026) ;
 - Tavily, seulement les outils qui agissent sur un site précis (extraire,
   explorer, cartographier). La recherche web et la recherche approfondie ne
   visent aucun site : elles gardent leur icône.
@@ -43,6 +44,24 @@ PARAMETRES_ADRESSE_TAVILY = {
 # Nombre maximal de domaines envoyés pour une même ligne.
 MAX_DOMAINES = 8
 
+# Début du nom des outils d'un serveur MCP personnalisé (connexions/mcp_personnalises.py,
+# _PREFIXE_OUTILS) : leur logo est celui du site du serveur.
+PREFIXE_OUTILS_MCP_PERSONNALISES = "custommcp_"
+
+# Domaines publics à deux niveaux (co.uk...) : le site compte alors trois morceaux.
+# Garder ces deux listes identiques à celles de lib/logoMcp.ts (frontend).
+SUFFIXES_DEUX_NIVEAUX = {
+    "co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.jp", "co.nz", "co.za",
+    "com.br", "com.tn", "org.tn", "gov.tn", "com.mx", "com.cn", "co.in", "com.tr",
+}
+
+# Plateformes d'hébergement : le sous-domaine est le vrai site, on le garde entier.
+HEBERGEURS = (
+    "vercel.app", "onrender.com", "railway.app", "netlify.app", "github.io", "pages.dev", "workers.dev",
+    "herokuapp.com", "fly.dev", "supabase.co", "azurewebsites.net", "cloudfunctions.net", "run.app",
+    "ngrok.app", "ngrok.io", "trycloudflare.com", "web.app", "firebaseapp.com", "amazonaws.com",
+)
+
 
 def domaine_de_adresse(adresse):
     """Nom de domaine d'une adresse web, sans "www.", en minuscules, ou None."""
@@ -61,6 +80,28 @@ def domaine_de_adresse(adresse):
         return None
     hote = hote.lower()
     return hote[4:] if hote.startswith("www.") else hote
+
+
+def domaine_site_serveur(adresse):
+    """
+    Site dont on montre le logo pour un serveur MCP (mcp.linear.app donne linear.app),
+    ou None si rien d'exploitable (adresse IP, adresse illisible).
+    """
+    hote = domaine_de_adresse(adresse)
+    if not hote or ":" in hote or re.fullmatch(r"\d+(\.\d+){3}", hote):
+        return None
+    if any(hote == h or hote.endswith("." + h) for h in HEBERGEURS):
+        return hote
+    morceaux = hote.split(".")
+    garde = 3 if ".".join(morceaux[-2:]) in SUFFIXES_DEUX_NIVEAUX else 2
+    return ".".join(morceaux[-garde:])
+
+
+def _domaines_outil_mcp_personnalise(nom_outil):
+    from connexions.mcp_personnalises import url_serveur_pour_outil
+
+    domaine = domaine_site_serveur(url_serveur_pour_outil(nom_outil))
+    return [domaine] if domaine else []
 
 
 def _domaines_de_adresses(valeur):
@@ -109,6 +150,8 @@ def domaines_de_l_appel(nom_outil, arguments):
         arguments = arguments if isinstance(arguments, dict) else {}
         if nom_outil in DOMAINES_FIXES:
             return list(DOMAINES_FIXES[nom_outil])
+        if isinstance(nom_outil, str) and nom_outil.startswith(PREFIXE_OUTILS_MCP_PERSONNALISES):
+            return _domaines_outil_mcp_personnalise(nom_outil)
         if nom_outil == "rechercher_document_externe":
             return _domaines_recherche_document(arguments)[:MAX_DOMAINES]
         if nom_outil == "gerer_execution_code" and arguments.get("action") == "demander_acces_reseau":

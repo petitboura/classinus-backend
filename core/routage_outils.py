@@ -7,7 +7,8 @@ import logging
 from groq import Groq
 from constantes_agent import get_secret, supabase, MODELE_ROUTEUR_OUTILS, MODELE_ROUTEUR_OUTILS_REPLI, DELAI_MAX_PAR_APPEL
 from mcp_tools import lister_outils_autorises_pour_agent
-from registre_outils import NOMS_CATEGORIES_OUTILS, INDEX_CATEGORIES_OUTILS
+from registre_outils import NOMS_CATEGORIES_PROPOSEES_A_L_IA, INDEX_CATEGORIES_OUTILS
+from libelles_activite_ia import schema_avec_libelle, libelle_ia_de_l_appel
 
 def _resume_description_outil(description, max_caracteres=200):
     """
@@ -194,7 +195,7 @@ def _outil_demander_outils():
     mcp_tools.lister_outils_autorises_pour_agent) -- cette fonction-ci ne
     fait que decrire l'outil, aucune recherche.
     """
-    return {
+    outil = {
         "type": "function",
         "function": {
             "name": NOM_OUTIL_DEMANDER_OUTILS,
@@ -263,7 +264,7 @@ def _outil_demander_outils():
                                 },
                                 "categorie": {
                                     "type": "string",
-                                    "enum": NOMS_CATEGORIES_OUTILS,
+                                    "enum": NOMS_CATEGORIES_PROPOSEES_A_L_IA,
                                     "description": (
                                         "Facultatif. Categorie dans "
                                         "laquelle chercher CE besoin "
@@ -283,6 +284,10 @@ def _outil_demander_outils():
             },
         },
     }
+    # 28/10/2026 (demande Bourama) : le libellé de la ligne est écrit par l'IA, comme pour les
+    # autres outils (voir libelles_activite_ia.py).
+    outil["function"]["parameters"] = schema_avec_libelle(outil["function"]["parameters"])
+    return outil
 
 
 def _separer_appels_demander_outils(appels):
@@ -329,7 +334,7 @@ def _separer_appels_demander_outils(appels):
             except Exception as e:
                 logging.error(f"ERREUR arguments demander_outils illisibles : {e}")
                 recherches = []
-            demandes.append({"id": appel["id"], "recherches": recherches})
+            demandes.append({"id": appel["id"], "recherches": recherches, "libelle": libelle_ia_de_l_appel(appel)})
         else:
             appels_normaux.append(appel)
     return appels_normaux, demandes

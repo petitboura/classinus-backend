@@ -38,6 +38,8 @@ _VERROU = threading.Lock()
 _MOTS_GENERAUX = {"site", "service", "projet", "base", "donnees", "fichier", "document", "page", "image", "video", "creer", "generer"}
 
 NOM_BLOC_CARTE = "connecteur"
+# Carte de proposition d'un serveur MCP que Classinus ne connaît pas (27/10/2026, demande de Bourama).
+NOM_BLOC_SERVEUR_MCP = "serveurmcp"
 
 
 def etat_service(service, user_id):
@@ -184,6 +186,54 @@ def texte_proposition(entree, etat):
     )
 
 
+def doit_proposer_serveur_mcp(besoins, des_outils_trouves, des_services_proposes):
+    """
+    Vrai quand l'IA doit chercher un serveur MCP externe : rien n'a été trouvé (ni outil, ni service
+    de la liste à connecter), ou un besoin parle lui-même d'un serveur MCP (l'utilisateur veut en ajouter un).
+    """
+    if any("mcp" in (besoin or "").lower() for besoin in besoins):
+        return True
+    return not des_outils_trouves and not des_services_proposes
+
+
+def texte_serveur_inconnu(aucun_outil=True):
+    """
+    Ce que l'IA reçoit quand aucun outil ni service connu ne répond à un besoin : au lieu de dire que
+    c'est impossible, elle cherche le serveur MCP officiel de l'outil et le propose dans une carte.
+    L'IA ne détermine ni le type d'accès ni le caractère officiel : Classinus les vérifie lui-même
+    à l'affichage de la carte (route POST /api/mcp-personnalises/sonder), et c'est l'utilisateur qui
+    clique pour ajouter. Le jeton ne passe jamais par le chat.
+    """
+    exemple = json.dumps({
+        "nom": "Nom de l'outil",
+        "url": "https://adresse-du-serveur-mcp-trouvee-sur-le-site-officiel",
+        "site_officiel": "https://site-officiel-de-l-outil",
+        "source": "https://page-du-site-officiel-qui-annonce-cette-adresse",
+        "jeton": {"lien": "https://page-ou-l-utilisateur-cree-son-jeton", "etapes": ["Première étape", "Deuxième étape"]},
+    }, ensure_ascii=False)
+    debut = (
+        "Aucun outil de Classinus ne répond à ce besoin, mais un serveur MCP externe pourrait le faire. "
+        "Ne dis pas que c'est impossible. Voici la marche à suivre : "
+        if aucun_outil
+        else "Si l'utilisateur veut ajouter un serveur MCP externe, voici la marche à suivre : "
+    )
+    return (
+        debut
+        + "1) Cherche avec tes outils de recherche web (cherche-les avec demander_outils si tu ne les as pas) "
+        "le site officiel de l'outil, puis la page de sa documentation qui annonce son serveur MCP. "
+        "Ne retiens que ce qui est écrit sur le site officiel de l'éditeur, jamais un blog ni un annuaire. "
+        f"2) Écris dans ta réponse un bloc ```{NOM_BLOC_SERVEUR_MCP}``` avec ce JSON, précédé d'une phrase qui dit "
+        f"pourquoi ce serveur répond à la demande :\n```{NOM_BLOC_SERVEUR_MCP}\n{exemple}\n```\n"
+        "Le champ jeton est facultatif : ne le remplis que si la documentation dit qu'un jeton ou une clé d'accès est "
+        "nécessaire, avec les étapes exactes pour l'obtenir. Si tu n'as pas trouvé l'adresse sur le site officiel, "
+        "mets seulement ce que tu as trouvé ailleurs (la carte préviendra l'utilisateur), et si tu n'as rien trouvé "
+        "laisse url vide. N'invente jamais une adresse ni un lien. "
+        "3) Classinus teste lui-même l'adresse, vérifie si elle vient du site officiel et dit à l'utilisateur si un "
+        "jeton est nécessaire. C'est l'utilisateur qui clique pour ajouter le serveur : tu n'ajoutes jamais rien "
+        "toi-même et tu ne demandes jamais de jeton dans le chat."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Versions doubles (Higgsfield) : celle de l'utilisateur d'abord
 # ---------------------------------------------------------------------------
@@ -256,6 +306,12 @@ def texte_prompt_connexions(etats, serveurs_perso):
     lignes.append(
         f"Pour proposer un service, écris le bloc ```{NOM_BLOC_CARTE}``` exactement comme demander_outils te le donne "
         "(une carte avec un bouton Connecter s'affiche, jamais un lien à recopier). N'invente jamais un nom de service."
+    )
+    lignes.append(
+        "Si demander_outils ne trouve rien du tout, il t'explique comment chercher et proposer le serveur MCP officiel "
+        "de l'outil. Si l'utilisateur veut ajouter un serveur MCP, appelle demander_outils avec le besoin « ajouter un "
+        "serveur MCP » : la réponse t'explique comment faire. Tu n'ajoutes jamais un serveur toi-même : c'est lui qui "
+        "clique sur la carte."
     )
     lignes.append("</connexions>")
     return "\n".join(lignes)

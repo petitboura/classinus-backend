@@ -147,6 +147,15 @@ def _url_notion(get_secret, user_id, agent_id, conversation_id=None):
     return "https://mcp.notion.com/mcp"
 
 
+def _url_diagnostic_classtech(get_secret, user_id, agent_id, conversation_id=None):
+    # 28/10/2026 (demande Bourama) : serveur d'outils MCP Class-Tech
+    # (diagnostic téléphone puis PC). Serveur public sans
+    # authentification : pas de headers_builder. URL prévue du service
+    # Render class-tech-outils, à corriger ici si le service déployé a
+    # une autre adresse.
+    return "https://class-tech-outils.onrender.com/mcp/diagnostic"
+
+
 def _headers_notion(get_secret, user_id, agent_id):
     # agent_id fait partie de la signature commune a tous les *_builder
     # (voir docstring en tete de fichier) mais n'est plus utilise ici :
@@ -505,6 +514,13 @@ SERVEURS_MCP = [
         "necessite_utilisateur": True,
         "prefixe_outils": "netlify_",
     },
+    {
+        "nom": "diagnostic_classtech",
+        "url_builder": _url_diagnostic_classtech,
+        # Pas de headers_builder : serveur public (phase test).
+        # Pas de necessite_utilisateur : dispo pour tout le monde.
+        # Pas d'outils_autorises : tous les outils du serveur exposés.
+    },
 ]
 
 # Serveurs MCP personnels dont les outils portent un prefixe (voir
@@ -695,6 +711,38 @@ OUTILS_SENSIBLES = {
     # format "nom_outil:action" expliqué au-dessus pour
     # gerer_document_bibliotheque:supprimer).
     "gerer_dossier_bibliotheque:supprimer",
+    # 28/10/2026 : action réelle du palier 80 % (vide les caches, qui
+    # se reconstruisent seuls ensuite, jamais les données des applis).
+    "vider_cache_applis",
+    # 28/10/2026 : actions réelles du serveur diagnostic Class-Tech
+    # (palier 100 %, sans root). Bip, vibration, appli photo : effet
+    # physique. revoquer_permission : retire vraiment un accès.
+    "tester_haut_parleur",
+    "tester_vibreur",
+    "tester_camera",
+    "revoquer_permission",
+    # 28/10/2026 : palier root DESACTIVE (19 outils, confirmation
+    # exigee pour chacun, meme les lectures : un telephone roote
+    # expose tout le systeme). Activation seulement sur ordre de Bourama.
+    "root_verifier_acces",
+    "root_lire_infos_root",
+    "root_lister_fichiers_systeme",
+    "root_lire_fichier_systeme",
+    "root_lire_erreurs_noyau",
+    "root_lire_paniques_passees",
+    "root_lire_partitions",
+    "root_verifier_integrite",
+    "root_lire_batterie_brute",
+    "root_lire_temperatures",
+    "root_reinitialiser_stats_batterie",
+    "root_lire_firmware",
+    "root_valider_slot_demarre",
+    "root_lister_processus",
+    "root_lire_wakelocks",
+    "root_nettoyer_fichiers_crash",
+    "root_vider_cache_dalvik",
+    "root_forcer_trim",
+    "root_redemarrer",
 }
 
 
@@ -1152,12 +1200,71 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "enregistrer_note_signalement": {"label": "Note sur un signalement", "icone": "NotebookPen", "onglet": None},
     "rattacher_signalement_notion": {"label": "Rattacher un signalement", "icone": "Link", "onglet": None},
 
+
     # Atelier vidéo contextuel : les outils sont pilotés par Clovis, jamais
     # sélectionnés manuellement dans le menu d'outils.
     "video_lister_outils": {"label": "Recherche des capacités vidéo", "icone": "Clapperboard", "onglet": None},
     "video_executer_outil": {"label": "Montage vidéo", "icone": "Film", "onglet": None},
     # 26/10/2026 : copie un fichier joint (vidéo, audio, image) dans l'espace de montage.
     "video_importer_fichier_conversation": {"label": "Import d'un fichier joint pour le montage", "icone": "Paperclip", "onglet": None},
+
+    # 28/10/2026 : outils du serveur diagnostic Class-Tech (onglet None :
+    # pas de bouton menu, affichés quand ils s'exécutent dans le fil).
+    "ping_serveur": {"label": "Ping serveur", "icone": "Satellite", "onglet": None},
+    "verifier_chaine": {"label": "Vérification", "icone": "Stethoscope", "onglet": None},
+    "resumer_symptome": {"label": "Résumé du symptôme", "icone": "ClipboardList", "onglet": None},
+    # 28/10/2026 : palier 80 % (pont ADB, batterie, stockage, applis,
+    # système, réseau, capteurs).
+    "detecter_telephone": {"label": "Détecter le phone", "icone": "Smartphone", "onglet": None},
+    "lire_batterie": {"label": "Batterie", "icone": "BatteryMedium", "onglet": None},
+    "lire_conso_batterie": {"label": "Conso batterie", "icone": "BatteryCharging", "onglet": None},
+    "lire_stockage": {"label": "Stockage", "icone": "HardDrive", "onglet": None},
+    "lister_gros_fichiers": {"label": "Gros fichiers", "icone": "Files", "onglet": None},
+    "vider_cache_applis": {"label": "Vider les caches", "icone": "Trash2", "onglet": None},
+    "lister_applis": {"label": "Applis installées", "icone": "LayoutGrid", "onglet": None},
+    "lire_crashs_recents": {"label": "Plantages d'applis", "icone": "Bug", "onglet": None},
+    "lister_applis_inutilisees": {"label": "Applis inutilisées", "icone": "Archive", "onglet": None},
+    "lire_version_systeme": {"label": "Version Android", "icone": "Info", "onglet": None},
+    "lire_erreurs_recentes": {"label": "Erreurs récentes", "icone": "ScrollText", "onglet": None},
+    "lire_etat_reseau": {"label": "Réseau", "icone": "Wifi", "onglet": None},
+    "lire_infos_wifi": {"label": "Détails wifi", "icone": "Signal", "onglet": None},
+    "tester_capteurs": {"label": "Test capteurs", "icone": "Radar", "onglet": None},
+    # 28/10/2026 : palier 100 % (tests matériel, perf, sécurité).
+    "tester_ecran_tactile": {"label": "Test écran tactile", "icone": "Smartphone", "onglet": None},
+    "tester_gps": {"label": "Test GPS", "icone": "MapPin", "onglet": None},
+    "tester_micro": {"label": "Test micro", "icone": "Mic", "onglet": None},
+    "tester_haut_parleur": {"label": "Test haut-parleur", "icone": "Volume2", "onglet": None},
+    "tester_vibreur": {"label": "Test vibreur", "icone": "Vibrate", "onglet": None},
+    "tester_camera": {"label": "Test caméra", "icone": "Camera", "onglet": None},
+    "tester_boutons": {"label": "Test boutons", "icone": "Power", "onglet": None},
+    "analyser_memoire_vive": {"label": "Mémoire vive", "icone": "MemoryStick", "onglet": None},
+    "analyser_cpu": {"label": "Processeur (CPU)", "icone": "Cpu", "onglet": None},
+    "analyser_applications_gourmandes": {"label": "Applis gourmandes", "icone": "Gauge", "onglet": None},
+    "lister_permissions_risquees": {"label": "Permissions à risque", "icone": "KeyRound", "onglet": None},
+    "revoquer_permission": {"label": "Retirer une permission", "icone": "ShieldOff", "onglet": None},
+    "verifier_securite": {"label": "Sécurité du téléphone", "icone": "ShieldCheck", "onglet": None},
+    "verifier_mises_a_jour": {"label": "Mises à jour", "icone": "RefreshCw", "onglet": None},
+    # 28/10/2026 : palier root DESACTIVE (19 outils, voir sensibles).
+    "root_verifier_acces": {"label": "Vérifier le root", "icone": "KeyRound", "onglet": None},
+    "root_lire_infos_root": {"label": "Infos root", "icone": "Info", "onglet": None},
+    "root_lister_fichiers_systeme": {"label": "Dossiers système", "icone": "FolderTree", "onglet": None},
+    "root_lire_fichier_systeme": {"label": "Fichier système", "icone": "FileText", "onglet": None},
+    "root_lire_erreurs_noyau": {"label": "Erreurs noyau", "icone": "Bug", "onglet": None},
+    "root_lire_paniques_passees": {"label": "Paniques passées", "icone": "History", "onglet": None},
+    "root_lire_partitions": {"label": "Partitions", "icone": "HardDrive", "onglet": None},
+    "root_verifier_integrite": {"label": "Intégrité système", "icone": "ShieldCheck", "onglet": None},
+    "root_lire_batterie_brute": {"label": "Batterie brute", "icone": "BatteryCharging", "onglet": None},
+    "root_lire_temperatures": {"label": "Températures", "icone": "Thermometer", "onglet": None},
+    "root_reinitialiser_stats_batterie": {"label": "RAZ stats batterie", "icone": "RotateCcw", "onglet": None},
+    "root_lire_firmware": {"label": "Firmware", "icone": "Cpu", "onglet": None},
+    "root_valider_slot_demarre": {"label": "Valider slot A/B", "icone": "Check", "onglet": None},
+    "root_lister_processus": {"label": "Processus", "icone": "Activity", "onglet": None},
+    "root_lire_wakelocks": {"label": "Wakelocks", "icone": "Zap", "onglet": None},
+    "root_nettoyer_fichiers_crash": {"label": "Nettoyer crashs", "icone": "Trash2", "onglet": None},
+    "root_vider_cache_dalvik": {"label": "Vider cache Dalvik", "icone": "Trash", "onglet": None},
+    "root_forcer_trim": {"label": "Forcer TRIM", "icone": "Sparkles", "onglet": None},
+    "root_redemarrer": {"label": "Redémarrer", "icone": "Power", "onglet": None},
+
 }
 
 # --- Verbes des actions (24/09/2026, demande Bourama : regroupement des
@@ -1183,6 +1290,14 @@ VERBES_ACTIONS = {
     "lister": ("Liste", "List"),
     "consulter": ("Consultation", "Eye"),
     "lire": ("Lecture", "Eye"),
+    # 28/10/2026 : verbes des outils diagnostic Class-Tech (80 et 100).
+    "detecter": ("Détection", "Search"),
+    "tester": ("Test", "FlaskConical"),
+    "vider": ("Nettoyage", "Trash2"),
+    "analyser": ("Analyse", "Activity"),
+    "revoquer": ("Retrait", "ShieldOff"),
+    "verifier": ("Vérification", "Check"),
+    "root": ("Root", "ShieldAlert"),
     "ouvrir": ("Ouverture", "Eye"),
     "explorer": ("Exploration", "Eye"),
     "creer": ("Création", "Plus"),
@@ -1383,6 +1498,23 @@ CATEGORIES_OUTILS = {
         "search_files", "read_file_content", "download_file_content",
         "list_recent_files", "get_file_metadata", "create_file", "copy_file",
     ],
+    # 28/10/2026 : outils du serveur diagnostic Class-Tech.
+    # Elargie le 28/10/2026 : base + palier 80 % + palier 100 %. Un nom
+    # pas encore exposé par le serveur reste sans effet (le filtre
+    # outils_de_la_categorie croise avec les outils réels).
+    "diagnostic_classtech": [
+        "ping_serveur", "verifier_chaine", "resumer_symptome",
+        "detecter_telephone", "lire_batterie", "lire_conso_batterie",
+        "lire_stockage", "lister_gros_fichiers", "vider_cache_applis",
+        "lister_applis", "lire_crashs_recents", "lister_applis_inutilisees",
+        "lire_version_systeme", "lire_erreurs_recentes", "lire_etat_reseau",
+        "lire_infos_wifi", "tester_capteurs",
+        "tester_ecran_tactile", "tester_gps", "tester_micro",
+        "tester_haut_parleur", "tester_vibreur", "tester_camera",
+        "tester_boutons", "analyser_memoire_vive", "analyser_cpu",
+        "analyser_applications_gourmandes", "lister_permissions_risquees",
+        "revoquer_permission", "verifier_securite", "verifier_mises_a_jour",
+    ],
 }
 
 # Categories reconnues par prefixe de nom d'outil plutot que par liste
@@ -1427,21 +1559,24 @@ NOMS_CATEGORIES_OUTILS = list(dict.fromkeys([*CATEGORIES_OUTILS.keys(), *CATEGOR
 # "mots_cles" : mots français qui permettent de retrouver le service depuis un besoin exprimé
 #   en langage libre (les noms d'outils sont en anglais et ne recoupent jamais le besoin).
 # "proposable" : False pour un service masqué dans l'écran Connexions du site (Google Workspace
-#   en préversion, Google Drive). Le proposer ferait afficher une carte vide : à passer à True
-#   seulement quand le site l'affiche, sur décision de Bourama.
+#   en préversion, Google Drive, Microsoft, Netlify, Cloudflare). Le proposer ferait afficher une
+#   carte vide : à passer à True seulement quand le site l'affiche, sur décision de Bourama.
+#   Source de vérité côté site : tests/verifier-connexions.mjs (visibleDansEspaceConnexions).
+#   Un service non proposable n'apparaît ni dans l'état des connexions, ni dans les catégories
+#   offertes à l'IA par demander_outils (voir CATEGORIES_SERVICES_MASQUES plus bas).
 # ---------------------------------------------------------------------------
 SERVICES_CONNECTABLES = [
     {"service": "github", "label": "GitHub", "categorie": "github", "proposable": True,
      "mots_cles": "github depot dépôt code repository repo commit branche pull request fichier source"},
     {"service": "notion", "label": "Notion", "categorie": "notion", "proposable": True,
      "mots_cles": "notion page base de données notes wiki espace de travail document"},
-    {"service": "microsoft_mcp", "label": "Microsoft Enterprise", "categorie": "microsoft_mcp", "proposable": True,
+    {"service": "microsoft_mcp", "label": "Microsoft Enterprise", "categorie": "microsoft_mcp", "proposable": False,
      "mots_cles": "microsoft entra graph entreprise annuaire utilisateurs locataire azure"},
-    {"service": "netlify_mcp", "label": "Netlify", "categorie": "netlify_mcp", "proposable": True,
+    {"service": "netlify_mcp", "label": "Netlify", "categorie": "netlify_mcp", "proposable": False,
      "mots_cles": "netlify site déployer deploiement déploiement hébergement build site web"},
     {"service": "render_mcp", "label": "Render", "categorie": "render_mcp", "proposable": True,
      "mots_cles": "render service déploiement hébergement serveur journaux logs backend"},
-    {"service": "cloudflare_mcp", "label": "Cloudflare", "categorie": "cloudflare_mcp", "proposable": True,
+    {"service": "cloudflare_mcp", "label": "Cloudflare", "categorie": "cloudflare_mcp", "proposable": False,
      "mots_cles": "cloudflare dns workers domaine cdn pages cache"},
     {"service": "higgsfield_mcp", "label": "Higgsfield", "categorie": "higgsfield", "proposable": True,
      "mots_cles": "higgsfield vidéo video image génération générer créer film clip animation"},
@@ -1470,6 +1605,20 @@ SERVICES_CONNECTABLES = [
     {"service": "google_people_mcp", "label": "Google People", "categorie": "google_people", "proposable": False,
      "mots_cles": "google people contacts profils"},
 ]
+
+# Catégories des services masqués dans l'écran Connexions (28/10/2026, demande de Bourama).
+# Calculées depuis SERVICES_CONNECTABLES : passer "proposable" à True suffit à les rendre à l'IA,
+# aucune autre liste à retoucher. NOMS_CATEGORIES_OUTILS reste la liste complète (elle sert à
+# retrouver les outils d'une catégorie et aux tests) ; seule la liste montrée à l'IA est filtrée,
+# sinon elle croit que ces services existent et ne les propose pas comme il faut.
+CATEGORIES_SERVICES_MASQUES = frozenset(s["categorie"] for s in SERVICES_CONNECTABLES if not s["proposable"])
+NOMS_CATEGORIES_PROPOSEES_A_L_IA = [n for n in NOMS_CATEGORIES_OUTILS if n not in CATEGORIES_SERVICES_MASQUES]
+
+
+def _categories_services_pour_index(entrees):
+    """Texte de l'index pour les catégories données (nom, texte), sans celles des services masqués."""
+    return ", ".join(texte for nom, texte in entrees if nom not in CATEGORIES_SERVICES_MASQUES)
+
 
 # Services qui existent en DEUX versions : celle de Classinus (notre API, clé partagée, sans
 # connexion) et celle du compte de l'utilisateur. Décision de Bourama (26/10/2026) : quand les
@@ -1503,9 +1652,26 @@ def _sources_documents_externes_pour_index():
 
 
 INDEX_CATEGORIES_OUTILS = (
-    "Catégories : google_gmail, google_docs, google_sheets, google_slides, google_calendar, "
-    "google_chat, google_classroom, google_people, microsoft_mcp (Microsoft Graph Entra, lecture seule), "
-    "render_mcp, cloudflare_mcp, netlify_mcp, notion, google_drive, github, vercel (sites et déploiements), "
+    "Catégories : "
+    + _categories_services_pour_index([
+        ("google_gmail", "google_gmail"),
+        ("google_docs", "google_docs"),
+        ("google_sheets", "google_sheets"),
+        ("google_slides", "google_slides"),
+        ("google_calendar", "google_calendar"),
+        ("google_chat", "google_chat"),
+        ("google_classroom", "google_classroom"),
+        ("google_people", "google_people"),
+        ("microsoft_mcp", "microsoft_mcp (Microsoft Graph Entra, lecture seule)"),
+        ("render_mcp", "render_mcp"),
+        ("cloudflare_mcp", "cloudflare_mcp"),
+        ("netlify_mcp", "netlify_mcp"),
+        ("notion", "notion"),
+        ("google_drive", "google_drive"),
+        ("github", "github"),
+        ("vercel", "vercel (sites et déploiements)"),
+    ])
+    + ", "
     "railway (services et logs), supabase (base de données et SQL), "
     "higgsfield (compte Higgsfield de l'utilisateur : images, vidéos et tout le catalogue Higgsfield), "
     "higgsfield_classinus (génération de vidéo Higgsfield par l'API de Classinus, sans connexion), "
@@ -1522,7 +1688,7 @@ INDEX_CATEGORIES_OUTILS = (
     f"{_sources_documents_externes_pour_index()}), base_connaissance (Classinus lui même), "
     "pedagogie (avancement, signalements), configuration (règles, style, procédures, comportements), skills, memoire, "
     "telephone_etudiant (mobile, écran, concentration), historique "
-    "(conversations passées), agent_applicatif (actions dans l'appli), minuteur (minuteurs dans le chat)."
+    "(conversations passées), agent_applicatif (actions dans l'appli), minuteur (minuteurs dans le chat), diagnostic_classtech (diagnostic téléphone et PC)."
 )
 
 
