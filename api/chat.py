@@ -22,7 +22,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Dict, List, Optional, Literal
 
 from api.auth import utilisateur_optionnel, supabase
@@ -38,6 +38,7 @@ from core.limitation_debit import limiteur
 from core.plafonds_reglables import PLAFOND_IMAGES_JOINTES, PLAFOND_OUTILS_PAR_MESSAGE, PLAFOND_ZIPS_JOINTS
 from core.restriction_mineur import acces_chat_bloque_pour_mineur
 from main import chat as chat_generateur  # core/main.py:chat()
+from erreur_tour import classer_erreur
 from core.libelles_outils_anglais import traduire_libelle_outil
 from fournisseurs_llm import modele_id_est_autorise
 
@@ -73,8 +74,22 @@ class Localisation(BaseModel):
 
 
 class RepriseConfirmation(BaseModel):
+    """
+    Deux usages : la reponse a une confirmation d'outil (approuve), ou la reprise d'un tour
+    arrete par une limite, une repetition ou une erreur (type="continuer_agent", avec un
+    message_utilisateur facultatif qui part dans le meme contexte). Jusqu'ici ce modele ne
+    connaissait que la confirmation : la reprise envoyee par le chat etait refusee.
+    """
     etat_reprise: dict
-    approuve: bool
+    approuve: Optional[bool] = None
+    type: Optional[Literal["continuer_agent"]] = None
+    message_utilisateur: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _approuve_ou_reprise(self):
+        if self.type is None and self.approuve is None:
+            raise ValueError("approuve est requis sans type de reprise")
+        return self
 
 
 class ZoneSelectionVideo(BaseModel):
@@ -265,6 +280,9 @@ class EnvoyerMessagePayload(BaseModel):
     # telephone_navigateur, pc_navigateur, pc_appli (voir core/origine_appareil.py). Absente ou
     # inconnue : comportement d'avant, rien n'est filtré.
     origine: Optional[str] = Field(default=None, max_length=64)
+    # Le chat du site veut des erreurs typees (evenement "erreur_tour", voir core/erreur_tour.py) ;
+    # sans ce champ, rien ne change pour les autres clients.
+    erreurs_typees: Optional[bool] = False
 
     @field_validator("images_base64")
     @classmethod
@@ -310,6 +328,17 @@ def _resoudre_modele_force(agent_id, modele_demande):
     return None
 
 
+def _reprise_pour_chat(reprise: RepriseConfirmation) -> dict:
+    """Ce que chat() attend : confirmation d'outil (approuve) ou reprise d'un tour arrete."""
+    if reprise.type == "continuer_agent":
+        return {
+            "etat_reprise": reprise.etat_reprise,
+            "type": "continuer_agent",
+            "message_utilisateur": reprise.message_utilisateur,
+        }
+    return {"etat_reprise": reprise.etat_reprise, "approuve": reprise.approuve}
+
+
 def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], langue_interface: str = "fr"):
     """
     Convertit le générateur Python de chat() en flux SSE (`data: {...}\n\n`
@@ -330,12 +359,10 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
     try:
         if payload.reprise is not None:
             generateur = chat_generateur(
-                reprise={
-                    "etat_reprise": payload.reprise.etat_reprise,
-                    "approuve": payload.reprise.approuve,
-                },
+                reprise=_reprise_pour_chat(payload.reprise),
                 arret_tour=arret,
                 langue_interface=langue_interface,
+                erreurs_typees=bool(payload.erreurs_typees),
             )
         else:
             generateur = chat_generateur(
@@ -374,6 +401,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
                 origine=payload.origine,
                 contexte_video=payload.contexte_video.model_dump() if payload.contexte_video else None,
                 langue_interface=langue_interface,
+                erreurs_typees=bool(payload.erreurs_typees),
             )
         for evenement in generateur:
             evenement_affiche = evenement
@@ -407,8 +435,12 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
             yield f"data: {json.dumps(evenement_affiche)}\n\n"
     except Exception as e:
         logging.error(f"ERREUR chat() en streaming (agent_id={payload.agent_id}) : {e}")
-        texte_erreur = "Something went wrong. Please try again shortly." if langue_interface == "en" else "Une erreur est survenue, réessaie dans un instant."
-        yield f"data: {json.dumps({'type': 'reponse', 'texte': texte_erreur})}\n\n"
+        if payload.erreurs_typees:
+            erreur_typee = {"type": "erreur_tour", "code": classer_erreur(e), "etat_reprise": None}
+            yield f"data: {json.dumps(erreur_typee)}\n\n"
+        else:
+            texte_erreur = "Something went wrong. Please try again shortly." if langue_interface == "en" else "Une erreur est survenue, réessaie dans un instant."
+            yield f"data: {json.dumps({'type': 'reponse', 'texte': texte_erreur})}\n\n"
     finally:
         fermer_arret(arret)
         if user_id:
