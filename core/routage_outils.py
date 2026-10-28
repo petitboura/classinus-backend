@@ -7,7 +7,7 @@ import logging
 from groq import Groq
 from constantes_agent import get_secret, supabase, MODELE_ROUTEUR_OUTILS, MODELE_ROUTEUR_OUTILS_REPLI, DELAI_MAX_PAR_APPEL
 from mcp_tools import lister_outils_autorises_pour_agent
-from registre_outils import NOMS_CATEGORIES_OUTILS, INDEX_CATEGORIES_OUTILS
+from registre_outils import NOMS_CATEGORIES_PROPOSEES_A_L_IA, INDEX_CATEGORIES_OUTILS
 from libelles_activite_ia import schema_avec_libelle, libelle_ia_de_l_appel
 
 def _resume_description_outil(description, max_caracteres=200):
@@ -264,7 +264,7 @@ def _outil_demander_outils():
                                 },
                                 "categorie": {
                                     "type": "string",
-                                    "enum": NOMS_CATEGORIES_OUTILS,
+                                    "enum": NOMS_CATEGORIES_PROPOSEES_A_L_IA,
                                     "description": (
                                         "Facultatif. Categorie dans "
                                         "laquelle chercher CE besoin "

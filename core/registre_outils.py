@@ -1559,21 +1559,24 @@ NOMS_CATEGORIES_OUTILS = list(dict.fromkeys([*CATEGORIES_OUTILS.keys(), *CATEGOR
 # "mots_cles" : mots français qui permettent de retrouver le service depuis un besoin exprimé
 #   en langage libre (les noms d'outils sont en anglais et ne recoupent jamais le besoin).
 # "proposable" : False pour un service masqué dans l'écran Connexions du site (Google Workspace
-#   en préversion, Google Drive). Le proposer ferait afficher une carte vide : à passer à True
-#   seulement quand le site l'affiche, sur décision de Bourama.
+#   en préversion, Google Drive, Microsoft, Netlify, Cloudflare). Le proposer ferait afficher une
+#   carte vide : à passer à True seulement quand le site l'affiche, sur décision de Bourama.
+#   Source de vérité côté site : tests/verifier-connexions.mjs (visibleDansEspaceConnexions).
+#   Un service non proposable n'apparaît ni dans l'état des connexions, ni dans les catégories
+#   offertes à l'IA par demander_outils (voir CATEGORIES_SERVICES_MASQUES plus bas).
 # ---------------------------------------------------------------------------
 SERVICES_CONNECTABLES = [
     {"service": "github", "label": "GitHub", "categorie": "github", "proposable": True,
      "mots_cles": "github depot dépôt code repository repo commit branche pull request fichier source"},
     {"service": "notion", "label": "Notion", "categorie": "notion", "proposable": True,
      "mots_cles": "notion page base de données notes wiki espace de travail document"},
-    {"service": "microsoft_mcp", "label": "Microsoft Enterprise", "categorie": "microsoft_mcp", "proposable": True,
+    {"service": "microsoft_mcp", "label": "Microsoft Enterprise", "categorie": "microsoft_mcp", "proposable": False,
      "mots_cles": "microsoft entra graph entreprise annuaire utilisateurs locataire azure"},
-    {"service": "netlify_mcp", "label": "Netlify", "categorie": "netlify_mcp", "proposable": True,
+    {"service": "netlify_mcp", "label": "Netlify", "categorie": "netlify_mcp", "proposable": False,
      "mots_cles": "netlify site déployer deploiement déploiement hébergement build site web"},
     {"service": "render_mcp", "label": "Render", "categorie": "render_mcp", "proposable": True,
      "mots_cles": "render service déploiement hébergement serveur journaux logs backend"},
-    {"service": "cloudflare_mcp", "label": "Cloudflare", "categorie": "cloudflare_mcp", "proposable": True,
+    {"service": "cloudflare_mcp", "label": "Cloudflare", "categorie": "cloudflare_mcp", "proposable": False,
      "mots_cles": "cloudflare dns workers domaine cdn pages cache"},
     {"service": "higgsfield_mcp", "label": "Higgsfield", "categorie": "higgsfield", "proposable": True,
      "mots_cles": "higgsfield vidéo video image génération générer créer film clip animation"},
@@ -1602,6 +1605,20 @@ SERVICES_CONNECTABLES = [
     {"service": "google_people_mcp", "label": "Google People", "categorie": "google_people", "proposable": False,
      "mots_cles": "google people contacts profils"},
 ]
+
+# Catégories des services masqués dans l'écran Connexions (28/10/2026, demande de Bourama).
+# Calculées depuis SERVICES_CONNECTABLES : passer "proposable" à True suffit à les rendre à l'IA,
+# aucune autre liste à retoucher. NOMS_CATEGORIES_OUTILS reste la liste complète (elle sert à
+# retrouver les outils d'une catégorie et aux tests) ; seule la liste montrée à l'IA est filtrée,
+# sinon elle croit que ces services existent et ne les propose pas comme il faut.
+CATEGORIES_SERVICES_MASQUES = frozenset(s["categorie"] for s in SERVICES_CONNECTABLES if not s["proposable"])
+NOMS_CATEGORIES_PROPOSEES_A_L_IA = [n for n in NOMS_CATEGORIES_OUTILS if n not in CATEGORIES_SERVICES_MASQUES]
+
+
+def _categories_services_pour_index(entrees):
+    """Texte de l'index pour les catégories données (nom, texte), sans celles des services masqués."""
+    return ", ".join(texte for nom, texte in entrees if nom not in CATEGORIES_SERVICES_MASQUES)
+
 
 # Services qui existent en DEUX versions : celle de Classinus (notre API, clé partagée, sans
 # connexion) et celle du compte de l'utilisateur. Décision de Bourama (26/10/2026) : quand les
@@ -1635,9 +1652,26 @@ def _sources_documents_externes_pour_index():
 
 
 INDEX_CATEGORIES_OUTILS = (
-    "Catégories : google_gmail, google_docs, google_sheets, google_slides, google_calendar, "
-    "google_chat, google_classroom, google_people, microsoft_mcp (Microsoft Graph Entra, lecture seule), "
-    "render_mcp, cloudflare_mcp, netlify_mcp, notion, google_drive, github, vercel (sites et déploiements), "
+    "Catégories : "
+    + _categories_services_pour_index([
+        ("google_gmail", "google_gmail"),
+        ("google_docs", "google_docs"),
+        ("google_sheets", "google_sheets"),
+        ("google_slides", "google_slides"),
+        ("google_calendar", "google_calendar"),
+        ("google_chat", "google_chat"),
+        ("google_classroom", "google_classroom"),
+        ("google_people", "google_people"),
+        ("microsoft_mcp", "microsoft_mcp (Microsoft Graph Entra, lecture seule)"),
+        ("render_mcp", "render_mcp"),
+        ("cloudflare_mcp", "cloudflare_mcp"),
+        ("netlify_mcp", "netlify_mcp"),
+        ("notion", "notion"),
+        ("google_drive", "google_drive"),
+        ("github", "github"),
+        ("vercel", "vercel (sites et déploiements)"),
+    ])
+    + ", "
     "railway (services et logs), supabase (base de données et SQL), "
     "higgsfield (compte Higgsfield de l'utilisateur : images, vidéos et tout le catalogue Higgsfield), "
     "higgsfield_classinus (génération de vidéo Higgsfield par l'API de Classinus, sans connexion), "

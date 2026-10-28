@@ -38,10 +38,62 @@ class RegistreDesServices(unittest.TestCase):
         for entree in r.SERVICES_CONNECTABLES:
             self.assertIn(entree["categorie"], r.NOMS_CATEGORIES_OUTILS, entree["service"])
 
+    SERVICES_MASQUES = (
+        "google_drive", "google_gmail_mcp", "google_docs_mcp", "google_sheets_mcp", "google_slides_mcp",
+        "google_calendar_mcp", "google_chat_mcp", "google_classroom_mcp", "google_people_mcp",
+        "microsoft_mcp", "netlify_mcp", "cloudflare_mcp",
+    )
+    SERVICES_VISIBLES = (
+        "github", "notion", "render_mcp", "higgsfield_mcp", "vercel_mcp", "railway_mcp", "supabase_mcp",
+    )
+
+    def _entree(self, service):
+        return next(s for s in r.SERVICES_CONNECTABLES if s["service"] == service)
+
     def test_les_services_masques_dans_l_ecran_connexions_ne_sont_pas_proposables(self):
-        # Meme decision que lib/outils.ts : Google Workspace en previsualisation et Drive restent masques.
-        for service in ("google_drive", "google_gmail_mcp", "google_docs_mcp"):
-            self.assertFalse(next(s for s in r.SERVICES_CONNECTABLES if s["service"] == service)["proposable"])
+        # Meme decision que tests/verifier-connexions.mjs du site : les 12 services masques.
+        for service in self.SERVICES_MASQUES:
+            with self.subTest(service=service):
+                self.assertFalse(self._entree(service)["proposable"])
+
+    def test_les_services_visibles_dans_l_ecran_connexions_restent_proposables(self):
+        for service in self.SERVICES_VISIBLES:
+            with self.subTest(service=service):
+                self.assertTrue(self._entree(service)["proposable"])
+
+    def test_le_registre_ne_contient_que_les_services_masques_et_visibles_connus(self):
+        # Un nouveau service doit etre range ici (visible ou masque) en meme temps que sur le site.
+        self.assertEqual(
+            {s["service"] for s in r.SERVICES_CONNECTABLES},
+            set(self.SERVICES_MASQUES) | set(self.SERVICES_VISIBLES),
+        )
+
+    def test_l_ia_ne_voit_pas_les_categories_des_services_masques(self):
+        for service in self.SERVICES_MASQUES:
+            categorie = self._entree(service)["categorie"]
+            with self.subTest(categorie=categorie):
+                self.assertNotIn(categorie, r.NOMS_CATEGORIES_PROPOSEES_A_L_IA)
+                self.assertNotIn(categorie, [c.strip(" ,.:()") for c in r.INDEX_CATEGORIES_OUTILS.replace("(", " ").split()])
+
+    def test_l_ia_voit_les_categories_des_services_visibles(self):
+        for service in self.SERVICES_VISIBLES:
+            categorie = self._entree(service)["categorie"]
+            with self.subTest(categorie=categorie):
+                self.assertIn(categorie, r.NOMS_CATEGORIES_PROPOSEES_A_L_IA)
+                self.assertIn(categorie, r.INDEX_CATEGORIES_OUTILS)
+
+    def test_les_categories_sans_service_a_connecter_restent_offertes(self):
+        for categorie in ("generation_documents", "recherche_web", "documents_externes", "serveurs_personnalises", "higgsfield_classinus"):
+            with self.subTest(categorie=categorie):
+                self.assertIn(categorie, r.NOMS_CATEGORIES_PROPOSEES_A_L_IA)
+
+    def test_l_enum_de_demander_outils_est_la_liste_filtree(self):
+        import routage_outils
+
+        enum = routage_outils._outil_demander_outils()["function"]["parameters"]["properties"]["recherches"]["items"]["properties"]["categorie"]["enum"]
+        self.assertEqual(enum, r.NOMS_CATEGORIES_PROPOSEES_A_L_IA)
+        for masquee in r.CATEGORIES_SERVICES_MASQUES:
+            self.assertNotIn(masquee, enum)
 
     def test_services_sans_doublon(self):
         noms = [s["service"] for s in r.SERVICES_CONNECTABLES]
@@ -54,7 +106,18 @@ class RetrouverUnServiceNonConnecte(unittest.TestCase):
 
     def test_deployer_un_site_propose_une_plateforme_de_deploiement(self):
         noms = self._noms("deployer mon site web")
-        self.assertTrue({"vercel_mcp", "netlify_mcp"} & set(noms), noms)
+        self.assertIn("vercel_mcp", noms)
+        # Netlify est masque dans l'ecran Connexions du site : l'IA ne le propose plus.
+        self.assertNotIn("netlify_mcp", noms)
+
+    def test_netlify_cloudflare_et_microsoft_ne_sont_jamais_proposes(self):
+        for besoin, service in (
+            ("deployer mon site sur netlify", "netlify_mcp"),
+            ("regler mon dns cloudflare", "cloudflare_mcp"),
+            ("lister les utilisateurs microsoft entra", "microsoft_mcp"),
+        ):
+            with self.subTest(besoin=besoin):
+                self.assertNotIn(service, self._noms(besoin))
 
     def test_requete_sur_une_base_de_donnees_propose_supabase(self):
         self.assertIn("supabase_mcp", self._noms("interroger ma base de données avec une requête sql"))
