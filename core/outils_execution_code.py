@@ -10,6 +10,7 @@ import os
 import re
 import shlex
 import time
+import uuid
 from pathlib import PurePosixPath
 from typing import Literal
 
@@ -467,37 +468,65 @@ def _fichiers_workspace(sandbox, configuration: dict) -> str:
     return f"Archive du workspace prête : {url}\nFichiers inclus : {len(fichiers)}.{avertissement}"
 
 
-def _lire_octets_fichier(sandbox, distant: str, timeout: int, limite: int):
-    """Lit un fichier du workspace en octets, par morceaux d'abord.
+_TAILLE_MORCEAU = 1048576
+_SEUIL_LECTURE_DIRECTE = 2097152
 
-    Test réel du 28/10/2026 : la lecture d'un seul bloc (format bytes) échoue avec ReadError
-    pour un fichier binaire de plus de 4 Mo environ. La lecture par morceaux (format stream)
-    ne garde pas toute la réponse d'un coup. En cas d'échec, on retente en un seul bloc, et
-    le détail de l'erreur est écrit dans les logs pour le diagnostic. Renvoie None si illisible.
+
+def _lire_direct(sandbox, distant: str, timeout: int):
+    contenu = sandbox.files.read(distant, format="bytes", request_timeout=timeout)
+    if isinstance(contenu, str):
+        contenu = contenu.encode("utf-8")
+    return bytes(contenu) if isinstance(contenu, (bytes, bytearray)) else None
+
+
+def _lire_octets_fichier(sandbox, distant: str, taille: int, timeout: int, limite: int):
+    """Lit un fichier du workspace en octets. Renvoie None si illisible.
+
+    Cause trouvée dans les logs de production le 28/10/2026 : pour un fichier binaire de
+    plus de 3,6 Mo environ, la connexion avec le sandbox est coupée par le serveur
+    (« detected excessive load generating behavior »), en lecture d'un bloc comme en lecture
+    par flux. Les textes passent car ils se compressent. Solution : au-dessus de 2 Mo, le
+    fichier est découpé en morceaux de 1 Mo DANS le sandbox, lus un par un (chacun passe),
+    puis recollés. Si le découpage échoue, repli sur la lecture directe.
     """
-    for mode in ("stream", "bytes"):
+    if taille > limite:
+        return None
+    if taille <= _SEUIL_LECTURE_DIRECTE:
         try:
-            if mode == "stream":
-                morceaux, total = [], 0
-                with sandbox.files.read(distant, format="stream", request_timeout=timeout) as flux:
-                    for morceau in flux:
-                        total += len(morceau)
-                        if total > limite:
-                            logging.warning("ERREUR lecture fichier workspace : plus gros que la limite configurée")
-                            return None
-                        morceaux.append(bytes(morceau))
-                return b"".join(morceaux)
-            contenu = sandbox.files.read(distant, format="bytes", request_timeout=timeout)
-            if isinstance(contenu, str):
-                contenu = contenu.encode("utf-8")
-            if isinstance(contenu, (bytes, bytearray)):
-                return bytes(contenu)
+            return _lire_direct(sandbox, distant, timeout)
         except Exception as erreur:
-            logging.warning(
-                "ERREUR lecture fichier workspace (%s) : %s %s",
-                mode, type(erreur).__name__, str(erreur)[:200],
-            )
-    return None
+            logging.warning("ERREUR lecture fichier workspace (direct) : %s %s", type(erreur).__name__, str(erreur)[:200])
+            return None
+    echeance = time.monotonic() + timeout
+    dossier = f"/tmp/classinus_morceaux_{uuid.uuid4().hex}"
+    try:
+        decoupe = _lancer_commande(
+            sandbox,
+            f"mkdir -p {dossier} && split -b {_TAILLE_MORCEAU} -d -a 4 {shlex.quote(distant)} {dossier}/p_ && ls {dossier}",
+            max(5, timeout), max(5, timeout) + 5,
+        )
+        if getattr(decoupe, "exit_code", 1) != 0:
+            raise OSError("découpage impossible")
+        noms = sorted(n for n in (getattr(decoupe, "stdout", "") or "").split() if n.startswith("p_"))
+        morceaux = []
+        for nom in noms:
+            reste = echeance - time.monotonic()
+            if reste <= 0:
+                raise TimeoutError("durée maximale de lecture atteinte")
+            morceau = _lire_direct(sandbox, f"{dossier}/{nom}", max(1, int(reste)))
+            if morceau is None:
+                raise OSError("morceau illisible")
+            morceaux.append(morceau)
+        contenu = b"".join(morceaux)
+        return contenu if len(contenu) == taille else None
+    except Exception as erreur:
+        logging.warning("ERREUR lecture fichier workspace (morceaux) : %s %s", type(erreur).__name__, str(erreur)[:200])
+        return None
+    finally:
+        try:
+            _lancer_commande(sandbox, f"rm -rf {dossier}", 10, 15)
+        except Exception:
+            pass
 
 
 def _fichier_seul_workspace(sandbox, configuration: dict, path: str) -> str:
@@ -529,7 +558,7 @@ def _fichier_seul_workspace(sandbox, configuration: dict, path: str) -> str:
             f"Le fichier {relatif} fait {taille} octets, au-dessus de la limite de {limite} octets "
             "configurée pour la sortie d'un fichier."
         )
-    contenu = _lire_octets_fichier(sandbox, distant, timeout, limite)
+    contenu = _lire_octets_fichier(sandbox, distant, taille, timeout, limite)
     if contenu is None:
         return f"Impossible de lire le fichier : {relatif}"
     from core.generation_code import generer_zip_depuis_fichiers
