@@ -27,7 +27,7 @@ ORIGINES = ("memoire", "skills", "configuration", "chat")
 PAGES_RESULTAT = {
     "memoire": "/memoire",
     "skills": "/comportements",
-    "configuration": "/bureau/configuration",
+    "configuration": "/configuration",
     "chat": "/",
 }
 
