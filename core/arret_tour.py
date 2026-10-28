@@ -18,6 +18,8 @@ import threading
 class ArretTour:
     def __init__(self, user_id):
         self.user_id = user_id
+        # Vrai pour le chat du site : il veut recevoir l'etat de reprise avant la fermeture du flux.
+        self.avec_etat = False
         self._evenement = threading.Event()
 
     def demander(self):

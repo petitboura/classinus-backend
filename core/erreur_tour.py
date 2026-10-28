@@ -9,7 +9,7 @@ garde tous les resultats d'outils deja obtenus) au lieu d'un "Reessayer" qui rep
 Le client qui n'a pas demande ces erreurs typees (erreurs_typees=False : plugin Thonny,
 serveur MCP, import depuis une autre IA) recoit exactement l'ancienne phrase d'excuse.
 """
-from boucle_agent import _evenement_reprise_agent
+from boucle_agent import _evenement_reprise_agent, messages_reprenables
 from constantes_agent import MESSAGE_ERREUR
 
 CODE_DELAI = "delai"
@@ -34,26 +34,6 @@ def classer_erreur(erreur):
     if any(mot in texte for mot in _MOTS_FORTE_DEMANDE):
         return CODE_FORTE_DEMANDE
     return CODE_SERVEUR
-
-
-def messages_reprenables(messages_agent):
-    """
-    Copie de messages_agent sans appel d'outil resté sans reponse. Une exception en plein
-    tour peut laisser un message assistant qui annonce des outils sans leurs resultats ;
-    le renvoyer tel quel ferait refuser la reprise par le fournisseur.
-    """
-    messages = list(messages_agent)
-    dernier = None
-    for i in range(len(messages) - 1, -1, -1):
-        m = messages[i]
-        if isinstance(m, dict) and m.get("role") == "assistant" and m.get("tool_calls"):
-            dernier = i
-            break
-    if dernier is None:
-        return messages
-    identifiants = {appel.get("id") for appel in messages[dernier]["tool_calls"]}
-    repondus = {m.get("tool_call_id") for m in messages[dernier + 1:] if isinstance(m, dict) and m.get("role") == "tool"}
-    return messages if identifiants <= repondus else messages[:dernier]
 
 
 def _texte_excuse(langue_interface):
