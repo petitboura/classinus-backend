@@ -32,20 +32,28 @@ def _attendre(import_id, user_id, delai=3.0):
 
 
 def test_textes_sans_double_tiret_et_complets():
-    for cible in cfg.CIBLES:
-        for langue in ("fr", "en"):
-            textes = [cfg.prompt_export(cible, langue), cfg.consigne_llm(cible, langue), cfg.libelle_historique(cible, langue)]
-            for t in textes:
-                assert t.strip() and "--" not in t and "\u2014" not in t
-        assert cfg.PAGES_RESULTAT[cible].startswith("/")
+    for langue in ("fr", "en"):
+        for t in (cfg.prompt_export(langue), cfg.consigne_llm(langue), cfg.libelle_historique(langue)):
+            assert t.strip() and "--" not in t and "\u2014" not in t
+        # La liste des applications connectées est toujours demandée, et gardée pour un rappel.
+        assert "applications-connectees.md" in cfg.prompt_export(langue)
+        assert "applications_a_reconnecter" in cfg.consigne_llm(langue)
+    for origine in cfg.ORIGINES:
+        assert cfg.PAGES_RESULTAT[origine].startswith("/")
     for cle in ("termine", "echec"):
         for langue in ("fr", "en"):
             titre, corps = cfg.textes_notification(cle, langue)
             assert titre and corps and "--" not in corps
 
 
+def test_meme_prompt_pour_toutes_les_origines():
+    # Un seul prompt et une seule consigne : rien ne dépend de la section d'où part l'utilisateur.
+    assert cfg.prompt_export("fr") == cfg.prompt_export("fr")
+    assert set(cfg.PAGES_RESULTAT) == set(cfg.ORIGINES)
+
+
 def test_liens_des_ias():
-    ias = {ia["id"]: ia for ia in cfg.ias_pour_cible("skills", "fr")}
+    ias = {ia["id"]: ia for ia in cfg.ias_export("fr")}
     assert ias["claude"]["prerempli"] is True and ias["claude"]["url"].startswith("https://claude.ai/new?q=")
     assert " " not in ias["claude"]["url"]
     assert ias["gemini"]["prerempli"] is False and "{prompt}" not in ias["gemini"]["url"]
@@ -66,6 +74,7 @@ def test_fin_normale_et_notification():
     assert appels[0]["zips_en_attente"] == ["job-1"] and appels[0]["user_id"] == "u1"
     assert appels[0]["conversation_id"] == r["conversation_id"]
     assert notif.call_args[0][1] == "action_ia_terminee" and notif.call_args.kwargs["lien"] == "/comportements"
+    assert appels[0]["message_utilisateur"] == cfg.consigne_llm("fr")
 
 
 def test_pas_visible_par_un_autre_utilisateur():
@@ -73,7 +82,7 @@ def test_pas_visible_par_un_autre_utilisateur():
         yield {"type": "reponse", "texte": "ok"}
 
     with patch.object(imp, "creer_notification"):
-        r = imp.demarrer("u2", "memoire", "job-2", "en", chat_generateur=faux_chat)
+        r = imp.demarrer("u2", "chat", "job-2", "en", chat_generateur=faux_chat)
         _attendre(r["import_id"], "u2")
     assert imp.lire_etat(r["import_id"], "autre") is None
 
@@ -119,7 +128,7 @@ def test_exception_donne_un_echec_propre():
     assert etat["statut"] == "echec" and notif.called
 
 
-def test_un_seul_import_actif_par_cible():
+def test_un_seul_import_actif_par_utilisateur():
     libere = []
 
     def lent(**kw):
@@ -129,11 +138,11 @@ def test_un_seul_import_actif_par_cible():
 
     with patch.object(imp, "creer_notification"):
         r = imp.demarrer("u6", "skills", "job-6", "fr", chat_generateur=lent)
-        assert imp.import_en_cours("u6", "skills") == r["import_id"]
-        assert imp.import_en_cours("u6", "memoire") is None
+        assert imp.import_en_cours("u6") == r["import_id"]
+        assert imp.import_en_cours("autre") is None
         libere.append(1)
         _attendre(r["import_id"], "u6")
-    assert imp.import_en_cours("u6", "skills") is None
+    assert imp.import_en_cours("u6") is None
 
 
 if __name__ == "__main__":

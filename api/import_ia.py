@@ -1,7 +1,8 @@
 """Routes de l'import depuis une autre IA (27/10/2026, demande Bourama).
 
-- GET  /api/import-ia/{cible}        : prompt d'export et liste des IA à ouvrir (cible : memoire, skills, configuration)
-- POST /api/import-ia/{cible}/zip    : dépose le zip, le serveur fait travailler le LLM en arrière-plan
+- GET  /api/import-ia                : prompt d'export (le même pour tous les boutons) et liste des IA à ouvrir
+- POST /api/import-ia/zip?origine=   : dépose le zip, le serveur fait travailler le LLM en arrière-plan
+                                       (origine : memoire, skills, configuration, chat, sert au lien de fin)
 - GET  /api/import-ia/statut/{id}    : étape en cours, fin ou échec
 
 Le travail lui-même vit dans core/import_depuis_autre_ia.py.
@@ -29,10 +30,10 @@ def _langue(request: Request) -> str:
     return "en" if valeur == "en" or valeur.startswith("en-") else "fr"
 
 
-def _verifier_cible(cible: str) -> str:
-    if cible not in config_import_ia.CIBLES:
+def _verifier_origine(origine: str) -> str:
+    if origine not in config_import_ia.ORIGINES:
         raise erreur_api(404, "IMPORT_IA_CIBLE_INCONNUE")
-    return cible
+    return origine
 
 
 @router.get("/statut/{import_id}")
@@ -43,20 +44,15 @@ def statut_import(import_id: str, utilisateur=Depends(utilisateur_courant)):
     return etat
 
 
-@router.get("/{cible}")
-def configuration_import(cible: str, request: Request, utilisateur=Depends(utilisateur_courant)):
-    _verifier_cible(cible)
+@router.get("")
+def configuration_import(request: Request, utilisateur=Depends(utilisateur_courant)):
     langue = _langue(request)
-    return {
-        "cible": cible,
-        "prompt": config_import_ia.prompt_export(cible, langue),
-        "ias": config_import_ia.ias_pour_cible(cible, langue),
-    }
+    return {"prompt": config_import_ia.prompt_export(langue), "ias": config_import_ia.ias_export(langue)}
 
 
-@router.post("/{cible}/zip")
-async def deposer_zip(cible: str, request: Request, fichier: UploadFile = File(...), utilisateur=Depends(utilisateur_courant)):
-    _verifier_cible(cible)
+@router.post("/zip")
+async def deposer_zip(request: Request, origine: str = "chat", fichier: UploadFile = File(...), utilisateur=Depends(utilisateur_courant)):
+    _verifier_origine(origine)
     langue = _langue(request)
     # Même règle que le chat : le travail passe par le chat, donc par ses restrictions.
     if acces_chat_bloque_pour_mineur(utilisateur.id):
@@ -68,8 +64,8 @@ async def deposer_zip(cible: str, request: Request, fichier: UploadFile = File(.
         raise erreur_api(400, "FICHIER_VIDE")
     if len(contenu) > TAILLE_MAX_ZIP_CHAT_OCTETS:
         raise erreur_api(400, "ZIP_TROP_LOURD_200_MO_MAX")
-    deja = import_depuis_autre_ia.import_en_cours(utilisateur.id, cible)
+    deja = import_depuis_autre_ia.import_en_cours(utilisateur.id)
     if deja:
         raise erreur_api(409, "IMPORT_IA_DEJA_EN_COURS")
     job_zip = demarrer_extraction_zip_chat(contenu, fichier.filename or "archive.zip")
-    return import_depuis_autre_ia.demarrer(utilisateur.id, cible, job_zip, langue)
+    return import_depuis_autre_ia.demarrer(utilisateur.id, origine, job_zip, langue)

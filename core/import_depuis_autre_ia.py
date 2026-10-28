@@ -1,7 +1,7 @@
 """Import depuis une autre IA, exécuté côté serveur (27/10/2026, demande Bourama).
 
-Le zip exporté par l'autre IA est déposé par l'utilisateur sur la page Mémoire, Skills ou
-Configuration (ou dans le chat). Ici, le serveur fait travailler le LLM de Classinus EXACTEMENT
+Le zip exporté par l'autre IA est déposé par l'utilisateur depuis un bouton de la page Mémoire,
+Skills ou Configuration, ou du bandeau du chat : tous font le même import. Ici, le serveur fait travailler le LLM de Classinus EXACTEMENT
 comme si l'utilisateur avait joint ce zip dans le chat avec la consigne de config_import_ia.py :
 même moteur (core/main.py:chat), mêmes outils (gerer_skill, mémoire, gerer_configuration),
 même historique. Le travail continue si l'utilisateur ferme la page.
@@ -43,11 +43,14 @@ def _nettoyer(maintenant: float) -> None:
         _ETATS.pop(cle, None)
 
 
-def import_en_cours(user_id: str, cible: str) -> str | None:
-    """Identifiant d'un import encore actif pour cet utilisateur et cette cible, sinon None."""
+def import_en_cours(user_id: str) -> str | None:
+    """Identifiant d'un import encore actif pour cet utilisateur, sinon None.
+
+    Tous les boutons font le même import : un seul à la fois par utilisateur, d'où qu'il soit lancé.
+    """
     with _VERROU:
         for cle, etat in _ETATS.items():
-            if etat["user_id"] == user_id and etat["cible"] == cible and not etat["fin"]:
+            if etat["user_id"] == user_id and not etat["fin"]:
                 return cle
     return None
 
@@ -68,7 +71,7 @@ def lire_etat(import_id: str, user_id: str) -> dict | None:
         }
 
 
-def demarrer(user_id: str, cible: str, job_zip: str, langue: str | None, chat_generateur=None) -> dict:
+def demarrer(user_id: str, origine: str, job_zip: str, langue: str | None, chat_generateur=None) -> dict:
     """Crée l'import et lance le travail en arrière-plan. Renvoie tout de suite l'identifiant.
 
     `chat_generateur` n'est passé que par les tests ; en vrai, c'est core/main.py:chat.
@@ -80,12 +83,12 @@ def demarrer(user_id: str, cible: str, job_zip: str, langue: str | None, chat_ge
     with _VERROU:
         _nettoyer(time.time())
         _ETATS[import_id] = {
-            "user_id": user_id, "cible": cible, "statut": "en_cours", "etape": "",
+            "user_id": user_id, "cible": origine, "statut": "en_cours", "etape": "",
             "reponse": "", "conversation_id": conversation_id, "fin": None,
         }
     threading.Thread(
         target=_executer,
-        args=(import_id, user_id, cible, job_zip, langue, conversation_id, chat_generateur),
+        args=(import_id, user_id, origine, job_zip, langue, conversation_id, chat_generateur),
         daemon=True,
     ).start()
     return {"import_id": import_id, "conversation_id": conversation_id}
@@ -98,17 +101,17 @@ def _maj(import_id: str, **champs) -> None:
             etat.update(champs)
 
 
-def _terminer(import_id: str, user_id: str, cible: str, langue: str | None, statut: str, **champs) -> None:
+def _terminer(import_id: str, user_id: str, origine: str, langue: str | None, statut: str, **champs) -> None:
     _maj(import_id, statut=statut, fin=time.time(), **champs)
     titre, corps = config_import_ia.textes_notification("termine" if statut == "termine" else "echec", langue)
-    creer_notification(user_id, "action_ia_terminee", titre, corps, lien=config_import_ia.PAGES_RESULTAT[cible])
+    creer_notification(user_id, "action_ia_terminee", titre, corps, lien=config_import_ia.PAGES_RESULTAT[origine])
 
 
-def _executer(import_id, user_id, cible, job_zip, langue, conversation_id, chat_generateur) -> None:
+def _executer(import_id, user_id, origine, job_zip, langue, conversation_id, chat_generateur) -> None:
     arret = ouvrir_arret(user_id)
     try:
-        consigne = config_import_ia.consigne_llm(cible, langue)
-        libelle = config_import_ia.libelle_historique(cible, langue)
+        consigne = config_import_ia.consigne_llm(langue)
+        libelle = config_import_ia.libelle_historique(langue)
         reprise = None
         reponses: list[str] = []
         for tentative in range(REPRISES_MAX + 1):
@@ -130,17 +133,17 @@ def _executer(import_id, user_id, cible, job_zip, langue, conversation_id, chat_
                 elif genre == "reponse" and evenement.get("texte"):
                     reponses.append(str(evenement["texte"]))
                 elif genre == "confirmation_requise":
-                    _terminer(import_id, user_id, cible, langue, "echec", etape="confirmation")
+                    _terminer(import_id, user_id, origine, langue, "echec", etape="confirmation")
                     return
                 elif genre == "limite_outils_atteinte" and evenement.get("etat_reprise"):
                     reprise = {"etat_reprise": evenement["etat_reprise"], "type": "continuer_agent"}
             if reprise is None:
                 break
         texte = "".join(reponses).strip()
-        _terminer(import_id, user_id, cible, langue, "termine", reponse=texte)
+        _terminer(import_id, user_id, origine, langue, "termine", reponse=texte)
     except Exception as e:
-        logging.error(f"ERREUR import depuis une autre IA (utilisateur {user_id}, cible {cible}) : {e}")
-        _terminer(import_id, user_id, cible, langue, "echec")
+        logging.error(f"ERREUR import depuis une autre IA (utilisateur {user_id}, origine {origine}) : {e}")
+        _terminer(import_id, user_id, origine, langue, "echec")
     finally:
         fermer_arret(arret)
         retirer_plafond_tour(user_id)
