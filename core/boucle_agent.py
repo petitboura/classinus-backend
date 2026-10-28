@@ -641,6 +641,12 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
             # mais geree ici a la main puisque demander_outils ne passe
             # jamais par _traiter_appels/table_routage.
             nom_lisible_demande = _nom_lisible(NOM_OUTIL_DEMANDER_OUTILS)
+            # Libellé écrit par l'IA (28/10/2026, demande Bourama), comme pour les autres outils ;
+            # sans phrase valable, le texte fixe habituel reste affiché.
+            phrase_ia = demande.get("libelle")
+            titre_demande = phrase_ia or nom_lisible_demande
+            marque_ia = {"libelle_ia": True} if phrase_ia else {}
+            statut_fin_ia = False
             # id_appel/nom_outil ajoutes (19/09/2026, demande Bourama : la ligne
             # "Recherche d'un outil" restait figee a part, avec un texte
             # technique). Sans identifiant, le frontend ne peut pas rattacher
@@ -651,9 +657,11 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
             # statut_termine et outil_resultat, c'est une ligne normale.
             yield {
                 "type": "statut",
-                "texte": f"{nom_lisible_demande}...",
+                "texte": f"{titre_demande}...",
                 "id_appel": demande["id"],
                 "nom_outil": NOM_OUTIL_DEMANDER_OUTILS,
+                "nom_lisible": titre_demande,
+                **marque_ia,
             }
 
             recherches_valides = [r for r in demande["recherches"] if r["besoin"]]
@@ -793,7 +801,8 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     # Bourama : les noms techniques des outils trouves ne doivent
                     # plus s'afficher ici). Le detail, lui, reste visible en
                     # depliant la ligne (resultat_affichage, inchange).
-                    statut_fin = f"{nom_lisible_demande} effectuée"
+                    statut_fin = phrase_ia or f"{nom_lisible_demande} effectuée"
+                    statut_fin_ia = bool(phrase_ia)
                     resultat_affichage = "\n".join(lignes_detail)
                     # Les deux versions d'un même service (Classinus et compte de l'utilisateur) :
                     # celle de l'utilisateur d'abord, sauf demande contraire.
@@ -830,11 +839,12 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                         f"- {e['label']} : pas connecté, connexion proposée" for e in propositions.values()
                     )
 
-            yield {"type": "statut_termine", "texte": statut_fin, "id_appel": demande["id"]}
+            yield {"type": "statut_termine", "texte": statut_fin, "id_appel": demande["id"], **(marque_ia if statut_fin_ia else {})}
             yield {
                 "type": "outil_resultat",
                 "nom_outil": NOM_OUTIL_DEMANDER_OUTILS,
-                "nom_lisible": nom_lisible_demande,
+                **marque_ia,
+                "nom_lisible": titre_demande,
                 "resultat": resultat_affichage,
                 "id_appel": demande["id"],
             }
