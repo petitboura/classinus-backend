@@ -15,8 +15,10 @@ sys.path.append("core")  # comme les autres tests
 os.environ.setdefault("SUPABASE_URL", "http://localhost")
 os.environ.setdefault("SUPABASE_SECRET", "test")
 
+import boucle_agent  # noqa: E402
 import erreur_tour  # noqa: E402
 import main  # noqa: E402
+from core.arret_tour import ArretTour  # noqa: E402
 
 
 class ErreurFournisseur(Exception):
@@ -122,6 +124,33 @@ class ChatReprise(unittest.TestCase):
         self.assertEqual(evenements[0]["type"], "erreur_tour")
         self.assertEqual(evenements[0]["code"], "forte_demande")
         self.assertEqual(evenements[0]["etat_reprise"]["messages_agent"], self.ETAT["messages_agent"])
+
+
+class ArretUtilisateur(unittest.TestCase):
+    """Clic sur Arrêter : le flux se ferme avec l'etat de reprise des outils deja obtenus."""
+
+    def _arret(self, avec_etat):
+        jeton = ArretTour("utilisateur")
+        jeton.avec_etat = avec_etat
+        jeton.demander()
+        return jeton
+
+    def _jouer(self, messages, arret):
+        return list(boucle_agent._agent_groq(None, messages, [], {}, arret=arret, modele="m", agent_nom="A"))
+
+    def test_etat_envoye_avec_les_outils_obtenus(self):
+        messages = BASE + [_appel("a"), _resultat("a"), _appel("b")]
+        evenements = self._jouer(messages, self._arret(True))
+        self.assertEqual([e["type"] for e in evenements], ["arret_tour"])
+        self.assertEqual(evenements[0]["etat_reprise"]["messages_agent"], BASE + [_appel("a"), _resultat("a")])
+
+    def test_sans_outil_pas_d_etat(self):
+        evenements = self._jouer(list(BASE), self._arret(True))
+        self.assertEqual(evenements, [{"type": "arret_tour", "etat_reprise": None}])
+
+    def test_client_qui_ne_le_demande_pas_ne_recoit_rien(self):
+        messages = BASE + [_appel("a"), _resultat("a")]
+        self.assertEqual(self._jouer(messages, self._arret(False)), [])
 
 
 class ReprisePayload(unittest.TestCase):

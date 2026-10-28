@@ -105,6 +105,42 @@ def _evenement_reprise_agent(type_evenement, messages_agent, outils_mcp, table_r
     }
 
 
+def messages_reprenables(messages_agent):
+    """
+    Copie de messages_agent sans appel d'outil resté sans reponse. Un arret ou une exception
+    en plein tour peut laisser un message assistant qui annonce des outils sans leurs
+    resultats ; le renvoyer tel quel ferait refuser la reprise par le fournisseur.
+    """
+    messages = list(messages_agent)
+    dernier = None
+    for i in range(len(messages) - 1, -1, -1):
+        m = messages[i]
+        if isinstance(m, dict) and m.get("role") == "assistant" and m.get("tool_calls"):
+            dernier = i
+            break
+    if dernier is None:
+        return messages
+    identifiants = {appel.get("id") for appel in messages[dernier]["tool_calls"]}
+    repondus = {m.get("tool_call_id") for m in messages[dernier + 1:] if isinstance(m, dict) and m.get("role") == "tool"}
+    return messages if identifiants <= repondus else messages[:dernier]
+
+
+def _evenement_arret_tour(arret, messages_agent, outils_mcp, table_routage, modele, reasoning_effort, agent_nom):
+    """
+    Evenement envoye juste avant de fermer le flux quand l'utilisateur a clique sur Arrêter, pour
+    que le chat puisse proposer "Continuer" avec les resultats d'outils deja obtenus. Seulement
+    si le chat du site l'a demande (jeton.avec_etat, voir api/chat.py) : les autres clients ne
+    connaissent pas cet evenement. etat_reprise vaut None quand aucun outil n'avait tourne.
+    """
+    if arret is None or not getattr(arret, "avec_etat", False):
+        return None
+    messages = messages_reprenables(messages_agent)
+    etat_reprise = None
+    if any(isinstance(m, dict) and m.get("role") == "tool" for m in messages):
+        etat_reprise = _evenement_reprise_agent("arret_tour", messages, outils_mcp, table_routage, modele, reasoning_effort, agent_nom)["etat_reprise"]
+    return {"type": "arret_tour", "etat_reprise": etat_reprise}
+
+
 def _detecter_appel_repete(historique_appels, nouveaux_appels, tolerance):
     """
     Parcourt `nouveaux_appels` (lot du tour courant) a la suite de
@@ -329,6 +365,9 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
     etape = 0
     while True:
         if arret is not None and arret.est_demande():
+            evenement_arret = _evenement_arret_tour(arret, messages_agent, outils_mcp, table_routage, modele, reasoning_effort, agent_nom)
+            if evenement_arret:
+                yield evenement_arret
             return
         if etape >= budget_courant:
             if budget_courant >= plafond_absolu:
@@ -424,6 +463,9 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     completion.close()
                 except Exception:
                     pass
+                evenement_arret = _evenement_arret_tour(arret, messages_agent, outils_mcp, table_routage, modele, reasoning_effort, agent_nom)
+                if evenement_arret:
+                    yield evenement_arret
                 return
             # Diagnostic du bug de troncature (27/07) : le dernier chunk
             # du flux porte finish_reason ("stop" = fin normale, "length" =

@@ -356,6 +356,8 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
         debuter_tour(user_id)
     # Jeton d'arrêt de ce tour (12/10/2026, bouton Arrêter) : levé par POST /api/chat/arreter.
     arret = ouvrir_arret(user_id)
+    if arret is not None:
+        arret.avec_etat = bool(payload.erreurs_typees)
     try:
         if payload.reprise is not None:
             generateur = chat_generateur(
