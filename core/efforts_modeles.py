@@ -9,7 +9,7 @@ Chaque fournisseur a son propre vocabulaire pour dire « réfléchis plus ou moi
     GPT      : reasoning.effort  none, low, medium, high, xhigh, max (selon le modèle)
     Claude   : output_config.effort  low, medium, high, xhigh, max
     Gemini   : thinking_level  low, medium, high
-    Meta     : reasoning.effort  minimal, low, medium, high, xhigh, max (28/10/2026, à confirmer au premier test réel)
+    Meta     : reasoning.effort  minimal, low, medium, high, xhigh, max (vérifié dans la doc officielle Meta le 29/10/2026 : "none" refusé, "max" confirmé pour Muse Spark 1.3 et Muse Wonder)
 
 Ce module est la source unique de cette liste : le backend s'en sert pour revalider l'effort
 reçu du frontend (jamais de confiance dans le client), et le frontend la reçoit avec chaque
@@ -51,7 +51,7 @@ EFFORTS_PAR_PREFIXE_MODELE = (
     ("grok-4.7", ("low", "medium", "high", "xhigh")),
     ("grok-4.3", ("none", "low", "medium", "high")),
     ("muse-spark-1.3", ("minimal", "low", "medium", "high", "xhigh", "max")),
-    ("muse-wonder", ("minimal", "low", "medium", "high", "xhigh", "max")),
+    ("muse-wonder-1.0", ("minimal", "low", "medium", "high", "xhigh", "max")),
 )
 
 # Fournisseurs dont les modèles passent par un adaptateur d'outils (voir

@@ -152,10 +152,10 @@ class ClientResponses(ClientCompatible):
     def _ouvrir(self, modele, instructions, entree, outils, effort):
         """
         Ouvre le flux. Le résumé du raisonnement est refusé par OpenAI aux organisations non
-        vérifiées : dans ce cas on rouvre sans résumé plutôt que de faire échouer le message.
+        vérifiées : dans ce cas on rouvre sans résumé (même repli pour Meta).
         """
-        # Résumé du raisonnement : OpenAI seulement (Meta ne le propose pas, à confirmer au test réel).
-        avec_resume = self.fournisseur == "openai"
+        # Résumé du raisonnement : OpenAI et Meta (doc officielle Meta, page Raisonnement : reasoning.summary vaut "auto", "concise" ou "detailed", vérifié le 29/10/2026).
+        avec_resume = self.fournisseur in ("openai", "meta")
         try:
             return self._client.responses.create(
                 **self._arguments_requete(modele, instructions, entree, outils, effort, avec_resume)
@@ -163,7 +163,7 @@ class ClientResponses(ClientCompatible):
         except BadRequestError as erreur:
             texte = str(erreur).lower()
             if avec_resume and ("summary" in texte or "verif" in texte):
-                logging.warning(f"Résumé du raisonnement refusé par OpenAI, nouvel essai sans résumé : {erreur}")
+                logging.warning(f"Résumé du raisonnement refusé, nouvel essai sans résumé : {erreur}")
                 return self._client.responses.create(
                     **self._arguments_requete(modele, instructions, entree, outils, effort, False)
                 )

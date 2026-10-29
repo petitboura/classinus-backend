@@ -112,7 +112,7 @@ HIERARCHIE_MODELES = {
         # modèles. Identifiants standards seulement, jamais "-contributor" (les données des
         # élèves ne doivent pas entraîner les modèles Meta).
         "avance": {"id": "muse-spark-1.3", "label": "Muse Spark 1.3"},
-        "pro": {"id": "muse-wonder", "label": "Muse Wonder"},
+        "pro": {"id": "muse-wonder-1.0", "label": "Muse Wonder"},
     },
 }
 

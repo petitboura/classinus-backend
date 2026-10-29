@@ -238,7 +238,7 @@ class ModelesMeta(unittest.TestCase):
         config = _config_modeles_de_repli()
         self.assertNotIn("essentiel", config["modeles"]["meta"])
         self.assertEqual(config["modeles"]["meta"]["avance"]["id"], "muse-spark-1.3")
-        self.assertEqual(config["modeles"]["meta"]["pro"]["id"], "muse-wonder")
+        self.assertEqual(config["modeles"]["meta"]["pro"]["id"], "muse-wonder-1.0")
         self.assertTrue(config["fournisseurs"]["meta"]["bientot"])
         self.assertEqual(config["fournisseurs"]["meta"]["variable_cle_api"], "MODEL_API_KEY")
 
@@ -246,18 +246,18 @@ class ModelesMeta(unittest.TestCase):
         with patch.dict(os.environ, {"MODEL_API_KEY": "x", "DEEPSEEK_API_KEY": "x"}, clear=True):
             bientot = modeles_bientot_pour_agent("claude", "pro")
             meta = [m["modele_id"] for m in bientot if m["distributeur"] == "meta"]
-            self.assertEqual(meta, ["muse-wonder", "muse-spark-1.3"])
-            self.assertFalse(modele_id_est_autorise("muse-wonder", "claude", "pro"))
+            self.assertEqual(meta, ["muse-wonder-1.0", "muse-spark-1.3"])
+            self.assertFalse(modele_id_est_autorise("muse-wonder-1.0", "claude", "pro"))
 
     def test_meta_utilisable_quand_bientot_retire_et_cle_presente(self):
         with _avec_config_supabase(lambda config: config["fournisseurs"]["meta"].update(bientot=False)):
             with patch.dict(os.environ, {"MODEL_API_KEY": "x"}, clear=True):
                 disponibles = modeles_disponibles_pour_agent("gemini", "pro")
                 ids = [m["modele_id"] for m in disponibles]
-                self.assertEqual(ids, ["muse-wonder", "muse-spark-1.3"])
-                self.assertTrue(modele_id_est_autorise("muse-wonder", "gemini", "pro"))
+                self.assertEqual(ids, ["muse-wonder-1.0", "muse-spark-1.3"])
+                self.assertTrue(modele_id_est_autorise("muse-wonder-1.0", "gemini", "pro"))
                 # Meta est le dernier de la hierarchie : un agent debloque a Grok le voit aussi.
-                self.assertIn("muse-wonder", [m["modele_id"] for m in modeles_disponibles_pour_agent("grok", "pro")])
+                self.assertIn("muse-wonder-1.0", [m["modele_id"] for m in modeles_disponibles_pour_agent("grok", "pro")])
                 # Un agent debloque a Meta seul ne voit que Meta.
                 self.assertEqual({m["distributeur"] for m in modeles_disponibles_pour_agent("meta", "pro")}, {"meta"})
 
@@ -269,7 +269,7 @@ class ModelesMeta(unittest.TestCase):
     def test_modele_meta_reconnu_et_connexion_prevue(self):
         from core.fournisseurs_llm import distributeur_pour_modele_id, _STREAMERS_PAR_DISTRIBUTEUR
         with patch.object(fournisseurs_llm, "_lire_config_modeles_supabase", return_value=None):
-            self.assertEqual(distributeur_pour_modele_id("muse-wonder"), "meta")
+            self.assertEqual(distributeur_pour_modele_id("muse-wonder-1.0"), "meta")
         self.assertIn("meta", _STREAMERS_PAR_DISTRIBUTEUR)
 
     def test_connexion_meta_utilise_ladresse_meta(self):

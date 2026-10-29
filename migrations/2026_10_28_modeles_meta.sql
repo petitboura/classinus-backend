@@ -22,5 +22,5 @@ ON CONFLICT (distributeur) DO NOTHING;
 
 INSERT INTO public.modeles_llm (distributeur, palier, niveau, modele_id, label) VALUES
     ('meta', 'avance', 2, 'muse-spark-1.3', 'Muse Spark 1.3'),
-    ('meta', 'pro', 3, 'muse-wonder', 'Muse Wonder')
+    ('meta', 'pro', 3, 'muse-wonder-1.0', 'Muse Wonder')
 ON CONFLICT (distributeur, palier) DO NOTHING;

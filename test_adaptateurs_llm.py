@@ -346,19 +346,21 @@ class Meta(unittest.TestCase):
     def test_efforts_spark_et_wonder_minimal_a_max(self):
         attendu = ["minimal", "low", "medium", "high", "xhigh", "max"]
         self.assertEqual(efforts_pour_modele("muse-spark-1.3", "meta"), attendu)
-        self.assertEqual(efforts_pour_modele("muse-wonder", "meta"), attendu)
+        self.assertEqual(efforts_pour_modele("muse-wonder-1.0", "meta"), attendu)
         self.assertEqual(effort_defaut(attendu), "low")
 
-    def test_adaptateur_sans_stockage_avec_raisonnement_chiffre(self):
-        client = ClientResponses("cle", "meta")
-        self.assertIn("api.meta.ai", str(client._client.base_url))
-        captured = {}
-        client._client = NS(responses=NS(create=lambda **a: self._enregistrer(captured, a)))
-        lire_flux(client.chat.completions.create(model="muse-wonder", messages=[], reasoning_effort="high"))
-        self.assertIs(captured["store"], False)
-        self.assertEqual(captured["include"], ["reasoning.encrypted_content"])
-        self.assertEqual(captured["reasoning"], {"effort": "high"})
-        self.assertNotIn("summary", captured["reasoning"])
+    def test_adaptateur_sans_stockage_avec_resume_et_raisonnement_chiffre(self):
+        # Les deux modèles Meta demandent le résumé de raisonnement (doc officielle
+        # Meta, page Raisonnement : reasoning.summary vaut "auto", "concise" ou "detailed").
+        for modele in ("muse-spark-1.3", "muse-wonder-1.0"):
+            client = ClientResponses("cle", "meta")
+            self.assertIn("api.meta.ai", str(client._client.base_url))
+            captured = {}
+            client._client = NS(responses=NS(create=lambda **a: self._enregistrer(captured, a)))
+            lire_flux(client.chat.completions.create(model=modele, messages=[], reasoning_effort="high"))
+            self.assertIs(captured["store"], False)
+            self.assertEqual(captured["include"], ["reasoning.encrypted_content"])
+            self.assertEqual(captured["reasoning"], {"effort": "high", "summary": "auto"})
 
     def _enregistrer(self, captured, arguments):
         captured.update(arguments)
@@ -369,15 +371,15 @@ class Meta(unittest.TestCase):
         config = fournisseurs_llm._config_modeles_de_repli()
         with patch.object(clients.fournisseurs_llm, "_config_modeles", return_value=config), \
                 patch.dict("os.environ", {"MODEL_API_KEY": "x"}, clear=True):
-            self.assertTrue(clients.modele_a_des_outils("muse-wonder"))
+            self.assertTrue(clients.modele_a_des_outils("muse-wonder-1.0"))
             self.assertTrue(clients.modele_a_des_outils("muse-spark-1.3"))
-            client = clients.client_avec_outils("muse-wonder")
+            client = clients.client_avec_outils("muse-wonder-1.0")
             self.assertIsNotNone(client)
             self.assertEqual(client.fournisseur, "meta")
         with patch.object(clients.fournisseurs_llm, "_config_modeles", return_value=config), \
                 patch.dict("os.environ", {}, clear=True):
-            self.assertFalse(clients.modele_a_des_outils("muse-wonder"))
-            self.assertIsNone(clients.client_avec_outils("muse-wonder"))
+            self.assertFalse(clients.modele_a_des_outils("muse-wonder-1.0"))
+            self.assertIsNone(clients.client_avec_outils("muse-wonder-1.0"))
 
 
 if __name__ == "__main__":
