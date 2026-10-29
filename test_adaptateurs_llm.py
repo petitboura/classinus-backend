@@ -95,7 +95,7 @@ class Efforts(unittest.TestCase):
 
 class OutilsParModele(unittest.TestCase):
     def test_deepseek_et_les_quatre_autres_ont_les_outils_quand_la_cle_existe(self):
-        import clients_outils_llm as clients
+        from core import clients_outils_llm as clients
         config = fournisseurs_llm._config_modeles_de_repli()
         with patch.object(clients.fournisseurs_llm, "_config_modeles", return_value=config), \
                 patch.dict("os.environ", {"DEEPSEEK_API_KEY": "x", "XAI_API_KEY": "x"}, clear=True):
@@ -338,6 +338,46 @@ class Gemini(unittest.TestCase):
         _, _, appels, _ = lire_flux(client.chat.completions.create(model="gemini-3.8-flash", messages=[], tools=OUTILS))
         self.assertTrue(appels[0]["id"])
         self.assertEqual(client.etat_dernier_tour()["parties"][0]["function_call"]["id"], appels[0]["id"])
+
+
+class Meta(unittest.TestCase):
+    """Meta (28/10/2026, staging en Bientôt) : adaptateur Responses sans appel réseau."""
+
+    def test_efforts_spark_et_wonder_minimal_a_max(self):
+        attendu = ["minimal", "low", "medium", "high", "xhigh", "max"]
+        self.assertEqual(efforts_pour_modele("muse-spark-1.3", "meta"), attendu)
+        self.assertEqual(efforts_pour_modele("muse-wonder", "meta"), attendu)
+        self.assertEqual(effort_defaut(attendu), "low")
+
+    def test_adaptateur_sans_stockage_avec_raisonnement_chiffre(self):
+        client = ClientResponses("cle", "meta")
+        self.assertIn("api.meta.ai", str(client._client.base_url))
+        captured = {}
+        client._client = NS(responses=NS(create=lambda **a: self._enregistrer(captured, a)))
+        lire_flux(client.chat.completions.create(model="muse-wonder", messages=[], reasoning_effort="high"))
+        self.assertIs(captured["store"], False)
+        self.assertEqual(captured["include"], ["reasoning.encrypted_content"])
+        self.assertEqual(captured["reasoning"], {"effort": "high"})
+        self.assertNotIn("summary", captured["reasoning"])
+
+    def _enregistrer(self, captured, arguments):
+        captured.update(arguments)
+        return iter([NS(type="response.output_text.delta", delta="ok")])
+
+    def test_outils_actifs_quand_la_cle_meta_existe(self):
+        from core import clients_outils_llm as clients
+        config = fournisseurs_llm._config_modeles_de_repli()
+        with patch.object(clients.fournisseurs_llm, "_config_modeles", return_value=config), \
+                patch.dict("os.environ", {"MODEL_API_KEY": "x"}, clear=True):
+            self.assertTrue(clients.modele_a_des_outils("muse-wonder"))
+            self.assertTrue(clients.modele_a_des_outils("muse-spark-1.3"))
+            client = clients.client_avec_outils("muse-wonder")
+            self.assertIsNotNone(client)
+            self.assertEqual(client.fournisseur, "meta")
+        with patch.object(clients.fournisseurs_llm, "_config_modeles", return_value=config), \
+                patch.dict("os.environ", {}, clear=True):
+            self.assertFalse(clients.modele_a_des_outils("muse-wonder"))
+            self.assertIsNone(clients.client_avec_outils("muse-wonder"))
 
 
 if __name__ == "__main__":

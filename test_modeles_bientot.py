@@ -38,8 +38,8 @@ class ModelesBientot(unittest.TestCase):
             bientot = modeles_bientot_pour_agent("claude", "pro")
         self.assertEqual({m["distributeur"] for m in disponibles}, {"deepseek"})
         self.assertEqual({m["distributeur"] for m in bientot}, set(DISTRIBUTEURS_BIENTOT))
-        # 3 niveaux pour Claude, GPT et Gemini, 3 modèles pour Grok (grok-4.3 sert deux niveaux, plus grok-build-0.1).
-        self.assertEqual(len(bientot), 12)
+        # 3 niveaux pour Claude, GPT et Gemini, 3 modèles pour Grok (grok-4.3 sert deux niveaux, plus grok-build-0.1), 2 pour Meta (avance et pro).
+        self.assertEqual(len(bientot), 14)
 
     def test_aucun_modele_en_double(self):
         with patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True):
@@ -115,7 +115,7 @@ class ModelesBientot(unittest.TestCase):
             disponibles = modeles_disponibles_pour_agent("claude", "pro")
             bientot = modeles_bientot_pour_agent("claude", "pro")
         self.assertEqual({m["distributeur"] for m in disponibles}, {"deepseek"})
-        self.assertEqual(len(bientot), 12)
+        self.assertEqual(len(bientot), 14)
 
     def test_supabase_en_panne_garde_la_derniere_configuration_connue(self):
         def ouvrir_gpt(config):
@@ -150,9 +150,9 @@ class ModelesGrok(unittest.TestCase):
     def tearDown(self):
         reinitialiser_cache_config_modeles()
 
-    def test_grok_en_dernier_apres_deepseek(self):
+    def test_ordre_finit_par_grok_puis_meta(self):
         from core.fournisseurs_llm import ORDRE_DISTRIBUTEURS
-        self.assertEqual(ORDRE_DISTRIBUTEURS, ["claude", "gpt", "gemini", "deepseek", "grok"])
+        self.assertEqual(ORDRE_DISTRIBUTEURS, ["claude", "gpt", "gemini", "deepseek", "grok", "meta"])
 
     def test_grok_deux_modeles_trois_niveaux_et_bientot(self):
         config = _config_modeles_de_repli()
@@ -222,6 +222,79 @@ class ModelesGrok(unittest.TestCase):
         self.assertEqual(envoye["base_url"], "https://api.x.ai/v1")
         self.assertEqual(envoye["cle"], "cle-test")
         self.assertEqual(envoye["modele"], "grok-4.7")
+        self.assertEqual(envoye["messages"][0], {"role": "system", "content": "consigne"})
+
+
+class ModelesMeta(unittest.TestCase):
+    """Meta (28/10/2026, staging en Bientôt) : dernier de la hiérarchie, après Grok."""
+
+    def setUp(self):
+        reinitialiser_cache_config_modeles()
+
+    def tearDown(self):
+        reinitialiser_cache_config_modeles()
+
+    def test_meta_deux_modeles_avance_pro_sans_essentiel_et_bientot(self):
+        config = _config_modeles_de_repli()
+        self.assertNotIn("essentiel", config["modeles"]["meta"])
+        self.assertEqual(config["modeles"]["meta"]["avance"]["id"], "muse-spark-1.3")
+        self.assertEqual(config["modeles"]["meta"]["pro"]["id"], "muse-wonder")
+        self.assertTrue(config["fournisseurs"]["meta"]["bientot"])
+        self.assertEqual(config["fournisseurs"]["meta"]["variable_cle_api"], "MODEL_API_KEY")
+
+    def test_meta_bientot_wonder_en_premier_sans_doublon_et_jamais_autorise(self):
+        with patch.dict(os.environ, {"MODEL_API_KEY": "x", "DEEPSEEK_API_KEY": "x"}, clear=True):
+            bientot = modeles_bientot_pour_agent("claude", "pro")
+            meta = [m["modele_id"] for m in bientot if m["distributeur"] == "meta"]
+            self.assertEqual(meta, ["muse-wonder", "muse-spark-1.3"])
+            self.assertFalse(modele_id_est_autorise("muse-wonder", "claude", "pro"))
+
+    def test_meta_utilisable_quand_bientot_retire_et_cle_presente(self):
+        with _avec_config_supabase(lambda config: config["fournisseurs"]["meta"].update(bientot=False)):
+            with patch.dict(os.environ, {"MODEL_API_KEY": "x"}, clear=True):
+                disponibles = modeles_disponibles_pour_agent("gemini", "pro")
+                ids = [m["modele_id"] for m in disponibles]
+                self.assertEqual(ids, ["muse-wonder", "muse-spark-1.3"])
+                self.assertTrue(modele_id_est_autorise("muse-wonder", "gemini", "pro"))
+                # Meta est le dernier de la hierarchie : un agent debloque a Grok le voit aussi.
+                self.assertIn("muse-wonder", [m["modele_id"] for m in modeles_disponibles_pour_agent("grok", "pro")])
+                # Un agent debloque a Meta seul ne voit que Meta.
+                self.assertEqual({m["distributeur"] for m in modeles_disponibles_pour_agent("meta", "pro")}, {"meta"})
+
+    def test_meta_sans_cle_invisible(self):
+        with _avec_config_supabase(lambda config: config["fournisseurs"]["meta"].update(bientot=False)):
+            with patch.dict(os.environ, {}, clear=True):
+                self.assertEqual(modeles_disponibles_pour_agent("gemini", "pro"), [])
+
+    def test_modele_meta_reconnu_et_connexion_prevue(self):
+        from core.fournisseurs_llm import distributeur_pour_modele_id, _STREAMERS_PAR_DISTRIBUTEUR
+        with patch.object(fournisseurs_llm, "_lire_config_modeles_supabase", return_value=None):
+            self.assertEqual(distributeur_pour_modele_id("muse-wonder"), "meta")
+        self.assertIn("meta", _STREAMERS_PAR_DISTRIBUTEUR)
+
+    def test_connexion_meta_utilise_ladresse_meta(self):
+        from core.fournisseurs_llm import _stream_meta
+        envoye = {}
+
+        class FauxOpenAI:
+            def __init__(self, api_key=None, base_url=None):
+                envoye["base_url"] = base_url
+                envoye["cle"] = api_key
+                self.chat = self
+                self.completions = self
+
+            def create(self, **kwargs):
+                envoye["modele"] = kwargs["model"]
+                envoye["messages"] = kwargs["messages"]
+                morceau = type("M", (), {"choices": [type("C", (), {"delta": type("D", (), {"content": "bonjour"})()})()]})()
+                return iter([morceau])
+
+        with patch.dict(os.environ, {"MODEL_API_KEY": "cle-test"}, clear=True), patch("openai.OpenAI", FauxOpenAI):
+            texte = "".join(_stream_meta("muse-spark-1.3", "consigne", [{"role": "user", "content": "salut"}]))
+        self.assertEqual(texte, "bonjour")
+        self.assertEqual(envoye["base_url"], "https://api.meta.ai/v1")
+        self.assertEqual(envoye["cle"], "cle-test")
+        self.assertEqual(envoye["modele"], "muse-spark-1.3")
         self.assertEqual(envoye["messages"][0], {"role": "system", "content": "consigne"})
 
 
