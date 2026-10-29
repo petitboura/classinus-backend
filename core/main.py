@@ -38,7 +38,7 @@ from avancement_notions_ia import notions_pertinentes_pour_eleve, resoudre_code_
 from signalements import signalements_pertinents_pour_injection
 from mcp_tools import lister_outils_autorises_pour_agent, filtrer_catalogue_par_outil_force, appeler_outil
 from registre_outils import CATEGORIES_OUTILS
-from fournisseurs_llm import generer_reponse_premium
+from fournisseurs_llm import generer_reponse_premium, creer_client_deepseek
 from identite_modele import message_systeme, systeme_avec_identite
 from clients_outils_llm import client_avec_outils, modele_a_des_outils
 
@@ -155,9 +155,11 @@ def _client_pour_reprise(modele):
     if client_fournisseur:
         return client_fournisseur
     if modele and str(modele).startswith("deepseek"):
-        cle_deepseek = get_secret("DEEPSEEK_API_KEY")
-        if cle_deepseek:
-            return OpenAI(api_key=cle_deepseek, base_url="https://api.deepseek.com")
+        # Baseten si l'interrupteur est ON (avec repli direct integre),
+        # direct sinon, Groq si aucune cle (comme avant).
+        client = creer_client_deepseek(modele)
+        if client is not None:
+            return client
     return Groq(api_key=get_secret("GROQ_API_KEY"), max_retries=0)
 
 
@@ -1578,9 +1580,8 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # texte seul, comme avant.
         # 20/10/2026 : Claude, GPT, Gemini et Grok passent aussi par cette boucle, avec le client
         # de leur fournisseur (core/clients_outils_llm.py) ; clé absente : chemin texte seul.
-        _cle_deepseek_choisi = get_secret("DEEPSEEK_API_KEY") if str(modele_force).startswith("deepseek") else None
-        if _cle_deepseek_choisi:
-            client_deepseek_choisi = OpenAI(api_key=_cle_deepseek_choisi, base_url="https://api.deepseek.com")
+        if str(modele_force).startswith("deepseek"):
+            client_deepseek_choisi = creer_client_deepseek(modele_force)
         else:
             client_deepseek_choisi = client_avec_outils(modele_force)
         if client_deepseek_choisi:
@@ -1670,8 +1671,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # principe que fournisseurs_llm.py) : cle API absente = client None,
     # l'etape correspondante est sautee sans erreur visible pour
     # l'usager, la cascade continue directement sur la suite.
-    _cle_deepseek = get_secret("DEEPSEEK_API_KEY")
-    client_deepseek = OpenAI(api_key=_cle_deepseek, base_url="https://api.deepseek.com") if _cle_deepseek else None
+    # Baseten si l'interrupteur est ON (repli direct integre), direct sinon,
+    # None si aucune cle (etape sautee, comme avant).
+    client_deepseek = creer_client_deepseek(DEEPSEEK_PRIMARY)
 
     derniere_erreur = None
     for _passage in range(MAX_PASSAGES_CASCADE):

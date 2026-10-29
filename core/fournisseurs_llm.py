@@ -101,9 +101,12 @@ HIERARCHIE_MODELES = {
         # 24/07/2026 (15:59 UTC) -- remplaces ici par les noms actuels.
         # Bug decouvert en verifiant les prix pour Bourama : nos appels
         # DeepSeek echouaient probablement en silence depuis le 24/07.
-        "essentiel": {"id": "deepseek-v4-flash", "label": "DeepSeek V4 Flash"},
-        "avance": {"id": "deepseek-v4-flash", "label": "DeepSeek V4 Flash"},
-        "pro": {"id": "deepseek-v4-pro", "label": "DeepSeek V4 Pro"},
+        # Slugs Baseten (29/10/2026, demande Bourama, source : doc officielle
+        # Baseten, page Reasoning, table des modeles) : traduits depuis l'id
+        # direct par core/adaptateur_baseten.py quand l'interrupteur est ON.
+        "essentiel": {"id": "deepseek-v4-flash", "label": "DeepSeek V4 Flash", "baseten": "deepseek-ai/DeepSeek-V4-Flash-0731"},
+        "avance": {"id": "deepseek-v4-flash", "label": "DeepSeek V4 Flash", "baseten": "deepseek-ai/DeepSeek-V4-Flash-0731"},
+        "pro": {"id": "deepseek-v4-pro", "label": "DeepSeek V4 Pro", "baseten": "deepseek-ai/DeepSeek-V4-Pro-0813"},
     },
     "meta": {
         # Meta, ajouté le 28/10/2026 sur staging en Bientôt (demande de Bourama) : Muse
@@ -140,6 +143,49 @@ def cle_api_du_distributeur(distributeur):
     fournisseur = _config_modeles()["fournisseurs"].get(distributeur) or {}
     variable = fournisseur.get("variable_cle_api") or VARIABLES_CLE_PAR_DISTRIBUTEUR.get(distributeur)
     return get_secret(variable) if variable else None
+
+
+# Nom de la variable d'environnement qui contient la cle Baseten (29/10/2026,
+# demande Bourama : posee par Bourama dans Render, jamais dans le code).
+VARIABLE_CLE_BASETEN = "BASETEN_API_KEY"
+
+
+def correspondance_baseten(config=None):
+    """
+    {identifiant direct DeepSeek: slug Baseten} pour les modeles qui en ont
+    un (colonne modele_id_baseten de Supabase, sinon repli du code).
+    """
+    config = config or _config_modeles()
+    correspondance = {}
+    for paliers in (config.get("modeles") or {}).get("deepseek", {}).values():
+        if paliers.get("baseten"):
+            correspondance[paliers["id"]] = paliers["baseten"]
+    return correspondance
+
+
+def creer_client_deepseek(modele_id):
+    """
+    Client DeepSeek : via Baseten quand l'interrupteur est ON (colonne
+    baseten_actif, cle BASETEN_API_KEY presente, slug connu et Baseten
+    pas mis a l'ecart), en direct sinon. None si aucune route n'a sa cle
+    (l'appelant retombe alors sur son repli habituel, comme avant).
+    Le repli Baseten -> direct en cas de credit epuise est gere dans
+    l'adaptateur lui-meme (voir core/adaptateur_baseten.py).
+    """
+    try:
+        from adaptateur_baseten import ClientBaseten
+    except ImportError:
+        from core.adaptateur_baseten import ClientBaseten
+    config = _config_modeles()
+    fournisseur = config["fournisseurs"].get("deepseek") or {}
+    interrupteur = bool(fournisseur.get("baseten_actif"))
+    cle_baseten = get_secret(VARIABLE_CLE_BASETEN) if interrupteur else None
+    variable_directe = fournisseur.get("variable_cle_api") or VARIABLES_CLE_PAR_DISTRIBUTEUR.get("deepseek")
+    cle_directe = get_secret(variable_directe) if variable_directe else None
+    correspondance = correspondance_baseten(config)
+    if cle_directe is None and (cle_baseten is None or modele_id not in correspondance):
+        return None
+    return ClientBaseten(correspondance, cle_baseten=cle_baseten, cle_directe=cle_directe)
 
 
 def _distributeur_disponible(distributeur, config=None):
@@ -206,6 +252,9 @@ def _config_modeles_de_repli():
             "variable_cle_api": VARIABLES_CLE_PAR_DISTRIBUTEUR.get(distributeur),
             # None : core/identite_modele.py prend alors son nom de repli.
             "nom_affiche": None,
+            # Interrupteur Baseten (29/10/2026, demande Bourama) : OFF par
+            # defaut, le direct reste la route tant que Bourama ne l'allume pas.
+            "baseten_actif": False,
         }
     return {
         "distributeurs": list(ORDRE_DISTRIBUTEURS),
@@ -245,6 +294,20 @@ def _lire_config_modeles_supabase():
         logging.warning("Tables fournisseurs_llm ou modeles_llm vides : valeurs de repli du code utilisees.")
         return None
 
+    # Interrupteur Baseten + slugs (29/10/2026) : lus a part pour rester
+    # compatibles si la migration n'est pas encore appliquee (colonnes
+    # absentes -> interrupteur OFF, direct comme avant).
+    baseten_actif_par_distributeur = {}
+    slug_baseten_par_modele = {}
+    try:
+        for ligne in client.table("fournisseurs_llm").select("distributeur, baseten_actif").execute().data or []:
+            baseten_actif_par_distributeur[ligne["distributeur"]] = bool(ligne.get("baseten_actif"))
+        for ligne in client.table("modeles_llm").select("distributeur, palier, modele_id_baseten").execute().data or []:
+            if ligne.get("modele_id_baseten"):
+                slug_baseten_par_modele[(ligne["distributeur"], ligne["palier"])] = ligne["modele_id_baseten"]
+    except Exception as e:
+        logging.warning(f"Colonnes Baseten absentes ou illisibles (migration a appliquer) : {e}")
+
     fournisseurs = {}
     for ligne in lignes_fournisseurs:
         fournisseurs[ligne["distributeur"]] = {
@@ -252,16 +315,21 @@ def _lire_config_modeles_supabase():
             "cle_api_requise": bool(ligne.get("cle_api_requise", True)),
             "variable_cle_api": ligne.get("variable_cle_api"),
             "nom_affiche": ligne.get("nom_affiche"),
+            "baseten_actif": baseten_actif_par_distributeur.get(ligne["distributeur"], False),
         }
     modeles = {}
     niveaux = {}
     for ligne in lignes_modeles:
         if not ligne.get("actif", True) or ligne["distributeur"] not in fournisseurs:
             continue
-        modeles.setdefault(ligne["distributeur"], {})[ligne["palier"]] = {
+        entree_modele = {
             "id": ligne["modele_id"],
             "label": ligne["label"],
         }
+        slug_baseten = slug_baseten_par_modele.get((ligne["distributeur"], ligne["palier"]))
+        if slug_baseten:
+            entree_modele["baseten"] = slug_baseten
+        modeles.setdefault(ligne["distributeur"], {})[ligne["palier"]] = entree_modele
         niveau = ligne["niveau"]
         niveaux[ligne["palier"]] = min(niveau, niveaux.get(ligne["palier"], niveau))
     textes = {}
@@ -528,7 +596,9 @@ def _stream_deepseek(modele_id, system_prompt, messages, effort=None):
     # DeepSeek : API compatible OpenAI, seule la base_url change (voir
     # docstring du module -- deepseek-v4-flash / deepseek-v4-pro).
     from openai import OpenAI
-    client = OpenAI(api_key=get_secret("DEEPSEEK_API_KEY"), base_url="https://api.deepseek.com")
+    # Route Baseten si l'interrupteur est ON, direct sinon. Le `or` garde
+    # l'erreur d'origine quand aucune cle n'existe (meme levee qu'avant).
+    client = creer_client_deepseek(modele_id) or OpenAI(api_key=get_secret("DEEPSEEK_API_KEY"), base_url="https://api.deepseek.com")
     system_deepseek = ajouter_consigne_langue_reflexion(system_prompt)
     messages_openai = [{"role": "system", "content": system_deepseek}] + messages
     flux = client.chat.completions.create(
