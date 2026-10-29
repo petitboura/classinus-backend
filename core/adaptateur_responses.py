@@ -18,8 +18,9 @@ les échanges des élèves ne restent pas chez le fournisseur.
 
 import json
 import logging
+import time
 
-from openai import BadRequestError, OpenAI
+from openai import BadRequestError, NotFoundError, OpenAI
 
 try:
     from adaptateur_commun import (
@@ -34,6 +35,15 @@ except ImportError:
 
 ADRESSE_XAI = "https://api.x.ai/v1"
 ADRESSE_META = "https://api.meta.ai/v1"
+
+# 29/10/2026 : l'API Meta répond parfois 404 "modèle introuvable" par
+# intermittence (constaté en direct : 200 puis 404 puis 200 à 10 secondes
+# d'intervalle, même demande, même clé ; d'autres équipes décrivent les
+# mêmes fenêtres de 404). On réessaie 3 fois à 8 secondes d'intervalle
+# avant d'abandonner, Meta seulement (les autres fournisseurs gardent
+# leur comportement).
+ESSAIS_META_INTROUVABLE = 3
+ATTENTE_META_INTROUVABLE_S = 8
 
 TYPES_ELEMENTS_A_REJOUER = ("reasoning", "function_call")
 
@@ -156,18 +166,30 @@ class ClientResponses(ClientCompatible):
         """
         # Résumé du raisonnement : OpenAI et Meta (doc officielle Meta, page Raisonnement : reasoning.summary vaut "auto", "concise" ou "detailed", vérifié le 29/10/2026).
         avec_resume = self.fournisseur in ("openai", "meta")
-        try:
-            return self._client.responses.create(
-                **self._arguments_requete(modele, instructions, entree, outils, effort, avec_resume)
-            )
-        except BadRequestError as erreur:
-            texte = str(erreur).lower()
-            if avec_resume and ("summary" in texte or "verif" in texte):
-                logging.warning(f"Résumé du raisonnement refusé, nouvel essai sans résumé : {erreur}")
-                return self._client.responses.create(
-                    **self._arguments_requete(modele, instructions, entree, outils, effort, False)
+        essais = ESSAIS_META_INTROUVABLE if self.fournisseur == "meta" else 1
+        for tentative in range(essais):
+            try:
+                try:
+                    return self._client.responses.create(
+                        **self._arguments_requete(modele, instructions, entree, outils, effort, avec_resume)
+                    )
+                except BadRequestError as erreur:
+                    texte = str(erreur).lower()
+                    if avec_resume and ("summary" in texte or "verif" in texte):
+                        logging.warning(f"Résumé du raisonnement refusé, nouvel essai sans résumé : {erreur}")
+                        return self._client.responses.create(
+                            **self._arguments_requete(modele, instructions, entree, outils, effort, False)
+                        )
+                    raise
+            except NotFoundError:
+                if tentative >= essais - 1:
+                    raise
+                logging.warning(
+                    f"Meta répond modèle introuvable (intermittence connue), "
+                    f"nouvel essai dans {ATTENTE_META_INTROUVABLE_S} s "
+                    f"(tentative {tentative + 2}/{essais})"
                 )
-            raise
+                time.sleep(ATTENTE_META_INTROUVABLE_S)
 
     def create(self, *, model, messages, tools=None, reasoning_effort=None, **_ignores):
         # max_completion_tokens, timeout et stream de la boucle sont volontairement ignorés :
