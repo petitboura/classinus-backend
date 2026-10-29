@@ -353,6 +353,10 @@ MESSAGES_FR: dict[str, str] = {
     "ZIP_SKILL_TROP_DE_FICHIERS": "Ce zip contient trop de fichiers ({maximum} au maximum).",
     "ZIP_SKILL_FICHIER_NON_TEXTE": "Le fichier {fichier} n'est pas un fichier texte. Les skills n'acceptent que des fichiers texte.",
     "ZIP_SKILL_ENTETE_INVALIDE": "Le nom ou la description écrits dans l'en-tête de SKILL.md sont trop longs ou contiennent un saut de ligne.",
+    "IMPORT_IA_CIBLE_INCONNUE": "Ce type d'import n'existe pas.",
+    "IMPORT_IA_INTROUVABLE": "Cet import est introuvable.",
+    "IMPORT_IA_DEJA_EN_COURS": "Un import de ce type est déjà en cours. Attends qu'il se termine.",
+    "IMPORT_IA_ACCES_BLOQUE": "L'import n'est pas disponible pour ce compte tant qu'aucun code de ton professeur ou établissement n'est entré.",
 }
 
 
@@ -708,6 +712,10 @@ MESSAGES_EN: dict[str, str] = {
     "ZIP_SKILL_TROP_DE_FICHIERS": "This zip contains too many files ({maximum} at most).",
     "ZIP_SKILL_FICHIER_NON_TEXTE": "The file {fichier} is not a text file. Skills only accept text files.",
     "ZIP_SKILL_ENTETE_INVALIDE": "The name or description in the SKILL.md header is too long or contains a line break.",
+    "IMPORT_IA_CIBLE_INCONNUE": "This type of import does not exist.",
+    "IMPORT_IA_INTROUVABLE": "This import was not found.",
+    "IMPORT_IA_DEJA_EN_COURS": "An import of this type is already running. Wait for it to finish.",
+    "IMPORT_IA_ACCES_BLOQUE": "Import is not available for this account until a code from your teacher or institution is entered.",
 }
 
 def erreur_api(status_code: int, code: str, message: str | None = None, **kwargs) -> HTTPException:
