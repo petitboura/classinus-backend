@@ -133,6 +133,9 @@ if higgsfield_api_disponible():
 
         Chaque utilisateur a un nombre limité de générations par jour. Génération
         payante : si l'utilisateur hésite, appelle d'abord estimer_cout_higgsfield.
+        Si l'utilisateur a joint un fichier image, vidéo ou son dans cette
+        conversation, son lien réel (visible dans le message) peut servir
+        de image_url, image_fin_url ou référence.
         """
         try:
             adresse, corps = construire_requete_video(
@@ -179,6 +182,8 @@ if higgsfield_api_disponible():
         "2:1" ou "1:2". `qualite` : "1k" ou "2k". Génération payante, avec un
         nombre limité par jour et par utilisateur. Pour garder le même personnage
         d'une image à l'autre, redonne la même image de référence.
+        Si l'utilisateur a joint une image dans cette conversation, son
+        lien réel (visible dans le message) peut servir de référence.
         """
         try:
             adresse, corps = construire_requete_image(modele, prompt, format_image, qualite, images_reference)
@@ -217,6 +222,7 @@ if higgsfield_api_disponible():
         lancer_video_higgsfield (modèles vidéo : seedance, kling ; image : grok).
         À utiliser pour comparer deux réglages ou avant une vidéo longue ou en
         haute qualité. Si le coût paraît élevé, propose un réglage moins cher.
+        Mêmes liens de fichiers joints acceptés que lancer_video_higgsfield.
         """
         try:
             if (genre or "").strip().lower() == "image":
