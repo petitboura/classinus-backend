@@ -3,7 +3,6 @@ import logging
 import base64
 import concurrent.futures
 from groq import Groq
-from openai import OpenAI
 from google import genai
 from google.genai import types
 from core.skills_catalogue import lister_catalogue_skills
