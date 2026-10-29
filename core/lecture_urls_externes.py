@@ -4,6 +4,7 @@
 # construction des "parts" Gemini pour les messages multimodaux.
 import logging
 import base64
+import io
 import re
 import requests
 from constantes_agent import get_secret
@@ -30,6 +31,17 @@ def _construire_parts_gemini(texte, images=None):
     return parts
 
 
+def _png_premiere_frame_gif(contenu_gif):
+    """Première image d'un gif animé, en PNG (lecture vision)."""
+    from PIL import Image
+    with Image.open(io.BytesIO(contenu_gif)) as image:
+        image.seek(0)
+        cadre = image.convert("RGB")
+        tampon = io.BytesIO()
+        cadre.save(tampon, format="PNG")
+        return tampon.getvalue()
+
+
 def _telecharger_image(image_url):
     """
     Télécharge l'image pointée par `image_url` (URL publique Supabase
@@ -41,7 +53,19 @@ def _telecharger_image(image_url):
     valider_url_externe(image_url)  # anti-SSRF : voir core/securite_url.py
     reponse = requests.get(image_url, timeout=15)
     reponse.raise_for_status()
-    return reponse.content, reponse.headers.get("content-type", "image/jpeg")
+    contenu = reponse.content
+    type_mime = reponse.headers.get("content-type", "image/jpeg")
+    # GIF (correctif Higgsfield entrées) : la vision reçoit la première
+    # image en PNG, format sûr partout. Le fichier gif d'origine reste
+    # accessible par son lien pour les outils. En cas de gif illisible,
+    # on renvoie le contenu tel quel plutôt que de bloquer le message.
+    if (type_mime or "").split(";")[0].strip().lower() == "image/gif":
+        try:
+            contenu = _png_premiere_frame_gif(contenu)
+            type_mime = "image/png"
+        except Exception as e:
+            logging.warning("GIF joint illisible, envoyé tel quel à la vision : %s", e)
+    return contenu, type_mime
 
 
 REGEX_URL = re.compile(r"https?://[^\s<>\"']+")
