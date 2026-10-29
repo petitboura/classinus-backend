@@ -399,6 +399,21 @@ async def diffuser_arret(user_id: str) -> None:
             logging.error(f"ERREUR diffusion arret canal agent applicatif (user={user_id}, appareil={cle[1]}) : {e}")
 
 
+async def a_app_systeme_connecte(user_id: str) -> bool:
+    """Vrai si au moins une connexion de cet utilisateur relaie les actions
+    système (appli PC/Electron ouverte sur ce compte).
+
+    29/10/2026 : utilisé par les outils téléphone pour répondre tout de
+    suite quand l'appli est fermée, au lieu d'attendre le délai
+    d'abandon. Lecture seule, jamais d'exception.
+    """
+    try:
+        async with _verrou_connexions:
+            return any(cle[0] == user_id for cle in _relais_systeme)
+    except Exception:
+        return False
+
+
 async def demander_execution_action(user_id: str, action_id: str, on_statut=None) -> Any | None:
     """
     Diffuse une demande d'execution de l'action `action_id` (declaree
@@ -514,7 +529,9 @@ async def demander_action_systeme(
     ({x, y}), "taper_clavier" ({texte, cible}), "ouvrir_application" ({nom}),
     "lire_ecran" ({nb_max_elements, nb_max_fenetres, longueur_max_nom,
     longueur_max_valeur, profondeur_max, delai_max_ms}, voir
-    core/outils_action_agent_pc.py).
+    core/outils_action_agent_pc.py), "outil_telephone" ({nom, args},
+    29/10/2026 : outil diagnostic exécuté sur le relais local du PC,
+    voir _appeler_outil_telephone_via_app dans core/mcp_tools.py).
 
     Pas de confirmation utilisateur pour ce lot (decision Bourama du
     27/09/2026, comme le reste du canal depuis le 19/09/2026), sauf pour
