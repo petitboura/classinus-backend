@@ -30,6 +30,8 @@ import os
 import time
 import asyncio
 import logging
+import json
+import re
 
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client, create_mcp_http_client
@@ -315,15 +317,130 @@ async def _appeler_avec_delai_et_arret(coroutine, delai, arret):
                     raise
 
 
+_EXTENSIONS_IMAGES_RESULTAT = ("png", "jpg", "jpeg", "webp", "gif")
+_EXTENSIONS_VIDEOS_RESULTAT = ("mp4", "webm", "mov")
+_REGEX_URL_RESULTAT = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
+
+
+def _extension_url(url):
+    fin = (url or "").split("?", 1)[0].rsplit(".", 1)
+    if len(fin) != 2:
+        return ""
+    return fin[-1].strip().lower().rstrip(").,]!;:'\"")
+
+
+def _medias_depuis_texte(texte):
+    """Liens (images, vidéos) trouvés dans un texte de résultat d'outil."""
+    images, videos, vues = [], [], set()
+    for brut in _REGEX_URL_RESULTAT.findall(texte or ""):
+        url = brut.rstrip(").,]!;:'\"")
+        if not url or url in vues:
+            continue
+        vues.add(url)
+        extension = _extension_url(url)
+        if extension in _EXTENSIONS_IMAGES_RESULTAT:
+            images.append({"titre": url, "url": url})
+        elif extension in _EXTENSIONS_VIDEOS_RESULTAT:
+            videos.append({"titre": url, "url": url})
+    return images, videos
+
+
+def _texte_depuis_blocs_mcp(blocs):
+    """Texte assemblé depuis les blocs de contenu d'un résultat MCP.
+
+    Avant (correctif Higgsfield affichage) : seul le premier bloc texte
+    était gardé, tout le reste (autres textes, images, sons, ressources)
+    était jeté. Maintenant : les textes sont joints, les images natives
+    deviennent une galerie JSON {"images": [...]} comprise par
+    l'affichage, les sons et ressources restent lisibles en texte.
+    Ne lève jamais : en cas de forme inconnue, repli texte best-effort.
+    """
+    try:
+        textes, images = [], []
+        elements = []
+        for bloc in blocs or []:
+            elements.append(bloc)
+            ressource = getattr(bloc, "resource", None)
+            if ressource is not None:
+                elements.append(ressource)
+        for element in elements:
+            texte = getattr(element, "text", None)
+            if isinstance(texte, str) and texte.strip():
+                textes.append(texte)
+                continue
+            donnees = getattr(element, "data", None) or getattr(element, "blob", None)
+            mime = (
+                getattr(element, "mimeType", "")
+                or getattr(element, "mime_type", "")
+                or ""
+            ).lower()
+            if isinstance(donnees, str) and donnees:
+                if mime.startswith("image/"):
+                    images.append({
+                        "titre": "Image renvoyée par l'outil",
+                        "url": "data:%s;base64,%s" % (mime, donnees),
+                    })
+                elif mime.startswith("audio/"):
+                    textes.append("[Son renvoyé par l'outil : data:%s;base64,%s]" % (mime, donnees))
+                continue
+            uri = getattr(element, "uri", None)
+            if isinstance(uri, str) and uri:
+                textes.append("[Ressource : %s]" % uri)
+        texte = "\n".join(textes)
+        if not images:
+            return texte
+        enveloppe = {"images": images}
+        if texte:
+            enveloppe["text"] = texte
+        return json.dumps(enveloppe, ensure_ascii=False)
+    except Exception as e:
+        logging.warning("Blocs MCP inattendus, repli texte vide : %s", e)
+        return ""
+
+
+def _enveloppe_medias_higgsfield(nom_outil, resultat):
+    """Galerie et cartes pour les liens médias des outils Higgsfield (compte).
+
+    Leurs réponses sont du texte (identifiant de travail, JSON avec
+    rawUrl...). Quand ce texte contient des liens directs d'images ou de
+    vidéos, on les expose en JSON {"images"/"videos"} pour l'affichage
+    automatique, sans toucher au texte d'origine. Les autres serveurs
+    sont renvoyés tels quels.
+    """
+    if not (nom_outil or "").startswith("higgsfield_"):
+        return resultat
+    if not isinstance(resultat, str) or not resultat:
+        return resultat
+    try:
+        donnees = json.loads(resultat)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        donnees = None
+    if isinstance(donnees, dict) and (donnees.get("images") or donnees.get("videos")):
+        return resultat
+    images, videos = _medias_depuis_texte(resultat)
+    if not images and not videos:
+        return resultat
+    enveloppe = {"text": resultat}
+    if images:
+        enveloppe["images"] = images
+    if videos:
+        enveloppe["videos"] = videos
+    try:
+        return json.dumps(enveloppe, ensure_ascii=False)
+    except Exception:
+        return resultat
+
+
 async def _appeler_outil_async(url, nom_outil, arguments, headers=None):
     async with create_mcp_http_client(headers=headers) as http_client:
         async with streamable_http_client(url, http_client=http_client) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 resultat = await session.call_tool(nom_outil, arguments=arguments)
-                for bloc in resultat.content:
-                    if hasattr(bloc, "text"):
-                        return bloc.text
+                texte = _texte_depuis_blocs_mcp(getattr(resultat, "content", None))
+                return _enveloppe_medias_higgsfield(nom_outil, texte)
+
+
     return ""
 
 
