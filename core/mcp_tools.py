@@ -465,6 +465,12 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
                 route = {"url": url, "headers": headers}
                 if prefixe:
                     route["nom_reel"] = outil.name
+                if serveur.get("via_app_telephone"):
+                    # 29/10/2026 : outils téléphone exécutés sur le PC de
+                    # l'utilisateur via son appli (canal agent applicatif),
+                    # jamais sur le cloud (voir _appeler_outil_telephone_via_app).
+                    route["via_app_telephone"] = True
+                    route["user_id"] = user_id
                 table_routage[f"{prefixe}{outil.name}"] = route
         except Exception as e:
             logging.error(f"ERREUR MCP listing ({nom}): {e}")
@@ -576,6 +582,78 @@ def _message_erreur_technique_outil(nom_outil: str) -> str:
     )
 
 
+# 29/10/2026 (Bourama : l'IA appelle, l'outil doit joindre le téléphone) :
+# type d'action système exécuté par l'appli PC (voir lib/canalAgentApplicatif.ts
+# et le plugin RelaisPc côté frontend). parametres = {"nom": nom de l'outil,
+# "args": arguments}. L'appli répond {"texte": ...} ou {"erreur": ...}.
+TYPE_ACTION_OUTIL_TELEPHONE = "outil_telephone"
+
+MESSAGE_TELEPHONE_SANS_APP = (
+    "Téléphone injoignable : ouvre l'appli Classinus sur ton PC (connectée "
+    "à ce compte) puis branche ton téléphone en USB avec le débogage USB "
+    "activé, et réessaie."
+)
+MESSAGE_TELEPHONE_SANS_REPONSE = (
+    "Téléphone injoignable : l'appli PC n'a pas répondu. Mets à jour "
+    "Classinus PC vers la dernière version, ouvre-la, puis réessaie."
+)
+
+
+async def _appeler_telephone_via_app_async(nom_reel, arguments, user_id, delai):
+    """Envoie un outil téléphone à l'appli PC et rend le texte du relais."""
+    from canal_agent_applicatif import a_app_systeme_connecte, demander_action_systeme
+    if not await a_app_systeme_connecte(user_id):
+        return MESSAGE_TELEPHONE_SANS_APP
+    reponse = await demander_action_systeme(
+        user_id,
+        TYPE_ACTION_OUTIL_TELEPHONE,
+        {"nom": nom_reel, "args": arguments},
+        delai_abandon_secondes=max(delai - 2, 5),
+    )
+    if reponse is None:
+        return MESSAGE_TELEPHONE_SANS_REPONSE
+    if isinstance(reponse, dict):
+        erreur = reponse.get("erreur")
+        if isinstance(erreur, str) and erreur:
+            return f"Erreur : {erreur}"
+        texte = reponse.get("texte")
+        if isinstance(texte, str):
+            return texte
+    return str(reponse)
+
+
+def _appeler_outil_telephone_via_app(nom_outil, arguments, route, delai, arret):
+    """Exécute un outil téléphone via l'appli PC de l'utilisateur (relais local).
+
+    Même contrat que appeler_outil (délai, bouton Arrêter, messages), mais
+    l'exécution passe par le canal agent applicatif au lieu du cloud MCP :
+    seul le relais local voit le téléphone branché en USB.
+    """
+    nom_reel = route.get("nom_reel", nom_outil)
+    user_id = route.get("user_id") or ""
+    if not user_id:
+        logging.error(f"Outil téléphone '{nom_outil}' sans user_id dans sa route.")
+        return "Erreur : impossible d'identifier l'utilisateur."
+    try:
+        appel = _appeler_telephone_via_app_async(nom_reel, arguments, user_id, delai)
+        resultat = asyncio.run(_appeler_avec_delai_et_arret(appel, delai, arret))
+        logging.info(f"Résultat outil '{nom_outil}' : {len(resultat or '')} caractères")
+        return resultat
+    except _AppelAnnule:
+        logging.info(f"Appel à {nom_outil} interrompu par le bouton Arrêter")
+        return "Action annulée par l'utilisateur : l'appel a été interrompu, le résultat est inconnu."
+    except TimeoutError:
+        logging.warning(f"Délai dépassé ({delai} s) pour l'outil {nom_outil}")
+        return (
+            f"Délai dépassé : {nom_outil} n'a pas répondu en {delai} s. L'action a peut-être quand même "
+            f"abouti côté service : vérifie son état avant de la relancer. Si l'outil est connu pour être "
+            f"long, tu peux le relancer avec {PARAMETRE_DELAI_OUTIL} plus grand (maximum {DELAI_OUTIL_MAX_SECONDES} s)."
+        )
+    except Exception as e:
+        logging.error(f"ERREUR pont téléphone {nom_outil}: {e}", exc_info=True)
+        return _message_erreur_technique_outil(nom_outil)
+
+
 def appeler_outil(nom_outil, arguments, table_routage, arret=None):
     """
     Execute un outil par son nom, quel que soit le serveur MCP qui
@@ -614,6 +692,10 @@ def appeler_outil(nom_outil, arguments, table_routage, arret=None):
     if not route:
         logging.error(f"Outil '{nom_outil}' demandé par le LLM mais absent de la table de routage.")
         return f"Erreur : outil '{nom_outil}' inconnu."
+    if route.get("via_app_telephone"):
+        # 29/10/2026 : outils téléphone exécutés sur le PC de
+        # l'utilisateur (relais local, seul à voir le téléphone).
+        return _appeler_outil_telephone_via_app(nom_outil, arguments, route, delai, arret)
     try:
         if route.get("custom_mcp"):
             # Serveur ajouté par l'utilisateur : adresse et jeton relus à l'instant de l'appel,
