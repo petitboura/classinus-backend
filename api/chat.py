@@ -20,7 +20,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "core"))
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Dict, List, Optional, Literal
@@ -28,14 +28,17 @@ from typing import Dict, List, Optional, Literal
 from api.auth import utilisateur_optionnel, supabase
 from core.erreurs import erreur_api
 from core.video_workspaces import chemin_video, lire_metadonnees_video, workspace_dir
-from core.arret_tour import demander_arret_utilisateur, fermer_arret, ouvrir_arret
+from core.arret_tour import autres_tours_en_cours, demander_arret_utilisateur, fermer_arret, ouvrir_arret
 from core.canal_agent_applicatif import (
     annuler_attentes, debuter_tour, definir_lecture_editeur_chat, diffuser_arret, renvoyer_messages_non_lus,
     retirer_lecture_editeur_chat, terminer_tour,
 )
 from core.plafond_outils_tour import retirer_plafond_tour
+from core import tours_detaches
 from core.limitation_debit import limiteur
-from core.plafonds_reglables import PLAFOND_IMAGES_JOINTES, PLAFOND_OUTILS_PAR_MESSAGE, PLAFOND_ZIPS_JOINTS
+from core.plafonds_reglables import (
+    DELAI_SIGNE_VIE_FLUX, PLAFOND_IMAGES_JOINTES, PLAFOND_OUTILS_PAR_MESSAGE, PLAFOND_ZIPS_JOINTS,
+)
 from core.restriction_mineur import acces_chat_bloque_pour_mineur
 from main import chat as chat_generateur  # core/main.py:chat()
 from erreur_tour import classer_erreur
@@ -355,7 +358,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
         definir_lecture_editeur_chat(user_id, payload.conversation_id, payload.etat_editeur)
         debuter_tour(user_id)
     # Jeton d'arrêt de ce tour (12/10/2026, bouton Arrêter) : levé par POST /api/chat/arreter.
-    arret = ouvrir_arret(user_id)
+    arret = ouvrir_arret(user_id, payload.conversation_id)
     if arret is not None:
         arret.avec_etat = bool(payload.erreurs_typees)
     try:
@@ -462,20 +465,95 @@ def _evenement_bloque(texte: str):
     yield "data: [DONE]\n\n"
 
 
+def _resume_du_tour(payload: EnvoyerMessagePayload) -> dict:
+    """Ce qu'une page qui se rouvre doit savoir pour redessiner le debut d'un tour encore en cours
+    (core/tours_detaches.py). L'echange n'est sauvegarde qu'a la fin du tour : tant qu'il tourne,
+    le message de l'utilisateur n'existe nulle part ailleurs.
+
+    `type` : "message" (envoi normal : le message de l'utilisateur est redessine), "reprise"
+    (suite d'un tour arrete ou confirmation d'un outil : seulement la reponse) ou "regeneration"
+    (reessayer : la reponse devient une version de l'ancienne, rien a redessiner en direct).
+    """
+    if payload.reprise is not None:
+        return {"type": "reprise", "message": payload.reprise.message_utilisateur or None}
+    if payload.regenerer and payload.parent_id:
+        return {"type": "regeneration", "parent_id": payload.parent_id}
+    return {
+        "type": "message",
+        "message": payload.message_enregistre or payload.message or "",
+        "automatique": bool(payload.message_automatique),
+        "parent_id": payload.parent_id,
+    }
+
+
+@router.get("/tour-en-cours")
+def tour_en_cours(conversation_id: str = Query(..., min_length=1, max_length=200), utilisateur=Depends(utilisateur_optionnel)):
+    """
+    Etat du dernier tour de chat de cette conversation (28/10/2026, demande de Bourama : changer de
+    conversation ou recharger la page ne doit plus arreter le travail). Sert a la page qui se
+    rouvre : si le tour tourne encore, elle se rattache a son flux (GET /api/chat/flux/{tour_id}).
+    Tient en memoire du serveur (core/tours_detaches.py) : un tour termine depuis longtemps ou un
+    serveur redemarre donnent "aucun", et l'historique sauvegarde fait foi.
+    """
+    user_id = utilisateur.id if utilisateur else None
+    tour = tours_detaches.dernier_de_conversation(user_id, conversation_id) if user_id else None
+    if tour is None:
+        return {"statut": "aucun"}
+    return {
+        "statut": "termine" if tour.termine else "en_cours",
+        "tour_id": tour.id,
+        "nb_evenements": tour.nombre_evenements(),
+        "ids": tour.ids,
+        "resume": tour.resume,
+    }
+
+
+@router.get("/flux/{tour_id}")
+def suivre_tour(tour_id: str, depuis: int = Query(0, ge=0), utilisateur=Depends(utilisateur_optionnel)):
+    """
+    Se rattache au flux d'un tour de chat detache (voir tour_en_cours) et rend ses evenements a
+    partir du numero `depuis` : le nombre d'evenements que le client a deja recus (0 pour tout
+    rejouer). Meme format SSE que POST /api/chat, plus une ligne de commentaire periodique pour
+    garder la connexion ouverte pendant les longues attentes d'outils. Reserve au compte qui a
+    lance le tour.
+    """
+    user_id = utilisateur.id if utilisateur else None
+    tour = tours_detaches.trouver(tour_id, user_id) if user_id else None
+    if tour is None:
+        raise erreur_api(404, "TOUR_CHAT_INTROUVABLE")
+    return StreamingResponse(
+        tour.lire(depuis, signe_vie=DELAI_SIGNE_VIE_FLUX),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "X-Tour-Id": tour.id},
+    )
+
+
 @router.post("/arreter")
-async def arreter_tour(utilisateur=Depends(utilisateur_optionnel)):
+async def arreter_tour(
+    conversation_id: Optional[str] = Query(None, max_length=200),
+    utilisateur=Depends(utilisateur_optionnel),
+):
     """
     Bouton Arrêter du chat et du canal en direct (12/10/2026, demande Bourama : « arrêter
     c'est arrêter »). Couper la connexion du flux ne suffisait pas : les outils en cours et
-    la boucle d'agent continuaient côté serveur. Cette route lève le signal d'arrêt de tous
-    les tours en cours du compte (plus de nouvel outil, plus d'attente des outils lancés),
+    la boucle d'agent continuaient côté serveur. Cette route lève le signal d'arrêt des
+    tours en cours du compte (plus de nouvel outil, plus d'attente des outils lancés),
     termine les actions que Clovis attendait de l'appli, et prévient l'appli pour qu'elle
     arrête aussi ce qu'elle avait en file. Sans compte connecté, il n'y a rien à arrêter ici.
+
+    28/10/2026 : un tour continue maintenant quand on change de conversation (core/tours_detaches.py).
+    Avec `conversation_id`, seuls les tours de CETTE conversation s'arrêtent. Si d'autres tours du
+    compte tournent encore, les attentes d'actions de l'appli et la diffusion de l'arrêt (qui
+    touchent tout le compte, sans distinguer les conversations) sont laissées de côté : elles
+    couperaient aussi le travail qu'on vient de choisir de ne pas arrêter. Sans `conversation_id`
+    (canal en direct), tout le compte s'arrête comme avant.
     """
     user_id = utilisateur.id if utilisateur else None
     if not user_id:
         return {"tours_arretes": 0, "attentes_annulees": 0}
-    tours = demander_arret_utilisateur(user_id)
+    tours = demander_arret_utilisateur(user_id, conversation_id)
+    if conversation_id and autres_tours_en_cours(user_id):
+        return {"tours_arretes": tours, "attentes_annulees": 0}
     attentes = annuler_attentes(user_id)
     await diffuser_arret(user_id)
     return {"tours_arretes": tours, "attentes_annulees": attentes}
@@ -550,6 +628,31 @@ def envoyer_message(request: Request, payload: EnvoyerMessagePayload, utilisateu
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+    if user_id:
+        # Compte connecte (28/10/2026) : le travail tourne dans un thread a lui et ne s'arrete plus
+        # quand la connexion se ferme (rechargement, changement de conversation, coupure de reseau).
+        # Cette reponse ne fait que lire le tour ; X-Tour-Id permet de s'y rattacher ensuite.
+        # Voir core/tours_detaches.py.
+        tour = tours_detaches.demarrer(
+            user_id,
+            payload.conversation_id,
+            lambda: _evenements_sse(payload, user_id, langue_interface),
+            resume=_resume_du_tour(payload),
+            message_erreur=(
+                "Something went wrong. Please try again shortly." if langue_interface == "en"
+                else "Une erreur est survenue, réessaie dans un instant."
+            ),
+        )
+        return StreamingResponse(
+            tour.lire(0),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",  # évite le buffering côté proxy (Railway/nginx)
+                "X-Tour-Id": tour.id,
+            },
+        )
+    # Visiteur non connecte : rien de rattachable a un compte, le flux reste direct comme avant.
     return StreamingResponse(
         _evenements_sse(payload, user_id, langue_interface),
         media_type="text/event-stream",

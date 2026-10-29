@@ -22,7 +22,7 @@ avec le nom de la table pour pouvoir être reprises à la main.
 import logging
 import os
 
-from core import config_skills, stockage_r2
+from core import config_skills, stockage_r2, tours_detaches
 from core.dedoublonnage_stockage import supprimer_stockage_si_dernier_usage
 
 
@@ -203,6 +203,12 @@ def _purger_videos(user_id: str) -> None:
 
 def purger_donnees_compte(supabase, user_id: str) -> None:
     """Point d'entrée, à appeler avant la suppression du profil."""
+    # Tours de chat gardés en mémoire du serveur pour la reprise (core/tours_detaches.py) : rien en
+    # base, mais le contenu des échanges récents du compte ne doit pas survivre à sa suppression.
+    try:
+        tours_detaches.oublier_utilisateur(user_id)
+    except Exception as e:
+        logging.error(f"ERREUR purge compte (tours de chat en mémoire pour {user_id}) : {e}")
     _purger_sandboxes_execution_code(supabase, user_id)
     _detacher_etablissements(supabase, user_id)
     # Les objets R2 des skills sont indépendants des lignes Supabase.
