@@ -5,10 +5,13 @@ Chaque test joue un flux simulé du fournisseur, relit les morceaux comme le fai
 d'agent (core/boucle_agent.py), puis vérifie la conversion des messages du tour suivant.
 """
 
+import httpx
 import json
 import types
 import unittest
 from unittest.mock import patch
+
+from openai import BadRequestError
 
 from core import fournisseurs_llm
 from core.adaptateur_claude import ClientClaude, _convertir_messages as claude_messages
@@ -348,6 +351,9 @@ class Meta(unittest.TestCase):
         self.assertEqual(efforts_pour_modele("muse-spark-1.3", "meta"), attendu)
         self.assertEqual(efforts_pour_modele("muse-wonder-1.0", "meta"), attendu)
         self.assertEqual(effort_defaut(attendu), "low")
+        # "none" est refusé par l'API Meta (HTTP 400) : il retombe sur le défaut.
+        self.assertEqual(effort_valide_pour_modele("muse-spark-1.3", "none", "meta"), "low")
+        self.assertEqual(effort_valide_pour_modele("muse-wonder-1.0", "none", "meta"), "low")
 
     def test_adaptateur_sans_stockage_avec_resume_et_raisonnement_chiffre(self):
         # Les deux modèles Meta demandent le résumé de raisonnement (doc officielle
@@ -361,6 +367,34 @@ class Meta(unittest.TestCase):
             self.assertIs(captured["store"], False)
             self.assertEqual(captured["include"], ["reasoning.encrypted_content"])
             self.assertEqual(captured["reasoning"], {"effort": "high", "summary": "auto"})
+
+    def test_resume_refuse_par_meta_nouvel_essai_sans_resume(self):
+        # Si Meta refuse le résumé (comme OpenAI pour les organisations non
+        # vérifiées), l'adaptateur rouvre sans résumé au lieu de faire échouer
+        # le message.
+        refus = BadRequestError(
+            "Unknown parameter: 'summary'",
+            response=httpx.Response(
+                400, request=httpx.Request("POST", "https://api.meta.ai/v1/responses")
+            ),
+            body=None,
+        )
+        appels = []
+
+        def creer(**arguments):
+            appels.append(arguments)
+            if len(appels) == 1:
+                raise refus
+            return iter([NS(type="response.output_text.delta", delta="ok")])
+
+        client = ClientResponses("cle", "meta")
+        client._client = NS(responses=NS(create=creer))
+        texte, _, _, fin = lire_flux(client.chat.completions.create(
+            model="muse-spark-1.3", messages=[], reasoning_effort="high"))
+        self.assertEqual((texte, fin), ("ok", "stop"))
+        self.assertEqual(len(appels), 2)
+        self.assertEqual(appels[0]["reasoning"], {"effort": "high", "summary": "auto"})
+        self.assertEqual(appels[1]["reasoning"], {"effort": "high"})
 
     def _enregistrer(self, captured, arguments):
         captured.update(arguments)

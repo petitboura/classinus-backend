@@ -107,9 +107,11 @@ HIERARCHIE_MODELES = {
     },
     "meta": {
         # Meta, ajouté le 28/10/2026 sur staging en Bientôt (demande de Bourama) : Muse
-        # Spark 1.3 au niveau avance, Muse Wonder (en préversion, plus cher) au niveau pro,
-        # affiché tout en haut. Jamais de niveau essentiel : Meta ne propose que ces deux
-        # modèles. Identifiants standards seulement, jamais "-contributor" (les données des
+        # Spark 1.3 (muse-spark-1.3) au niveau avance, Muse Wonder (muse-wonder-1.0,
+        # en préversion, plus cher) au niveau pro, affiché tout en haut. Jamais de
+        # niveau essentiel : Meta ne propose que ces deux modèles. Identifiants exacts
+        # de la doc officielle Meta (page Modèles, dev.meta.ai, vérifiés le 29/10/2026).
+        # Identifiants standards seulement, jamais "-contributor" (les données des
         # élèves ne doivent pas entraîner les modèles Meta).
         "avance": {"id": "muse-spark-1.3", "label": "Muse Spark 1.3"},
         "pro": {"id": "muse-wonder-1.0", "label": "Muse Wonder"},
