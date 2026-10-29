@@ -343,7 +343,7 @@ class AgentDetailPublic(BaseModel):
 
 
 @router.get("/{agent_id}", response_model=AgentDetailPublic)
-def obtenir_agent_public(agent_id: str):
+def obtenir_agent_public(agent_id: str, utilisateur=Depends(utilisateur_optionnel)):
     """
     Détail public d'un agent, pour la page `/agent/[slug]`. Public, aucune auth requise, comme
     `/api/feed`. `agent_id` sert de slug : pas de colonne `slug` dédiée
@@ -404,10 +404,10 @@ def obtenir_agent_public(agent_id: str):
         filiere=ligne.get("filiere"),
         domaine=ligne.get("domaine"),
         modeles_disponibles=modeles_disponibles_pour_agent(
-            ligne.get("distributeur_debloque"), ligne.get("palier_debloque")
+            ligne.get("distributeur_debloque"), ligne.get("palier_debloque"), getattr(utilisateur, "email", None)
         ),
         modeles_bientot=modeles_bientot_pour_agent(
-            ligne.get("distributeur_debloque"), ligne.get("palier_debloque")
+            ligne.get("distributeur_debloque"), ligne.get("palier_debloque"), getattr(utilisateur, "email", None)
         ),
         modele_choisi=ligne.get("modele_choisi"),
         contenu_dynamique_par_matiere=bool(ligne.get("contenu_dynamique_par_matiere")),
@@ -639,7 +639,7 @@ def obtenir_agent_pour_edition(agent_id: str, utilisateur=Depends(utilisateur_co
         distributeur_debloque=ligne.get("distributeur_debloque"),
         palier_debloque=ligne.get("palier_debloque"),
         modeles_disponibles=modeles_disponibles_pour_agent(
-            ligne.get("distributeur_debloque"), ligne.get("palier_debloque")
+            ligne.get("distributeur_debloque"), ligne.get("palier_debloque"), getattr(utilisateur, "email", None)
         ),
         modele_choisi=ligne.get("modele_choisi"),
     )
@@ -918,7 +918,8 @@ def modifier_agent(
         if payload.modele_choisi == "":
             mise_a_jour["modele_choisi"] = None
         elif not modele_id_est_autorise(
-            payload.modele_choisi, ligne.get("distributeur_debloque"), ligne.get("palier_debloque")
+            payload.modele_choisi, ligne.get("distributeur_debloque"), ligne.get("palier_debloque"),
+            getattr(utilisateur, "email", None),
         ):
             # Le createur ne peut choisir QUE parmi les modeles reellement
             # debloques pour son agent -- jamais de confiance aveugle
@@ -1078,7 +1079,7 @@ def modifier_agent(
         distributeur_debloque=ligne.get("distributeur_debloque"),
         palier_debloque=ligne.get("palier_debloque"),
         modeles_disponibles=modeles_disponibles_pour_agent(
-            ligne.get("distributeur_debloque"), ligne.get("palier_debloque")
+            ligne.get("distributeur_debloque"), ligne.get("palier_debloque"), getattr(utilisateur, "email", None)
         ),
         modele_choisi=mise_a_jour.get("modele_choisi", ligne.get("modele_choisi")),
     )

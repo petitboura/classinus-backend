@@ -213,7 +213,42 @@ def _config_modeles_de_repli():
         "paliers": list(ORDRE_PALIERS),
         "modeles": {distributeur: dict(paliers) for distributeur, paliers in HIERARCHIE_MODELES.items()},
         "textes": {"bientot": dict(LIBELLE_BIENTOT_DE_REPLI)},
+        "acces_anticipe": {},
     }
+
+
+def _normaliser_email(email):
+    """Adresse comparée sans majuscules ni espaces ; None si vide ou absente."""
+    if not isinstance(email, str):
+        return None
+    email = email.strip().lower()
+    return email or None
+
+
+def _lire_acces_anticipe(client):
+    """
+    Accès anticipé par fournisseur (29/10/2026, demande de Bourama) : table
+    acces_anticipe_modeles (distributeur, email). Une adresse listée voit et peut
+    utiliser un fournisseur encore marqué Bientôt pour tout le monde. Si la table
+    n'existe pas encore ou ne répond pas, personne n'a d'accès anticipé : le
+    comportement reste celui d'avant et le reste de la configuration n'est pas touché.
+    """
+    try:
+        lignes = client.table("acces_anticipe_modeles").select("distributeur, email").execute().data or []
+    except Exception as e:
+        logging.warning(f"Lecture de acces_anticipe_modeles impossible, aucun accès anticipé : {e}")
+        return {}
+    acces = {}
+    for ligne in lignes:
+        email = _normaliser_email(ligne.get("email"))
+        if email and ligne.get("distributeur"):
+            acces.setdefault(ligne["distributeur"], set()).add(email)
+    return acces
+
+
+def _a_acces_anticipe(config, distributeur, email):
+    email = _normaliser_email(email)
+    return bool(email) and email in config.get("acces_anticipe", {}).get(distributeur, set())
 
 
 def _lire_config_modeles_supabase():
@@ -273,6 +308,7 @@ def _lire_config_modeles_supabase():
         "paliers": sorted(niveaux, key=lambda palier: niveaux[palier]),
         "modeles": modeles,
         "textes": textes,
+        "acces_anticipe": _lire_acces_anticipe(client),
     }
 
 
@@ -321,7 +357,7 @@ def effort_defaut(efforts):
     return _defaut(efforts)
 
 
-def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque):
+def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque, email=None):
     """
     Calcule la liste des modeles reellement choisissables pour un agent,
     a partir de son distributeur/palier debloques (colonnes `agents`,
@@ -333,7 +369,8 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque):
     Cumulatif sur les deux axes (voir docstring du module) ET filtre par
     la regle de cle API (cle absente et cle_api_requise vrai : fournisseur
     invisible). Les fournisseurs marques Bientôt dans Supabase sont toujours
-    exclus, cle API presente ou non. Tout vient de la configuration Supabase
+    exclus, cle API presente ou non, sauf pour une adresse e-mail listee dans la table
+    acces_anticipe_modeles pour ce fournisseur (la cle API reste exigee). Tout vient de la configuration Supabase
     (voir _config_modeles), avec le code comme valeur de repli.
     """
     if not distributeur_debloque or distributeur_debloque == "aucun":
@@ -358,7 +395,7 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque):
     resultats = []
     ids_deja_vus = set()
     for distributeur in distributeurs_autorises:
-        if config["fournisseurs"][distributeur]["bientot"]:
+        if config["fournisseurs"][distributeur]["bientot"] and not _a_acces_anticipe(config, distributeur, email):
             continue
         if not _distributeur_disponible(distributeur, config):
             continue
@@ -392,7 +429,7 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque):
     return resultats
 
 
-def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque):
+def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque, email=None):
     """
     Modèles affichés grisés avec la mention "Bientôt" : tous les niveaux de
     chaque fournisseur marqué Bientôt dans Supabase (table fournisseurs_llm),
@@ -407,7 +444,7 @@ def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque):
     Ces modèles ne sont JAMAIS acceptés par modele_id_est_autorise (qui ne lit
     que modeles_disponibles_pour_agent) : le frontend ne peut pas les imposer.
     """
-    disponibles = modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque)
+    disponibles = modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque, email)
     if not disponibles:
         return []
 
@@ -436,14 +473,14 @@ def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque):
     return resultats
 
 
-def modele_id_est_autorise(modele_id, distributeur_debloque, palier_debloque):
+def modele_id_est_autorise(modele_id, distributeur_debloque, palier_debloque, email=None):
     """
     Verification cote backend AVANT d'honorer un choix de modele envoye
     par le frontend (jamais fait confiance a un id de modele venu du
     client sans le revalider contre ce que l'agent a reellement
     debloque) : voir api/chat.py et api/agents.py.
     """
-    disponibles = modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque)
+    disponibles = modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque, email)
     return any(m["modele_id"] == modele_id for m in disponibles)
 
 

@@ -298,5 +298,89 @@ class ModelesMeta(unittest.TestCase):
         self.assertEqual(envoye["messages"][0], {"role": "system", "content": "consigne"})
 
 
+CLES_DEEPSEEK_ET_META = {"DEEPSEEK_API_KEY": "x", "MODEL_API_KEY": "x"}
+
+
+def _avec_acces_meta(emails):
+    """Simule la table acces_anticipe_modeles : Meta reste Bientôt, ces adresses y ont accès."""
+    def modifier(config):
+        config["acces_anticipe"] = {"meta": set(emails)}
+    return _avec_config_supabase(modifier)
+
+
+class AccesAnticipe(unittest.TestCase):
+    def setUp(self):
+        reinitialiser_cache_config_modeles()
+
+    def tearDown(self):
+        reinitialiser_cache_config_modeles()
+
+    def test_adresse_autorisee_voit_et_peut_utiliser_meta(self):
+        with patch.dict(os.environ, CLES_DEEPSEEK_ET_META, clear=True), _avec_acces_meta(["petitboura26@gmail.com"]):
+            disponibles = modeles_disponibles_pour_agent("claude", "pro", "petitboura26@gmail.com")
+            bientot = modeles_bientot_pour_agent("claude", "pro", "petitboura26@gmail.com")
+            autorise = modele_id_est_autorise("muse-spark-1.3", "claude", "pro", "petitboura26@gmail.com")
+        self.assertIn("meta", {m["distributeur"] for m in disponibles})
+        self.assertNotIn("meta", {m["distributeur"] for m in bientot})
+        self.assertTrue(autorise)
+
+    def test_autre_adresse_ne_voit_meta_que_grise_et_ne_peut_pas_l_imposer(self):
+        with patch.dict(os.environ, CLES_DEEPSEEK_ET_META, clear=True), _avec_acces_meta(["petitboura26@gmail.com"]):
+            for email in ("autre@exemple.com", None, ""):
+                disponibles = modeles_disponibles_pour_agent("claude", "pro", email)
+                bientot = modeles_bientot_pour_agent("claude", "pro", email)
+                self.assertNotIn("meta", {m["distributeur"] for m in disponibles})
+                self.assertIn("meta", {m["distributeur"] for m in bientot})
+                self.assertFalse(modele_id_est_autorise("muse-spark-1.3", "claude", "pro", email))
+                self.assertFalse(modele_id_est_autorise("muse-wonder-1.0", "claude", "pro", email))
+
+    def test_adresse_comparee_sans_tenir_compte_des_majuscules(self):
+        with patch.dict(os.environ, CLES_DEEPSEEK_ET_META, clear=True), _avec_acces_meta(["petitboura26@gmail.com"]):
+            self.assertTrue(modele_id_est_autorise("muse-wonder-1.0", "claude", "pro", "  PetitBoura26@Gmail.com "))
+
+    def test_sans_cle_api_meme_une_adresse_autorisee_ne_peut_pas_utiliser_meta(self):
+        with patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True), _avec_acces_meta(["petitboura26@gmail.com"]):
+            disponibles = modeles_disponibles_pour_agent("claude", "pro", "petitboura26@gmail.com")
+            bientot = modeles_bientot_pour_agent("claude", "pro", "petitboura26@gmail.com")
+        self.assertNotIn("meta", {m["distributeur"] for m in disponibles})
+        # Sans clé, Meta reste affiché grisé : jamais en double, jamais choisissable.
+        self.assertIn("meta", {m["distributeur"] for m in bientot})
+
+    def test_agent_qui_n_a_pas_debloque_meta_ne_le_donne_pas(self):
+        # grok est plus bas que claude dans la hiérarchie mais meta (ordre 6) vient après : un agent
+        # débloqué seulement à un fournisseur d'ordre plus grand que meta ne verrait pas meta.
+        config = _config_modeles_de_repli()
+        self.assertIn("meta", config["distributeurs"])
+        with patch.dict(os.environ, CLES_DEEPSEEK_ET_META, clear=True), _avec_acces_meta(["petitboura26@gmail.com"]):
+            self.assertEqual(modeles_disponibles_pour_agent("aucun", "pro", "petitboura26@gmail.com"), [])
+
+    def test_table_acces_anticipe_absente_ne_casse_pas_la_configuration(self):
+        class ClientSansTable:
+            def table(self, nom):
+                raise RuntimeError("relation absente")
+
+        self.assertEqual(fournisseurs_llm._lire_acces_anticipe(ClientSansTable()), {})
+
+    def test_lecture_table_acces_anticipe_normalise_les_adresses(self):
+        class Requete:
+            def select(self, *_):
+                return self
+
+            def execute(self):
+                class Reponse:
+                    data = [
+                        {"distributeur": "meta", "email": " Moi@Exemple.com "},
+                        {"distributeur": "meta", "email": ""},
+                    ]
+                return Reponse()
+
+        class Client:
+            def table(self, nom):
+                assert nom == "acces_anticipe_modeles"
+                return Requete()
+
+        self.assertEqual(fournisseurs_llm._lire_acces_anticipe(Client()), {"meta": {"moi@exemple.com"}})
+
+
 if __name__ == "__main__":
     unittest.main()
