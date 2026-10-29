@@ -3,8 +3,9 @@ Fabrique des clients avec outils pour les modèles Claude, GPT, Gemini, Grok et 
 
 Chaque client expose le même appel que le SDK OpenAI (client.chat.completions.create), ce qui
 permet à la boucle d'agent (core/boucle_agent.py:_agent_groq) de s'en servir sans rien changer :
-outils, mémoire, demander_outils, confirmations, bouton Arrêter. DeepSeek garde son chemin
-existant (client OpenAI vers api.deepseek.com, voir core/main.py).
+outils, mémoire, demander_outils, confirmations, bouton Arrêter. DeepSeek garde son
+chemin existant (core/adaptateur_baseten.py : Baseten si l'interrupteur est ON,
+direct sinon, voir core/fournisseurs_llm.py:creer_client_deepseek).
 
 Renvoie None quand le modèle n'est pas géré ici ou que la clé API du fournisseur est absente :
 l'appelant retombe alors sur le chemin texte seul, comme avant.

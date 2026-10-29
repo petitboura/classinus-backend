@@ -31,6 +31,7 @@ import logging
 import threading
 
 from openai import OpenAI
+from fournisseurs_llm import creer_client_deepseek
 from constantes_agent import (
     supabase,
     get_secret,
@@ -284,7 +285,9 @@ def _demander_cloture_sujets(system_prompt, historique_allege, conversation_id):
         },
     }
 
-    client_deepseek = OpenAI(api_key=get_secret("DEEPSEEK_API_KEY"), base_url="https://api.deepseek.com")
+    # Baseten si l'interrupteur est ON (repli direct integre), direct sinon.
+    # Le `or` garde l'erreur d'origine quand aucune cle n'existe.
+    client_deepseek = creer_client_deepseek(DEEPSEEK_PRIMARY) or OpenAI(api_key=get_secret("DEEPSEEK_API_KEY"), base_url="https://api.deepseek.com")
     completion = client_deepseek.chat.completions.create(
         model=DEEPSEEK_PRIMARY,
         messages=messages,
