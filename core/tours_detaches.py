@@ -1,0 +1,228 @@
+"""Tours de chat detaches de la connexion HTTP (28/10/2026, demande de Bourama).
+
+Avant : le flux SSE de /api/chat etait lu directement par la connexion du navigateur. Des que
+la connexion se fermait (rechargement de la page, changement de conversation, coupure de
+reseau), le generateur etait ferme avec elle : la boucle d'agent et les outils s'arretaient net,
+et comme l'echange n'est sauvegarde qu'a la toute fin du tour, rien n'etait enregistre.
+
+Maintenant : le travail tourne dans un thread a lui, independant de la connexion. Chaque ligne
+SSE produite est rangee dans le tour. La connexion HTTP ne fait que LIRE ce rangement :
+- si elle se ferme, le travail continue et finit par sauvegarder l'echange comme d'habitude ;
+- une nouvelle connexion peut se rattacher au meme tour et reprendre la lecture exactement la
+  ou la precedente s'etait arretee (parametre `depuis`, nombre de lignes deja recues).
+
+Le bouton Arreter n'est pas touche : il passe par POST /api/chat/arreter, qui leve le jeton
+d'arret du tour (core/arret_tour.py), et ce jeton appartient au thread de travail.
+
+Le rangement est en memoire du processus. Le service tourne avec un seul processus uvicorn
+(Procfile) : toutes les requetes d'un meme compte voient donc le meme registre. Un redemarrage
+du serveur (deploiement) interrompt les tours en cours, comme avant. Les visiteurs non connectes
+n'ont pas de tour detache : rien n'est rattachable a un compte, le flux reste direct.
+
+Rien n'est ecrit en base : un tour ne vit que le temps du travail, puis
+CONSERVATION_TOUR_DETACHE apres sa fin (core/plafonds_reglables.py).
+"""
+import contextvars
+import json
+import logging
+import threading
+import time
+import uuid
+from typing import Callable, Iterable, Iterator, Optional
+
+from core.plafonds_reglables import CONSERVATION_TOUR_DETACHE, MAX_TOURS_DETACHES_CONSERVES
+
+# Duree maximale d'une attente sans nouvelle ligne avant de reverifier l'etat du tour. Ne sert
+# qu'a rester reveille : le signe de vie envoye au client a son propre delai (parametre).
+_PAS_ATTENTE_SECONDES = 1.0
+
+LIGNE_SIGNE_VIE = ": signe de vie\n\n"
+LIGNE_FIN = "data: [DONE]\n\n"
+
+
+def _ids_sauvegardes(ligne: str) -> Optional[dict]:
+    """Identifiants de l'echange, lus dans l'evenement "meta" que le chat emet une fois l'echange
+    sauvegarde (api/chat.py:_evenements_sse). None pour toute autre ligne."""
+    if '"type": "meta"' not in ligne or not ligne.startswith("data:"):
+        return None
+    try:
+        evenement = json.loads(ligne[len("data:"):].strip())
+    except ValueError:
+        return None
+    if not isinstance(evenement, dict) or evenement.get("type") != "meta":
+        return None
+    return {
+        "message_id_user": evenement.get("message_id_user"),
+        "message_id_assistant": evenement.get("message_id_assistant"),
+    }
+
+
+class TourDetache:
+    """Un tour de chat en cours ou termine : ses lignes SSE, dans l'ordre, et son etat."""
+
+    def __init__(self, user_id: str, conversation_id: Optional[str], resume: Optional[dict] = None):
+        self.id = uuid.uuid4().hex
+        self.user_id = user_id
+        self.conversation_id = conversation_id
+        # Ce dont une page qui se rouvre a besoin pour redessiner le debut du tour (le message de
+        # l'utilisateur, par exemple) : le serveur ne l'a pas encore sauvegarde avant la fin.
+        self.resume = dict(resume or {})
+        # Identifiants de l'echange une fois sauvegarde (None tant qu'il ne l'est pas, ou s'il ne
+        # l'a jamais ete : tour arrete ou en erreur). Une page qui se rouvre s'en sert pour ne pas
+        # redessiner un echange qu'elle a deja recharge depuis l'historique.
+        self.ids: Optional[dict] = None
+        self.termine_a: Optional[float] = None
+        self._lignes: list[str] = []
+        self._condition = threading.Condition()
+        self._termine = False
+
+    @property
+    def termine(self) -> bool:
+        with self._condition:
+            return self._termine
+
+    def nombre_evenements(self) -> int:
+        with self._condition:
+            return len(self._lignes)
+
+    def ajouter(self, ligne: str) -> None:
+        ids = _ids_sauvegardes(ligne)
+        with self._condition:
+            self._lignes.append(ligne)
+            if ids is not None:
+                self.ids = ids
+            self._condition.notify_all()
+
+    def clore(self) -> None:
+        with self._condition:
+            if self._termine:
+                return
+            self._termine = True
+            self.termine_a = time.monotonic()
+            self._condition.notify_all()
+
+    def lire(self, depuis: int = 0, signe_vie: Optional[float] = None) -> Iterator[str]:
+        """Rend les lignes a partir de la position `depuis`, puis attend les suivantes jusqu'a la
+        fin du tour. `signe_vie` : delai en secondes apres lequel une ligne de commentaire SSE est
+        envoyee si rien d'autre ne l'a ete (None : jamais, comportement du flux d'origine).
+
+        Fermer ce generateur (connexion perdue) ne touche pas au tour : seul son lecteur s'arrete.
+        """
+        position = max(0, int(depuis))
+        dernier_envoi = time.monotonic()
+        while True:
+            with self._condition:
+                if position >= len(self._lignes) and not self._termine:
+                    self._condition.wait(timeout=_PAS_ATTENTE_SECONDES)
+                # Lues dans le meme verrou : `fini` vrai avec des lignes encore a rendre n'arrive
+                # qu'une fois, la boucle repasse ensuite par ici et trouve la liste vide.
+                nouvelles = self._lignes[position:]
+                fini = self._termine
+            if nouvelles:
+                position += len(nouvelles)
+                dernier_envoi = time.monotonic()
+                yield from nouvelles
+                continue
+            if fini:
+                return
+            if signe_vie is not None and time.monotonic() - dernier_envoi >= signe_vie:
+                dernier_envoi = time.monotonic()
+                yield LIGNE_SIGNE_VIE
+
+
+_verrou = threading.Lock()
+_tours: dict[str, TourDetache] = {}
+_dernier_par_conversation: dict[tuple[str, str], str] = {}
+
+
+def _oublier_sous_verrou(tour_id: str) -> None:
+    tour = _tours.pop(tour_id, None)
+    if tour is None:
+        return
+    cle = (tour.user_id, tour.conversation_id)
+    if _dernier_par_conversation.get(cle) == tour_id:
+        del _dernier_par_conversation[cle]
+
+
+def _purger_sous_verrou(maintenant: float) -> None:
+    """Oublie les tours termines depuis trop longtemps, puis les plus anciens si trop restent."""
+    duree = CONSERVATION_TOUR_DETACHE.total_seconds()
+    termines = sorted(
+        (t for t in _tours.values() if t.termine_a is not None),
+        key=lambda t: t.termine_a,
+    )
+    a_oublier = {t.id for t in termines if maintenant - t.termine_a > duree}
+    exces = len(termines) - MAX_TOURS_DETACHES_CONSERVES
+    if exces > 0:
+        a_oublier.update(t.id for t in termines[:exces])
+    for tour_id in a_oublier:
+        _oublier_sous_verrou(tour_id)
+
+
+def _executer(tour: TourDetache, fabrique: Callable[[], Iterable[str]], message_erreur: str) -> None:
+    try:
+        for ligne in fabrique():
+            tour.ajouter(ligne)
+    except Exception as e:
+        # Le generateur du chat attrape deja ses propres erreurs : on n'arrive ici que si
+        # quelque chose a casse avant sa premiere ligne ou autour de lui.
+        logging.error("ERREUR tour detache %s (compte %s) : %s", tour.id, tour.user_id, e)
+        tour.ajouter(f"data: {json.dumps({'type': 'reponse', 'texte': message_erreur})}\n\n")
+        tour.ajouter(LIGNE_FIN)
+    finally:
+        tour.clore()
+
+
+def demarrer(
+    user_id: str,
+    conversation_id: Optional[str],
+    fabrique: Callable[[], Iterable[str]],
+    resume: Optional[dict] = None,
+    message_erreur: str = "Une erreur est survenue, réessaie dans un instant.",
+) -> TourDetache:
+    """Lance le travail dans son propre thread et renvoie le tour, deja lisible.
+
+    `fabrique` rend l'iterable de lignes SSE (api/chat.py:_evenements_sse). Le contexte de la
+    requete est copie dans le thread : sans lui, ce que le travail lisait par variable de
+    contexte dans le thread de la requete disparaitrait.
+    """
+    tour = TourDetache(user_id, conversation_id, resume)
+    with _verrou:
+        _purger_sous_verrou(time.monotonic())
+        _tours[tour.id] = tour
+        if conversation_id:
+            _dernier_par_conversation[(user_id, conversation_id)] = tour.id
+    contexte = contextvars.copy_context()
+    fil = threading.Thread(
+        target=contexte.run,
+        args=(_executer, tour, fabrique, message_erreur),
+        name=f"tour-detache-{tour.id[:8]}",
+        daemon=True,
+    )
+    fil.start()
+    return tour
+
+
+def trouver(tour_id: str, user_id: str) -> Optional[TourDetache]:
+    """Le tour `tour_id`, seulement s'il appartient bien a `user_id`."""
+    with _verrou:
+        tour = _tours.get(tour_id)
+    return tour if tour is not None and tour.user_id == user_id else None
+
+
+def dernier_de_conversation(user_id: str, conversation_id: str) -> Optional[TourDetache]:
+    """Le tour le plus recent de cette conversation pour ce compte, en cours ou termine."""
+    with _verrou:
+        tour_id = _dernier_par_conversation.get((user_id, conversation_id))
+        tour = _tours.get(tour_id) if tour_id else None
+    return tour if tour is not None and tour.user_id == user_id else None
+
+
+def oublier_utilisateur(user_id: str) -> int:
+    """Retire tous les tours d'un compte du registre (suppression du compte). Un travail encore
+    en cours finit tout seul, mais plus personne ne peut s'y rattacher. Renvoie leur nombre."""
+    with _verrou:
+        ids = [t.id for t in _tours.values() if t.user_id == user_id]
+        for tour_id in ids:
+            _oublier_sous_verrou(tour_id)
+    return len(ids)

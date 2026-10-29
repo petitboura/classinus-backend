@@ -16,10 +16,13 @@ import threading
 
 
 class ArretTour:
-    def __init__(self, user_id):
+    def __init__(self, user_id, conversation_id=None):
         self.user_id = user_id
         # Vrai pour le chat du site : il veut recevoir l'etat de reprise avant la fermeture du flux.
         self.avec_etat = False
+        # Conversation du tour (28/10/2026) : un tour continue maintenant quand l'utilisateur
+        # change de conversation (core/tours_detaches.py), arrêter l'une ne doit pas couper l'autre.
+        self.conversation_id = conversation_id
         self._evenement = threading.Event()
 
     def demander(self):
@@ -33,11 +36,11 @@ _verrou = threading.Lock()
 _tours_ouverts: dict = {}
 
 
-def ouvrir_arret(user_id):
+def ouvrir_arret(user_id, conversation_id=None):
     """Jeton d'un nouveau tour. None pour un visiteur non connecté (rien à arrêter côté serveur)."""
     if not user_id:
         return None
-    jeton = ArretTour(user_id)
+    jeton = ArretTour(user_id, conversation_id)
     with _verrou:
         _tours_ouverts.setdefault(user_id, set()).add(jeton)
     return jeton
@@ -54,15 +57,31 @@ def fermer_arret(jeton):
                 _tours_ouverts.pop(jeton.user_id, None)
 
 
-def demander_arret_utilisateur(user_id):
-    """Lève le jeton de tous les tours en cours de ce compte. Renvoie leur nombre."""
+def demander_arret_utilisateur(user_id, conversation_id=None):
+    """Lève le jeton des tours en cours de ce compte. Renvoie leur nombre.
+
+    Sans `conversation_id` : tous les tours du compte (comportement d'origine, canal en direct).
+    Avec : seulement ceux de cette conversation, les tours des autres conversations continuent.
+    """
     if not user_id:
         return 0
     with _verrou:
-        tours = list(_tours_ouverts.get(user_id, ()))
+        tours = [
+            jeton
+            for jeton in _tours_ouverts.get(user_id, ())
+            if conversation_id is None or jeton.conversation_id == conversation_id
+        ]
     for jeton in tours:
         jeton.demander()
     return len(tours)
+
+
+def autres_tours_en_cours(user_id):
+    """Vrai s'il reste au moins un tour de ce compte dont l'arrêt n'a pas été demandé."""
+    if not user_id:
+        return False
+    with _verrou:
+        return any(not jeton.est_demande() for jeton in _tours_ouverts.get(user_id, ()))
 
 
 def arret_demande(jeton):

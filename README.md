@@ -226,7 +226,22 @@ sur la WebSocket). Les contrôles se font par lecture du jeton, jamais par excep
 cascade de modèles de `chat()` attrape les exceptions et relancerait une réponse. Limite :
 un fil d'outil déjà parti ne peut pas être tué, il finit seul et son résultat est jeté.
 Le signal est gardé en mémoire du processus, comme le reste du canal en direct (une seule
-instance du serveur).
+instance du serveur). Avec `?conversation_id=`, seul le tour de cette conversation est arrêté.
+
+## Tours de chat détachés de la connexion (28/10/2026)
+
+Un utilisateur connecté qui envoie un message démarre un tour dans un thread à lui
+(`core/tours_detaches.py`) : recharger la page, changer de conversation ou perdre le réseau ne
+coupe plus le travail. Les lignes SSE sont gardées dans l'ordre. `POST /api/chat` renvoie
+l'identifiant du tour dans l'en-tête `X-Tour-Id` (exposé par le CORS). Le navigateur se rattache
+avec `GET /api/chat/flux/{tour_id}?depuis=N` (rejeu à partir de l'événement N, signe de vie toutes
+les 15 s) et retrouve le tour d'une conversation avec `GET /api/chat/tour-en-cours?conversation_id=`.
+Les tours finis sont gardés 30 minutes (200 au plus), réglables par `CLASSINUS_TOUR_CONSERVATION_MINUTES`,
+`CLASSINUS_TOURS_CONSERVES_MAX` et `CLASSINUS_FLUX_SIGNE_VIE_SECONDES`. Chaque tour n'est visible que
+de son compte, et la suppression du compte les oublie (`core/purge_compte.py`). Limites : registre en
+mémoire du processus (une seule instance, un redéploiement interrompt les tours en cours), les
+visiteurs non connectés gardent le flux direct, et les outils qui dépendent de la page (code Pyodide,
+vision d'écran, voix) attendent que la page revienne.
 
 ## Variables d'environnement / secrets nécessaires
 

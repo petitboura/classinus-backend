@@ -808,7 +808,9 @@ app.add_middleware(
     # appels venant d'un autre domaine (Content-Length illisible, donc pas de
     # pourcentage). Content-Encoding permet de savoir si la taille annoncée est
     # celle d'un fichier compressé en route (alors pas de pourcentage trompeur).
-    expose_headers=["Content-Length", "Content-Encoding", "Content-Range", "Content-Disposition", "Accept-Ranges"],
+    # X-Tour-Id (28/10/2026) : identifiant du tour de chat detache (core/tours_detaches.py), lu par
+    # le frontend pour se rattacher au meme tour apres une coupure de connexion.
+    expose_headers=["Content-Length", "Content-Encoding", "Content-Range", "Content-Disposition", "Accept-Ranges", "X-Tour-Id"],
 )
 
 
