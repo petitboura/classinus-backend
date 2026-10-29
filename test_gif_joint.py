@@ -89,6 +89,24 @@ sys.modules["core.zip_chat"] = _faux_zip_chat
 import api.uploads as uploads  # noqa: E402
 from lecture_urls_externes import _telecharger_image  # noqa: E402
 
+# Les faux modules ne doivent pas fuir vers les autres fichiers de test
+# exécutés dans le même processus : retirés sitôt les imports faits
+# (les modules importés gardent leurs références, rien ne change pour eux).
+for _nom_faux in (
+    "supabase",
+    "google",
+    "boto3",
+    "botocore",
+    "botocore.config",
+    "postgrest",
+    "postgrest.exceptions",
+    "core.lecture_document_conversation",
+    "core.import_zip",
+    "core.lecture_media_conversation",
+    "core.zip_chat",
+):
+    sys.modules.pop(_nom_faux, None)
+
 
 def _gif_test():
     from PIL import Image
