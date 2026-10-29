@@ -33,10 +33,10 @@ core/
                                 candidats, le grand modèle décide lui-même de lire le texte complet
   contenu_dynamique_matiere.py résolution du system prompt pour les agents à contenu dynamique par matière
   auth.py                      authentification (email/mot de passe + Google) via Supabase Auth
-  fournisseurs_llm.py          LLM premium (Claude, GPT, Gemini, Grok, DeepSeek) — gardes-fous d'accès, et liste des modèles affichés « Bientôt » dans le sélecteur du chat (DISTRIBUTEURS_BIENTOT)
-  clients_outils_llm.py        Fabrique des clients avec outils pour Claude, GPT, Gemini et Grok (None si la clé API manque)
+  fournisseurs_llm.py          LLM premium (Claude, GPT, Gemini, Grok, DeepSeek, Meta) — gardes-fous d'accès, et liste des modèles affichés « Bientôt » dans le sélecteur du chat (DISTRIBUTEURS_BIENTOT)
+  clients_outils_llm.py        Fabrique des clients avec outils pour Claude, GPT, Gemini, Grok et Meta (None si la clé API manque)
   adaptateur_commun.py         Briques communes : les adaptateurs imitent client.chat.completions.create pour que la boucle d'agent ne change pas
-  adaptateur_responses.py      GPT (OpenAI) et Grok (xAI) via l'API Responses
+  adaptateur_responses.py      GPT (OpenAI), Grok (xAI) et Meta via l'API Responses
   adaptateur_claude.py         Claude via l'API Messages (réflexion adaptative, effort)
   adaptateur_gemini.py         Gemini via generateContent natif (thinking_level, signatures de pensée)
   efforts_modeles.py           Niveaux d'effort de réflexion possibles par modèle, revalidés côté serveur et envoyés au frontend
@@ -241,7 +241,7 @@ Le backend est hébergé sur Render. Toutes les variables d'environnement doiven
 | `TAVILY_API_KEY` | `core/registre_outils.py` (outil de recherche web) |
 | `GITHUB_TOKEN` (optionnel) | `core/serveur_mcp_github.py` — sans lui, l'API GitHub non authentifiée est plafonnée à 60 requêtes/heure PAR IP ; un classic token `public_repo` fait passer la limite à 5000/heure |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | `connexions/oauth_generique.py` (connexion OAuth GitHub par agent) |
-| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` / `DEEPSEEK_API_KEY` | `core/fournisseurs_llm.py` (LLM premium optionnels — absents, seuls Gemini/DeepSeek de secours restent proposés) |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` / `DEEPSEEK_API_KEY` / `MODEL_API_KEY` (Meta, staging) | `core/fournisseurs_llm.py` (LLM premium optionnels — absents, seuls Gemini/DeepSeek de secours restent proposés) |
 
 Pour vérifier chaque fournisseur avec ses vraies clés (texte, appel d'outil aller-retour, chaque effort) : `python scripts/verifier_fournisseurs.py [--efforts] [--fournisseur claude]`, à lancer là où les clés existent.
 | `TOGETHER_API_KEY` | `core/generation_images.py` (meilleure fiabilité que le fournisseur par défaut) |
