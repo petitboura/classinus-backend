@@ -5,11 +5,13 @@ les outils API, puis le format galerie/cartes des résultats (correctif
 suivant) et la conservation des blocs non texte des outils MCP.
 """
 
+import json
 import logging
 import os
 import sys
 import types
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "core"))
 os.environ.setdefault("SUPABASE_URL", "http://localhost")
@@ -61,6 +63,35 @@ class TestConsignesFichiersJoints(unittest.TestCase):
 
     def test_estimer_mentionne_les_liens_joints(self):
         self.assertIn("fichiers joints", outils_higgsfield.estimer_cout_higgsfield.__doc__)
+
+
+class TestSuiviGalerie(unittest.TestCase):
+    def _suivi(self, etat, url, genre):
+        with (
+            patch.object(
+                outils_higgsfield,
+                "statut_generation",
+                return_value={"etat": etat, "url": url, "erreur": None},
+            ),
+            patch.object(outils_higgsfield, "_sauvegarder_generation_bibliotheque"),
+        ):
+            return outils_higgsfield._texte_suivi("rid1", "Mon titre", genre, ctx=None)
+
+    def test_video_terminee_renvoie_json_videos(self):
+        resultat = json.loads(self._suivi("terminee", "https://cdn.test/v.mp4", "video"))
+        self.assertEqual(resultat["videos"][0]["url"], "https://cdn.test/v.mp4")
+        self.assertEqual(resultat["videos"][0]["titre"], "Mon titre")
+
+    def test_image_terminee_renvoie_json_images(self):
+        resultat = json.loads(self._suivi("terminee", "https://cdn.test/i.png", "image"))
+        self.assertEqual(resultat["images"][0]["url"], "https://cdn.test/i.png")
+        self.assertEqual(resultat["images"][0]["titre"], "Mon titre")
+
+    def test_sans_url_reste_texte(self):
+        self.assertIn("pas encore disponible", self._suivi("terminee", None, "video"))
+
+    def test_echec_reste_texte(self):
+        self.assertIn("facturée", self._suivi("echec", None, "video"))
 
 
 if __name__ == "__main__":
