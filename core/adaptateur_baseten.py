@@ -115,7 +115,11 @@ class ClientBaseten(ClientCompatible):
         slug = self._slug_pour(modele_id)
         if slug is not None:
             try:
-                return self._client_baseten.chat.completions.create(**{**arguments, "model": slug})
+                reponse = self._client_baseten.chat.completions.create(**{**arguments, "model": slug})
+                # Log temporaire (staging) : quelle route a repondu. En
+                # warning car le niveau info n'apparait pas dans les logs.
+                logging.warning(f"[ROUTE DEEPSEEK] Baseten a repondu ({modele_id}, slug {slug})")
+                return reponse
             except Exception as erreur:
                 if self._client_direct is None or not est_erreur_repli_baseten(erreur):
                     raise
@@ -123,4 +127,14 @@ class ClientBaseten(ClientCompatible):
                 logging.warning(f"Baseten refuse DeepSeek ({modele_id}), repli direct : {erreur}")
         if self._client_direct is None:
             raise RuntimeError(f"DeepSeek {modele_id} : ni Baseten ni le direct ne sont disponibles")
-        return self._client_direct.chat.completions.create(**arguments)
+        reponse = self._client_direct.chat.completions.create(**arguments)
+        if slug is not None:
+            motif = "repli apres refus Baseten"
+        elif self._client_baseten is None:
+            motif = "Baseten desactive ou cle absente"
+        elif baseten_circuit_ouvert():
+            motif = "Baseten mis de cote (refus recent)"
+        else:
+            motif = "modele sans slug Baseten"
+        logging.warning(f"[ROUTE DEEPSEEK] DeepSeek direct a repondu ({modele_id}), motif : {motif}")
+        return reponse
