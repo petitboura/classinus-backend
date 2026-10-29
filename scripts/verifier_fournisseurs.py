@@ -98,12 +98,12 @@ def essayer(nom, fonction, *arguments):
 def main():
     analyse = argparse.ArgumentParser()
     analyse.add_argument("--efforts", action="store_true", help="teste aussi chaque niveau d'effort")
-    analyse.add_argument("--fournisseur", help="un seul fournisseur : claude, gpt, gemini, grok, deepseek")
+    analyse.add_argument("--fournisseur", help="un seul fournisseur : claude, gpt, gemini, grok, meta, deepseek")
     options = analyse.parse_args()
 
     config = fournisseurs_llm._config_modeles()
     echecs = 0
-    for distributeur in ("claude", "gpt", "gemini", "grok", "deepseek"):
+    for distributeur in ("claude", "gpt", "gemini", "grok", "meta", "deepseek"):
         if options.fournisseur and options.fournisseur != distributeur:
             continue
         fournisseur = config["fournisseurs"].get(distributeur) or {}

@@ -9,6 +9,7 @@ Chaque fournisseur a son propre vocabulaire pour dire « réfléchis plus ou moi
     GPT      : reasoning.effort  none, low, medium, high, xhigh, max (selon le modèle)
     Claude   : output_config.effort  low, medium, high, xhigh, max
     Gemini   : thinking_level  low, medium, high
+    Meta     : reasoning.effort  minimal, low, medium, high, xhigh, max (vérifié dans la doc officielle Meta le 29/10/2026 : "none" refusé, "max" confirmé pour Muse Spark 1.3 et Muse Wonder)
 
 Ce module est la source unique de cette liste : le backend s'en sert pour revalider l'effort
 reçu du frontend (jamais de confiance dans le client), et le frontend la reçoit avec chaque
@@ -36,6 +37,7 @@ EFFORTS_PAR_FOURNISSEUR = {
     "gpt": ("low", "medium", "high"),
     "gemini": ("low", "medium", "high"),
     "grok": ("low", "medium", "high"),
+    "meta": ("minimal", "low", "medium", "high", "xhigh", "max"),
 }
 
 # Règles précises, par début d'identifiant de modèle. La première qui correspond gagne.
@@ -48,11 +50,13 @@ EFFORTS_PAR_PREFIXE_MODELE = (
     ("gpt-6-sol", ("low", "medium", "high", "xhigh", "max")),
     ("grok-4.7", ("low", "medium", "high", "xhigh")),
     ("grok-4.3", ("none", "low", "medium", "high")),
+    ("muse-spark-1.3", ("minimal", "low", "medium", "high", "xhigh", "max")),
+    ("muse-wonder-1.0", ("minimal", "low", "medium", "high", "xhigh", "max")),
 )
 
 # Fournisseurs dont les modèles passent par un adaptateur d'outils (voir
 # core/clients_outils_llm.py). DeepSeek garde son propre chemin.
-DISTRIBUTEURS_AVEC_ADAPTATEUR = ("claude", "gpt", "gemini", "grok")
+DISTRIBUTEURS_AVEC_ADAPTATEUR = ("claude", "gpt", "gemini", "grok", "meta")
 
 # Effort choisi quand rien de valide n'a été demandé : le plus rapide qui existe, comme le
 # défaut historique de DeepSeek (DEEPSEEK_REASONING_EFFORT = "low").
@@ -101,5 +105,5 @@ def effort_valide_pour_modele(modele_id, effort, distributeur=None):
 
 
 def est_modele_avec_adaptateur(modele_id):
-    """Vrai pour un modèle Claude, GPT, Gemini ou Grok du sélecteur."""
+    """Vrai pour un modèle Claude, GPT, Gemini, Grok ou Meta du sélecteur."""
     return distributeur_du_modele(modele_id) in DISTRIBUTEURS_AVEC_ADAPTATEUR

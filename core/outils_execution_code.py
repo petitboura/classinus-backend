@@ -10,6 +10,7 @@ import os
 import re
 import shlex
 import time
+import uuid
 from pathlib import PurePosixPath
 from typing import Literal
 
@@ -467,6 +468,104 @@ def _fichiers_workspace(sandbox, configuration: dict) -> str:
     return f"Archive du workspace prête : {url}\nFichiers inclus : {len(fichiers)}.{avertissement}"
 
 
+_TAILLE_MORCEAU = 1048576
+_SEUIL_LECTURE_DIRECTE = 2097152
+
+
+def _lire_direct(sandbox, distant: str, timeout: int):
+    contenu = sandbox.files.read(distant, format="bytes", request_timeout=timeout)
+    if isinstance(contenu, str):
+        contenu = contenu.encode("utf-8")
+    return bytes(contenu) if isinstance(contenu, (bytes, bytearray)) else None
+
+
+def _lire_octets_fichier(sandbox, distant: str, taille: int, timeout: int, limite: int):
+    """Lit un fichier du workspace en octets. Renvoie None si illisible.
+
+    Cause trouvée dans les logs de production le 28/10/2026 : pour un fichier binaire de
+    plus de 3,6 Mo environ, la connexion avec le sandbox est coupée par le serveur
+    (« detected excessive load generating behavior »), en lecture d'un bloc comme en lecture
+    par flux. Les textes passent car ils se compressent. Solution : au-dessus de 2 Mo, le
+    fichier est découpé en morceaux de 1 Mo DANS le sandbox, lus un par un (chacun passe),
+    puis recollés. Si le découpage échoue, repli sur la lecture directe.
+    """
+    if taille > limite:
+        return None
+    if taille <= _SEUIL_LECTURE_DIRECTE:
+        try:
+            return _lire_direct(sandbox, distant, timeout)
+        except Exception as erreur:
+            logging.warning("ERREUR lecture fichier workspace (direct) : %s %s", type(erreur).__name__, str(erreur)[:200])
+            return None
+    echeance = time.monotonic() + timeout
+    dossier = f"/tmp/classinus_morceaux_{uuid.uuid4().hex}"
+    try:
+        decoupe = _lancer_commande(
+            sandbox,
+            f"mkdir -p {dossier} && split -b {_TAILLE_MORCEAU} -d -a 4 {shlex.quote(distant)} {dossier}/p_ && ls {dossier}",
+            max(5, timeout), max(5, timeout) + 5,
+        )
+        if getattr(decoupe, "exit_code", 1) != 0:
+            raise OSError("découpage impossible")
+        noms = sorted(n for n in (getattr(decoupe, "stdout", "") or "").split() if n.startswith("p_"))
+        morceaux = []
+        for nom in noms:
+            reste = echeance - time.monotonic()
+            if reste <= 0:
+                raise TimeoutError("durée maximale de lecture atteinte")
+            morceau = _lire_direct(sandbox, f"{dossier}/{nom}", max(1, int(reste)))
+            if morceau is None:
+                raise OSError("morceau illisible")
+            morceaux.append(morceau)
+        contenu = b"".join(morceaux)
+        return contenu if len(contenu) == taille else None
+    except Exception as erreur:
+        logging.warning("ERREUR lecture fichier workspace (morceaux) : %s %s", type(erreur).__name__, str(erreur)[:200])
+        return None
+    finally:
+        try:
+            _lancer_commande(sandbox, f"rm -rf {dossier}", 10, 15)
+        except Exception:
+            pass
+
+
+def _fichier_seul_workspace(sandbox, configuration: dict, path: str) -> str:
+    """Publie UN fichier du workspace avec son propre lien, sans archive ZIP.
+
+    Ajouté le 28/10/2026 (demande Bourama) : un service extérieur (Higgsfield par
+    exemple) ne sait pas lire un ZIP, il lui faut le fichier lui-même. La taille
+    maximale est celle de la configuration existante max_download_bytes, la même que
+    pour l'archive, pour ne rien ajouter de fixe dans le code.
+    """
+    try:
+        distant = _chemin_distant(path)
+        relatif = _chemin_relatif_sur(path)
+    except ValueError as e:
+        return f"Chemin refusé : {e}"
+    limite = max(1024, int(configuration.get("max_download_bytes", 5000000)))
+    timeout = max(5, int(configuration.get("max_download_seconds", 60)))
+    taille_brute = _lancer_commande(
+        sandbox, f"stat -c %s {shlex.quote(distant)}", max(1, int(configuration.get("file_operation_reserve_seconds", 10))), timeout
+    )
+    if getattr(taille_brute, "exit_code", 1) != 0:
+        return f"Fichier introuvable dans le workspace : {relatif}"
+    try:
+        taille = int((getattr(taille_brute, "stdout", "") or "").strip())
+    except ValueError:
+        return f"Impossible de lire la taille du fichier : {relatif}"
+    if taille > limite:
+        return (
+            f"Le fichier {relatif} fait {taille} octets, au-dessus de la limite de {limite} octets "
+            "configurée pour la sortie d'un fichier."
+        )
+    contenu = _lire_octets_fichier(sandbox, distant, taille, timeout, limite)
+    if contenu is None:
+        return f"Impossible de lire le fichier : {relatif}"
+    from core.generation_code import generer_zip_depuis_fichiers
+    url = generer_zip_depuis_fichiers("execution_code", {relatif: bytes(contenu)}, toujours_zip=False)
+    return f"Fichier prêt (lien direct, sans archive) : {url}\nFichier : {relatif}, {len(contenu)} octets."
+
+
 def _executer_action(sandbox, action: str, language: str, code: str, command: str,
                      path: str, content: str, configuration: dict, fichier_importe=None) -> str:
     max_chars = max(1000, int(configuration.get("max_output_chars", 20000)))
@@ -560,6 +659,8 @@ def _executer_action(sandbox, action: str, language: str, code: str, command: st
         return _resultat_commande(sandbox, commande, timeout_fichier, max_chars)
 
     if action == "download_files":
+        if path.strip():
+            return _fichier_seul_workspace(sandbox, configuration, path)
         return _fichiers_workspace(sandbox, configuration)
 
     raise ValueError("Action inconnue.")
@@ -606,7 +707,7 @@ def gerer_execution_code(
 
     Actions : run_code exécute du code en Python, JavaScript, TypeScript ou Bash;
     run_command lance une commande shell; write_file/read_file/list_files gèrent les fichiers;
-    download_files prépare une archive ZIP; close ferme le workspace;
+    download_files prépare une archive ZIP de tout le workspace, ou, si path est donné, publie CE SEUL fichier avec son propre lien direct, sans ZIP (à utiliser pour envoyer une vidéo, un son ou une image à un service extérieur qui demande un lien); close ferme le workspace;
     importer_fichier copie dans le workspace un fichier que l'étudiant a joint à la conversation
     (paramètre url_fichier : le lien réel indiqué entre crochets après le fichier, jamais inventé),
     dans fichiers_joints/<nom> ou au chemin donné dans path. L'original reste intact : travaille
