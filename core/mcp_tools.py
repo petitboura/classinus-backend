@@ -465,7 +465,7 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
                 route = {"url": url, "headers": headers}
                 if prefixe:
                     route["nom_reel"] = outil.name
-                if serveur.get("via_app_telephone"):
+                if _route_via_app_telephone(serveur, outil.name):
                     # 29/10/2026 : outils téléphone exécutés sur le PC de
                     # l'utilisateur via son appli (canal agent applicatif),
                     # jamais sur le cloud (voir _appeler_outil_telephone_via_app).
@@ -587,6 +587,18 @@ def _message_erreur_technique_outil(nom_outil: str) -> str:
 # et le plugin RelaisPc côté frontend). parametres = {"nom": nom de l'outil,
 # "args": arguments}. L'appli répond {"texte": ...} ou {"erreur": ...}.
 TYPE_ACTION_OUTIL_TELEPHONE = "outil_telephone"
+
+
+def _route_via_app_telephone(serveur, nom_outil_reel):
+    """Vrai si l'outil passe par l'appli PC (relais local).
+
+    Serveur marqué via_app_telephone, SAUF les outils qui ne touchent pas
+    au téléphone (outils_serveur_seul du registre : ping, sondes), qui
+    restent exécutés sur le cloud même sans appli connectée.
+    """
+    if not serveur.get("via_app_telephone"):
+        return False
+    return nom_outil_reel not in (serveur.get("outils_serveur_seul") or [])
 
 MESSAGE_TELEPHONE_SANS_APP = (
     "Téléphone injoignable : ouvre l'appli Classinus sur ton PC (connectée "

@@ -526,6 +526,10 @@ SERVEURS_MCP = [
         # Render (voir _appeler_outil_telephone_via_app). Le catalogue
         # (schémas) vient toujours de Render.
         "via_app_telephone": True,
+        # Sondes sans telephone (ping, verification, resume de symptome) :
+        # toujours executees sur le cloud Render, meme sans appli PC
+        # connectee (voir _route_via_app_telephone).
+        "outils_serveur_seul": ["ping_serveur", "verifier_chaine", "resumer_symptome"],
     },
 ]
 

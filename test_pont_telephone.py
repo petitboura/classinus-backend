@@ -33,6 +33,24 @@ def test_registre_marque_outils_telephone_via_app():
     assert entrees[0].get("via_app_telephone") is True
 
 
+def _entree_diagnostic():
+    entrees = [s for s in SERVEURS_MCP if s.get("nom") == "diagnostic_classtech"]
+    assert len(entrees) == 1
+    return entrees[0]
+
+
+def test_sondes_sans_telephone_restent_sur_le_cloud():
+    entree = _entree_diagnostic()
+    for nom in ("ping_serveur", "verifier_chaine", "resumer_symptome"):
+        assert mcp_tools._route_via_app_telephone(entree, nom) is False
+
+
+def test_outil_telephone_passe_par_app():
+    entree = _entree_diagnostic()
+    assert mcp_tools._route_via_app_telephone(entree, "detecter_telephone") is True
+    assert mcp_tools._route_via_app_telephone({}, "detecter_telephone") is False
+
+
 def test_sans_user_id_erreur_identification():
     texte = mcp_tools.appeler_outil("detecter_telephone", {}, {"detecter_telephone": _route_telephone(user_id="")})
     assert texte == "Erreur : impossible d'identifier l'utilisateur."
