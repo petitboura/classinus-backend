@@ -39,6 +39,30 @@ def _user_id(ctx: Context) -> str | None:
     return ctx.request_context.request.query_params.get("user_id")
 
 
+def _contenu_en_objet(valeur):
+    """
+    Corrige le 30/10/2026 (muse-spark-open) : certains modèles envoient le
+    contenu directement comme objet JSON, d'autres comme texte JSON. Les deux
+    sont acceptés ici. Avant, seul le texte passait : un objet était refusé
+    par la validation du serveur, le modèle retentait le même appel à
+    l'identique, et la détection de répétition coupait après 3 essais, sans
+    qu'aucune écriture n'ait réussi. Renvoie (objet, None) si le contenu est
+    exploitable, (None, "texte") si c'est du JSON invalide, (None, "type") si
+    c'est du JSON valide mais pas un objet.
+    """
+    if isinstance(valeur, dict):
+        return valeur, None
+    if isinstance(valeur, str):
+        try:
+            decode = json.loads(valeur)
+        except Exception:
+            return None, "texte"
+        if isinstance(decode, dict):
+            return decode, None
+        return None, "type"
+    return None, "type"
+
+
 @mcp_generation.tool()
 def memoire_sommaire(ctx: Context) -> str:
     """
@@ -97,7 +121,7 @@ def memoire_lire(categorie: str, ctx: Context, sous_categorie: str = "") -> str:
 
 
 @mcp_generation.tool()
-def memoire_ecrire(categorie: str, contenu_json: str, description: str, ctx: Context, sous_categorie: str = "") -> str:
+def memoire_ecrire(categorie: str, contenu_json: str | dict, description: str, ctx: Context, sous_categorie: str = "") -> str:
     """
     Crée ou remplace le contenu d'UNE catégorie ou sous-catégorie précise
     de la mémoire de CET utilisateur, ne touche JAMAIS aux autres
@@ -130,11 +154,10 @@ def memoire_ecrire(categorie: str, contenu_json: str, description: str, ctx: Con
     user_id = _user_id(ctx)
     if not user_id:
         return "Erreur : impossible d'identifier l'utilisateur."
-    try:
-        contenu = json.loads(contenu_json)
-    except Exception:
+    contenu, probleme = _contenu_en_objet(contenu_json)
+    if probleme == "texte":
         return "Erreur : contenu_json doit être un objet JSON valide."
-    if not isinstance(contenu, dict):
+    if probleme == "type":
         return "Erreur : contenu_json doit être un objet JSON (pas une liste ou une valeur simple)."
     if not description.strip():
         return "Erreur : description manquante."
@@ -151,7 +174,7 @@ def memoire_ecrire(categorie: str, contenu_json: str, description: str, ctx: Con
 
 
 @mcp_generation.tool()
-def memoire_completer(categorie: str, ajouts_json: str, description: str, ctx: Context, sous_categorie: str = "") -> str:
+def memoire_completer(categorie: str, ajouts_json: str | dict, description: str, ctx: Context, sous_categorie: str = "") -> str:
     """
     Ajoute ou modifie seulement quelques éléments dans UNE catégorie ou
     sous-catégorie de la mémoire de CET utilisateur, sans jamais toucher au
@@ -172,11 +195,10 @@ def memoire_completer(categorie: str, ajouts_json: str, description: str, ctx: C
     user_id = _user_id(ctx)
     if not user_id:
         return "Erreur : impossible d'identifier l'utilisateur."
-    try:
-        ajouts = json.loads(ajouts_json)
-    except Exception:
+    ajouts, probleme = _contenu_en_objet(ajouts_json)
+    if probleme == "texte":
         return "Erreur : ajouts_json doit être un objet JSON valide."
-    if not isinstance(ajouts, dict):
+    if probleme == "type":
         return "Erreur : ajouts_json doit être un objet JSON (pas une liste ou une valeur simple)."
     if not description.strip():
         return "Erreur : description manquante."
