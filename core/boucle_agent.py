@@ -229,6 +229,8 @@ def _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, 
     etat_filtre = _nouvel_etat_filtre_texte()
     etat_raisonnement = _nouvel_etat_filtre_raisonnement()
     for chunk in completion:
+        if not chunk.choices:
+            continue
         delta = chunk.choices[0].delta
         raisonnement = _lire_raisonnement(delta)
         if raisonnement:
@@ -477,6 +479,11 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
             if getattr(chunk, "x_groq", None) and getattr(chunk.x_groq, "usage", None):
                 dernier_usage = chunk.x_groq.usage
 
+            # Certains fournisseurs (Baseten) envoient des morceaux sans
+            # aucun choix (ex. le dernier, qui porte seulement l'usage) :
+            # on les saute au lieu de planter sur choices[0].
+            if not chunk.choices:
+                continue
             delta = chunk.choices[0].delta
 
             raisonnement = _lire_raisonnement(delta)
