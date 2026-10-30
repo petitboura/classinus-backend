@@ -234,9 +234,13 @@ class ModelesMeta(unittest.TestCase):
     def tearDown(self):
         reinitialiser_cache_config_modeles()
 
-    def test_meta_deux_modeles_avance_pro_sans_essentiel_et_bientot(self):
+    def test_meta_deux_modeles_par_son_api_plus_muse_spark_open_par_baseten_et_bientot(self):
         config = _config_modeles_de_repli()
-        self.assertNotIn("essentiel", config["modeles"]["meta"])
+        # Pas de modèle essentiel chez Meta par son API ; le niveau essentiel est Muse Spark Open
+        # (30/10/2026), servi seulement par Baseten et ouvert à tous (voir test_muse_spark_open.py).
+        essentiel = config["modeles"]["meta"]["essentiel"]
+        self.assertEqual(essentiel["id"], "muse-spark-open")
+        self.assertTrue(essentiel["baseten_seul"])
         self.assertEqual(config["modeles"]["meta"]["avance"]["id"], "muse-spark-1.3")
         self.assertEqual(config["modeles"]["meta"]["pro"]["id"], "muse-wonder-1.0")
         self.assertTrue(config["fournisseurs"]["meta"]["bientot"])

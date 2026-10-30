@@ -112,12 +112,16 @@ HIERARCHIE_MODELES = {
         # Meta, ajouté le 28/10/2026 sur staging en Bientôt (demande de Bourama) : Muse
         # Spark 1.3 (muse-spark-1.3) au niveau avance, Muse Wonder (muse-wonder-1.0,
         # en préversion, plus cher) au niveau pro, affiché tout en haut. Jamais de
-        # niveau essentiel : Meta ne propose que ces deux modèles. Identifiants exacts
+        # niveau essentiel par son API : Meta n'y propose que ces deux modèles. Identifiants exacts
         # de la doc officielle Meta (page Modèles, dev.meta.ai, vérifiés le 29/10/2026).
+        # 30/10/2026, demande de Bourama : Muse Spark Open (poids ouverts) au niveau essentiel,
+        # donc affiché après Muse Spark 1.3. Meta ne le sert pas par son API : il passe
+        # UNIQUEMENT par Baseten ("baseten_seul"), ouvert à tout le monde (pas de Bientôt).
         # Identifiants standards seulement, jamais "-contributor" (les données des
         # élèves ne doivent pas entraîner les modèles Meta).
         "avance": {"id": "muse-spark-1.3", "label": "Muse Spark 1.3"},
         "pro": {"id": "muse-wonder-1.0", "label": "Muse Wonder"},
+        "essentiel": {"id": "muse-spark-open", "label": "Muse Spark Open", "baseten": "meta-models/muse-spark-open-1026", "baseten_seul": True},
     },
 }
 
@@ -186,6 +190,45 @@ def creer_client_deepseek(modele_id):
     if cle_directe is None and (cle_baseten is None or modele_id not in correspondance):
         return None
     return ClientBaseten(correspondance, cle_baseten=cle_baseten, cle_directe=cle_directe)
+
+
+def info_baseten_seul(modele_id, config=None):
+    """
+    Slug Baseten d'un modele servi UNIQUEMENT par Baseten (colonne baseten_seul de
+    modeles_llm : aujourd'hui Muse Spark Open), None pour tout autre modele. Un tel
+    modele est ouvert a tout le monde (le Bientot de son fournisseur ne s'applique pas) et
+    ne depend que de la cle BASETEN_API_KEY, pas de la cle du fournisseur.
+    """
+    config = config or _config_modeles()
+    for paliers in (config.get("modeles") or {}).values():
+        for info in paliers.values():
+            if info.get("id") == modele_id and info.get("baseten_seul") and info.get("baseten"):
+                return info["baseten"]
+    return None
+
+
+def cle_baseten_disponible():
+    """True si la cle Baseten est posee sur le serveur."""
+    return bool(get_secret(VARIABLE_CLE_BASETEN))
+
+
+def creer_client_baseten_seul(modele_id):
+    """
+    Client pour un modele servi uniquement par Baseten : meme appel que le SDK OpenAI,
+    l'identifiant du modele est traduit en slug Baseten. Pas de repli direct (Meta ne sert
+    pas ce modele par son API) : un refus de Baseten remonte comme erreur. None si le
+    modele n'est pas "Baseten seul" ou si la cle Baseten est absente (l'appelant retombe
+    alors sur son chemin habituel).
+    """
+    slug = info_baseten_seul(modele_id)
+    cle = get_secret(VARIABLE_CLE_BASETEN)
+    if not slug or not cle:
+        return None
+    try:
+        from adaptateur_baseten import ClientBaseten
+    except ImportError:
+        from core.adaptateur_baseten import ClientBaseten
+    return ClientBaseten({modele_id: slug}, cle_baseten=cle, cle_directe=None)
 
 
 def _distributeur_disponible(distributeur, config=None):
@@ -343,6 +386,16 @@ def _lire_config_modeles_supabase():
     except Exception as e:
         logging.warning(f"Colonnes Baseten absentes ou illisibles (migration a appliquer) : {e}")
 
+    # Modeles servis UNIQUEMENT par Baseten (30/10/2026, Muse Spark Open) : colonne lue a part,
+    # pour qu'une migration pas encore appliquee ne casse pas les slugs DeepSeek ci-dessus.
+    baseten_seul_par_modele = set()
+    try:
+        for ligne in client.table("modeles_llm").select("distributeur, palier, baseten_seul").execute().data or []:
+            if ligne.get("baseten_seul"):
+                baseten_seul_par_modele.add((ligne["distributeur"], ligne["palier"]))
+    except Exception as e:
+        logging.warning(f"Colonne baseten_seul absente ou illisible (migration a appliquer) : {e}")
+
     fournisseurs = {}
     for ligne in lignes_fournisseurs:
         fournisseurs[ligne["distributeur"]] = {
@@ -364,6 +417,8 @@ def _lire_config_modeles_supabase():
         slug_baseten = slug_baseten_par_modele.get((ligne["distributeur"], ligne["palier"]))
         if slug_baseten:
             entree_modele["baseten"] = slug_baseten
+        if (ligne["distributeur"], ligne["palier"]) in baseten_seul_par_modele and slug_baseten:
+            entree_modele["baseten_seul"] = True
         modeles.setdefault(ligne["distributeur"], {})[ligne["palier"]] = entree_modele
         niveau = ligne["niveau"]
         niveaux[ligne["palier"]] = min(niveau, niveaux.get(ligne["palier"], niveau))
@@ -463,14 +518,21 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque, email
     resultats = []
     ids_deja_vus = set()
     for distributeur in distributeurs_autorises:
-        if config["fournisseurs"][distributeur]["bientot"] and not _a_acces_anticipe(config, distributeur, email):
-            continue
-        if not _distributeur_disponible(distributeur, config):
-            continue
+        # Fournisseur utilisable : pas Bientot (sauf acces anticipe) et cle API presente.
+        fournisseur_ouvert = not (
+            config["fournisseurs"][distributeur]["bientot"] and not _a_acces_anticipe(config, distributeur, email)
+        ) and _distributeur_disponible(distributeur, config)
         modeles_du_distributeur = []
         for palier in paliers_autorises:
             info = config["modeles"].get(distributeur, {}).get(palier)
             if not info:
+                continue
+            if info.get("baseten_seul"):
+                # Modele servi seulement par Baseten (Muse Spark Open, 30/10/2026) : ouvert a
+                # tout le monde malgre le Bientot de Meta, mais seulement si la cle Baseten existe.
+                if not cle_baseten_disponible():
+                    continue
+            elif not fournisseur_ouvert:
                 continue
             # Dedoublonnage par modele_id (cas DeepSeek, ou deux paliers
             # partagent le meme modele) : sans cela le meme modele apparaitrait
@@ -526,7 +588,7 @@ def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque, email=Non
         modeles_du_distributeur = []
         for palier in config["paliers"]:
             info = config["modeles"].get(distributeur, {}).get(palier)
-            if not info or info["id"] in ids_a_exclure:
+            if not info or info["id"] in ids_a_exclure or info.get("baseten_seul"):
                 continue
             ids_a_exclure.add(info["id"])
             modeles_du_distributeur.append({
@@ -703,6 +765,26 @@ def _stream_meta(modele_id, system_prompt, messages):
             yield delta
 
 
+def _stream_baseten_seul(modele_id, system_prompt, messages):
+    # Modele servi uniquement par Baseten (Muse Spark Open, 30/10/2026) : chemin texte seul,
+    # meme principe que DeepSeek (API compatible OpenAI). La reflexion du modele, si Baseten
+    # l'envoie, est remontee comme evenement et jamais ajoutee a la reponse.
+    client = creer_client_baseten_seul(modele_id)
+    if client is None:
+        raise RuntimeError(f"{modele_id} : cle Baseten absente ou modele sans slug Baseten")
+    messages_openai = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + messages
+    flux = client.chat.completions.create(model=modele_id, messages=messages_openai, stream=True)
+    for morceau in flux:
+        if not morceau.choices:
+            continue
+        delta = morceau.choices[0].delta
+        reflexion = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
+        if reflexion:
+            yield {"type": "raisonnement", "texte": reflexion}
+        if delta.content:
+            yield delta.content
+
+
 def _stream_gemini(modele_id, system_prompt, messages):
     # Reutilise le client google-genai deja initialise ailleurs dans le
     # projet (voir core/main.py) -- instancie ici localement pour garder
@@ -753,6 +835,9 @@ def generer_reponse_premium(modele_id, system_prompt, messages, effort=None):
     distributeur = distributeur_pour_modele_id(modele_id)
     if distributeur is None:
         raise ValueError(f"modele_id inconnu : {modele_id}")
+    if info_baseten_seul(modele_id):
+        yield from _stream_baseten_seul(modele_id, system_prompt, messages)
+        return
     streamer = _STREAMERS_PAR_DISTRIBUTEUR[distributeur]
     if distributeur == "deepseek":
         # Seul DeepSeek a un reglage d'effort aujourd'hui (les autres

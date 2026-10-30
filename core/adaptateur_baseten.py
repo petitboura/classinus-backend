@@ -126,7 +126,7 @@ class ClientBaseten(ClientCompatible):
                 noter_baseten_epuise()
                 logging.warning(f"Baseten refuse DeepSeek ({modele_id}), repli direct : {erreur}")
         if self._client_direct is None:
-            raise RuntimeError(f"DeepSeek {modele_id} : ni Baseten ni le direct ne sont disponibles")
+            raise RuntimeError(f"{modele_id} : ni Baseten ni le direct ne sont disponibles")
         reponse = self._client_direct.chat.completions.create(**arguments)
         if slug is not None:
             motif = "repli apres refus Baseten"
