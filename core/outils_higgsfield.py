@@ -4,6 +4,7 @@ Enregistrés seulement si une clé API Higgsfield est configurée. Génération 
 deux temps (lancer puis consulter), comme la vidéo fal.ai : une génération n'est
 jamais instantanée. Le catalogue des modèles est dans core/higgsfield_catalogue.py.
 """
+import json
 import logging
 from typing import List, Optional
 
@@ -60,11 +61,15 @@ def _texte_suivi(request_id: str, titre: str, genre: str, ctx) -> str:
         if genre == "video":
             nom, mime = (titre.strip() or f"Video_Higgsfield_{request_id}") + ".mp4", "video/mp4"
             _sauvegarder_generation_bibliotheque(ctx, url, nom, mime)
-            return f"Vidéo terminée et enregistrée dans la bibliothèque : {url}"
+            # JSON {"videos": [...]} : détecté génériquement pour afficher
+            # les cartes vidéo sous la réponse, comme rechercher_video.
+            return json.dumps({"videos": [{"titre": titre.strip() or nom, "url": url}]}, ensure_ascii=False)
         extension = _extension_image(url)
         nom = (titre.strip() or f"Image_Higgsfield_{request_id}") + f".{extension}"
         _sauvegarder_generation_bibliotheque(ctx, url, nom, _MIME_IMAGES[extension])
-        return f"Image terminée et enregistrée dans la bibliothèque : {url}"
+        # JSON {"images": [...]} : détecté génériquement pour afficher
+        # la galerie sous la réponse, comme rechercher_image.
+        return json.dumps({"images": [{"titre": titre.strip() or nom, "url": url}]}, ensure_ascii=False)
     if etat == "echec":
         raison = f" ({resultat['erreur']})" if resultat["erreur"] else ""
         return (
@@ -133,6 +138,9 @@ if higgsfield_api_disponible():
 
         Chaque utilisateur a un nombre limité de générations par jour. Génération
         payante : si l'utilisateur hésite, appelle d'abord estimer_cout_higgsfield.
+        Si l'utilisateur a joint un fichier image, vidéo ou son dans cette
+        conversation, son lien réel (visible dans le message) peut servir
+        de image_url, image_fin_url ou référence.
         """
         try:
             adresse, corps = construire_requete_video(
@@ -150,7 +158,7 @@ if higgsfield_api_disponible():
 
     @mcp_generation.tool()
     def consulter_video_higgsfield(request_id: str, titre: str, ctx: Context = None) -> str:
-        """Version Classinus de Higgsfield (API de Classinus) : vérifie une vidéo Higgsfield lancée et l'enregistre dans la bibliothèque Classinus sous le titre fourni quand elle est prête. Gère aussi l'échec, le refus de contenu et l'annulation."""
+        """Version Classinus de Higgsfield (API de Classinus) : vérifie une vidéo Higgsfield lancée et l'enregistre dans la bibliothèque Classinus sous le titre fourni quand elle est prête. Gère aussi l'échec, le refus de contenu et l'annulation. Vidéo prête : son lien part en JSON et s'affiche tout seul en carte sous ta réponse, présente-la juste brièvement en texte."""
         try:
             return _texte_suivi(request_id, titre, "video", ctx)
         except Exception as e:
@@ -179,6 +187,8 @@ if higgsfield_api_disponible():
         "2:1" ou "1:2". `qualite` : "1k" ou "2k". Génération payante, avec un
         nombre limité par jour et par utilisateur. Pour garder le même personnage
         d'une image à l'autre, redonne la même image de référence.
+        Si l'utilisateur a joint une image dans cette conversation, son
+        lien réel (visible dans le message) peut servir de référence.
         """
         try:
             adresse, corps = construire_requete_image(modele, prompt, format_image, qualite, images_reference)
@@ -193,7 +203,7 @@ if higgsfield_api_disponible():
 
     @mcp_generation.tool()
     def consulter_image_higgsfield(request_id: str, titre: str, ctx: Context = None) -> str:
-        """Vérifie une image Higgsfield lancée et l'enregistre dans la bibliothèque Classinus sous le titre fourni quand elle est prête. Gère aussi l'échec, le refus de contenu et l'annulation."""
+        """Vérifie une image Higgsfield lancée et l'enregistre dans la bibliothèque Classinus sous le titre fourni quand elle est prête. Gère aussi l'échec, le refus de contenu et l'annulation. Image prête : son lien part en JSON et s'affiche tout seul en galerie sous ta réponse, présente-la juste brièvement en texte."""
         try:
             return _texte_suivi(request_id, titre, "image", ctx)
         except Exception as e:
@@ -217,6 +227,7 @@ if higgsfield_api_disponible():
         lancer_video_higgsfield (modèles vidéo : seedance, kling ; image : grok).
         À utiliser pour comparer deux réglages ou avant une vidéo longue ou en
         haute qualité. Si le coût paraît élevé, propose un réglage moins cher.
+        Mêmes liens de fichiers joints acceptés que lancer_video_higgsfield.
         """
         try:
             if (genre or "").strip().lower() == "image":

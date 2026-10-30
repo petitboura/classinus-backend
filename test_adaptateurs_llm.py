@@ -11,7 +11,7 @@ import types
 import unittest
 from unittest.mock import patch
 
-from openai import BadRequestError
+from openai import BadRequestError, NotFoundError
 
 from core import fournisseurs_llm
 from core.adaptateur_claude import ClientClaude, _convertir_messages as claude_messages
@@ -414,6 +414,70 @@ class Meta(unittest.TestCase):
                 patch.dict("os.environ", {}, clear=True):
             self.assertFalse(clients.modele_a_des_outils("muse-wonder-1.0"))
             self.assertIsNone(clients.client_avec_outils("muse-wonder-1.0"))
+
+    def _introuvable(self):
+        return NotFoundError(
+            "Modèle introuvable",
+            response=httpx.Response(
+                404, request=httpx.Request("POST", "https://api.meta.ai/v1/responses")
+            ),
+            body=None,
+        )
+
+    def test_introuvable_meta_reessaye_puis_reussit(self):
+        # 29/10/2026 : Meta répond parfois 404 par intermittence (200, 404,
+        # 200 à 10 s d'intervalle constatés). L'adaptateur réessaie au lieu
+        # de faire échouer le message.
+        appels = []
+
+        def creer(**arguments):
+            appels.append(arguments)
+            if len(appels) < 3:
+                raise self._introuvable()
+            return iter([NS(type="response.output_text.delta", delta="ok")])
+
+        client = ClientResponses("cle", "meta")
+        client._client = NS(responses=NS(create=creer))
+        with patch("core.adaptateur_responses.ATTENTE_META_INTROUVABLE_S", 0):
+            texte, _, _, fin = lire_flux(client.chat.completions.create(
+                model="muse-spark-1.3", messages=[], reasoning_effort="high"))
+        self.assertEqual((texte, fin), ("ok", "stop"))
+        self.assertEqual(len(appels), 3)
+
+    def test_introuvable_meta_abandonne_apres_3_essais(self):
+        client = ClientResponses("cle", "meta")
+        client._client = NS(responses=NS(create=self._toujours_introuvable()))
+        with patch("core.adaptateur_responses.ATTENTE_META_INTROUVABLE_S", 0):
+            with self.assertRaises(NotFoundError):
+                lire_flux(client.chat.completions.create(
+                    model="muse-wonder-1.0", messages=[], reasoning_effort="max"))
+        self.assertEqual(self.compteur_introuvable, 3)
+
+    def _toujours_introuvable(self):
+        self.compteur_introuvable = 0
+
+        def creer(**arguments):
+            self.compteur_introuvable += 1
+            raise self._introuvable()
+
+        return creer
+
+    def test_introuvable_hors_meta_pas_de_reessai(self):
+        # Les autres fournisseurs gardent leur comportement : un 404
+        # remonte tout de suite, sans réessai.
+        appels = []
+
+        def creer(**arguments):
+            appels.append(arguments)
+            raise self._introuvable()
+
+        client = ClientResponses("cle", "openai")
+        client._client = NS(responses=NS(create=creer))
+        with patch("core.adaptateur_responses.ATTENTE_META_INTROUVABLE_S", 0):
+            with self.assertRaises(NotFoundError):
+                lire_flux(client.chat.completions.create(
+                    model="gpt-6-luna", messages=[]))
+        self.assertEqual(len(appels), 1)
 
 
 if __name__ == "__main__":

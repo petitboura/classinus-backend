@@ -46,6 +46,7 @@ TYPES_AUTORISES = {
     "image/jpeg": "jpg",
     "image/png": "png",
     "image/webp": "webp",
+    "image/gif": "gif",
 }
 
 TAILLE_MAX_OCTETS = 5 * 1024 * 1024  # 5 Mo
@@ -57,7 +58,7 @@ async def uploader_image(
     utilisateur=Depends(utilisateur_courant),
 ):
     """
-    Upload une image (jpeg/png/webp, 5 Mo max) dans le bucket public
+    Upload une image (jpeg/png/webp/gif, 5 Mo max) dans le bucket public
     `images-publiques`, sous le chemin `{user_id}/{uuid}.{extension}` —
     un dossier par utilisateur, pas de collision possible entre deux
     personnes qui uploadent au même moment. Renvoie l'URL publique,
@@ -109,8 +110,8 @@ async def uploader_image_chat(
     un sujet (le bucket actuel est public par construction : quiconque a
     l'URL peut voir l'image, comme pour un avatar ou une image de vitrine).
 
-    Mêmes contraintes que /image (jpeg/png/webp, 5 Mo max) : Gemini
-    n'accepte de toute façon que ces formats courants pour la vision.
+    Mêmes contraintes que /image (jpeg/png/webp/gif, 5 Mo max).
+    Un gif est ramené à sa première image en PNG pour la lecture vision, le fichier gif reste accessible par son lien.
     """
     if fichier.content_type not in TYPES_AUTORISES:
         raise erreur_api(400, "FORMAT_NON_SUPPORTE_JPEG_PNG_OU")

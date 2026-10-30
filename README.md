@@ -27,6 +27,7 @@ core/
   mcp_tools.py                 moteur MCP générique (catalogue d'outils en cache 24h, appel d'outils externes)
   registre_outils.py           registre des outils (bras) MCP actifs
   domaines_affichage.py        sites visés par un appel d'outil (YouTube, sources de documents, page Tavily), envoyés au chat pour afficher leur logo
+  logos_sites.py               icône d'un site vérifiée auprès de Google (vraie icône ou absente, jamais le globe générique), gardée en mémoire
   configuration.py             system prompt central de Clovis, chargé depuis Notion, cache 5 min
   proactivite.py               relance des utilisateurs inactifs (boucle en tâche de fond, voir api/main.py)
   comportements_etudiants.py   "Mes comportements" (skills côté UI) : routeur léger qui présente les
@@ -120,6 +121,7 @@ api/
   comportements_publics.py     catalogue public de comportements
   codes_partage.py             endpoints des codes de partage
   outils_registre.py           registre d'affichage des outils, exposé au frontend
+  logos_sites.py               GET /api/logos-sites/{domaine} : l'icône du site, ou 404 sans image quand il n'en a pas (l'écran affiche alors une lettre)
   generation.py                génération déclenchée par un bouton explicite (hors chat)
   signalements.py              signalements de contenu (bibliothèque publique + documents publics)
   contenu_legal.py             contenu légal (CGU, politique de copyright)

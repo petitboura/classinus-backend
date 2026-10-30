@@ -28,7 +28,7 @@ if _MANQUE is None:
     from core import arret_tour, tours_detaches
 
 
-def _evenements_factices(payload, user_id, langue_interface="fr"):
+def _evenements_factices(payload, user_id, langue_interface="fr", email_utilisateur=None):
     yield 'data: {"type": "reponse", "texte": "Bonjour"}\n\n'
     yield 'data: {"type": "meta", "message_id_user": 1, "message_id_assistant": 2}\n\n'
     yield "data: [DONE]\n\n"

@@ -520,6 +520,16 @@ SERVEURS_MCP = [
         # Pas de headers_builder : serveur public (phase test).
         # Pas de necessite_utilisateur : dispo pour tout le monde.
         # Pas d'outils_autorises : tous les outils du serveur exposés.
+        # 29/10/2026 : via_app_telephone, l'exécution passe par l'appli PC
+        # de l'utilisateur (canal agent applicatif type "outil_telephone",
+        # relais local seul à voir le téléphone), jamais par le cloud
+        # Render (voir _appeler_outil_telephone_via_app). Le catalogue
+        # (schémas) vient toujours de Render.
+        "via_app_telephone": True,
+        # Sondes sans telephone (ping, verification, resume de symptome) :
+        # toujours executees sur le cloud Render, meme sans appli PC
+        # connectee (voir _route_via_app_telephone).
+        "outils_serveur_seul": ["ping_serveur", "verifier_chaine", "resumer_symptome"],
     },
 ]
 

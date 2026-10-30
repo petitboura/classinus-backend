@@ -296,7 +296,7 @@ class EnvoyerMessagePayload(BaseModel):
         return valeurs
 
 
-def _resoudre_modele_force(agent_id, modele_demande):
+def _resoudre_modele_force(agent_id, modele_demande, email=None):
     """
     Revalide `modele_demande` (envoye par le frontend) contre ce que
     l'agent `agent_id` a REELLEMENT debloque en base (distributeur_debloque/
@@ -323,7 +323,7 @@ def _resoudre_modele_force(agent_id, modele_demande):
     if not res or not res.data:
         return None
     ligne = res.data
-    if modele_id_est_autorise(modele_demande, ligne.get("distributeur_debloque"), ligne.get("palier_debloque")):
+    if modele_id_est_autorise(modele_demande, ligne.get("distributeur_debloque"), ligne.get("palier_debloque"), email):
         return modele_demande
     logging.error(
         f"Modele '{modele_demande}' demande mais non debloque pour l'agent {agent_id} -- ignore, repli sur Groq."
@@ -342,7 +342,7 @@ def _reprise_pour_chat(reprise: RepriseConfirmation) -> dict:
     return {"etat_reprise": reprise.etat_reprise, "approuve": reprise.approuve}
 
 
-def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], langue_interface: str = "fr"):
+def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], langue_interface: str = "fr", email_utilisateur: Optional[str] = None):
     """
     Convertit le générateur Python de chat() en flux SSE (`data: {...}\n\n`
     par événement), le format que `fetch` + `ReadableStream` côté Next.js
@@ -386,7 +386,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
                 recherche_forcee=payload.recherche_forcee,
                 outil_force=payload.outil_force,
                 ignorer_suggestion_outils=payload.ignorer_suggestion_outils or False,
-                modele_force=_resoudre_modele_force(payload.agent_id, payload.modele),
+                modele_force=_resoudre_modele_force(payload.agent_id, payload.modele, email_utilisateur),
                 effort_reflexion=payload.effort_reflexion,
                 sans_enseignant=payload.sans_enseignant or False,
                 natif=payload.natif or False,
@@ -584,6 +584,7 @@ def envoyer_message(request: Request, payload: EnvoyerMessagePayload, utilisateu
     façon rejetée.
     """
     user_id = utilisateur.id if utilisateur else None
+    email_utilisateur = getattr(utilisateur, "email", None)
     valeur_langue = request.headers.get("accept-language", "fr").split(",", 1)[0].strip().lower()
     langue_interface = "en" if valeur_langue == "en" or valeur_langue.startswith("en-") else "fr"
 
@@ -636,7 +637,7 @@ def envoyer_message(request: Request, payload: EnvoyerMessagePayload, utilisateu
         tour = tours_detaches.demarrer(
             user_id,
             payload.conversation_id,
-            lambda: _evenements_sse(payload, user_id, langue_interface),
+            lambda: _evenements_sse(payload, user_id, langue_interface, email_utilisateur),
             resume=_resume_du_tour(payload),
             message_erreur=(
                 "Something went wrong. Please try again shortly." if langue_interface == "en"
@@ -654,7 +655,7 @@ def envoyer_message(request: Request, payload: EnvoyerMessagePayload, utilisateu
         )
     # Visiteur non connecte : rien de rattachable a un compte, le flux reste direct comme avant.
     return StreamingResponse(
-        _evenements_sse(payload, user_id, langue_interface),
+        _evenements_sse(payload, user_id, langue_interface, email_utilisateur),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

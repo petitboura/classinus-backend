@@ -30,6 +30,8 @@ import os
 import time
 import asyncio
 import logging
+import json
+import re
 
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client, create_mcp_http_client
@@ -315,15 +317,130 @@ async def _appeler_avec_delai_et_arret(coroutine, delai, arret):
                     raise
 
 
+_EXTENSIONS_IMAGES_RESULTAT = ("png", "jpg", "jpeg", "webp", "gif")
+_EXTENSIONS_VIDEOS_RESULTAT = ("mp4", "webm", "mov")
+_REGEX_URL_RESULTAT = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
+
+
+def _extension_url(url):
+    fin = (url or "").split("?", 1)[0].rsplit(".", 1)
+    if len(fin) != 2:
+        return ""
+    return fin[-1].strip().lower().rstrip(").,]!;:'\"")
+
+
+def _medias_depuis_texte(texte):
+    """Liens (images, vidéos) trouvés dans un texte de résultat d'outil."""
+    images, videos, vues = [], [], set()
+    for brut in _REGEX_URL_RESULTAT.findall(texte or ""):
+        url = brut.rstrip(").,]!;:'\"")
+        if not url or url in vues:
+            continue
+        vues.add(url)
+        extension = _extension_url(url)
+        if extension in _EXTENSIONS_IMAGES_RESULTAT:
+            images.append({"titre": url, "url": url})
+        elif extension in _EXTENSIONS_VIDEOS_RESULTAT:
+            videos.append({"titre": url, "url": url})
+    return images, videos
+
+
+def _texte_depuis_blocs_mcp(blocs):
+    """Texte assemblé depuis les blocs de contenu d'un résultat MCP.
+
+    Avant (correctif Higgsfield affichage) : seul le premier bloc texte
+    était gardé, tout le reste (autres textes, images, sons, ressources)
+    était jeté. Maintenant : les textes sont joints, les images natives
+    deviennent une galerie JSON {"images": [...]} comprise par
+    l'affichage, les sons et ressources restent lisibles en texte.
+    Ne lève jamais : en cas de forme inconnue, repli texte best-effort.
+    """
+    try:
+        textes, images = [], []
+        elements = []
+        for bloc in blocs or []:
+            elements.append(bloc)
+            ressource = getattr(bloc, "resource", None)
+            if ressource is not None:
+                elements.append(ressource)
+        for element in elements:
+            texte = getattr(element, "text", None)
+            if isinstance(texte, str) and texte.strip():
+                textes.append(texte)
+                continue
+            donnees = getattr(element, "data", None) or getattr(element, "blob", None)
+            mime = (
+                getattr(element, "mimeType", "")
+                or getattr(element, "mime_type", "")
+                or ""
+            ).lower()
+            if isinstance(donnees, str) and donnees:
+                if mime.startswith("image/"):
+                    images.append({
+                        "titre": "Image renvoyée par l'outil",
+                        "url": "data:%s;base64,%s" % (mime, donnees),
+                    })
+                elif mime.startswith("audio/"):
+                    textes.append("[Son renvoyé par l'outil : data:%s;base64,%s]" % (mime, donnees))
+                continue
+            uri = getattr(element, "uri", None)
+            if isinstance(uri, str) and uri:
+                textes.append("[Ressource : %s]" % uri)
+        texte = "\n".join(textes)
+        if not images:
+            return texte
+        enveloppe = {"images": images}
+        if texte:
+            enveloppe["text"] = texte
+        return json.dumps(enveloppe, ensure_ascii=False)
+    except Exception as e:
+        logging.warning("Blocs MCP inattendus, repli texte vide : %s", e)
+        return ""
+
+
+def _enveloppe_medias_higgsfield(nom_outil, resultat):
+    """Galerie et cartes pour les liens médias des outils Higgsfield (compte).
+
+    Leurs réponses sont du texte (identifiant de travail, JSON avec
+    rawUrl...). Quand ce texte contient des liens directs d'images ou de
+    vidéos, on les expose en JSON {"images"/"videos"} pour l'affichage
+    automatique, sans toucher au texte d'origine. Les autres serveurs
+    sont renvoyés tels quels.
+    """
+    if not (nom_outil or "").startswith("higgsfield_"):
+        return resultat
+    if not isinstance(resultat, str) or not resultat:
+        return resultat
+    try:
+        donnees = json.loads(resultat)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        donnees = None
+    if isinstance(donnees, dict) and (donnees.get("images") or donnees.get("videos")):
+        return resultat
+    images, videos = _medias_depuis_texte(resultat)
+    if not images and not videos:
+        return resultat
+    enveloppe = {"text": resultat}
+    if images:
+        enveloppe["images"] = images
+    if videos:
+        enveloppe["videos"] = videos
+    try:
+        return json.dumps(enveloppe, ensure_ascii=False)
+    except Exception:
+        return resultat
+
+
 async def _appeler_outil_async(url, nom_outil, arguments, headers=None):
     async with create_mcp_http_client(headers=headers) as http_client:
         async with streamable_http_client(url, http_client=http_client) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 resultat = await session.call_tool(nom_outil, arguments=arguments)
-                for bloc in resultat.content:
-                    if hasattr(bloc, "text"):
-                        return bloc.text
+                texte = _texte_depuis_blocs_mcp(getattr(resultat, "content", None))
+                return _enveloppe_medias_higgsfield(nom_outil, texte)
+
+
     return ""
 
 
@@ -465,6 +582,12 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
                 route = {"url": url, "headers": headers}
                 if prefixe:
                     route["nom_reel"] = outil.name
+                if _route_via_app_telephone(serveur, outil.name):
+                    # 29/10/2026 : outils téléphone exécutés sur le PC de
+                    # l'utilisateur via son appli (canal agent applicatif),
+                    # jamais sur le cloud (voir _appeler_outil_telephone_via_app).
+                    route["via_app_telephone"] = True
+                    route["user_id"] = user_id
                 table_routage[f"{prefixe}{outil.name}"] = route
         except Exception as e:
             logging.error(f"ERREUR MCP listing ({nom}): {e}")
@@ -576,6 +699,90 @@ def _message_erreur_technique_outil(nom_outil: str) -> str:
     )
 
 
+# 29/10/2026 (Bourama : l'IA appelle, l'outil doit joindre le téléphone) :
+# type d'action système exécuté par l'appli PC (voir lib/canalAgentApplicatif.ts
+# et le plugin RelaisPc côté frontend). parametres = {"nom": nom de l'outil,
+# "args": arguments}. L'appli répond {"texte": ...} ou {"erreur": ...}.
+TYPE_ACTION_OUTIL_TELEPHONE = "outil_telephone"
+
+
+def _route_via_app_telephone(serveur, nom_outil_reel):
+    """Vrai si l'outil passe par l'appli PC (relais local).
+
+    Serveur marqué via_app_telephone, SAUF les outils qui ne touchent pas
+    au téléphone (outils_serveur_seul du registre : ping, sondes), qui
+    restent exécutés sur le cloud même sans appli connectée.
+    """
+    if not serveur.get("via_app_telephone"):
+        return False
+    return nom_outil_reel not in (serveur.get("outils_serveur_seul") or [])
+
+MESSAGE_TELEPHONE_SANS_APP = (
+    "Téléphone injoignable : ouvre l'appli Classinus sur ton PC (connectée "
+    "à ce compte) puis branche ton téléphone en USB avec le débogage USB "
+    "activé, et réessaie."
+)
+MESSAGE_TELEPHONE_SANS_REPONSE = (
+    "Téléphone injoignable : l'appli PC n'a pas répondu. Mets à jour "
+    "Classinus PC vers la dernière version, ouvre-la, puis réessaie."
+)
+
+
+async def _appeler_telephone_via_app_async(nom_reel, arguments, user_id, delai):
+    """Envoie un outil téléphone à l'appli PC et rend le texte du relais."""
+    from canal_agent_applicatif import a_app_systeme_connecte, demander_action_systeme
+    if not await a_app_systeme_connecte(user_id):
+        return MESSAGE_TELEPHONE_SANS_APP
+    reponse = await demander_action_systeme(
+        user_id,
+        TYPE_ACTION_OUTIL_TELEPHONE,
+        {"nom": nom_reel, "args": arguments},
+        delai_abandon_secondes=max(delai - 2, 5),
+    )
+    if reponse is None:
+        return MESSAGE_TELEPHONE_SANS_REPONSE
+    if isinstance(reponse, dict):
+        erreur = reponse.get("erreur")
+        if isinstance(erreur, str) and erreur:
+            return f"Erreur : {erreur}"
+        texte = reponse.get("texte")
+        if isinstance(texte, str):
+            return texte
+    return str(reponse)
+
+
+def _appeler_outil_telephone_via_app(nom_outil, arguments, route, delai, arret):
+    """Exécute un outil téléphone via l'appli PC de l'utilisateur (relais local).
+
+    Même contrat que appeler_outil (délai, bouton Arrêter, messages), mais
+    l'exécution passe par le canal agent applicatif au lieu du cloud MCP :
+    seul le relais local voit le téléphone branché en USB.
+    """
+    nom_reel = route.get("nom_reel", nom_outil)
+    user_id = route.get("user_id") or ""
+    if not user_id:
+        logging.error(f"Outil téléphone '{nom_outil}' sans user_id dans sa route.")
+        return "Erreur : impossible d'identifier l'utilisateur."
+    try:
+        appel = _appeler_telephone_via_app_async(nom_reel, arguments, user_id, delai)
+        resultat = asyncio.run(_appeler_avec_delai_et_arret(appel, delai, arret))
+        logging.info(f"Résultat outil '{nom_outil}' : {len(resultat or '')} caractères")
+        return resultat
+    except _AppelAnnule:
+        logging.info(f"Appel à {nom_outil} interrompu par le bouton Arrêter")
+        return "Action annulée par l'utilisateur : l'appel a été interrompu, le résultat est inconnu."
+    except TimeoutError:
+        logging.warning(f"Délai dépassé ({delai} s) pour l'outil {nom_outil}")
+        return (
+            f"Délai dépassé : {nom_outil} n'a pas répondu en {delai} s. L'action a peut-être quand même "
+            f"abouti côté service : vérifie son état avant de la relancer. Si l'outil est connu pour être "
+            f"long, tu peux le relancer avec {PARAMETRE_DELAI_OUTIL} plus grand (maximum {DELAI_OUTIL_MAX_SECONDES} s)."
+        )
+    except Exception as e:
+        logging.error(f"ERREUR pont téléphone {nom_outil}: {e}", exc_info=True)
+        return _message_erreur_technique_outil(nom_outil)
+
+
 def appeler_outil(nom_outil, arguments, table_routage, arret=None):
     """
     Execute un outil par son nom, quel que soit le serveur MCP qui
@@ -614,6 +821,10 @@ def appeler_outil(nom_outil, arguments, table_routage, arret=None):
     if not route:
         logging.error(f"Outil '{nom_outil}' demandé par le LLM mais absent de la table de routage.")
         return f"Erreur : outil '{nom_outil}' inconnu."
+    if route.get("via_app_telephone"):
+        # 29/10/2026 : outils téléphone exécutés sur le PC de
+        # l'utilisateur (relais local, seul à voir le téléphone).
+        return _appeler_outil_telephone_via_app(nom_outil, arguments, route, delai, arret)
     try:
         if route.get("custom_mcp"):
             # Serveur ajouté par l'utilisateur : adresse et jeton relus à l'instant de l'appel,
