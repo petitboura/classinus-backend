@@ -52,6 +52,9 @@ EFFORTS_PAR_PREFIXE_MODELE = (
     ("grok-4.3", ("none", "low", "medium", "high")),
     ("muse-spark-1.3", ("minimal", "low", "medium", "high", "xhigh", "max")),
     ("muse-wonder-1.0", ("minimal", "low", "medium", "high", "xhigh", "max")),
+    # Muse Spark Open (30/10/2026) : servi par Baseten, qui ne documente pas de reglage d'effort
+    # pour ce modele (reflexion toujours active). Liste vide : aucun reglage, rien n'est envoye.
+    ("muse-spark-open", ()),
 )
 
 # Fournisseurs dont les modèles passent par un adaptateur d'outils (voir

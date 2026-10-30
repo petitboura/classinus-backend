@@ -25,6 +25,9 @@ def modele_a_des_outils(modele_id):
     ou Claude, GPT, Gemini, Grok et Meta (adaptateurs), à condition que la clé API du fournisseur existe.
     Sans clé, le modèle retombe sur le chemin texte seul.
     """
+    # Modele servi uniquement par Baseten (Muse Spark Open, 30/10/2026) : sa seule cle est celle de Baseten.
+    if fournisseurs_llm.info_baseten_seul(modele_id):
+        return fournisseurs_llm.cle_baseten_disponible()
     distributeur = distributeur_du_modele(modele_id)
     if distributeur != "deepseek" and distributeur not in DISTRIBUTEURS_AVEC_ADAPTATEUR:
         return False
@@ -33,6 +36,9 @@ def modele_a_des_outils(modele_id):
 
 def client_avec_outils(modele_id):
     """Client avec outils pour un modèle Claude, GPT, Gemini, Grok ou Meta, ou None (DeepSeek : voir core/main.py)."""
+    # Modele servi uniquement par Baseten (Muse Spark Open, 30/10/2026) : client Baseten, sans repli direct.
+    if fournisseurs_llm.info_baseten_seul(modele_id):
+        return fournisseurs_llm.creer_client_baseten_seul(modele_id)
     if distributeur_du_modele(modele_id) not in DISTRIBUTEURS_AVEC_ADAPTATEUR or not modele_a_des_outils(modele_id):
         return None
     distributeur = distributeur_du_modele(modele_id)
