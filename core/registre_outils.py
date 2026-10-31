@@ -667,6 +667,9 @@ OUTILS_SENSIBLES = {
     "lancer_video_higgsfield",
     # Image Higgsfield (25/10/2026) : payante aussi, donc TOUJOURS interrompue pour confirmation.
     "generer_image_higgsfield",
+    # Fonctions MCP-only (31/10/2026) : payantes sur le compte partage, donc
+    # TOUJOURS interrompues pour confirmation avant execution.
+    "generer_mcp_higgsfield",
     # ÉCRIT réellement sur un dépôt GitHub (voir
     # core/serveur_mcp_github.py, gerer_depot_github action
     # "modifier_fichier", consolidé le 26/08, ex modifier_fichier_depot_github) :
@@ -1203,6 +1206,9 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "consulter_image_higgsfield": {"label": "Suivi d'une image", "icone": "Image", "onglet": None, "appli": "higgsfield_mcp"},
     "estimer_cout_higgsfield": {"label": "Estimation du coût", "icone": "Coins", "onglet": None, "appli": "higgsfield_mcp"},
     "annuler_generation_higgsfield": {"label": "Annulation d'une génération", "icone": "Ban", "onglet": None, "appli": "higgsfield_mcp"},
+    "lister_capacites_higgsfield": {"label": "Capacités Higgsfield", "icone": "ListChecks", "onglet": None, "appli": "higgsfield_mcp"},
+    "generer_mcp_higgsfield": {"label": "Fonction Higgsfield via MCP", "icone": "Sparkles", "onglet": None, "appli": "higgsfield_mcp"},
+    "etat_mcp_partage_higgsfield": {"label": "État du MCP Higgsfield", "icone": "Activity", "onglet": None, "appli": "higgsfield_mcp"},
     "gerer_programme_catalogue_public": {"label": "Programmes publics", "icone": "GraduationCap", "onglet": None},
     "ajouter_commentaire_catalogue_public": {"label": "Ajout d'un commentaire public", "icone": "MessageSquarePlus", "onglet": None},
     "supprimer_commentaire_catalogue_public": {"label": "Suppression d'un commentaire public", "icone": "MessageSquareX", "onglet": None},
@@ -1506,6 +1512,12 @@ CATEGORIES_OUTILS = {
         "lancer_video_higgsfield", "consulter_video_higgsfield",
         "generer_image_higgsfield", "consulter_image_higgsfield",
         "estimer_cout_higgsfield", "annuler_generation_higgsfield",
+        # Moteur de fond (31/10/2026) : registre des capacites, fonctions
+        # MCP-only via notre MCP partage (API toujours en premier) et sante
+        # du compte partage. Le MCP personnel de l'utilisateur reste la
+        # categorie "higgsfield" ci-dessus, inchangee.
+        "lister_capacites_higgsfield", "generer_mcp_higgsfield",
+        "etat_mcp_partage_higgsfield",
     ],
     "google_drive": [
         "search_files", "read_file_content", "download_file_content",

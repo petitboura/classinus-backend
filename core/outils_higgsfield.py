@@ -104,7 +104,7 @@ if higgsfield_api_disponible():
         ctx: Context = None,
     ) -> str:
         """
-        Version Classinus de Higgsfield (API de Classinus, clé partagée, sans connexion de l'utilisateur). Si l'utilisateur a connecté son propre compte Higgsfield, ses outils higgsfield_ passent en premier.
+        Version Classinus de Higgsfield (API de Classinus, clé partagée, sans connexion de l'utilisateur). Voie API : elle passe toujours en premier pour la vidéo et l'image. Le compte Higgsfield personnel de l'utilisateur, s'il en a connecté un, n'est ni utilisé ni modifié par cet outil.
         Lance une vidéo Higgsfield : depuis une description, en animant une
         image si `image_url` est donné, ou guidée par des références. NE renvoie PAS la vidéo (1 à 3 minutes) :
         renvoie un identifiant à donner à consulter_video_higgsfield un peu plus
@@ -238,7 +238,8 @@ if higgsfield_api_disponible():
                     images_reference,
                 )
             prix = estimer_cout(adresse, corps)
-            return f"Coût estimé : {prix['credits']} crédits (environ {prix['usd']} dollars)."
+            # Estimation toujours en credits, jamais en argent (31/10/2026).
+            return f"Coût estimé : {prix['credits']} crédits."
         except Exception as e:
             return _message_erreur(e, "estimer le coût")
 
@@ -251,3 +252,138 @@ if higgsfield_api_disponible():
             return "Impossible d'annuler : la génération a déjà commencé, elle va se terminer."
         except Exception as e:
             return _message_erreur(e, "annuler cette génération")
+
+
+# Fonctions MCP-only (31/10/2026) : enregistrees meme sans cle API, car leur
+# voie est notre MCP partage, pas l'API. Chaque appel verifie en direct la
+# configuration et l'etat du compte partage avant de depenser quoi que ce soit.
+
+@mcp_generation.tool()
+def lister_capacites_higgsfield(ctx: Context = None) -> str:
+    """
+    Liste les capacités Higgsfield de Classinus et leur voie réelle : API
+    d'abord (vidéo, image), notre MCP partagé ensuite pour les fonctions
+    absentes de l'API (audio, 3D, édition, studios). À appeler avant toute
+    génération spéciale pour savoir ce qui est faisable, quels médias sont
+    requis, et quels outils MCP existent vraiment en ce moment (vérifié en
+    direct, avec leur schéma d'arguments). Le compte Higgsfield personnel
+    de l'utilisateur n'est ni utilisé ni modifié.
+    """
+    try:
+        from connexions.higgsfield_mcp import etat_service
+        from core.generation_video_higgsfield import higgsfield_api_disponible as _api_ok
+        from core.higgsfield_capacites import CAPACITES
+        from core.higgsfield_mcp_partage import lister_outils_partages
+        from core.higgsfield_routeur import choisir_voie
+
+        etat = etat_service()
+        outils_mcp = []
+        if etat["connecte"]:
+            try:
+                outils_mcp = lister_outils_partages()
+            except Exception:
+                outils_mcp = []
+        noms_mcp = {o["nom"] for o in outils_mcp}
+        lignes = []
+        for capacite in CAPACITES:
+            choix = choisir_voie(capacite["id"], _api_ok(), etat["connecte"])
+            ligne = {
+                "capacite": capacite["id"],
+                "label": capacite["label"],
+                "voie": choix["voie"],
+                "raison": choix["raison"],
+                "medias_requis": capacite["medias_requis"],
+            }
+            if capacite["voie"] == "mcp":
+                presents = [n for n in capacite["outils_mcp"] if n in noms_mcp]
+                ligne["outils_mcp_disponibles"] = presents
+                if choix["voie"] == "mcp" and not presents:
+                    ligne["voie"] = "indisponible"
+                    ligne["raison"] = "Aucun outil de cette fonction n'est exposé par le MCP en ce moment."
+            lignes.append(ligne)
+        return json.dumps({
+            "api_configuree": _api_ok(),
+            "mcp_partage": etat,
+            "capacites": lignes,
+            "outils_mcp": outils_mcp,
+        }, ensure_ascii=False)
+    except Exception as e:
+        return _message_erreur(e, "lister les capacités Higgsfield")
+
+
+@mcp_generation.tool()
+def generer_mcp_higgsfield(
+    capacite: str,
+    outil: str,
+    arguments_json: str,
+    titre: str,
+    ctx: Context = None,
+) -> str:
+    """
+    Lance une fonction Higgsfield disponible uniquement via notre MCP
+    partagé (audio, 3D, édition, studios) : l'API ne sait pas la faire, il
+    n'y a aucun équivalent API. `capacite` : un identifiant de
+    lister_capacites_higgsfield (ex. audio_tts, upscale_video, doublage).
+    `outil` : un nom présent dans outils_mcp_disponibles de cette capacité.
+    `arguments_json` : objet JSON conforme au schéma de cet outil (voir
+    lister_capacites_higgsfield), avec les adresses https des médias requis.
+    `titre` : nom court du résultat, sans extension. Génération payante sur
+    le compte partagé de Classinus, comptée dans la limite MCP du jour de
+    l'utilisateur. N'utilise jamais le compte Higgsfield personnel de
+    l'utilisateur. Si la capacité est servie par l'API (vidéo, image),
+    refuse et renvoie vers lancer_video_higgsfield ou generer_image_higgsfield.
+    """
+    try:
+        from core.higgsfield_capacites import capacite_par_id
+        from core.higgsfield_mcp_partage import appeler_outil_partage
+        from core.higgsfield_routeur import choisir_voie
+        from connexions.higgsfield_mcp import etat_service
+
+        infos = capacite_par_id(capacite)
+        if infos is None:
+            return "Erreur : capacité Higgsfield inconnue. Appelle lister_capacites_higgsfield d'abord."
+        if infos["voie"] == "api":
+            return (
+                "Erreur : cette capacité passe par l'API Classinus, pas par le MCP. "
+                "Utilise lancer_video_higgsfield ou generer_image_higgsfield."
+            )
+        if (outil or "").strip() not in infos["outils_mcp"]:
+            return (
+                f"Erreur : l'outil {outil} n'appartient pas à la capacité {capacite}. "
+                f"Outils possibles : {', '.join(infos['outils_mcp'])}."
+            )
+        try:
+            arguments = json.loads(arguments_json or "{}")
+        except ValueError:
+            return "Erreur : arguments_json n'est pas un JSON valide."
+        if not isinstance(arguments, dict):
+            return "Erreur : arguments_json doit être un objet JSON."
+        choix = choisir_voie(capacite, False, etat_service()["connecte"])
+        if choix["voie"] != "mcp":
+            return f"Indisponible : {choix['raison']}"
+        reserver_generation(_supabase_memoire, _id_utilisateur(ctx), "mcp")
+        texte = appeler_outil_partage(outil, arguments)
+        return texte
+    except Exception as e:
+        return _message_erreur(e, "lancer cette fonction MCP Higgsfield")
+
+
+@mcp_generation.tool()
+def etat_mcp_partage_higgsfield(ctx: Context = None) -> str:
+    """
+    Santé du MCP Higgsfield partagé de Classinus (fonctions MCP-only) :
+    configuré ou non, connecté ou à reconnecter, et outils MCP-only
+    réellement exposés en ce moment. Lecture seule, ne dépense rien.
+    À utiliser si une fonction MCP échoue ou pour vérifier avant de promettre.
+    """
+    try:
+        from connexions.higgsfield_mcp import etat_service
+        from core.higgsfield_mcp_partage import lister_outils_partages
+
+        etat = etat_service()
+        outils = []
+        if etat["connecte"]:
+            outils = [o["nom"] for o in lister_outils_partages()]
+        return json.dumps({"mcp_partage": etat, "outils_mcp_only_disponibles": outils}, ensure_ascii=False)
+    except Exception as e:
+        return _message_erreur(e, "vérifier le MCP Higgsfield partagé")
