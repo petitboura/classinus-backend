@@ -188,6 +188,7 @@ def lire_tour_persiste(tour_id: str, user_id: str) -> Optional[dict]:
 
 def dernier_tour_persiste(user_id: str, conversation_id: str) -> Optional[dict]:
     """Le dernier tour persiste de cette conversation (sans ses lignes)."""
+    marquer_tours_orphelins_une_fois()
     try:
         res = (
             supabase.table(TABLE_TOURS)
@@ -203,6 +204,18 @@ def dernier_tour_persiste(user_id: str, conversation_id: str) -> Optional[dict]:
     except Exception as e:
         logging.error("ERREUR lecture dernier tour persiste (conversation %s) : %s", conversation_id, e)
         return None
+
+
+_marquage_fait = threading.Event()
+
+
+def marquer_tours_orphelins_une_fois() -> int:
+    """Premier appel du processus seulement : apres un redemarrage, c'est le premier
+    rattachement qui declenche le marquage des orphelins (voir marquer_tours_orphelins)."""
+    if _marquage_fait.is_set():
+        return 0
+    _marquage_fait.set()
+    return marquer_tours_orphelins()
 
 
 def marquer_tours_orphelins() -> int:
