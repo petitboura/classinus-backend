@@ -814,6 +814,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "generer_site_zip": {"label": "Génération d'un site (zip)", "icone": "Package", "onglet": "generer"},
     "generer_bundle": {"label": "Génération d'une archive", "icone": "Archive", "onglet": "generer"},
     "generer_image": {"label": "Génération d'une image", "icone": "Image", "onglet": "generer"},
+    "detourer_objet_image": {"label": "Détourage d'un objet (SAM)", "icone": "Scissors", "onglet": "generer"},
     "generer_audio": {"label": "Génération audio", "icone": "AudioLines", "onglet": "generer"},
     "lancer_generation_video": {"label": "Génération d'une vidéo", "icone": "Video", "onglet": "generer"},
     "lancer_generation_3d": {"label": "Génération d'un modèle 3D", "icone": "Box", "onglet": "generer"},
@@ -1416,7 +1417,7 @@ CATEGORIES_OUTILS = {
     "generation_documents": [
         "generer_document", "generer_document_word", "generer_document_excel",
         "generer_document_powerpoint", "generer_document_latex", "generer_code",
-        "generer_site_zip", "generer_bundle", "generer_image", "deployer_site",
+        "generer_site_zip", "generer_bundle", "generer_image", "detourer_objet_image", "deployer_site",
         "exporter_donnees", "calculer_symbolique",
     ],
     # Exécution de code (24/10/2026, demande Bourama) : catégorie à part, retiré

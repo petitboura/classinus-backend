@@ -1563,6 +1563,23 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             for piece_jointe in meta_utilisateur["pieces_jointes"]:
                 piece_jointe["description_echec"] = True
 
+        # Detourage SAM (31/10/2026, demande Bourama) : le modele ne voit
+        # sinon que la description de l'image, jamais son adresse. On lui
+        # donne les liens reels des images jointes a ce message, comme
+        # pour les medias joints (lire_media_conversation), pour qu'il
+        # puisse les passer tels quels a detourer_objet_image.
+        if toutes_les_urls_images:
+            liens = ", ".join(toutes_les_urls_images)
+            message_pour_modele = (
+                f"{message_pour_modele}\n\n"
+                f"[Lien reel de l'image jointe a ce message : {liens}. "
+                "Si l'eleve demande de detourer ou d'isoler un objet de "
+                "cette image, utilise l'outil detourer_objet_image avec "
+                "exactement ce lien comme image_url (jamais invente) et "
+                "le nom de l'objet comme consigne.]"
+            )
+            messages_base[-1]["content"] = message_pour_modele
+
     # --- Zip joint (26/09/2026, chantier "zip en conversation", plan
     # valide par Bourama) : le dezipage a deja demarre en tache de fond
     # DES l'upload (voir api/uploads.py:demarrer_zip_chat), avant meme

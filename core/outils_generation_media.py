@@ -28,6 +28,7 @@ from core.generation_3d import (
     modele_3d_disponible,
 )
 from core.generation_images import generer_image as _generer_image, image_generation_disponible
+from core.segmentation_sam import sam_disponible, segmenter_et_detourer as _segmenter_et_detourer
 from core.recherche_image import rechercher_images as _rechercher_images
 from core.recherche_video import rechercher_videos as _rechercher_videos
 
@@ -261,6 +262,33 @@ def generer_image(prompt: str, titre: str, ctx: Context = None) -> str:
         logging.error(f"ERREUR outil generation : {e}")
         return "Erreur : la génération de l'image a échoué, réessaie."
 
+
+# SAM 3.1 (Meta Model API) : detourage d'un objet dans une image jointe.
+# Enregistre seulement si MODEL_API_KEY est configuree, meme logique que
+# les autres outils conditionnels de ce fichier.
+if sam_disponible():
+    @mcp_generation.tool()
+    def detourer_objet_image(image_url: str, consigne: str, titre: str, ctx: Context = None) -> str:
+        """
+        Detoure un objet dans une image et renvoie un PNG sur fond
+        transparent, affiche dans le chat et enregistre en bibliotheque.
+
+        `image_url` : lien reel de l'image jointe au message, donne dans
+        le contexte du message (jamais invente). Si l'etudiant donne une
+        adresse publique d'image, tu peux aussi l'utiliser.
+        `consigne` : nom court de l'objet a garder, par exemple
+        "la voiture rouge" ou "le chien". Si plusieurs objets
+        correspondent, ils sont tous detoures.
+        `titre` : nom court et clair du PNG final, sans extension.
+        """
+        try:
+            url = _segmenter_et_detourer(image_url, consigne)
+            nom = (titre.strip() or "Objet detoure") + ".png"
+            _sauvegarder_generation_bibliotheque(ctx, url, nom, "image/png")
+            return url
+        except Exception as e:
+            logging.error(f"ERREUR outil detourer_objet_image : {e}")
+            return f"Erreur : le detourage a echoue. {e}"
 
 # Ajouté le 01/09/2026 (demande Bourama) : RECHERCHE d'image EXISTANTE
 # sur le web, à ne pas confondre avec generer_image ci-dessus (qui EN
