@@ -567,7 +567,9 @@ def _fichier_seul_workspace(sandbox, configuration: dict, path: str) -> str:
 
 
 def _executer_action(sandbox, action: str, language: str, code: str, command: str,
-                     path: str, content: str, configuration: dict, fichier_importe=None) -> str:
+                     path: str, content: str, configuration: dict, fichier_importe=None,
+                     pattern: str = "", old_text: str = "", new_text: str = "",
+                     start_line: int | None = None, end_line: int | None = None) -> str:
     max_chars = max(1000, int(configuration.get("max_output_chars", 20000)))
     max_bytes = max(1024, int(configuration.get("max_file_bytes", 1048576)))
     max_command_chars = max(256, int(configuration.get("max_command_chars", 10000)))
@@ -632,8 +634,74 @@ def _executer_action(sandbox, action: str, language: str, code: str, command: st
             "tes résultats dans d'autres fichiers."
         )
 
+    if action == "edit_file":
+        distant = _chemin_distant(path)
+        if not old_text:
+            return "old_text doit contenir le texte exact à remplacer."
+        if len(old_text.encode("utf-8")) > max_bytes:
+            return f"Le texte à remplacer dépasse la limite configurée de {max_bytes} octets."
+        try:
+            taille = _taille_fichier(sandbox, distant, timeout_fichier)
+        except FileNotFoundError:
+            return f"Fichier introuvable : {_chemin_relatif_sur(path)}"
+        if taille > max_bytes:
+            return f"Le fichier fait {taille} octets, au-delà de la limite configurée de {max_bytes} octets."
+        contenu = sandbox.files.read(distant, format="text")
+        if isinstance(contenu, bytes):
+            contenu = contenu.decode("utf-8")
+        if not isinstance(contenu, str):
+            return "Impossible de lire le fichier comme texte UTF-8."
+        occurrences = contenu.count(old_text)
+        if occurrences == 0:
+            return "Modification annulée : old_text est introuvable dans le fichier. Relis le passage actuel avant de réessayer."
+        if occurrences > 1:
+            return (
+                f"Modification annulée : old_text apparaît {occurrences} fois. "
+                "Ajoute davantage de lignes autour du passage pour rendre le remplacement unique."
+            )
+        nouveau_contenu = contenu.replace(old_text, new_text, 1)
+        taille_nouvelle = len(nouveau_contenu.encode("utf-8"))
+        if taille_nouvelle > max_bytes:
+            return f"Le fichier modifié dépasserait la limite configurée de {max_bytes} octets."
+        if nouveau_contenu == contenu:
+            return "Aucun changement : le nouveau texte est identique au texte actuel."
+        temporaire = f"{distant}.classinus-{uuid.uuid4().hex}.tmp"
+        sandbox.files.write(temporaire, nouveau_contenu)
+        remplacement = _lancer_commande(
+            sandbox,
+            f"chmod --reference={shlex.quote(distant)} -- {shlex.quote(temporaire)} && "
+            f"mv -- {shlex.quote(temporaire)} {shlex.quote(distant)}",
+            timeout_fichier,
+            timeout_fichier + 10,
+        )
+        if getattr(remplacement, "exit_code", 1) != 0:
+            try:
+                _lancer_commande(sandbox, f"rm -f -- {shlex.quote(temporaire)}", timeout_fichier, timeout_fichier + 10)
+            except Exception:
+                pass
+            return "Impossible de remplacer le fichier après préparation du changement."
+        return (
+            f"Modification ciblée effectuée dans {_chemin_relatif_sur(path)} : "
+            f"1 occurrence remplacée ({taille_nouvelle} octets)."
+        )
+
     if action == "read_file":
         distant = _chemin_distant(path)
+        if (start_line is None) != (end_line is None):
+            return "Pour lire une plage, indique start_line et end_line ensemble."
+        if start_line is not None:
+            if start_line < 1 or end_line < start_line:
+                return "Plage invalide : start_line doit être positif et end_line doit être supérieur ou égal."
+            try:
+                _taille_fichier(sandbox, distant, timeout_fichier)
+            except FileNotFoundError:
+                return f"Fichier introuvable : {_chemin_relatif_sur(path)}"
+            commande = (
+                f"sed -n '{start_line},{end_line}p' -- {shlex.quote(distant)} "
+                f"| nl -ba -v {start_line}"
+            )
+            sortie = _resultat_commande(sandbox, commande, timeout_fichier, max_chars)
+            return f"{_chemin_relatif_sur(path)} — lignes {start_line} à {end_line}\n{sortie}"
         try:
             taille = _taille_fichier(sandbox, distant, timeout_fichier)
         except FileNotFoundError:
@@ -644,6 +712,55 @@ def _executer_action(sandbox, action: str, language: str, code: str, command: st
         if isinstance(contenu, bytes):
             contenu = contenu.decode("utf-8")
         return _tronquer(str(contenu), max_chars)
+
+    if action == "search_files":
+        motif = str(pattern or "").strip()
+        if not motif:
+            return "Indique le motif ou l'expression à rechercher dans pattern."
+        if len(motif) > 1000:
+            return "Le motif de recherche dépasse la limite de 1 000 caractères."
+        racine = _ROOT if not path or path.strip() in ("", ".") else _chemin_distant(path)
+        exclusions = (
+            "--exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.cache "
+            "--exclude-dir=__pycache__ --exclude-dir=.venv --exclude-dir=venv "
+            "--exclude-dir=dist --exclude-dir=build "
+            "--exclude='.env' --exclude='.env.*' --exclude='*.pem' --exclude='*.key' "
+            "--exclude='*.p12' --exclude='*.pfx' --exclude='id_rsa*'"
+        )
+        commande = (
+            f"grep -RInE --binary-files=without-match {exclusions} "
+            f"-- {shlex.quote(motif)} {shlex.quote(racine)} "
+            "| sed 's#^/home/user/##'; "
+            "code=${PIPESTATUS[0]}; "
+            "if [ \"$code\" -eq 1 ]; then printf 'Aucun résultat.\\n'; "
+            "elif [ \"$code\" -ne 0 ]; then exit \"$code\"; fi"
+        )
+        return _resultat_commande(sandbox, commande, timeout_fichier, max_chars)
+
+    if action == "find_files":
+        motif = str(pattern or "").strip()
+        if not motif:
+            return "Indique un motif de nom de fichier dans pattern (ex. *.py)."
+        if "/" in motif or motif in (".", "..") or len(motif) > 255:
+            return "Le motif doit être un nom de fichier simple, sans chemin (ex. *.py)."
+        racine = _ROOT if not path or path.strip() in ("", ".") else _chemin_distant(path)
+        limite = max(1, min(500, int(configuration.get("max_files_per_download", 50))))
+        exclusions = (
+            "-not -path '*/.git/*' -not -path '*/node_modules/*' "
+            "-not -path '*/.cache/*' -not -path '*/__pycache__/*' "
+            "-not -path '*/.venv/*' -not -path '*/venv/*' "
+            "-not -path '*/dist/*' -not -path '*/build/*' "
+            "-not -name '.env' -not -name '.env.*' "
+            "-not -name '*.pem' -not -name '*.key' -not -name '*.p12' -not -name '*.pfx' "
+            "-not -name 'id_rsa*'"
+        )
+        commande = (
+            f"find {shlex.quote(racine)} -type f {exclusions} "
+            f"-name {shlex.quote(motif)} -printf '%p\\n' "
+            "| sed 's#^/home/user/##' "
+            f"| head -n {limite}"
+        )
+        return _resultat_commande(sandbox, commande, timeout_fichier, max_chars)
 
     if action == "list_files":
         limite = max(1, int(configuration.get("max_files_per_download", 50)))
@@ -664,6 +781,15 @@ def _executer_action(sandbox, action: str, language: str, code: str, command: st
         return _fichiers_workspace(sandbox, configuration)
 
     raise ValueError("Action inconnue.")
+
+
+def _action_pour_reservation(action: str) -> str:
+    """Les nouvelles actions réutilisent les catégories de quota déjà autorisées par la RPC."""
+    return {
+        "edit_file": "write_file",
+        "search_files": "read_file",
+        "find_files": "read_file",
+    }.get(action, action)
 
 
 def _message_refus(reservation: dict) -> str:
@@ -693,20 +819,34 @@ def _message_refus(reservation: dict) -> str:
 
 @mcp_execution_code.tool()
 def gerer_execution_code(
-    action: Literal["run_code", "run_command", "write_file", "read_file", "list_files", "download_files", "importer_fichier", "network", "demander_acces_reseau", "close"],
+    action: Literal["run_code", "run_command", "write_file", "edit_file", "read_file", "search_files", "find_files", "list_files", "download_files", "importer_fichier", "network", "demander_acces_reseau", "close"],
     ctx: Context,
     language: Literal["python", "javascript", "typescript", "bash"] = "python",
     code: str = "",
     command: str = "",
     path: str = "",
     content: str = "",
+    old_text: str = "",
+    new_text: str = "",
+    pattern: str = "",
+    start_line: int | None = None,
+    end_line: int | None = None,
     domain: str = "",
     url_fichier: str = "",
 ) -> str:
     """Execute du code ou gère les fichiers d'un workspace Linux isolé propre à cette conversation.
 
     Actions : run_code exécute du code en Python, JavaScript, TypeScript ou Bash;
-    run_command lance une commande shell; write_file/read_file/list_files gèrent les fichiers;
+    run_command lance une commande shell; write_file écrit un fichier; edit_file remplace le texte exact
+    old_text par new_text dans path, seulement si old_text apparaît exactement une fois (sinon aucun changement);
+    read_file lit path en entier ou la plage inclusive start_line/end_line (numérotation à partir de 1, les deux
+    paramètres doivent être fournis ensemble); search_files cherche l'expression régulière pattern dans path
+    ou dans tout le workspace si path est vide, avec fichier et numéro de ligne; find_files cherche les noms
+    de fichiers correspondant au motif glob pattern (ex. *.py), dans path ou tout le workspace si path est vide;
+    list_files liste le workspace. Pour travailler sur un dépôt GitHub public, vérifie d'abord network puis
+    utilise run_command avec git clone --depth 1 https://github.com/OWNER/REPO.git dossier : travaille
+    ensuite dans ce clone avec find_files, search_files, read_file et edit_file, plutôt que de parcourir
+    les fichiers un par un par l'API GitHub.
     download_files prépare une archive ZIP de tout le workspace, ou, si path est donné, publie CE SEUL fichier avec son propre lien direct, sans ZIP (à utiliser pour envoyer une vidéo, un son ou une image à un service extérieur qui demande un lien); close ferme le workspace;
     importer_fichier copie dans le workspace un fichier que l'étudiant a joint à la conversation
     (paramètre url_fichier : le lien réel indiqué entre crochets après le fichier, jamais inventé),
@@ -742,11 +882,23 @@ def gerer_execution_code(
         return "Aucun code fourni. Envoie le code à exécuter."
     if action == "run_command" and not command.strip():
         return "Aucune commande fournie."
-    if action in ("read_file", "write_file"):
+    if action in ("read_file", "write_file", "edit_file"):
         try:
             _chemin_relatif_sur(path)
         except ValueError as e:
             return f"Chemin refusé : {e}"
+    if action in ("search_files", "find_files") and path and path.strip() not in ("", "."):
+        try:
+            _chemin_relatif_sur(path)
+        except ValueError as e:
+            return f"Chemin refusé : {e}"
+    if action == "read_file" and (start_line is not None or end_line is not None):
+        if start_line is None or end_line is None or start_line < 1 or end_line < start_line:
+            return "Plage invalide : indique deux lignes positives, avec end_line supérieur ou égal à start_line."
+    if action in ("search_files", "find_files") and not str(pattern or "").strip():
+        return "Le paramètre pattern est obligatoire pour cette recherche."
+    if action == "edit_file" and not old_text:
+        return "old_text doit contenir le texte exact à remplacer."
 
     fichier_importe = None
     if action == "importer_fichier":
@@ -761,7 +913,7 @@ def gerer_execution_code(
             "execution_code_reserver",
             {
                 "p_user_id": user_id, "p_conversation_id": conversation_id,
-                "p_action": "write_file" if action == "importer_fichier" else action,
+                "p_action": "write_file" if action == "importer_fichier" else _action_pour_reservation(action),
             },
         )
     except Exception as e:
@@ -866,7 +1018,10 @@ def gerer_execution_code(
                 garder = False
                 raise RuntimeError("Impossible d'enregistrer le workspace dans Classinus.")
 
-        resultat = _executer_action(sandbox, action, language, code, command, path, content, configuration, fichier_importe)
+        resultat = _executer_action(
+            sandbox, action, language, code, command, path, content, configuration, fichier_importe,
+            pattern, old_text, new_text, start_line, end_line,
+        )
         garder = True
     except Exception as e:
         logging.warning(

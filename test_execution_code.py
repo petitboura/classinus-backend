@@ -17,6 +17,7 @@ from core.outils_execution_code import (
     _executer_action,
     _message_reseau,
     _options_reseau,
+    _action_pour_reservation,
     _resultat_commande,
     _taille_fichier,
     gerer_execution_code,
@@ -330,6 +331,78 @@ class TestCommandesEnEchec(unittest.TestCase):
         sandbox.files.write.assert_not_called()
 
 
+class TestActionsWorkspace(unittest.TestCase):
+    def test_edit_file_remplace_une_occurrence_unique(self):
+        sandbox = MagicMock()
+        sandbox.files.read.return_value = "valeur = 1\n"
+        with patch("core.outils_execution_code._taille_fichier", return_value=12), patch("core.outils_execution_code._lancer_commande", return_value=SimpleNamespace(exit_code=0)):
+            resultat = _executer_action(
+                sandbox, "edit_file", "python", "", "", "main.py", "", {},
+                old_text="valeur = 1", new_text="valeur = 2",
+            )
+        self.assertIn("1 occurrence remplacée", resultat)
+        chemin_temporaire, contenu = sandbox.files.write.call_args.args
+        self.assertIn(".classinus-", chemin_temporaire)
+        self.assertEqual(contenu, "valeur = 2\n")
+
+    def test_edit_file_refuse_un_texte_present_plusieurs_fois(self):
+        sandbox = MagicMock()
+        sandbox.files.read.return_value = "x = 1\nx = 1\n"
+        with patch("core.outils_execution_code._taille_fichier", return_value=12):
+            resultat = _executer_action(
+                sandbox, "edit_file", "python", "", "", "main.py", "", {},
+                old_text="x = 1", new_text="x = 2",
+            )
+        self.assertIn("apparaît 2 fois", resultat)
+        sandbox.files.write.assert_not_called()
+
+    def test_read_file_lit_une_plage_sans_telecharger_le_fichier_entier(self):
+        sandbox = MagicMock()
+        with patch("core.outils_execution_code._taille_fichier", return_value=5000000), patch("core.outils_execution_code._resultat_commande", return_value="100\tligne") as executer:
+            resultat = _executer_action(
+                sandbox, "read_file", "python", "", "", "src/main.py", "", {},
+                start_line=100, end_line=200,
+            )
+        self.assertIn("lignes 100 à 200", resultat)
+        commande = executer.call_args.args[1]
+        self.assertIn("sed -n '100,200p'", commande)
+        self.assertIn("nl -ba -v 100", commande)
+        sandbox.files.read.assert_not_called()
+
+    def test_search_files_utilise_grep_avec_numero_de_ligne(self):
+        sandbox = MagicMock()
+        with patch("core.outils_execution_code._resultat_commande", return_value="src/a.py:12:match") as executer:
+            resultat = _executer_action(
+                sandbox, "search_files", "python", "", "", "src", "", {},
+                pattern="def calculer",
+            )
+        self.assertIn("src/a.py:12", resultat)
+        commande = executer.call_args.args[1]
+        self.assertIn("grep -RInE", commande)
+        self.assertIn("--exclude-dir=.git", commande)
+        self.assertIn("sed 's#^/home/user/##'", commande)
+        self.assertIn("PIPESTATUS[0]", commande)
+        self.assertIn("src", commande)
+
+    def test_find_files_utilise_un_motif_de_nom_et_exclut_les_dependances(self):
+        sandbox = MagicMock()
+        with patch("core.outils_execution_code._resultat_commande", return_value="src/main.py") as executer:
+            resultat = _executer_action(
+                sandbox, "find_files", "python", "", "", "", "", {},
+                pattern="*.py",
+            )
+        self.assertIn("src/main.py", resultat)
+        commande = executer.call_args.args[1]
+        self.assertIn("-name '*.py'", commande)
+        self.assertIn("node_modules", commande)
+        self.assertIn("-type f", commande)
+
+    def test_actions_workspace_reutilisent_les_reservations_existantes(self):
+        self.assertEqual(_action_pour_reservation("edit_file"), "write_file")
+        self.assertEqual(_action_pour_reservation("search_files"), "read_file")
+        self.assertEqual(_action_pour_reservation("find_files"), "read_file")
+
+
 class TestSchemaDeLOutil(unittest.TestCase):
     """Ce qui est annoncé au modèle doit exister dans le code."""
 
@@ -351,14 +424,21 @@ class TestSchemaDeLOutil(unittest.TestCase):
         actions = self._schema()["properties"]["action"]["enum"]
         self.assertIn("network", actions)
         self.assertIn("demander_acces_reseau", actions)
+        self.assertTrue({"edit_file", "search_files", "find_files"}.issubset(set(actions)))
         # network ne passe jamais par execution_code_reserver : la liste blanche SQL n'a pas à la contenir.
         with open("migrations/2026_10_23_execution_code_e2b.sql", encoding="utf-8") as fichier:
             migration = fichier.read()
         # importer_fichier (27/10/2026) est réservé comme une écriture de fichier (write_file) : le code
         # envoie p_action = write_file, la liste blanche SQL n'a donc pas à la contenir non plus.
+        alias_reservation = {
+            "edit_file": "write_file",
+            "search_files": "read_file",
+            "find_files": "read_file",
+        }
         for action in actions:
             if action not in ("network", "demander_acces_reseau", "importer_fichier"):
-                self.assertIn(f"'{action}'", migration)
+                self.assertIn(f"'{alias_reservation.get(action, action)}'", migration)
+        self.assertIn("'github.com'", migration)
 
     def test_les_langages_non_implementes_ne_sont_pas_annonces(self):
         langages = self._schema()["properties"]["language"]["enum"]

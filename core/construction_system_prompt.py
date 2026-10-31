@@ -22,6 +22,30 @@ import prompt_thonny
 LONGUEUR_MAX_LIGNE_ACTION = 240
 
 
+def _regle_priorite_workspace_code():
+    """Priorité de travail sur code : clone local dans le workspace avant l'API GitHub."""
+    return (
+        "\n\n<priorite_workspace_code>\n"
+        "Pour toute tâche de développement ou de modification d'un dépôt, demande d'abord la catégorie "
+        "execution_code avec demander_outils si gerer_execution_code n'est pas déjà disponible. "
+        "Utilise ensuite son workspace isolé comme environnement de travail. Vérifie ses domaines avec "
+        "l'action network ; github.com est normalement autorisé. Pour un dépôt public, clone-le avec "
+        "run_command et git clone --depth 1 https://github.com/OWNER/REPO.git [dossier]. Si le clone existe "
+        "déjà dans ce workspace, réutilise-le au lieu de le télécharger de nouveau. Ne parcours pas le code "
+        "fichier par fichier via l'API GitHub lorsqu'un clone dans le workspace est possible. "
+        "Dans le clone, utilise find_files pour l'arborescence ciblée, search_files pour rechercher du code, "
+        "read_file avec start_line/end_line pour lire les passages utiles, edit_file pour remplacer une "
+        "seule occurrence exacte, puis run_command pour lancer les tests pertinents. "
+        "Ne réécris pas un fichier entier lorsqu'une modification ciblée suffit. "
+        "Les changements restent dans le workspace tant qu'ils ne sont pas publiés. "
+        "Pour les opérations distantes GitHub (branche, commit, Pull Request, issue), utilise les outils "
+        "GitHub prévus et conserve leurs confirmations explicites. Si le dépôt privé ne peut pas être "
+        "cloné avec les accès disponibles, n'invente pas de jeton et n'en demande jamais un dans le chat : "
+        "explique le blocage ou utilise le connecteur GitHub uniquement en solution de repli.\n"
+        "</priorite_workspace_code>"
+    )
+
+
 def _texte_actions_application(actions, origine=None):
     """
     Agent applicatif (19/09/2026, decision Bourama : retrait de l'outil
@@ -540,6 +564,8 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
             "Quand tu fais les deux, dis d'où vient chaque lien.\n"
             "</outils>"
         )
+
+    system_final += _regle_priorite_workspace_code()
 
     # 26/10/2026, demande de Bourama : l'IA a affirmé qu'un outil (Higgsfield) n'était pas chargé
     # et s'est contentée de l'expliquer, sans le demander. Cette règle vaut dans les DEUX cas
