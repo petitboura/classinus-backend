@@ -421,7 +421,25 @@ def _extraire_fichiers_generes(resultat_brut):
     return fichiers
 
 
-def _est_outil_sensible(appel):
+def cle_autorisation_appel(appel):
+    """
+    Clé qui identifie l'action de CET appel pour "Toujours autoriser" : le nom
+    de l'outil, ou "outil:action" quand l'outil a plusieurs actions dont
+    certaines seulement sont sensibles. None si l'appel n'est pas sensible.
+    """
+    if appel["name"] in OUTILS_SENSIBLES or est_outil_sensible_serveur_personnel(appel["name"]):
+        return appel["name"]
+    try:
+        arguments = json.loads(appel["arguments"] or "{}")
+    except Exception:
+        arguments = {}
+    action = arguments.get("action")
+    if action and f"{appel['name']}:{action}" in OUTILS_SENSIBLES:
+        return f"{appel['name']}:{action}"
+    return None
+
+
+def _est_outil_sensible(appel, autorisations=None):
     """
     True si cet appel doit déclencher la confirmation utilisateur
     (OUTILS_SENSIBLES). Gère deux formats dans OUTILS_SENSIBLES :
@@ -433,19 +451,14 @@ def _est_outil_sensible(appel):
       26/08 (plusieurs outils fusionnés en un seul avec un paramètre
       `action`, dont certaines actions sont sensibles et d'autres non).
     """
-    if appel["name"] in OUTILS_SENSIBLES:
-        return True
-    if est_outil_sensible_serveur_personnel(appel["name"]):
-        return True
-    try:
-        arguments = json.loads(appel["arguments"] or "{}")
-    except Exception:
-        arguments = {}
-    action = arguments.get("action")
-    return bool(action) and f"{appel['name']}:{action}" in OUTILS_SENSIBLES
+    cle = cle_autorisation_appel(appel)
+    if cle is None:
+        return False
+    # "Toujours autoriser" : cette action précise a déjà été autorisée pour de bon.
+    return not (autorisations and cle in autorisations)
 
 
-def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None, arret=None):
+def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None, arret=None, autorisations=None):
     """
     Execute une liste d'appels d'outils, en ajoutant le resultat de chacun
     a messages_agent au fur et a mesure. Des qu'un outil sensible
@@ -477,7 +490,7 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
     if arret is not None and arret.est_demande():
         return
     index_sensible = next(
-        (i for i, appel in enumerate(appels) if _est_outil_sensible(appel)),
+        (i for i, appel in enumerate(appels) if _est_outil_sensible(appel, autorisations)),
         None,
     )
     appels_surs = appels if index_sensible is None else appels[:index_sensible]

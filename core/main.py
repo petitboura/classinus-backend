@@ -76,7 +76,8 @@ from historique_conversation import (
     forcer_cloture_sujets_en_arriere_plan,
 )
 from historique_reponses_qcm import reponses_qcm_a_injecter
-from execution_outils import _resultat_pour_affichage
+from execution_outils import _resultat_pour_affichage, cle_autorisation_appel
+from autorisations_outils import enregistrer_autorisation
 from boucle_agent import _agent_groq, _capturer_reponse, _ajouter_segment_texte
 from erreur_tour import evenement_echec
 
@@ -479,7 +480,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 modele=modele_reprise, reasoning_effort=reasoning_effort_reprise,
                 agent_nom=etat.get("agent_nom"), conversation_id=conversation_id,
                 catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
-                arret=arret_tour,
+                user_id=user_id, arret=arret_tour,
             )
         except Exception as e:
             logging.error(f"ERREUR GROQ (reprise apres limite/répétition) {modele_reprise}: {e}")
@@ -508,6 +509,13 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         client_groq = _client_pour_reprise(modele_reprise)
 
         if approuve:
+            # "Toujours autoriser" (31/10/2026) : la clé est recalculée ici à partir de
+            # l'appel lui-même, jamais reprise telle quelle du navigateur, et refusée
+            # si l'action n'est pas une action sensible.
+            if reprise.get("toujours_autoriser") and user_id:
+                cle_toujours = cle_autorisation_appel(appel)
+                if cle_toujours:
+                    enregistrer_autorisation(user_id, cle_toujours, _nom_lisible_appel(appel))
             # 24/09/2026 (bug remonté par Bourama : après un clic sur Confirmer,
             # la suite était mal branchée et bloquait) : l'appel confirmé
             # doit porter les MÊMES identifiants que dans _traiter_appels
@@ -588,7 +596,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 modele=modele_reprise, reasoning_effort=reasoning_effort_reprise,
                 agent_nom=etat.get("agent_nom"), conversation_id=conversation_id,
                 catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
-                arret=arret_tour,
+                user_id=user_id, arret=arret_tour,
             )
         except Exception as e:
             logging.error(f"ERREUR GROQ (reprise apres confirmation) {modele_reprise}: {e}")

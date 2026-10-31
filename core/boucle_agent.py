@@ -14,7 +14,8 @@ from constantes_agent import GROQ_PRIMARY, MODELES_AVEC_REASONING_EFFORT, DELAI_
 from efforts_modeles import effort_valide_pour_modele, est_modele_avec_adaptateur
 from adaptateur_commun import CLE_ETAT_FOURNISSEUR
 from fournisseurs_llm import CONSIGNE_LANGUE_REFLEXION, DEEPSEEK_REASONING_EFFORT, ajouter_consigne_langue_reflexion, normaliser_effort_reflexion
-from execution_outils import _AttenteConfirmation, _traiter_appels
+from execution_outils import _AttenteConfirmation, _traiter_appels, cle_autorisation_appel
+from autorisations_outils import charger_autorisations
 from routage_outils import (
     _ecrire_outils_retenus,
     _separer_appels_garder_outils,
@@ -68,6 +69,8 @@ def _evenement_confirmation(attente, messages_agent, outils_mcp, table_routage, 
         # frontend peut afficher ce message directement, ou continuer à
         # composer le sien à partir de nom_lisible s'il préfère.
         "message": f"{agent_nom or 'Cet agent'} veut faire ceci : {_nom_lisible_appel(appel)}.",
+        # Clé envoyée au bouton "Toujours autoriser" (None : le bouton n'est pas proposé).
+        "cle_autorisation": cle_autorisation_appel(appel),
         "agent_nom": agent_nom,
         "arguments": arguments_dict,
         "etat_reprise": {
@@ -336,9 +339,12 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
     if modele in MODELES_AVEC_REASONING_EFFORT and "gpt-oss" not in modele and reasoning_effort != "none":
         kwargs_reasoning["reasoning_format"] = "parsed"
 
+    # Actions déjà autorisées pour de bon par cette personne ("Toujours autoriser").
+    autorisations = charger_autorisations(user_id)
+
     if appels_en_cours_a_finir:
         try:
-            for event in _traiter_appels(appels_en_cours_a_finir, messages_agent, table_routage, compteur_sources, arret=arret):
+            for event in _traiter_appels(appels_en_cours_a_finir, messages_agent, table_routage, compteur_sources, arret=arret, autorisations=autorisations):
                 yield event
         except _AttenteConfirmation as attente:
             yield _evenement_confirmation(attente, messages_agent, outils_mcp, table_routage, modele, reasoning_effort, agent_nom)
@@ -906,7 +912,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
 
         if appels_normaux:
             try:
-                for event in _traiter_appels(appels_normaux, messages_agent, table_routage, compteur_sources, arret=arret):
+                for event in _traiter_appels(appels_normaux, messages_agent, table_routage, compteur_sources, arret=arret, autorisations=autorisations):
                     yield event
             except _AttenteConfirmation as attente:
                 yield _evenement_confirmation(attente, messages_agent, outils_mcp, table_routage, modele, reasoning_effort, agent_nom)
