@@ -58,8 +58,15 @@ AGE_TACHE_PERIMEE = timedelta(hours=_entier_positif_env("CLASSINUS_TACHE_PERIMEE
 # de reseau peut encore rattraper la fin du flux. Le plafond de tours termines gardes borne la
 # memoire du serveur. Le signe de vie garde la connexion ouverte pendant les longues attentes
 # d'outils (les proxys coupent une connexion restee muette trop longtemps).
-CONSERVATION_TOUR_DETACHE = timedelta(minutes=_entier_positif_env("CLASSINUS_TOUR_CONSERVATION_MINUTES", 30))
-MAX_TOURS_DETACHES_CONSERVES = _entier_positif_env("CLASSINUS_TOURS_CONSERVES_MAX", 200)
+CONSERVATION_TOUR_DETACHE = timedelta(minutes=_entier_positif_env("CLASSINUS_TOUR_CONSERVATION_MINUTES", 5))
+MAX_TOURS_DETACHES_CONSERVES = _entier_positif_env("CLASSINUS_TOURS_CONSERVES_MAX", 50)
+# Budget total de lignes SSE des tours TERMINES gardes en memoire (les tours en cours ne sont
+# jamais touches) : un nombre de tours seul ne borne pas la RAM, leur taille compte autant.
+MAX_OCTETS_TOURS_DETACHES_CONSERVES = _entier_positif_env("CLASSINUS_TOURS_CONSERVES_MAX_MO", 32) * 1024 * 1024
+# Garde-fou d'un tour en cours : au-dela, ses nouvelles lignes ne sont plus stockees (le travail
+# continue et sauvegarde normalement), seul un rattachement ulterieur serait partiel.
+MAX_OCTETS_TOUR_DETACHE = _entier_positif_env("CLASSINUS_TOUR_MAX_MO", 16) * 1024 * 1024
+INTERVALLE_PURGE_TOURS_DETACHES = timedelta(seconds=_entier_positif_env("CLASSINUS_TOURS_PURGE_SECONDES", 60))
 DELAI_SIGNE_VIE_FLUX = _entier_positif_env("CLASSINUS_FLUX_SIGNE_VIE_SECONDES", 15)
 
 # Persistance des tours detaches en base (core/persistance_tours.py, 31/10/2026). Les lignes SSE
