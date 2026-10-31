@@ -365,6 +365,14 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
         if payload.reprise is not None:
             generateur = chat_generateur(
                 reprise=_reprise_pour_chat(payload.reprise),
+                # Correctif 31/10/2026 (bouton Continuer) : la reprise partait sans aucun
+                # identifiant, la continuation n'était donc rattachée à aucun fil et jamais
+                # sauvegardée. Le frontend envoie désormais conversation/agent/parent avec la
+                # reprise (voir ChatIA.tsx:reprendreAgent), on les transmet tels quels.
+                user_id=user_id,
+                agent_id=payload.agent_id,
+                conversation_id=payload.conversation_id,
+                parent_id=payload.parent_id,
                 arret_tour=arret,
                 langue_interface=langue_interface,
                 erreurs_typees=bool(payload.erreurs_typees),

@@ -125,6 +125,36 @@ class ChatReprise(unittest.TestCase):
         self.assertEqual(evenements[0]["code"], "forte_demande")
         self.assertEqual(evenements[0]["etat_reprise"]["messages_agent"], self.ETAT["messages_agent"])
 
+    def test_reprise_reussie_sauvegardee_dans_la_conversation(self):
+        # Correctif 31/10/2026 (bouton Continuer) : une continuation réussie doit être persistée
+        # dans le fil d'origine et renvoyer l'événement meta, sans inventer de ligne "user"
+        # quand l'utilisateur a juste cliqué Continuer (parent_id = question d'origine).
+        def reussit(*args, **kwargs):
+            yield {"type": "reponse", "texte": "suite"}
+
+        sauvegardes = []
+
+        def fausse_sauvegarde(*args, **kwargs):
+            sauvegardes.append((args, kwargs))
+            return {"message_id_user": 7, "message_id_assistant": 8, "created_at_assistant": "t"}
+
+        reprise = {"etat_reprise": self.ETAT, "type": "continuer_agent", "message_utilisateur": None}
+        with patch.object(main, "_agent_groq", reussit), patch.object(main, "_client_pour_reprise", lambda m: None), \
+                patch.object(main, "_catalogue_pour_demander_outils", lambda *a, **k: ([], {})), \
+                patch.object(main, "_sauvegarder_echange", fausse_sauvegarde):
+            evenements = list(main.chat(
+                reprise=reprise, user_id="u1", agent_id="a1", conversation_id="c1",
+                parent_id=7, erreurs_typees=True,
+            ))
+
+        self.assertEqual([e["type"] for e in evenements], ["reponse", "meta"])
+        self.assertEqual(evenements[1]["message_id_assistant"], 8)
+        self.assertEqual(len(sauvegardes), 1)
+        args, kwargs = sauvegardes[0]
+        self.assertEqual(args[:5], ("u1", "a1", "", "suite", "c1"))
+        self.assertEqual(kwargs["parent_id"], 7)
+        self.assertFalse(kwargs["sauvegarder_message_utilisateur"])
+
 
 class ArretUtilisateur(unittest.TestCase):
     """Clic sur Arrêter : le flux se ferme avec l'etat de reprise des outils deja obtenus."""

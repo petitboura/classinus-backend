@@ -473,14 +473,49 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             messages_agent.append({"role": "user", "content": reprise["message_utilisateur"]})
 
         client_groq = _client_pour_reprise(modele_reprise)
+        reponse_accumulee = []
+        meta_assistant = {}
+        fichiers_generes_accumules = []
         try:
-            yield from _agent_groq(
-                client_groq, messages_agent, outils_mcp, table_routage,
-                modele=modele_reprise, reasoning_effort=reasoning_effort_reprise,
-                agent_nom=etat.get("agent_nom"), conversation_id=conversation_id,
-                catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
-                arret=arret_tour,
+            yield from _capturer_reponse(
+                _agent_groq(
+                    client_groq, messages_agent, outils_mcp, table_routage,
+                    modele=modele_reprise, reasoning_effort=reasoning_effort_reprise,
+                    agent_nom=etat.get("agent_nom"), conversation_id=conversation_id,
+                    catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
+                    user_id=user_id,
+                    arret=arret_tour,
+                ),
+                reponse_accumulee,
+                meta_assistant,
+                fichiers_generes_accumules,
             )
+            # Correctif 31/10/2026 (bouton Continuer) : la continuation était seulement
+            # diffusée en direct, jamais sauvegardée -- au rechargement elle disparaissait et
+            # le fil était cassé. On la persiste dans la même conversation : avec un message
+            # tapé par l'utilisateur, c'est un échange normal chaîné à la réponse interrompue
+            # (parent_id) ; sans texte (simple clic Continuer), aucune ligne "user" inventée,
+            # la continuation devient la suite rattachée à la question d'origine.
+            texte_reprise = reprise.get("message_utilisateur")
+            if user_id and "".join(reponse_accumulee).strip():
+                if texte_reprise:
+                    ids_historique = _sauvegarder_echange(
+                        user_id, agent_id, texte_reprise,
+                        "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules),
+                        conversation_id, modele=modele_reprise, meta_assistant=meta_assistant,
+                        parent_id=parent_id, sauvegarder_message_utilisateur=True,
+                    )
+                elif parent_id:
+                    ids_historique = _sauvegarder_echange(
+                        user_id, agent_id, "",
+                        "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules),
+                        conversation_id, modele=modele_reprise, meta_assistant=meta_assistant,
+                        parent_id=parent_id, sauvegarder_message_utilisateur=False,
+                    )
+                else:
+                    ids_historique = None
+                if ids_historique:
+                    yield {"type": "meta", **ids_historique}
         except Exception as e:
             logging.error(f"ERREUR GROQ (reprise apres limite/répétition) {modele_reprise}: {e}")
             evenement = evenement_echec(
