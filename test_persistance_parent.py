@@ -31,6 +31,10 @@ class _Requete:
         self._filtres[colonne] = valeur
         return self
 
+    def is_(self, colonne, _valeur):
+        self._filtres[colonne] = None
+        return self
+
     def order(self, *_args, **_kwargs):
         return self
 
@@ -50,13 +54,14 @@ class _Requete:
             faux.prochain_id += 1
             return _Resultat([{**self._insertion, "id": faux.prochain_id, "created_at": "2026-10-31T00:00:00Z"}])
         if "id" in self._filtres:
-            return _Resultat([{"id": self._filtres["id"]}] if faux.parent_existe else [])
+            return _Resultat([{"id": self._filtres["id"], "role": faux.parent_role}] if faux.parent_existe else [])
         return _Resultat([{"id": faux.derniere_id}] if faux.derniere_id else [])
 
 
 class _FauxSupabase:
     def __init__(self):
         self.parent_existe = False
+        self.parent_role = "assistant"
         self.derniere_id = None
         self.insertions = []
         self.prochain_id = 100
@@ -81,6 +86,7 @@ import persistance_echanges  # noqa: E402
 class ParentEffectifTest(unittest.TestCase):
     def setUp(self):
         FAUX.parent_existe = False
+        FAUX.parent_role = "assistant"
         FAUX.derniere_id = None
         FAUX.insertions = []
         FAUX.prochain_id = 100
@@ -102,10 +108,22 @@ class ParentEffectifTest(unittest.TestCase):
     def test_premier_message_du_fil_reste_sans_parent(self):
         self.assertIsNone(persistance_echanges._parent_effectif("u1", "clovis", "conv1", None))
 
-    def test_sans_conversation_id_aucune_reparation(self):
+    def test_parent_user_repere_sur_derniere_ligne(self):
+        # Une question rattachee a une question deviendrait la soeur de
+        # sa reponse : le frontend les lirait comme des versions.
+        FAUX.parent_existe = True
+        FAUX.parent_role = "user"
         FAUX.derniere_id = 42
-        self.assertIsNone(persistance_echanges._parent_effectif("u1", "clovis", None, None))
+        self.assertEqual(persistance_echanges._parent_effectif("u1", "clovis", "conv1", 7), 42)
+
+    def test_sans_conversation_id_reparation_dans_le_groupe_legacy(self):
+        FAUX.derniere_id = 42
+        self.assertEqual(persistance_echanges._parent_effectif("u1", "clovis", None, None), 42)
+        FAUX.parent_existe = True
         self.assertEqual(persistance_echanges._parent_effectif("u1", "clovis", None, 7), 7)
+
+    def test_sans_conversation_id_premier_echange_sans_parent(self):
+        self.assertIsNone(persistance_echanges._parent_effectif("u1", "clovis", None, None))
 
     def test_sauvegarde_ecrit_le_parent_repare(self):
         FAUX.derniere_id = 42

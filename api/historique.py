@@ -183,7 +183,7 @@ def obtenir_historique_agent(agent_id: str, utilisateur=Depends(utilisateur_cour
             .select("id, parent_id, role, content, created_at, meta, selectionne_le")
             .eq("user_id", utilisateur.id)
             .eq("agent_id", agent_id)
-            .order("created_at")
+            .order("created_at").order("id")
         )
     except Exception as e:
         logging.error(
@@ -229,7 +229,7 @@ def lister_fils_conversation(agent_id: str, utilisateur=Depends(utilisateur_cour
             .select("conversation_id, role, content, created_at")
             .eq("user_id", utilisateur.id)
             .eq("agent_id", agent_id)
-            .order("created_at")
+            .order("created_at").order("id")
         )
     except Exception as e:
         logging.error(
@@ -318,7 +318,7 @@ def obtenir_fil_conversation(agent_id: str, conversation_id: str, utilisateur=De
             requete = requete.is_("conversation_id", "null")
         else:
             requete = requete.eq("conversation_id", conversation_id)
-        return requete.order("created_at")
+        return requete.order("created_at").order("id")
 
     try:
         lignes = _recuperer_toutes_les_lignes(_construire_requete)

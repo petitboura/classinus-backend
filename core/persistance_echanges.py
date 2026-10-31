@@ -19,34 +19,40 @@ def _parent_effectif(user_id, agent_id, conversation_id, parent_id):
     premier message et n'affiche qu'une branche, l'echange le plus
     recent peut donc disparaitre de l'ecran sans etre perdu en base.
 
-    Regle : dans un fil identifie qui a deja des lignes, un parent absent
-    ou introuvable dans CE fil est repare sur la derniere ligne du fil.
-    Un parent present dans le fil est respecte tel quel, meme ancien :
-    c'est le cas legitime d'une branche (message edite, version).
-    Sans conversation_id (groupement historique), rien a reparer.
+    Regle : dans un fil qui a deja des lignes, un parent absent,
+    introuvable dans CE fil, ou de role "user" est repare sur la
+    derniere ligne du fil. Une nouvelle question suit toujours une
+    reponse : rattachee a une question, elle deviendrait la soeur de la
+    reponse de cette question, et le frontend les lirait comme des
+    versions alternatives (voir les freres de roles differents releves
+    le 31/10/2026). Un parent "assistant" present dans le fil est
+    respecte tel quel, meme ancien : c'est le cas legitime d'une
+    branche (message edite, version).
+
+    Sans conversation_id, le fil est le groupe "legacy" du meme
+    utilisateur et du meme agent (conversation_id NULL en base, affiche
+    comme un seul fil cote historique) : meme reparation, partitionnee
+    sur ce groupe, plutot que de recreer une racine a chaque echange.
     """
-    if not conversation_id:
-        return parent_id
+    def _dans_le_fil(requete):
+        requete = requete.eq("user_id", user_id).eq("agent_id", agent_id)
+        if conversation_id:
+            return requete.eq("conversation_id", conversation_id)
+        return requete.is_("conversation_id", "null")
+
     try:
         if parent_id is not None:
             res_parent = (
-                supabase.table("historique_conversations")
-                .select("id")
-                .eq("user_id", user_id)
-                .eq("agent_id", agent_id)
-                .eq("conversation_id", conversation_id)
+                _dans_le_fil(supabase.table("historique_conversations").select("id, role"))
                 .eq("id", parent_id)
                 .limit(1)
                 .execute()
             )
-            if res_parent.data:
+            parents = res_parent.data or []
+            if parents and parents[0].get("role") == "assistant":
                 return parent_id
         res_derniere = (
-            supabase.table("historique_conversations")
-            .select("id")
-            .eq("user_id", user_id)
-            .eq("agent_id", agent_id)
-            .eq("conversation_id", conversation_id)
+            _dans_le_fil(supabase.table("historique_conversations").select("id"))
             .order("created_at", desc=True)
             .order("id", desc=True)
             .limit(1)
