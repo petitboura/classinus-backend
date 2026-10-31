@@ -83,6 +83,31 @@ def _evenement_confirmation(attente, messages_agent, outils_mcp, table_routage, 
     }
 
 
+# Debut des consignes systeme de conclusion forcee (voir les deux fins de
+# boucle de _agent_groq : plafond_absolu atteint et repetition detectee).
+# Ces consignes ordonnent au modele de rediger sa reponse FINALE : elles ont
+# servi a produire la conclusion du tour, mais ne doivent JAMAIS partir dans
+# l'etat de reprise. Sinon, a la reprise, le dernier ordre systeme vu par le
+# modele reste "redige ta reponse finale, tu as atteint la limite" et il la
+# redige a nouveau au lieu de poursuivre le travail (bug signale le
+# 31/10/2026 : Continuer, puis meme un nouveau message tape, retombaient
+# toujours sur la meme reponse de limite).
+_DEBUTS_CONSIGNE_CONCLUSION_FORCEE = ("Tu as atteint la limite de", "Tu as répété")
+
+
+def messages_sans_consigne_conclusion(messages_agent):
+    """Copie de messages_agent sans la consigne de conclusion forcee."""
+    return [
+        m for m in messages_agent
+        if not (
+            isinstance(m, dict)
+            and m.get("role") == "system"
+            and isinstance(m.get("content"), str)
+            and m["content"].startswith(_DEBUTS_CONSIGNE_CONCLUSION_FORCEE)
+        )
+    ]
+
+
 def _evenement_reprise_agent(type_evenement, messages_agent, outils_mcp, table_routage, modele, reasoning_effort, agent_nom):
     """
     Meme principe que _evenement_confirmation, pour les deux cas ou la
@@ -91,11 +116,15 @@ def _evenement_reprise_agent(type_evenement, messages_agent, outils_mcp, table_r
     repetition detectee ("repetition_detectee", bouton Reessayer). Contrairement
     a la reprise apres confirmation, la reprise ici rappelle directement
     _agent_groq avec un budget neuf, sans rejouer d'appel -- voir chat().
+
+    L'etat part sans la consigne de conclusion forcee (voir
+    messages_sans_consigne_conclusion) : la conclusion qu'elle a produite a
+    deja ete montree a l'utilisateur, la reprise doit poursuivre le travail.
     """
     return {
         "type": type_evenement,
         "etat_reprise": {
-            "messages_agent": messages_agent,
+            "messages_agent": messages_sans_consigne_conclusion(messages_agent),
             "outils_mcp": outils_mcp,
             "table_routage": table_routage,
             "modele": modele,

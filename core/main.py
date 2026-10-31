@@ -77,7 +77,7 @@ from historique_conversation import (
 )
 from historique_reponses_qcm import reponses_qcm_a_injecter
 from execution_outils import _resultat_pour_affichage
-from boucle_agent import _agent_groq, _capturer_reponse, _ajouter_segment_texte
+from boucle_agent import _agent_groq, _capturer_reponse, _ajouter_segment_texte, messages_sans_consigne_conclusion
 from erreur_tour import evenement_echec
 
 logging.basicConfig(level=logging.INFO)
@@ -460,7 +460,11 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # modele de decider quoi en faire (continuer, s'arreter,
         # s'ajuster), pas au frontend de trancher en amont.
         etat = reprise["etat_reprise"]
-        messages_agent = _messages_agent_avec_locale(etat["messages_agent"], langue_interface)
+        # Etats emis avant le correctif du 31/10/2026 (voir boucle_agent.py) :
+        # ils contiennent encore la consigne "redige ta reponse finale", qui
+        # faisait redire la reponse de limite a chaque reprise. On la retire
+        # ici aussi, pour que les conversations deja bloquees repartent.
+        messages_agent = _messages_agent_avec_locale(messages_sans_consigne_conclusion(etat["messages_agent"]), langue_interface)
         outils_mcp = etat["outils_mcp"]
         table_routage = etat["table_routage"]
         modele_reprise = etat.get("modele", GROQ_PRIMARY)

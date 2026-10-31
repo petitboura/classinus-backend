@@ -183,6 +183,68 @@ class ArretUtilisateur(unittest.TestCase):
         self.assertEqual(self._jouer(messages, self._arret(False)), [])
 
 
+class ConsigneConclusionForcee(unittest.TestCase):
+    """Bug 31/10/2026 : la consigne « redige ta reponse finale » partait dans
+    l'etat de reprise, le modele la redigeait a nouveau a chaque Continuer."""
+
+    CONSIGNE_LIMITE = {
+        "role": "system",
+        "content": "Tu as atteint la limite de 50 actions pour cette réponse. Rédige maintenant ta réponse finale.",
+    }
+    CONSIGNE_REPETITION = {
+        "role": "system",
+        "content": "Tu as répété 3 fois d'affilée exactement la même action (X) sans y arriver. Rédige maintenant ta réponse.",
+    }
+
+    def test_etat_de_reprise_sans_la_consigne(self):
+        for consigne in (self.CONSIGNE_LIMITE, self.CONSIGNE_REPETITION):
+            messages = BASE + [_appel("a"), _resultat("a"), consigne]
+            evenement = boucle_agent._evenement_reprise_agent("limite_outils_atteinte", messages, [], {}, "m", None, "A")
+            self.assertEqual(evenement["etat_reprise"]["messages_agent"], BASE + [_appel("a"), _resultat("a")])
+            # La liste d'origine (celle qui a produit la conclusion) est intacte.
+            self.assertEqual(messages[-1], consigne)
+
+    def test_reprise_avec_un_ancien_etat_nettoyee_dans_chat(self):
+        recus = []
+
+        def reussit(client, messages_agent, *args, **kwargs):
+            recus.extend(messages_agent)
+            yield {"type": "reponse", "texte": "suite"}
+
+        etat = {
+            "messages_agent": BASE + [_appel("a"), _resultat("a"), self.CONSIGNE_LIMITE],
+            "outils_mcp": [], "table_routage": {}, "modele": "m", "agent_nom": "A",
+        }
+        reprise = {"etat_reprise": etat, "type": "continuer_agent", "message_utilisateur": "continue"}
+        with patch.object(main, "_agent_groq", reussit), patch.object(main, "_client_pour_reprise", lambda m: None), \
+                patch.object(main, "_catalogue_pour_demander_outils", lambda *a, **k: ([], {})):
+            list(main.chat(reprise=reprise, erreurs_typees=True))
+        self.assertNotIn(self.CONSIGNE_LIMITE, recus)
+        self.assertEqual(recus[-1], {"role": "user", "content": "continue"})
+
+
+class HistoriqueOutilsTropGros(unittest.TestCase):
+    """Bug 31/10/2026 : un historique avec plus d'outils que le plafond
+    refusait tout l'envoi en 422, conversation bloquee pour toujours."""
+
+    def test_trop_d_outils_tronques_pas_refuses(self):
+        from api.chat import MessageHistorique
+
+        outils = [{"nomOutil": "o", "nomLisible": "O", "resultat": "r"} for _ in range(60)]
+        message = MessageHistorique(role="assistant", content="ok", outils=outils)
+        self.assertEqual(len(message.outils), 50)
+
+    def test_libelles_trop_longs_tronques(self):
+        from api.chat import MessageHistorique
+
+        message = MessageHistorique(
+            role="assistant", content="ok",
+            outils=[{"nomOutil": "n" * 200, "nomLisible": "l" * 200, "resultat": "r"}],
+        )
+        self.assertEqual(len(message.outils[0].nomOutil), 120)
+        self.assertEqual(len(message.outils[0].nomLisible), 160)
+
+
 class ReprisePayload(unittest.TestCase):
     def test_la_reprise_du_chat_est_acceptee(self):
         sys.path.append(".")
