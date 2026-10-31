@@ -318,6 +318,14 @@ async def _diffuser_et_attendre(
             if relais:
                 connexions = relais
                 message = {**message, "via_renderer": True}
+            elif message.get("action_systeme") == "outil_telephone":
+                # Aucun relais déclaré (ancienne appli) : tenter quand même,
+                # mais jamais vers la connexion native "-systeme", qui ne
+                # connaît pas cet outil et répondrait une erreur immédiate
+                # avant que le renderer ait pu joindre le relais local.
+                connexions = [
+                    (cle, ws) for cle, ws in connexions if not cle[1].endswith("-systeme")
+                ]
 
     if not connexions:
         return None
@@ -410,6 +418,27 @@ async def a_app_systeme_connecte(user_id: str) -> bool:
     try:
         async with _verrou_connexions:
             return any(cle[0] == user_id for cle in _relais_systeme)
+    except Exception:
+        return False
+
+
+async def a_app_telephone_connectee(user_id: str) -> bool:
+    """Vrai si l'appli PC est ouverte sur ce compte, même ancienne version.
+
+    Les anciennes applis ne déclarent pas toujours le relais renderer,
+    mais leur connexion système native (appareil en "-systeme", ouverte
+    par le processus principal Electron) prouve que l'appli PC tourne.
+    Dans ce cas l'outil téléphone est quand même tenté : la diffusion
+    exclut cette connexion native, qui ne sait pas l'exécuter.
+    Lecture seule, jamais d'exception.
+    """
+    try:
+        async with _verrou_connexions:
+            return any(
+                cle[0] == user_id
+                and (cle in _relais_systeme or cle[1].endswith("-systeme"))
+                for cle in _connexions
+            )
     except Exception:
         return False
 
