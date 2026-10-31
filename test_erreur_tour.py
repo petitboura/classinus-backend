@@ -198,7 +198,7 @@ class ReprisePayload(unittest.TestCase):
         from api.chat import RepriseConfirmation, _reprise_pour_chat
 
         reprise = RepriseConfirmation(etat_reprise={"a": 1}, approuve=False)
-        self.assertEqual(_reprise_pour_chat(reprise), {"etat_reprise": {"a": 1}, "approuve": False})
+        self.assertEqual(_reprise_pour_chat(reprise), {"etat_reprise": {"a": 1}, "approuve": False, "toujours_autoriser": False})
 
     def test_sans_type_ni_approbation_refuse(self):
         from api.chat import RepriseConfirmation
