@@ -36,6 +36,15 @@ PLAFOND_OUTILS_PAR_MESSAGE = _entier_positif_env("CLASSINUS_CHAT_MAX_OUTILS_PAR_
 PLAFOND_IMAGES_JOINTES = _entier_positif_env("CLASSINUS_CHAT_MAX_IMAGES_JOINTES", 30)
 PLAFOND_ZIPS_JOINTS = _entier_positif_env("CLASSINUS_CHAT_MAX_ZIPS_JOINTS", 20)
 
+# Copie d'un outil renvoyee au modele aux tours suivants (core/historique_outils.py). Le
+# resultat d'affichage reste coupe a 3000 caracteres pour l'ecran, mais le modele doit revoir
+# le resultat entier et les arguments de l'appel (code lance, chemin lu, requete envoyee),
+# sinon il ne sait plus ce qu'il a fait et recommence. Ces deux plafonds ne protegent que le
+# serveur contre un resultat demesure, ils ne servent pas a economiser du contexte (les vieux
+# resultats sont deja remplaces par un rappel, voir SEUIL_CARACTERES_OUTILS_HISTORIQUE).
+PLAFOND_RESULTAT_OUTIL_HISTORIQUE = _entier_positif_env("CLASSINUS_CHAT_RESULTAT_OUTIL_HISTORIQUE_MAX", 60000)
+PLAFOND_ARGUMENTS_OUTIL_HISTORIQUE = _entier_positif_env("CLASSINUS_CHAT_ARGUMENTS_OUTIL_HISTORIQUE_MAX", 20000)
+
 # Taille totale d'une requete vers /api/chat, en Mo. Protege la memoire du serveur : la requete
 # entiere est lue avant toute validation, et le chat est ouvert aux visiteurs non connectes.
 TAILLE_MAX_REQUETE_CHAT_MO = _entier_positif_env("CLASSINUS_CHAT_TAILLE_MAX_REQUETE_MO", 100)

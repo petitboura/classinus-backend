@@ -66,7 +66,7 @@ from routage_outils import (
 )
 from construction_system_prompt import _construire_system_prompt, _est_timeout, _repli_si_reponse_partielle
 from persistance_echanges import _sauvegarder_echange, _finaliser_memoire_en_arriere_plan
-from historique_outils import enrichir_historique_avec_outils, a_des_outils_allegers
+from historique_outils import enrichir_historique_avec_outils, a_des_outils_allegers, champs_historique_outil
 from historique_conversation import (
     alleger_historique_ancien,
     note_avancement_historique,
@@ -548,6 +548,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     "action": _action_appel(appel),
                     **_champs_domaines_appel(appel),
                     "resultat": resultat,
+                    **champs_historique_outil(arguments, resultat, resultat),
                     "id_appel": appel["id"],
                 }
                 messages_agent.append({
@@ -565,6 +566,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     "action": _action_appel(appel),
                     **_champs_domaines_appel(appel),
                     "resultat": _resultat_pour_affichage(resultat),
+                    **champs_historique_outil(arguments, resultat, _resultat_pour_affichage(resultat)),
                     "id_appel": appel["id"],
                 }
         else:

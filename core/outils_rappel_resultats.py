@@ -34,7 +34,7 @@ def _score(mots_requete, o):
     """Nombre de mots significatifs communs entre la description donnee par le
     modele et un resultat d'outil archive. Le nom de l'outil compte double."""
     nom = mots_significatifs(f"{o.get('nomLisible') or ''} {o.get('nomOutil') or ''}".replace("_", " "))
-    corps = mots_significatifs(o.get("resultat"))
+    corps = mots_significatifs(o.get("resultatComplet") or o.get("resultat"))
     return 2 * len(mots_requete & nom) + len(mots_requete & corps)
 
 
@@ -105,5 +105,5 @@ def rappeler_resultat_outil(requete: str, ctx: Context) -> str:
     blocs = []
     for o in resultats:
         nom = o.get("nomLisible") or o.get("nomOutil") or "Outil"
-        blocs.append(f"[Résultat rappelé : {nom}]\n{o.get('resultat') or ''}")
+        blocs.append(f"[Résultat rappelé : {nom}]\n{o.get('resultatComplet') or o.get('resultat') or ''}")
     return "\n\n".join(blocs)

@@ -58,6 +58,10 @@ class OutilHistorique(BaseModel):
     nomOutil: str = Field(max_length=120)
     nomLisible: str = Field(max_length=160)
     resultat: str
+    # Arguments de l'appel et resultat complet (le champ resultat est la version coupee pour
+    # l'ecran) : voir core/historique_outils.py. Absents pour les anciens messages.
+    arguments: Optional[str] = None
+    resultatComplet: Optional[str] = None
 
 
 class MessageHistorique(BaseModel):

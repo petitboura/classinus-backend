@@ -1043,7 +1043,15 @@ def _capturer_reponse(generateur, accumulateur, meta=None, fichiers_generes_accu
             # pour survivre à la réouverture d'une conversation, absent sinon.
             if event.get("langage"):
                 entree_meta["langage"] = event["langage"]
-            meta.setdefault("outils", []).append(dict(entree_meta))
+            # Arguments de l'appel et resultat complet : gardes dans meta.outils seulement
+            # (source de la reinjection au modele), pas dans les segments d'affichage, pour
+            # ne pas stocker deux fois les memes gros textes.
+            entree_outils = dict(entree_meta)
+            if event.get("arguments"):
+                entree_outils["arguments"] = event["arguments"]
+            if event.get("resultat_complet"):
+                entree_outils["resultatComplet"] = event["resultat_complet"]
+            meta.setdefault("outils", []).append(entree_outils)
             meta.setdefault("segments", []).append({"type": "outil", **entree_meta})
         elif meta is not None and event["type"] == "sources" and meta.get("outils"):
             meta["outils"][-1]["sources"] = event["sources"]

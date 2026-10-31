@@ -12,6 +12,7 @@ from mcp_tools import appeler_outil
 from registre_outils import OUTILS_SENSIBLES, est_outil_sensible_serveur_personnel
 from profils_agents import _nom_lisible_appel, _action_appel, _champs_domaines_appel
 from libelles_activite_ia import champs_timeline_appel
+from historique_outils import champs_historique_outil
 
 class _AttenteConfirmation(Exception):
     """
@@ -558,6 +559,7 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                         "action": _action_appel(appel),
                         **_champs_domaines_appel(appel),
                         "resultat": resultat,
+                        **champs_historique_outil(appel["arguments"], resultat, resultat),
                         "id_appel": appel["id"],
                     }
                     messages_agent.append({
@@ -579,6 +581,7 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                     "action": _action_appel(appel),
                     **_champs_domaines_appel(appel),
                     "resultat": _resultat_pour_affichage(resultat),
+                    **champs_historique_outil(appel["arguments"], resultat, _resultat_pour_affichage(resultat)),
                     "id_appel": appel["id"],
                 }
                 # Garanti indépendamment de ce que le modèle écrira ensuite
