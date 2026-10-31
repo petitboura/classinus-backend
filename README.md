@@ -240,10 +240,21 @@ avec `GET /api/chat/flux/{tour_id}?depuis=N` (rejeu à partir de l'événement N
 les 15 s) et retrouve le tour d'une conversation avec `GET /api/chat/tour-en-cours?conversation_id=`.
 Les tours finis sont gardés 30 minutes (200 au plus), réglables par `CLASSINUS_TOUR_CONSERVATION_MINUTES`,
 `CLASSINUS_TOURS_CONSERVES_MAX` et `CLASSINUS_FLUX_SIGNE_VIE_SECONDES`. Chaque tour n'est visible que
-de son compte, et la suppression du compte les oublie (`core/purge_compte.py`). Limites : registre en
-mémoire du processus (une seule instance, un redéploiement interrompt les tours en cours), les
+de son compte, et la suppression du compte les oublie (`core/purge_compte.py`). Les
 visiteurs non connectés gardent le flux direct, et les outils qui dépendent de la page (code Pyodide,
 vision d'écran, voix) attendent que la page revienne.
+
+### Persistance des tours en base (31/10/2026)
+
+Chaque tour connecté est aussi écrit en base par paquets (`core/persistance_tours.py`,
+tables `tours_chat_persistes` / `tours_chat_evenements_persistes`, migration
+`2026_10_31_tours_chat_persistes.sql`) : le processus web reste l'exécuteur, mais un
+redémarrage ne perd plus le texte partiel. Les tours restés `en_cours`
+sans signe de vie deviennent `interrompu` au premier rattachement qui suit le
+redémarrage : la page rejoue le texte depuis la base et propose Continuer. Si un tour se termine sans aucun lecteur
+rattaché, un push « La réponse est terminée » part (`core/notifications_push.py`).
+Réglages : `CLASSINUS_TOUR_PAQUET_LIGNES` (50), `CLASSINUS_TOUR_ECRITURE_SECONDES` (2),
+`CLASSINUS_TOUR_ORPHELIN_MINUTES` (5), `CLASSINUS_TOURS_PERSISTES_JOURS` (7, purge).
 
 ## Variables d'environnement / secrets nécessaires
 

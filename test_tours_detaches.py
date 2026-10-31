@@ -249,5 +249,92 @@ class ArretParConversationTest(unittest.TestCase):
         self.assertTrue(arret_tour.arret_demande(a))
 
 
+class _PersistanceFactice:
+    """Double de core/persistance_tours.PersistanceTour : note tout, sans base."""
+
+    def __init__(self):
+        self.lignes = []
+        self.ids_cloture = "pas_cloture"
+        self.demarree = False
+
+    def demarrer(self):
+        self.demarree = True
+
+    def ajouter(self, ligne, ids=None):
+        self.lignes.append((ligne, ids))
+
+    def clore(self, ids=None):
+        self.ids_cloture = ids
+
+
+class PersistanceTourDetacheTest(unittest.TestCase):
+    def setUp(self):
+        with tours_detaches._verrou:
+            tours_detaches._tours.clear()
+            tours_detaches._dernier_par_conversation.clear()
+
+    def test_les_lignes_et_la_cloture_partent_dans_la_persistance(self):
+        persistance = _PersistanceFactice()
+        tour = tours_detaches.demarrer(
+            "u1", "c1", _fabrique_lente(2), fabrique_persistance=lambda t: persistance
+        )
+        _attendre_fin(tour)
+        self.assertTrue(persistance.demarree)
+        self.assertEqual([l for l, _ in persistance.lignes], [_ligne(0), _ligne(1), LIGNE_FIN])
+        self.assertIsNone(persistance.ids_cloture)
+
+    def test_les_ids_de_l_echange_partent_dans_la_persistance(self):
+        persistance = _PersistanceFactice()
+
+        def fabrique():
+            yield 'data: {"type": "meta", "message_id_user": 11, "message_id_assistant": 12}\n\n'
+            yield LIGNE_FIN
+
+        tour = tours_detaches.demarrer(
+            "u1", "c1", fabrique, fabrique_persistance=lambda t: persistance
+        )
+        _attendre_fin(tour)
+        attendu = {"message_id_user": 11, "message_id_assistant": 12}
+        self.assertEqual(persistance.ids_cloture, attendu)
+
+    def test_une_persistance_qui_casse_ne_casse_pas_le_tour(self):
+        class PersistanceCassee:
+            def demarrer(self):
+                raise RuntimeError("base absente")
+
+        tour = tours_detaches.demarrer(
+            "u1", "c1", _fabrique_lente(1), fabrique_persistance=lambda t: PersistanceCassee()
+        )
+        self.assertEqual(list(tour.lire(0)), [_ligne(0), LIGNE_FIN])
+
+    def test_notification_seulement_si_personne_ne_regarde(self):
+        notifies = []
+        tour = tours_detaches.demarrer(
+            "u1", "c1", _fabrique_lente(1), a_la_cloture=lambda t: notifies.append(t.id)
+        )
+        _attendre_fin(tour)
+        # Le lecteur initial etait deja parti (aucun lire en cours a la cloture dans ce test :
+        # on attend la fin sans lire) -> notification.
+        self.assertEqual(notifies, [tour.id])
+
+    def test_pas_de_notification_si_un_lecteur_est_rattache(self):
+        notifies = []
+        porte = threading.Event()
+        tour = tours_detaches.demarrer(
+            "u1", "c1", _fabrique_lente(2, porte=porte), a_la_cloture=lambda t: notifies.append(t.id)
+        )
+        recus = []
+
+        def lire():
+            recus.extend(tour.lire(0))
+
+        fil = threading.Thread(target=lire)
+        fil.start()
+        time.sleep(0.1)
+        porte.set()
+        fil.join(timeout=5)
+        self.assertEqual(notifies, [])
+
+
 if __name__ == "__main__":
     unittest.main()

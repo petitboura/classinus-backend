@@ -61,3 +61,14 @@ AGE_TACHE_PERIMEE = timedelta(hours=_entier_positif_env("CLASSINUS_TACHE_PERIMEE
 CONSERVATION_TOUR_DETACHE = timedelta(minutes=_entier_positif_env("CLASSINUS_TOUR_CONSERVATION_MINUTES", 30))
 MAX_TOURS_DETACHES_CONSERVES = _entier_positif_env("CLASSINUS_TOURS_CONSERVES_MAX", 200)
 DELAI_SIGNE_VIE_FLUX = _entier_positif_env("CLASSINUS_FLUX_SIGNE_VIE_SECONDES", 15)
+
+# Persistance des tours detaches en base (core/persistance_tours.py, 31/10/2026). Les lignes SSE
+# sont ecrites par paquets pour ne pas faire une requete par evenement : un paquet part quand il
+# atteint TAILLE_PAQUET_TOUR lignes ou apres DELAI_ECRITURE_TOUR secondes. Le signe de vie en base
+# (maj_le) est rafraichi a chaque paquet : un tour "en_cours" sans signe de vie depuis plus de
+# AGE_TOUR_SANS_SIGNE_VIE est un orphelin (processus mort) et passe "interrompu" au redemarrage.
+# Les tours termines/interrompus sont purges apres CONSERVATION_TOURS_PERSISTES jours.
+TAILLE_PAQUET_TOUR = _entier_positif_env("CLASSINUS_TOUR_PAQUET_LIGNES", 50)
+DELAI_ECRITURE_TOUR_SECONDES = _entier_positif_env("CLASSINUS_TOUR_ECRITURE_SECONDES", 2)
+AGE_TOUR_SANS_SIGNE_VIE = timedelta(minutes=_entier_positif_env("CLASSINUS_TOUR_ORPHELIN_MINUTES", 5))
+CONSERVATION_TOURS_PERSISTES = timedelta(days=_entier_positif_env("CLASSINUS_TOURS_PERSISTES_JOURS", 7))
