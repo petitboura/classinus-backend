@@ -1681,7 +1681,7 @@ INDEX_CATEGORIES_OUTILS = (
         ("netlify_mcp", "netlify_mcp"),
         ("notion", "notion"),
         ("google_drive", "google_drive"),
-        ("github", "github"),
+        ("github", "github (dépôts privés, issues, pull requests, commits, écriture ; pour lire le code d'un dépôt public, le cloner avec execution_code)"),
         ("vercel", "vercel (sites et déploiements)"),
     ])
     + ", "
@@ -1691,7 +1691,7 @@ INDEX_CATEGORIES_OUTILS = (
     "serveurs_personnalises (serveurs MCP ajoutés par l'utilisateur lui-même, quel que soit leur nom, "
     "par exemple Render ou un CRM ; le nom du serveur figure dans la description de chaque outil), "
     "generation_documents, "
-    "execution_code (lancer du code et des commandes, gérer des fichiers dans un espace de travail), "
+    "execution_code (lancer du code et des commandes, gérer, modifier et chercher dans des fichiers dans un espace de travail, cloner un dépôt GitHub public avec git pour le lire), "
     "montage_video (créer ou modifier une vidéo : couper, assembler, sous-titrer, effets, animations ; "
     "pas pour chercher une vidéo sur le web), "
     "recherche_web (web, actualité, images et vidéos ; pas le premier réflexe "

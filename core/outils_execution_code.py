@@ -566,10 +566,20 @@ def _fichier_seul_workspace(sandbox, configuration: dict, path: str) -> str:
     return f"Fichier prêt (lien direct, sans archive) : {url}\nFichier : {relatif}, {len(contenu)} octets."
 
 
+# Largeur maximale d'une ligne renvoyée par search_files, au-delà elle est coupée.
+_LARGEUR_MAX_LIGNE_RECHERCHE = 400
+
+
+def _nom_de_fichier_invalide(motif: str) -> bool:
+    """Vrai si le motif n'est pas un simple nom de fichier ou glob de nom (ex. *.py), sans chemin."""
+    return "/" in motif or motif in (".", "..") or len(motif) > 255
+
+
 def _executer_action(sandbox, action: str, language: str, code: str, command: str,
                      path: str, content: str, configuration: dict, fichier_importe=None,
                      pattern: str = "", old_text: str = "", new_text: str = "",
-                     start_line: int | None = None, end_line: int | None = None) -> str:
+                     start_line: int | None = None, end_line: int | None = None,
+                     replace_all: bool = False, glob: str = "") -> str:
     max_chars = max(1000, int(configuration.get("max_output_chars", 20000)))
     max_bytes = max(1024, int(configuration.get("max_file_bytes", 1048576)))
     max_command_chars = max(256, int(configuration.get("max_command_chars", 10000)))
@@ -654,12 +664,14 @@ def _executer_action(sandbox, action: str, language: str, code: str, command: st
         occurrences = contenu.count(old_text)
         if occurrences == 0:
             return "Modification annulée : old_text est introuvable dans le fichier. Relis le passage actuel avant de réessayer."
-        if occurrences > 1:
+        if occurrences > 1 and not replace_all:
             return (
                 f"Modification annulée : old_text apparaît {occurrences} fois. "
-                "Ajoute davantage de lignes autour du passage pour rendre le remplacement unique."
+                "Ajoute davantage de lignes autour du passage pour rendre le remplacement unique, "
+                "ou passe replace_all à true pour remplacer toutes les occurrences."
             )
-        nouveau_contenu = contenu.replace(old_text, new_text, 1)
+        remplacements = occurrences if replace_all else 1
+        nouveau_contenu = contenu.replace(old_text, new_text) if replace_all else contenu.replace(old_text, new_text, 1)
         taille_nouvelle = len(nouveau_contenu.encode("utf-8"))
         if taille_nouvelle > max_bytes:
             return f"Le fichier modifié dépasserait la limite configurée de {max_bytes} octets."
@@ -680,9 +692,10 @@ def _executer_action(sandbox, action: str, language: str, code: str, command: st
             except Exception:
                 pass
             return "Impossible de remplacer le fichier après préparation du changement."
+        accord = "s" if remplacements > 1 else ""
         return (
             f"Modification ciblée effectuée dans {_chemin_relatif_sur(path)} : "
-            f"1 occurrence remplacée ({taille_nouvelle} octets)."
+            f"{remplacements} occurrence{accord} remplacée{accord} ({taille_nouvelle} octets)."
         )
 
     if action == "read_file":
@@ -701,7 +714,7 @@ def _executer_action(sandbox, action: str, language: str, code: str, command: st
                 f"| nl -ba -v {start_line}"
             )
             sortie = _resultat_commande(sandbox, commande, timeout_fichier, max_chars)
-            return f"{_chemin_relatif_sur(path)} — lignes {start_line} à {end_line}\n{sortie}"
+            return f"{_chemin_relatif_sur(path)} : lignes {start_line} à {end_line}\n{sortie}"
         try:
             taille = _taille_fichier(sandbox, distant, timeout_fichier)
         except FileNotFoundError:
@@ -720,6 +733,15 @@ def _executer_action(sandbox, action: str, language: str, code: str, command: st
         if len(motif) > 1000:
             return "Le motif de recherche dépasse la limite de 1 000 caractères."
         racine = _ROOT if not path or path.strip() in ("", ".") else _chemin_distant(path)
+        filtre_nom = ""
+        nom_glob = str(glob or "").strip()
+        if nom_glob:
+            if _nom_de_fichier_invalide(nom_glob):
+                return "Le filtre glob doit être un nom de fichier simple, sans chemin (ex. *.py)."
+            # --include passe AVANT les --exclude ci-dessous : avec GNU grep, le dernier motif qui
+            # correspond à un fichier l'emporte, donc un glob comme .env ou *.pem ne peut jamais
+            # rouvrir un fichier secret exclu.
+            filtre_nom = f"--include={shlex.quote(nom_glob)} "
         exclusions = (
             "--exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.cache "
             "--exclude-dir=__pycache__ --exclude-dir=.venv --exclude-dir=venv "
@@ -727,10 +749,18 @@ def _executer_action(sandbox, action: str, language: str, code: str, command: st
             "--exclude='.env' --exclude='.env.*' --exclude='*.pem' --exclude='*.key' "
             "--exclude='*.p12' --exclude='*.pfx' --exclude='id_rsa*'"
         )
+        # Une ligne minifiée (un fichier JS entier sur une seule ligne) ne doit pas remplir à elle
+        # seule toute la sortie : chaque ligne est coupée après _LARGEUR_MAX_LIGNE_RECHERCHE
+        # caractères. Locale UTF-8 pour ne jamais couper un caractère en deux. Ce second sed reste
+        # après le premier, donc PIPESTATUS[0] ci-dessous désigne toujours grep.
+        coupe_lignes = (
+            f"LC_ALL=C.UTF-8 sed -E 's/^(.{{{_LARGEUR_MAX_LIGNE_RECHERCHE}}}).+$/\\1 [ligne coupée]/'"
+        )
         commande = (
-            f"grep -RInE --binary-files=without-match {exclusions} "
+            f"grep -RInE --binary-files=without-match {filtre_nom}{exclusions} "
             f"-- {shlex.quote(motif)} {shlex.quote(racine)} "
-            "| sed 's#^/home/user/##'; "
+            "| sed 's#^/home/user/##' "
+            f"| {coupe_lignes}; "
             "code=${PIPESTATUS[0]}; "
             "if [ \"$code\" -eq 1 ]; then printf 'Aucun résultat.\\n'; "
             "elif [ \"$code\" -ne 0 ]; then exit \"$code\"; fi"
@@ -741,7 +771,7 @@ def _executer_action(sandbox, action: str, language: str, code: str, command: st
         motif = str(pattern or "").strip()
         if not motif:
             return "Indique un motif de nom de fichier dans pattern (ex. *.py)."
-        if "/" in motif or motif in (".", "..") or len(motif) > 255:
+        if _nom_de_fichier_invalide(motif):
             return "Le motif doit être un nom de fichier simple, sans chemin (ex. *.py)."
         racine = _ROOT if not path or path.strip() in ("", ".") else _chemin_distant(path)
         limite = max(1, min(500, int(configuration.get("max_files_per_download", 50))))
@@ -833,15 +863,20 @@ def gerer_execution_code(
     end_line: int | None = None,
     domain: str = "",
     url_fichier: str = "",
+    replace_all: bool = False,
+    glob: str = "",
 ) -> str:
     """Execute du code ou gère les fichiers d'un workspace Linux isolé propre à cette conversation.
 
     Actions : run_code exécute du code en Python, JavaScript, TypeScript ou Bash;
     run_command lance une commande shell; write_file écrit un fichier; edit_file remplace le texte exact
-    old_text par new_text dans path, seulement si old_text apparaît exactement une fois (sinon aucun changement);
+    old_text par new_text dans path, seulement si old_text apparaît exactement une fois (sinon aucun changement),
+    sauf si replace_all vaut true : toutes les occurrences sont alors remplacées (utile pour renommer);
     read_file lit path en entier ou la plage inclusive start_line/end_line (numérotation à partir de 1, les deux
     paramètres doivent être fournis ensemble); search_files cherche l'expression régulière pattern dans path
-    ou dans tout le workspace si path est vide, avec fichier et numéro de ligne; find_files cherche les noms
+    ou dans tout le workspace si path est vide, avec fichier et numéro de ligne, et glob (optionnel, un nom de
+    fichier simple comme *.py) limite la recherche aux fichiers dont le nom correspond; une ligne de résultat
+    trop longue (fichier minifié) est coupée; find_files cherche les noms
     de fichiers correspondant au motif glob pattern (ex. *.py), dans path ou tout le workspace si path est vide;
     list_files liste le workspace. Pour travailler sur un dépôt GitHub public, vérifie d'abord network puis
     utilise run_command avec git clone --depth 1 https://github.com/OWNER/REPO.git dossier : travaille
@@ -897,6 +932,8 @@ def gerer_execution_code(
             return "Plage invalide : indique deux lignes positives, avec end_line supérieur ou égal à start_line."
     if action in ("search_files", "find_files") and not str(pattern or "").strip():
         return "Le paramètre pattern est obligatoire pour cette recherche."
+    if action == "search_files" and str(glob or "").strip() and _nom_de_fichier_invalide(str(glob).strip()):
+        return "Le filtre glob doit être un nom de fichier simple, sans chemin (ex. *.py)."
     if action == "edit_file" and not old_text:
         return "old_text doit contenir le texte exact à remplacer."
 
@@ -1020,7 +1057,7 @@ def gerer_execution_code(
 
         resultat = _executer_action(
             sandbox, action, language, code, command, path, content, configuration, fichier_importe,
-            pattern, old_text, new_text, start_line, end_line,
+            pattern, old_text, new_text, start_line, end_line, replace_all, glob,
         )
         garder = True
     except Exception as e:

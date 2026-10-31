@@ -397,14 +397,182 @@ class TestActionsWorkspace(unittest.TestCase):
         self.assertIn("node_modules", commande)
         self.assertIn("-type f", commande)
 
+    def _edition(self, contenu, configuration=None, **options):
+        sandbox = MagicMock()
+        sandbox.files.read.return_value = contenu
+        with patch("core.outils_execution_code._taille_fichier", return_value=len(contenu)), patch("core.outils_execution_code._lancer_commande", return_value=SimpleNamespace(exit_code=0)):
+            resultat = _executer_action(sandbox, "edit_file", "python", "", "", "main.py", "", configuration or {}, **options)
+        return sandbox, resultat
+
+    def test_edit_file_replace_all_remplace_toutes_les_occurrences(self):
+        sandbox, resultat = self._edition("x = 1\nx = 1\nx = 1\n", old_text="x = 1", new_text="x = 2", replace_all=True)
+        self.assertIn("3 occurrences remplacées", resultat)
+        self.assertEqual(sandbox.files.write.call_args.args[1], "x = 2\nx = 2\nx = 2\n")
+
+    def test_edit_file_replace_all_sur_une_seule_occurrence_reste_au_singulier(self):
+        sandbox, resultat = self._edition("valeur = 1\n", old_text="valeur = 1", new_text="valeur = 2", replace_all=True)
+        self.assertIn("1 occurrence remplacée", resultat)
+        self.assertNotIn("occurrences", resultat)
+
+    def test_edit_file_sans_replace_all_propose_de_l_utiliser(self):
+        sandbox, resultat = self._edition("x = 1\nx = 1\n", old_text="x = 1", new_text="x = 2")
+        self.assertIn("apparaît 2 fois", resultat)
+        self.assertIn("replace_all", resultat)
+        sandbox.files.write.assert_not_called()
+
+    def test_edit_file_replace_all_ne_depasse_pas_la_limite_de_taille(self):
+        # Limite de 1024 octets (le minimum accepté) : le fichier de 800 octets passe, pas son résultat.
+        sandbox, resultat = self._edition(
+            "a\n" * 400, configuration={"max_file_bytes": 1024}, old_text="a", new_text="a" * 100, replace_all=True,
+        )
+        self.assertIn("dépasserait la limite", resultat)
+        sandbox.files.write.assert_not_called()
+
+    def test_search_files_glob_passe_avant_les_exclusions_de_secrets(self):
+        sandbox = MagicMock()
+        with patch("core.outils_execution_code._resultat_commande", return_value="x") as executer:
+            _executer_action(sandbox, "search_files", "python", "", "", "", "", {}, pattern="TODO", glob="*.py")
+        commande = executer.call_args.args[1]
+        self.assertIn("--include='*.py'", commande)
+        # Avec GNU grep le dernier motif qui correspond l'emporte : include doit venir avant les exclusions.
+        self.assertLess(commande.index("--include='*.py'"), commande.index("--exclude='.env'"))
+
+    def test_search_files_sans_glob_n_ajoute_pas_de_filtre(self):
+        sandbox = MagicMock()
+        with patch("core.outils_execution_code._resultat_commande", return_value="x") as executer:
+            _executer_action(sandbox, "search_files", "python", "", "", "", "", {}, pattern="TODO")
+        self.assertNotIn("--include", executer.call_args.args[1])
+
+    def test_search_files_refuse_un_glob_avec_chemin(self):
+        sandbox = MagicMock()
+        for glob in ("src/*.py", "..", "a" * 300):
+            with self.subTest(glob=glob[:20]):
+                with patch("core.outils_execution_code._resultat_commande") as executer:
+                    resultat = _executer_action(sandbox, "search_files", "python", "", "", "", "", {}, pattern="TODO", glob=glob)
+                self.assertIn("filtre glob", resultat)
+                executer.assert_not_called()
+
+    def test_search_files_coupe_les_lignes_trop_longues_sans_toucher_au_code_de_grep(self):
+        sandbox = MagicMock()
+        with patch("core.outils_execution_code._resultat_commande", return_value="x") as executer:
+            _executer_action(sandbox, "search_files", "python", "", "", "", "", {}, pattern="TODO")
+        commande = executer.call_args.args[1]
+        self.assertIn("LC_ALL=C.UTF-8 sed -E", commande)
+        self.assertIn(".{400}", commande)
+        # Le code de sortie lu est celui de grep (premier élément du tube), pas celui des sed.
+        self.assertIn("PIPESTATUS[0]", commande)
+
+    def test_la_lecture_par_plage_n_utilise_plus_de_tiret_long(self):
+        sandbox = MagicMock()
+        with patch("core.outils_execution_code._taille_fichier", return_value=10), patch("core.outils_execution_code._resultat_commande", return_value="1\tligne"):
+            resultat = _executer_action(sandbox, "read_file", "python", "", "", "a.py", "", {}, start_line=1, end_line=2)
+        self.assertNotIn(chr(0x2014), resultat)
+        self.assertIn("a.py : lignes 1 à 2", resultat)
+
     def test_actions_workspace_reutilisent_les_reservations_existantes(self):
         self.assertEqual(_action_pour_reservation("edit_file"), "write_file")
         self.assertEqual(_action_pour_reservation("search_files"), "read_file")
         self.assertEqual(_action_pour_reservation("find_files"), "read_file")
 
 
+def _grep_et_sed_gnu_disponibles():
+    import shutil
+    import subprocess
+    if not shutil.which("grep") or not shutil.which("sed"):
+        return False
+    try:
+        sortie = subprocess.run(["grep", "-V"], capture_output=True, text=True).stdout
+        return "GNU" in sortie
+    except Exception:
+        return False
+
+
+@unittest.skipUnless(_grep_et_sed_gnu_disponibles(), "grep et sed GNU requis")
+class TestRechercheDansUnVraiDossier(unittest.TestCase):
+    """Lance la vraie commande de search_files sur un dossier temporaire (le workspace est simulé)."""
+
+    def setUp(self):
+        import subprocess
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        racine = self._tmp.name
+        for chemin, contenu in {
+            "src/a.py": "TODO dans a\n",
+            "src/b.txt": "TODO dans b\n",
+            "src/long.js": "TODO " + "x" * 3000 + "\nTODO court\n",
+            "src/accentue.py": "TODO " + "é" * 600 + "\n",
+            ".env": "TODO secret env\n",
+            "cle.pem": "TODO secret pem\n",
+            "node_modules/m/i.py": "TODO dependance\n",
+        }.items():
+            complet = os.path.join(racine, chemin)
+            os.makedirs(os.path.dirname(complet), exist_ok=True)
+            with open(complet, "w", encoding="utf-8") as f:
+                f.write(contenu)
+
+        def lancer(commande, timeout=None, request_timeout=None):
+            traduite = commande.replace("/home/user", racine)
+            r = subprocess.run(traduite, shell=True, capture_output=True, text=True)
+            return SimpleNamespace(stdout=r.stdout + r.stderr, stderr="", exit_code=r.returncode)
+
+        self.sandbox = MagicMock()
+        self.sandbox.commands.run.side_effect = lancer
+
+    def _chercher(self, pattern="TODO", **options):
+        return _executer_action(self.sandbox, "search_files", "python", "", "", "", "", {}, pattern=pattern, **options)
+
+    def test_le_glob_limite_la_recherche_aux_fichiers_voulus(self):
+        resultat = self._chercher(glob="*.py")
+        self.assertIn("src/a.py:1:TODO dans a", resultat)
+        self.assertNotIn("b.txt", resultat)
+
+    def test_un_glob_ne_peut_pas_rouvrir_un_fichier_secret(self):
+        for glob in (".env", "*.pem", "*"):
+            with self.subTest(glob=glob):
+                resultat = self._chercher(glob=glob)
+                self.assertNotIn("secret", resultat)
+                self.assertNotIn("node_modules", resultat)
+
+    def test_les_secrets_restent_exclus_sans_glob(self):
+        resultat = self._chercher()
+        self.assertNotIn("secret", resultat)
+        self.assertIn("src/a.py", resultat)
+
+    def test_une_ligne_minifiee_est_coupee_et_les_autres_resultats_restent_visibles(self):
+        resultat = self._chercher(glob="*.js")
+        self.assertIn("[ligne coupée]", resultat)
+        self.assertIn("src/long.js:2:TODO court", resultat)
+        self.assertLess(max(len(ligne) for ligne in resultat.splitlines()), 450)
+
+    def test_la_coupe_ne_casse_jamais_un_caractere_accentue(self):
+        resultat = self._chercher(glob="accentue.py")
+        self.assertIn("[ligne coupée]", resultat)
+        resultat.encode("utf-8")
+        self.assertNotIn("�", resultat)
+
+    def test_aucun_resultat_est_signale_sans_erreur(self):
+        resultat = self._chercher(pattern="introuvable_xyz")
+        self.assertEqual(resultat, "Aucun résultat.")
+
+
+class TestLibellesDesActionsDeCodage(unittest.TestCase):
+    def test_chaque_action_de_codage_a_sa_traduction_anglaise(self):
+        from core.libelles_outils_anglais import LIBELLES_OUTILS_EN
+        from core.registre_outils import REGISTRE_AFFICHAGE_OUTILS
+        for action in ("edit_file", "search_files", "find_files", "read_file", "write_file", "list_files"):
+            with self.subTest(action=action):
+                libelle = REGISTRE_AFFICHAGE_OUTILS[f"gerer_execution_code:{action}"]["label"]
+                self.assertIn(libelle, LIBELLES_OUTILS_EN)
+
+
 class TestSchemaDeLOutil(unittest.TestCase):
     """Ce qui est annoncé au modèle doit exister dans le code."""
+
+    def test_replace_all_et_glob_sont_annonces_au_modele(self):
+        proprietes = self._schema()["properties"]
+        self.assertEqual(proprietes["replace_all"]["type"], "boolean")
+        self.assertEqual(proprietes["glob"]["type"], "string")
 
     def _schema(self):
         outils = asyncio.run(mcp_execution_code.list_tools())
