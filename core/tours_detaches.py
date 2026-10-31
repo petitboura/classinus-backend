@@ -14,13 +14,12 @@ SSE produite est rangee dans le tour. La connexion HTTP ne fait que LIRE ce rang
 Le bouton Arreter n'est pas touche : il passe par POST /api/chat/arreter, qui leve le jeton
 d'arret du tour (core/arret_tour.py), et ce jeton appartient au thread de travail.
 
-Le rangement est en memoire du processus. Le service tourne avec un seul processus uvicorn
-(Procfile) : toutes les requetes d'un meme compte voient donc le meme registre. Un redemarrage
-du serveur (deploiement) interrompt les tours en cours, comme avant. Les visiteurs non connectes
-n'ont pas de tour detache : rien n'est rattachable a un compte, le flux reste direct.
-
-Rien n'est ecrit en base : un tour ne vit que le temps du travail, puis
-CONSERVATION_TOUR_DETACHE apres sa fin (core/plafonds_reglables.py).
+Le rangement rapide est en memoire du processus, double par une persistance en base
+(core/persistance_tours.py, 31/10/2026) : un redemarrage ne perd plus le texte partiel,
+le tour orphelin passe "interrompu" et l'interface propose Continuer. Le processus web
+reste l'executeur (decision de Bourama) : un redemarrage coupe toujours le travail en
+cours, mais plus son contenu. Les visiteurs non connectes n'ont pas de tour detache :
+rien n'est rattachable a un compte, le flux reste direct.
 """
 import contextvars
 import json
@@ -60,10 +59,16 @@ def _ids_sauvegardes(ligne: str) -> Optional[dict]:
 class TourDetache:
     """Un tour de chat en cours ou termine : ses lignes SSE, dans l'ordre, et son etat."""
 
-    def __init__(self, user_id: str, conversation_id: Optional[str], resume: Optional[dict] = None):
+    def __init__(self, user_id: str, conversation_id: Optional[str], resume: Optional[dict] = None,
+                 persistance=None, a_la_cloture: Optional[Callable] = None):
         self.id = uuid.uuid4().hex
         self.user_id = user_id
         self.conversation_id = conversation_id
+        # Couche durable optionnelle (core/persistance_tours.py) : ecrit le tour en base par
+        # paquets. None = memoire seule (visiteurs, tests). Ses erreurs ne remontent jamais ici.
+        self._persistance = persistance
+        # Appele une fois a la cloture si plus aucun lecteur n'est rattache (notification de fin).
+        self._a_la_cloture = a_la_cloture
         # Ce dont une page qui se rouvre a besoin pour redessiner le debut du tour (le message de
         # l'utilisateur, par exemple) : le serveur ne l'a pas encore sauvegarde avant la fin.
         self.resume = dict(resume or {})
@@ -75,6 +80,7 @@ class TourDetache:
         self._lignes: list[str] = []
         self._condition = threading.Condition()
         self._termine = False
+        self._lecteurs = 0
 
     @property
     def termine(self) -> bool:
@@ -92,6 +98,11 @@ class TourDetache:
             if ids is not None:
                 self.ids = ids
             self._condition.notify_all()
+        if self._persistance is not None:
+            try:
+                self._persistance.ajouter(ligne, ids)
+            except Exception as e:
+                logging.error("ERREUR persistance tour %s (ajout) : %s", self.id, e)
 
     def clore(self) -> None:
         with self._condition:
@@ -99,7 +110,18 @@ class TourDetache:
                 return
             self._termine = True
             self.termine_a = time.monotonic()
+            sans_lecteur = self._lecteurs == 0
             self._condition.notify_all()
+        if self._persistance is not None:
+            try:
+                self._persistance.clore(self.ids)
+            except Exception as e:
+                logging.error("ERREUR persistance tour %s (cloture) : %s", self.id, e)
+        if sans_lecteur and self._a_la_cloture is not None:
+            try:
+                self._a_la_cloture(self)
+            except Exception as e:
+                logging.error("ERREUR cloture tour %s (notification) : %s", self.id, e)
 
     def lire(self, depuis: int = 0, signe_vie: Optional[float] = None) -> Iterator[str]:
         """Rend les lignes a partir de la position `depuis`, puis attend les suivantes jusqu'a la
@@ -108,6 +130,15 @@ class TourDetache:
 
         Fermer ce generateur (connexion perdue) ne touche pas au tour : seul son lecteur s'arrete.
         """
+        with self._condition:
+            self._lecteurs += 1
+        try:
+            yield from self._lire_interne(depuis, signe_vie)
+        finally:
+            with self._condition:
+                self._lecteurs = max(0, self._lecteurs - 1)
+
+    def _lire_interne(self, depuis: int = 0, signe_vie: Optional[float] = None) -> Iterator[str]:
         position = max(0, int(depuis))
         dernier_envoi = time.monotonic()
         while True:
@@ -179,14 +210,27 @@ def demarrer(
     fabrique: Callable[[], Iterable[str]],
     resume: Optional[dict] = None,
     message_erreur: str = "Une erreur est survenue, réessaie dans un instant.",
+    fabrique_persistance: Optional[Callable] = None,
+    a_la_cloture: Optional[Callable] = None,
 ) -> TourDetache:
     """Lance le travail dans son propre thread et renvoie le tour, deja lisible.
 
     `fabrique` rend l'iterable de lignes SSE (api/chat.py:_evenements_sse). Le contexte de la
     requete est copie dans le thread : sans lui, ce que le travail lisait par variable de
     contexte dans le thread de la requete disparaitrait.
+    `fabrique_persistance(tour)` (optionnel) rend la couche durable du tour
+    (core/persistance_tours.py) : elle recoit chaque ligne et la cloture.
+    `a_la_cloture(tour)` est appele si le tour se termine sans aucun lecteur rattache.
     """
-    tour = TourDetache(user_id, conversation_id, resume)
+    tour = TourDetache(user_id, conversation_id, resume, a_la_cloture=a_la_cloture)
+    if fabrique_persistance is not None:
+        try:
+            tour._persistance = fabrique_persistance(tour)
+            if tour._persistance is not None:
+                tour._persistance.demarrer()
+        except Exception as e:
+            logging.error("ERREUR demarrage persistance tour %s : %s", tour.id, e)
+            tour._persistance = None
     with _verrou:
         _purger_sous_verrou(time.monotonic())
         _tours[tour.id] = tour
