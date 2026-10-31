@@ -95,6 +95,32 @@ _cache_serveurs_disponibles = {"valeur": None, "expire_a": 0}
 _cache_outils_generation_disponibles = {"valeur": None, "expire_a": 0}
 _cache_catalogue_outils = {}  # nom_serveur -> {"outils": [...], "expire_a": ts}
 
+# 31/10/2026 (demande Bourama, diagnostic memoire Render) : cache NEGATIF.
+# Avant, seul un listing REUSSI etait mis en cache : un serveur en panne ou
+# endormi (ex. diagnostic_classtech, service Render gratuit en veille)
+# etait retente a CHAQUE message, avec a chaque fois une session MCP neuve
+# jamais liberee proprement cote OS -- une des montées memoire par paliers
+# derriere les OOM des 29-30/10. Apres un echec, on ne retente donc pas
+# avant ce delai. Reglable sans toucher au code (0 = retenter tout de suite).
+try:
+    _DUREE_CACHE_NEGATIF_SECONDES = int(os.getenv("MCP_CACHE_NEGATIF_SECONDES", "600"))
+    if _DUREE_CACHE_NEGATIF_SECONDES < 0:
+        _DUREE_CACHE_NEGATIF_SECONDES = 600
+except (TypeError, ValueError):
+    _DUREE_CACHE_NEGATIF_SECONDES = 600
+_cache_echecs_catalogue = {}  # nom_serveur -> expire_a (ts)
+_derniers_reveils = {}  # url_reveil -> ts du dernier reveil tente
+
+# Delai laisse a un service endormi pour se reveiller avant le listing
+# (reveil a la demande, seulement sur un cache vide ou expire : jamais a
+# chaque message). Reglable sans toucher au code.
+try:
+    _DELAI_REVEIL_SECONDES = int(os.getenv("MCP_REVEIL_DELAI_SECONDES", "90"))
+    if _DELAI_REVEIL_SECONDES <= 0:
+        _DELAI_REVEIL_SECONDES = 90
+except (TypeError, ValueError):
+    _DELAI_REVEIL_SECONDES = 90
+
 
 def forcer_rechargement_catalogue_outils():
     """
@@ -108,6 +134,8 @@ def forcer_rechargement_catalogue_outils():
     _cache_outils_generation_disponibles["valeur"] = None
     _cache_outils_generation_disponibles["expire_a"] = 0
     _cache_catalogue_outils.clear()
+    _cache_echecs_catalogue.clear()
+    _derniers_reveils.clear()
     _cache_parametres_outils["valeur"] = None
     _cache_parametres_outils["expire_a"] = 0
 
@@ -181,7 +209,56 @@ def parametres_outils():
     return valeur
 
 
-def _lister_outils_serveur_avec_cache(nom, url, headers):
+def _reveiller_serveur(url_reveil):
+    """
+    Reveil a la demande d'un service endormi (31/10/2026) : un simple GET
+    sur son URL de sante, qui laisse au service gratuit le temps de
+    demarrer avant qu'on tente le vrai listing MCP. Ne leve JAMAIS : si le
+    reveil echoue, le listing derriere dira la vraie erreur, une fois, puis
+    le cache negatif prendra le relais.
+    """
+    import urllib.request
+
+    try:
+        requete = urllib.request.Request(url_reveil, headers={"User-Agent": "Classinus-Reveil/1.0"})
+        with urllib.request.urlopen(requete, timeout=_DELAI_REVEIL_SECONDES) as reponse:
+            logging.info(f"Reveil MCP via {url_reveil} -> HTTP {reponse.status}")
+    except Exception as e:
+        logging.warning(f"Reveil MCP via {url_reveil} sans reponse exploitable : {e}")
+    finally:
+        _derniers_reveils[url_reveil] = time.time()
+
+
+def _url_reveil(serveur, url):
+    """URL de reveil d'un serveur : celle declaree dans le registre, sinon,
+    pour le diagnostic (service gratuit qui s'endort), le /health du meme
+    hote que son URL MCP -- derive de l'URL, jamais une adresse en dur."""
+    if serveur.get("reveil_url"):
+        return serveur["reveil_url"]
+    if serveur.get("nom") == "diagnostic_classtech" and url:
+        from urllib.parse import urlparse
+        morceaux = urlparse(url)
+        if morceaux.scheme and morceaux.netloc:
+            return f"{morceaux.scheme}://{morceaux.netloc}/health"
+    return None
+
+
+def _reveiller_si_recent_non_tente(url_reveil):
+    """Reveil au plus une fois par fenetre de cache negatif et par URL.
+
+    Sert avant un appel reel : le catalogue peut etre en cache 24h alors
+    que le service gratuit s'est rendormi entre-temps. Au-dela de la
+    fenetre, un GET /health suffit a le relancer sans ralentir chaque appel.
+    """
+    if not url_reveil:
+        return
+    if time.time() - _derniers_reveils.get(url_reveil, 0) < _DUREE_CACHE_NEGATIF_SECONDES:
+        return
+    _derniers_reveils[url_reveil] = time.time()
+    _reveiller_serveur(url_reveil)
+
+
+def _lister_outils_serveur_avec_cache(nom, url, headers, reveil_url=None):
     """
     Catalogue d'un serveur MCP (nom/description/schema de chaque outil,
     via list_tools()) mis en cache 24h, cle par nom de serveur seul (pas
@@ -191,12 +268,32 @@ def _lister_outils_serveur_avec_cache(nom, url, headers):
     list_tools() est evite par ce cache ; l'appel reel de l'outil
     (appeler_outil, plus bas) n'est jamais mis en cache et repart a
     chaque fois avec les bons headers de l'utilisateur courant.
+
+    Echec (31/10/2026) : cache negatif -- l'erreur remonte une fois (pour
+    les journaux), puis les appels suivants renvoient une liste vide sans
+    reseau pendant _DUREE_CACHE_NEGATIF_SECONDES, au lieu de retenter a
+    chaque message. Si le serveur declare une URL de reveil, on le reveille
+    d'abord (service gratuit endormi), seulement sur un cache vide/expire.
     """
     maintenant = time.time()
     entree = _cache_catalogue_outils.get(nom)
     if entree is not None and entree["expire_a"] > maintenant:
         return entree["outils"]
-    outils = asyncio.run(_lister_outils_async(url, headers))
+    echec_expire_a = _cache_echecs_catalogue.get(nom, 0)
+    if echec_expire_a > maintenant:
+        logging.info(
+            f"MCP '{nom}' non retente : echec recent en cache negatif "
+            f"encore {int(echec_expire_a - maintenant)}s."
+        )
+        return []
+    if reveil_url:
+        _reveiller_serveur(reveil_url)
+    try:
+        outils = asyncio.run(_lister_outils_async(url, headers))
+    except Exception:
+        _cache_echecs_catalogue[nom] = time.time() + _DUREE_CACHE_NEGATIF_SECONDES
+        raise
+    _cache_echecs_catalogue.pop(nom, None)
     _cache_catalogue_outils[nom] = {"outils": outils, "expire_a": maintenant + _DUREE_CACHE_SECONDES}
     return outils
 
@@ -535,7 +632,7 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
                 logging.info(f"MCP '{nom}' ignoré : utilisateur {user_id} pas connecté à cet outil.")
                 continue
 
-            outils = _lister_outils_serveur_avec_cache(nom, url, headers)
+            outils = _lister_outils_serveur_avec_cache(nom, url, headers, reveil_url=_url_reveil(serveur, url))
 
             outils_autorises = serveur.get("outils_autorises")
             if nom == "generation":
@@ -580,6 +677,9 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
                     },
                 })
                 route = {"url": url, "headers": headers}
+                url_reveil = _url_reveil(serveur, url)
+                if url_reveil:
+                    route["reveil_url"] = url_reveil
                 if prefixe:
                     route["nom_reel"] = outil.name
                 if _route_via_app_telephone(serveur, outil.name):
@@ -825,6 +925,10 @@ def appeler_outil(nom_outil, arguments, table_routage, arret=None):
         # 29/10/2026 : outils téléphone exécutés sur le PC de
         # l'utilisateur (relais local, seul à voir le téléphone).
         return _appeler_outil_telephone_via_app(nom_outil, arguments, route, delai, arret)
+    # 31/10/2026 : les outils executes cote serveur (sondes sans telephone)
+    # reveillent d'abord un service gratuit endormi, au plus une fois par
+    # fenetre -- jamais avant les outils telephone, executes sur le PC.
+    _reveiller_si_recent_non_tente(route.get("reveil_url"))
     try:
         if route.get("custom_mcp"):
             # Serveur ajouté par l'utilisateur : adresse et jeton relus à l'instant de l'appel,
