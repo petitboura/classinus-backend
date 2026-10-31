@@ -29,7 +29,11 @@ import time
 import uuid
 from typing import Callable, Iterable, Iterator, Optional
 
-from core.plafonds_reglables import CONSERVATION_TOUR_DETACHE, MAX_TOURS_DETACHES_CONSERVES
+from core.plafonds_reglables import (
+    CONSERVATION_TOUR_DETACHE, INTERVALLE_PURGE_TOURS_DETACHES,
+    MAX_OCTETS_TOUR_DETACHE, MAX_OCTETS_TOURS_DETACHES_CONSERVES,
+    MAX_TOURS_DETACHES_CONSERVES,
+)
 
 # Duree maximale d'une attente sans nouvelle ligne avant de reverifier l'etat du tour. Ne sert
 # qu'a rester reveille : le signe de vie envoye au client a son propre delai (parametre).
@@ -78,6 +82,8 @@ class TourDetache:
         self.ids: Optional[dict] = None
         self.termine_a: Optional[float] = None
         self._lignes: list[str] = []
+        self._taille_octets = 0
+        self._stockage_plafonne = False
         self._condition = threading.Condition()
         self._termine = False
         self._lecteurs = 0
@@ -91,10 +97,45 @@ class TourDetache:
         with self._condition:
             return len(self._lignes)
 
+    @property
+    def taille_octets(self) -> int:
+        with self._condition:
+            return self._taille_octets
+
+    @property
+    def stockage_plafonne(self) -> bool:
+        with self._condition:
+            return self._stockage_plafonne
+
+    def texte_partiel(self) -> str:
+        """Texte deja affiche (evenements "reponse") : ce qu'une sauvegarde partielle conserve."""
+        morceaux = []
+        with self._condition:
+            lignes = list(self._lignes)
+        for ligne in lignes:
+            if not ligne.startswith("data:"):
+                continue
+            try:
+                evenement = json.loads(ligne[len("data:"):].strip())
+            except ValueError:
+                continue
+            if isinstance(evenement, dict) and evenement.get("type") == "reponse" and isinstance(evenement.get("texte"), str):
+                morceaux.append(evenement["texte"])
+        return "".join(morceaux)
+
     def ajouter(self, ligne: str) -> None:
         ids = _ids_sauvegardes(ligne)
+        # La ligne de fin et l'evenement meta restent toujours stockes : ils portent la
+        # terminaison et les identifiants de l'echange sauvegarde.
+        toujours = ligne == LIGNE_FIN or ids is not None
         with self._condition:
+            if not toujours and self._taille_octets + len(ligne.encode("utf-8")) > MAX_OCTETS_TOUR_DETACHE:
+                if not self._stockage_plafonne:
+                    self._stockage_plafonne = True
+                    logging.warning("Tour detache %s : stockage des lignes plafonne a %s octets.", self.id, MAX_OCTETS_TOUR_DETACHE)
+                return
             self._lignes.append(ligne)
+            self._taille_octets += len(ligne.encode("utf-8"))
             if ids is not None:
                 self.ids = ids
             self._condition.notify_all()
@@ -186,11 +227,65 @@ def _purger_sous_verrou(maintenant: float) -> None:
     exces = len(termines) - MAX_TOURS_DETACHES_CONSERVES
     if exces > 0:
         a_oublier.update(t.id for t in termines[:exces])
+    restants = [t for t in termines if t.id not in a_oublier]
+    total = sum(t.taille_octets for t in restants)
+    for t in restants:  # du plus ancien au plus recent
+        if total <= MAX_OCTETS_TOURS_DETACHES_CONSERVES:
+            break
+        a_oublier.add(t.id)
+        total -= t.taille_octets
     for tour_id in a_oublier:
         _oublier_sous_verrou(tour_id)
 
 
-def _executer(tour: TourDetache, fabrique: Callable[[], Iterable[str]], message_erreur: str) -> None:
+def purger_tours_termines() -> None:
+    """Purge periodique : sans elle, la memoire des tours termines ne redescend que lorsqu'un
+    nouveau tour demarre."""
+    with _verrou:
+        _purger_sous_verrou(time.monotonic())
+
+
+_purge_demarree = False
+
+
+def _demarrer_purge_periodique() -> None:
+    global _purge_demarree
+    with _verrou:
+        if _purge_demarree:
+            return
+        _purge_demarree = True
+
+    def boucle():
+        while True:
+            time.sleep(INTERVALLE_PURGE_TOURS_DETACHES.total_seconds())
+            try:
+                purger_tours_termines()
+            except Exception as e:  # la purge ne doit jamais faire tomber le processus
+                logging.error("ERREUR purge des tours detaches : %s", e)
+
+    threading.Thread(target=boucle, name="purge-tours-detaches", daemon=True).start()
+
+
+def _sauvegarder_partielle(tour: TourDetache, sauvegarder_partielle) -> None:
+    """Sauvegarde la reponse partielle d'un tour casse avant sa purge, si l'echange n'a pas
+    deja ete sauvegarde (aucun evenement meta recu). Un echec laisse le tour en memoire pour
+    les purges suivantes : la conservation normale s'applique, rien n'est perdu aussitot."""
+    if sauvegarder_partielle is None or tour.ids is not None:
+        return
+    texte = tour.texte_partiel().strip()
+    if not texte:
+        return
+    try:
+        ids = sauvegarder_partielle(texte)
+    except Exception as e:
+        logging.error("ERREUR sauvegarde partielle tour %s : %s", tour.id, e)
+        return
+    if ids:
+        tour.ids = ids
+        tour.ajouter(f"data: {json.dumps({'type': 'meta', **ids})}\n\n")
+
+
+def _executer(tour: TourDetache, fabrique: Callable[[], Iterable[str]], message_erreur: str, sauvegarder_partielle=None) -> None:
     try:
         for ligne in fabrique():
             tour.ajouter(ligne)
@@ -198,6 +293,7 @@ def _executer(tour: TourDetache, fabrique: Callable[[], Iterable[str]], message_
         # Le generateur du chat attrape deja ses propres erreurs : on n'arrive ici que si
         # quelque chose a casse avant sa premiere ligne ou autour de lui.
         logging.error("ERREUR tour detache %s (compte %s) : %s", tour.id, tour.user_id, e)
+        _sauvegarder_partielle(tour, sauvegarder_partielle)
         tour.ajouter(f"data: {json.dumps({'type': 'reponse', 'texte': message_erreur})}\n\n")
         tour.ajouter(LIGNE_FIN)
     finally:
@@ -212,6 +308,7 @@ def demarrer(
     message_erreur: str = "Une erreur est survenue, réessaie dans un instant.",
     fabrique_persistance: Optional[Callable] = None,
     a_la_cloture: Optional[Callable] = None,
+    sauvegarder_partielle=None,
 ) -> TourDetache:
     """Lance le travail dans son propre thread et renvoie le tour, deja lisible.
 
@@ -222,6 +319,7 @@ def demarrer(
     (core/persistance_tours.py) : elle recoit chaque ligne et la cloture.
     `a_la_cloture(tour)` est appele si le tour se termine sans aucun lecteur rattache.
     """
+    _demarrer_purge_periodique()
     tour = TourDetache(user_id, conversation_id, resume, a_la_cloture=a_la_cloture)
     if fabrique_persistance is not None:
         try:
@@ -239,7 +337,7 @@ def demarrer(
     contexte = contextvars.copy_context()
     fil = threading.Thread(
         target=contexte.run,
-        args=(_executer, tour, fabrique, message_erreur),
+        args=(_executer, tour, fabrique, message_erreur, sauvegarder_partielle),
         name=f"tour-detache-{tour.id[:8]}",
         daemon=True,
     )
