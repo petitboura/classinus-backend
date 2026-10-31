@@ -730,8 +730,8 @@ MESSAGE_TELEPHONE_SANS_REPONSE = (
 
 async def _appeler_telephone_via_app_async(nom_reel, arguments, user_id, delai):
     """Envoie un outil téléphone à l'appli PC et rend le texte du relais."""
-    from canal_agent_applicatif import a_app_systeme_connecte, demander_action_systeme
-    if not await a_app_systeme_connecte(user_id):
+    from canal_agent_applicatif import a_app_telephone_connectee, demander_action_systeme
+    if not await a_app_telephone_connectee(user_id):
         return MESSAGE_TELEPHONE_SANS_APP
     reponse = await demander_action_systeme(
         user_id,

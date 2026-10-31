@@ -57,13 +57,13 @@ def test_sans_user_id_erreur_identification():
 
 
 def test_sans_app_message_ouverture_appli():
-    with patch("canal_agent_applicatif.a_app_systeme_connecte", new=AsyncMock(return_value=False)):
+    with patch("canal_agent_applicatif.a_app_telephone_connectee", new=AsyncMock(return_value=False)):
         texte = mcp_tools.appeler_outil("detecter_telephone", {}, {"detecter_telephone": _route_telephone()})
     assert texte == mcp_tools.MESSAGE_TELEPHONE_SANS_APP
 
 
 def test_sans_reponse_message_mise_a_jour():
-    with patch("canal_agent_applicatif.a_app_systeme_connecte", new=AsyncMock(return_value=True)), \
+    with patch("canal_agent_applicatif.a_app_telephone_connectee", new=AsyncMock(return_value=True)), \
          patch("canal_agent_applicatif.demander_action_systeme", new=AsyncMock(return_value=None)):
         texte = mcp_tools.appeler_outil("detecter_telephone", {}, {"detecter_telephone": _route_telephone()})
     assert texte == mcp_tools.MESSAGE_TELEPHONE_SANS_REPONSE
@@ -73,7 +73,7 @@ def test_pont_renvoie_texte_du_relais_sans_cloud():
     def exploser(*args, **kwargs):
         raise AssertionError("le cloud ne doit jamais être appelé pour un outil téléphone")
 
-    with patch("canal_agent_applicatif.a_app_systeme_connecte", new=AsyncMock(return_value=True)), \
+    with patch("canal_agent_applicatif.a_app_telephone_connectee", new=AsyncMock(return_value=True)), \
          patch("canal_agent_applicatif.demander_action_systeme",
                new=AsyncMock(return_value={"texte": "Téléphone détecté (TEST)."})) as pont, \
          patch("mcp_tools._appeler_outil_async", new=exploser):
@@ -86,7 +86,7 @@ def test_pont_renvoie_texte_du_relais_sans_cloud():
 
 
 def test_pont_erreur_remontee_en_erreur():
-    with patch("canal_agent_applicatif.a_app_systeme_connecte", new=AsyncMock(return_value=True)), \
+    with patch("canal_agent_applicatif.a_app_telephone_connectee", new=AsyncMock(return_value=True)), \
          patch("canal_agent_applicatif.demander_action_systeme",
                new=AsyncMock(return_value={"erreur": "relais arrêté"})):
         texte = mcp_tools.appeler_outil("lire_batterie", {}, {"lire_batterie": _route_telephone()})
@@ -102,3 +102,53 @@ def test_connexion_systeme_lit_le_registre():
         assert asyncio.run(canal.a_app_systeme_connecte("u9")) is True
     finally:
         canal._relais_systeme.discard(("u9", "a9"))
+
+
+def test_connexion_native_prouve_appli_pc_pour_telephone():
+    import canal_agent_applicatif as canal
+
+    class FauxWs:
+        pass
+
+    ws = FauxWs()
+    canal._connexions[("u8", "pc8-systeme")] = ws
+    try:
+        # Ancienne appli : pas de relais renderer déclaré, mais l'appli PC
+        # tourne, donc l'outil téléphone doit être tenté, pas rejeté.
+        assert asyncio.run(canal.a_app_telephone_connectee("u8")) is True
+        assert asyncio.run(canal.a_app_systeme_connecte("u8")) is False
+    finally:
+        canal._connexions.pop(("u8", "pc8-systeme"), None)
+
+
+def test_diffusion_telephone_exclut_connexion_native_sans_relais():
+    import canal_agent_applicatif as canal
+
+    recus = {}
+
+    class FauxWs:
+        def __init__(self, nom):
+            self.nom = nom
+
+        async def send_json(self, message):
+            recus[self.nom] = message
+
+    async def scenario():
+        canal._connexions[("u7", "pc7-systeme")] = FauxWs("natif")
+        canal._connexions[("u7", "web7")] = FauxWs("web")
+        tache = asyncio.create_task(canal._diffuser_et_attendre(
+            "u7",
+            {"id": "test-tel-1", "action_systeme": "outil_telephone", "parametres": {"nom": "detecter_telephone", "args": {}}},
+            delai_abandon_secondes=5,
+        ))
+        await asyncio.sleep(0.2)
+        canal.recevoir_reponse("test-tel-1", {"texte": "ok"})
+        return await tache
+
+    try:
+        assert asyncio.run(scenario()) == {"texte": "ok"}
+        assert "web" in recus
+        assert "natif" not in recus
+    finally:
+        canal._connexions.pop(("u7", "pc7-systeme"), None)
+        canal._connexions.pop(("u7", "web7"), None)
