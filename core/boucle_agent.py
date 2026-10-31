@@ -263,7 +263,8 @@ def _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, 
 def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                  appels_en_cours_a_finir=None, modele=GROQ_PRIMARY, reasoning_effort=None, agent_nom=None,
                  rattrapage_tool_code_restant=1, conversation_id=None,
-                 catalogue_complet=None, table_routage_complet=None, user_id=None, arret=None):
+                 catalogue_complet=None, table_routage_complet=None, user_id=None, arret=None,
+                 user_id_autorisations=None):
     """
     Boucle d'agent generique sur le modele Groq utilise (par defaut
     GROQ_PRIMARY, mais peut recevoir n'importe quel modele Groq qui sait
@@ -340,7 +341,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
         kwargs_reasoning["reasoning_format"] = "parsed"
 
     # Actions déjà autorisées pour de bon par cette personne ("Toujours autoriser").
-    autorisations = charger_autorisations(user_id)
+    autorisations = charger_autorisations(user_id or user_id_autorisations)
 
     if appels_en_cours_a_finir:
         try:
@@ -559,6 +560,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     conversation_id=conversation_id,
                     catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
                     user_id=user_id, arret=arret,
+                    user_id_autorisations=user_id_autorisations,
                 )
                 return
             else:

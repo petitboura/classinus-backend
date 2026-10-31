@@ -198,7 +198,7 @@ def _messages_agent_avec_locale(messages_agent, langue_interface):
     return messages
 
 
-def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None, effort_reflexion=None, arret_tour=None, message_enregistre=None, client=None, libelles_client=None, origine=None, langue_interface="fr", contexte_video=None, erreurs_typees=False):
+def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None, effort_reflexion=None, arret_tour=None, message_enregistre=None, client=None, libelles_client=None, origine=None, langue_interface="fr", contexte_video=None, erreurs_typees=False, utilisateur_autorisations=None):
     """
     Generateur d'evenements. Chaque element produit est un dictionnaire :
     - {"type": "statut", "texte": "..."}         -> un outil MCP est en cours d'utilisation (ou, depuis le 11/09/2026, Gemini en train de lire une image/video jointe)
@@ -480,7 +480,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 modele=modele_reprise, reasoning_effort=reasoning_effort_reprise,
                 agent_nom=etat.get("agent_nom"), conversation_id=conversation_id,
                 catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
-                user_id=user_id, arret=arret_tour,
+                user_id=user_id, user_id_autorisations=utilisateur_autorisations, arret=arret_tour,
             )
         except Exception as e:
             logging.error(f"ERREUR GROQ (reprise apres limite/répétition) {modele_reprise}: {e}")
@@ -512,10 +512,12 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # "Toujours autoriser" (31/10/2026) : la clé est recalculée ici à partir de
             # l'appel lui-même, jamais reprise telle quelle du navigateur, et refusée
             # si l'action n'est pas une action sensible.
-            if reprise.get("toujours_autoriser") and user_id:
+            # La reprise ne transporte pas user_id : l'identifiant vient de la session, via
+            # utilisateur_autorisations, et ne sert qu'aux autorisations permanentes.
+            if reprise.get("toujours_autoriser") and utilisateur_autorisations:
                 cle_toujours = cle_autorisation_appel(appel)
                 if cle_toujours:
-                    enregistrer_autorisation(user_id, cle_toujours, _nom_lisible_appel(appel))
+                    enregistrer_autorisation(utilisateur_autorisations, cle_toujours, _nom_lisible_appel(appel))
             # 24/09/2026 (bug remonté par Bourama : après un clic sur Confirmer,
             # la suite était mal branchée et bloquait) : l'appel confirmé
             # doit porter les MÊMES identifiants que dans _traiter_appels
@@ -596,7 +598,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 modele=modele_reprise, reasoning_effort=reasoning_effort_reprise,
                 agent_nom=etat.get("agent_nom"), conversation_id=conversation_id,
                 catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
-                user_id=user_id, arret=arret_tour,
+                user_id=user_id, user_id_autorisations=utilisateur_autorisations, arret=arret_tour,
             )
         except Exception as e:
             logging.error(f"ERREUR GROQ (reprise apres confirmation) {modele_reprise}: {e}")

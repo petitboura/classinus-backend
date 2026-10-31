@@ -371,6 +371,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
         if payload.reprise is not None:
             generateur = chat_generateur(
                 reprise=_reprise_pour_chat(payload.reprise),
+                utilisateur_autorisations=user_id,
                 arret_tour=arret,
                 langue_interface=langue_interface,
                 erreurs_typees=bool(payload.erreurs_typees),
