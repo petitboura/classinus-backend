@@ -6,6 +6,69 @@ import threading
 from constantes_agent import supabase
 from profils_agents import _mettre_a_jour_profil_utilisateur_si_besoin
 
+def _parent_effectif(user_id, agent_id, conversation_id, parent_id):
+    """
+    Parent reel de la prochaine ligne "user" d'un fil (31/10/2026, bug
+    remonte par Bourama : dernier echange invisible a la reouverture).
+
+    Le frontend envoie parent_id=None quand sa liste locale ne contient
+    encore aucun message deja enregistre (reouverture, reprise de flux,
+    conversation partagee...) alors que le fil a deja des lignes en base.
+    Inserer tel quel cree une deuxieme racine : a la reouverture, le
+    frontend traite les racines comme des versions alternatives du
+    premier message et n'affiche qu'une branche, l'echange le plus
+    recent peut donc disparaitre de l'ecran sans etre perdu en base.
+
+    Regle : dans un fil identifie qui a deja des lignes, un parent absent
+    ou introuvable dans CE fil est repare sur la derniere ligne du fil.
+    Un parent present dans le fil est respecte tel quel, meme ancien :
+    c'est le cas legitime d'une branche (message edite, version).
+    Sans conversation_id (groupement historique), rien a reparer.
+    """
+    if not conversation_id:
+        return parent_id
+    try:
+        if parent_id is not None:
+            res_parent = (
+                supabase.table("historique_conversations")
+                .select("id")
+                .eq("user_id", user_id)
+                .eq("agent_id", agent_id)
+                .eq("conversation_id", conversation_id)
+                .eq("id", parent_id)
+                .limit(1)
+                .execute()
+            )
+            if res_parent.data:
+                return parent_id
+        res_derniere = (
+            supabase.table("historique_conversations")
+            .select("id")
+            .eq("user_id", user_id)
+            .eq("agent_id", agent_id)
+            .eq("conversation_id", conversation_id)
+            .order("created_at", desc=True)
+            .order("id", desc=True)
+            .limit(1)
+            .execute()
+        )
+        lignes = res_derniere.data or []
+        if not lignes:
+            return None
+        parent_repare = lignes[0]["id"]
+        if parent_id != parent_repare:
+            logging.warning(
+                "parent_id repare dans historique_conversations "
+                f"(conversation_id={conversation_id}, recu={parent_id}, utilise={parent_repare})"
+            )
+        return parent_repare
+    except Exception as e:
+        # La reparation ne doit jamais empecher la sauvegarde elle-meme :
+        # en cas d'echec de lecture, on retente avec le parent recu.
+        logging.error(f"ERREUR SUPABASE (verification parent historique) : {e}")
+        return parent_id
+
+
 def _sauvegarder_echange(user_id, agent_id, message_utilisateur, reponse_finale, conversation_id=None, modele=None, meta_utilisateur=None, meta_assistant=None, parent_id=None, sauvegarder_message_utilisateur=True):
     """
     Persiste l'echange (question + reponse) dans `conversations`, pour la
@@ -108,13 +171,22 @@ def _sauvegarder_echange(user_id, agent_id, message_utilisateur, reponse_finale,
     # (reessayer), puisque le parent (la question existante) est deja
     # connu.
     try:
-        id_parent_assistant = parent_id
+        # Reparation d'un parent absent/introuvable (voir _parent_effectif) :
+        # uniquement pour une nouvelle ligne "user". En mode reessayer, le
+        # parent designe la question existante et doit rester tel quel,
+        # sinon la nouvelle reponse ne serait plus une version alternative.
+        parent_effectif = (
+            _parent_effectif(user_id, agent_id, conversation_id, parent_id)
+            if sauvegarder_message_utilisateur
+            else parent_id
+        )
+        id_parent_assistant = parent_effectif
         if sauvegarder_message_utilisateur:
             res_user = (
                 supabase.table("historique_conversations")
                 .insert({
                     "user_id": user_id, "agent_id": agent_id, "role": "user", "content": message_utilisateur,
-                    "conversation_id": conversation_id, "meta": meta_utilisateur or None, "parent_id": parent_id,
+                    "conversation_id": conversation_id, "meta": meta_utilisateur or None, "parent_id": parent_effectif,
                 })
                 .execute()
             )
