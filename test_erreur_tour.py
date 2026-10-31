@@ -227,22 +227,26 @@ class HistoriqueOutilsTropGros(unittest.TestCase):
     """Bug 31/10/2026 : un historique avec plus d'outils que le plafond
     refusait tout l'envoi en 422, conversation bloquee pour toujours."""
 
-    def test_trop_d_outils_tronques_pas_refuses(self):
+    def test_beaucoup_d_outils_gardes_en_entier(self):
+        # Demande Bourama 31/10/2026 : plafond releve a 10000, aucune
+        # troncature -- les 500 outils sont gardes tels quels, dans l'ordre.
         from api.chat import MessageHistorique
 
-        outils = [{"nomOutil": "o", "nomLisible": "O", "resultat": "r"} for _ in range(60)]
+        outils = [{"nomOutil": f"o{i}", "nomLisible": "O", "resultat": "r"} for i in range(500)]
         message = MessageHistorique(role="assistant", content="ok", outils=outils)
-        self.assertEqual(len(message.outils), 50)
+        self.assertEqual(len(message.outils), 500)
+        self.assertEqual(message.outils[0].nomOutil, "o0")
+        self.assertEqual(message.outils[-1].nomOutil, "o499")
 
-    def test_libelles_trop_longs_tronques(self):
+    def test_libelles_longs_gardes_en_entier(self):
         from api.chat import MessageHistorique
 
         message = MessageHistorique(
             role="assistant", content="ok",
             outils=[{"nomOutil": "n" * 200, "nomLisible": "l" * 200, "resultat": "r"}],
         )
-        self.assertEqual(len(message.outils[0].nomOutil), 120)
-        self.assertEqual(len(message.outils[0].nomLisible), 160)
+        self.assertEqual(len(message.outils[0].nomOutil), 200)
+        self.assertEqual(len(message.outils[0].nomLisible), 200)
 
 
 class ReprisePayload(unittest.TestCase):

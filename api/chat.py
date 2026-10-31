@@ -55,28 +55,17 @@ class OutilHistorique(BaseModel):
     (voir core/historique_outils.py) -- même forme que meta.outils déjà
     sauvegardé pour l'affichage (nomOutil/nomLisible/resultat, sans
     sources/images : inutiles pour le modèle, uniquement pour l'UI)."""
-    nomOutil: str = Field(max_length=120)
-    nomLisible: str = Field(max_length=160)
+    nomOutil: str
+    nomLisible: str
     resultat: str
 
     # Correctif 31/10/2026 (conversation bloquee apres la limite d'outils) :
-    # un libelle trop long ou un resultat non textuel ne doit pas faire
-    # refuser TOUT l'envoi en 422 -- l'historique est renvoye a chaque
-    # message, la conversation restait donc bloquee pour toujours, avec
-    # "modifie ton message" alors que le texte tape n'y etait pour rien.
-    # On tronque/convertit au lieu de refuser, meme regle que le frontend
-    # (ChatIA.tsx:outilsPourHistorique), mais cote serveur pour couvrir
-    # aussi les clients qui ne tronquent pas.
-    @field_validator("nomOutil", mode="before")
-    @classmethod
-    def _tronquer_nom_outil(cls, valeur):
-        return valeur[:120] if isinstance(valeur, str) else valeur
-
-    @field_validator("nomLisible", mode="before")
-    @classmethod
-    def _tronquer_nom_lisible(cls, valeur):
-        return valeur[:160] if isinstance(valeur, str) else valeur
-
+    # un resultat non textuel ne doit pas faire refuser TOUT l'envoi en 422 --
+    # l'historique est renvoye a chaque message, la conversation restait donc
+    # bloquee pour toujours, avec "modifie ton message" alors que le texte
+    # tape n'y etait pour rien. On convertit au lieu de refuser. Aucune
+    # troncature : ni les libelles ni la liste d'outils ne sont coupes
+    # (demande Bourama 31/10/2026, plafond releve a 10000).
     @field_validator("resultat", mode="before")
     @classmethod
     def _resultat_en_texte(cls, valeur):
@@ -97,15 +86,6 @@ class MessageHistorique(BaseModel):
     # core/historique_outils.py. Absent/vide pour un message user ou un
     # message assistant sans outil, comportement inchangé dans ce cas.
     outils: Optional[List[OutilHistorique]] = Field(default=None, max_length=PLAFOND_OUTILS_PAR_MESSAGE)
-
-    # Meme correctif que OutilHistorique ci-dessus : au-dela du plafond, on
-    # garde les outils les plus recents au lieu de refuser tout l'envoi.
-    @field_validator("outils", mode="before")
-    @classmethod
-    def _tronquer_outils(cls, valeur):
-        if isinstance(valeur, list) and len(valeur) > PLAFOND_OUTILS_PAR_MESSAGE:
-            return valeur[-PLAFOND_OUTILS_PAR_MESSAGE:]
-        return valeur
 
 
 class Localisation(BaseModel):
