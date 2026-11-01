@@ -1512,6 +1512,7 @@ CATEGORIES_OUTILS = {
         "lancer_video_higgsfield", "consulter_video_higgsfield",
         "generer_image_higgsfield", "consulter_image_higgsfield",
         "estimer_cout_higgsfield", "annuler_generation_higgsfield",
+        "lancer_genjutsu_higgsfield",
         # Moteur de fond (31/10/2026) : registre des capacites, fonctions
         # MCP-only via notre MCP partage (API toujours en premier) et sante
         # du compte partage. Le MCP personnel de l'utilisateur reste la
