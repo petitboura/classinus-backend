@@ -27,11 +27,20 @@ coche, sans rien modifier cote agent.
 """
 
 import os
+import sys
 import time
 import asyncio
 import logging
 import json
 import re
+
+# Anticorruption double import (01/11/2026) : voir core/canal_agent_applicatif.py
+try:
+    _this_mcp = sys.modules[__name__]
+    sys.modules.setdefault("mcp_tools", _this_mcp)
+    sys.modules.setdefault("core.mcp_tools", _this_mcp)
+except Exception:
+    pass
 
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client, create_mcp_http_client
@@ -830,7 +839,7 @@ MESSAGE_TELEPHONE_SANS_REPONSE = (
 
 async def _appeler_telephone_via_app_async(nom_reel, arguments, user_id, delai):
     """Envoie un outil téléphone à l'appli PC et rend le texte du relais."""
-    from canal_agent_applicatif import a_app_telephone_connectee, demander_action_systeme
+    from core.canal_agent_applicatif import a_app_telephone_connectee, demander_action_systeme
     if not await a_app_telephone_connectee(user_id):
         return MESSAGE_TELEPHONE_SANS_APP
     reponse = await demander_action_systeme(

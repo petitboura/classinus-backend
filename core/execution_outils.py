@@ -8,7 +8,7 @@ import logging
 import re
 import concurrent.futures
 import requests
-from mcp_tools import appeler_outil
+from core.mcp_tools import appeler_outil
 from registre_outils import OUTILS_SENSIBLES, est_outil_sensible_serveur_personnel
 from profils_agents import _nom_lisible_appel, _action_appel, _champs_domaines_appel
 from libelles_activite_ia import champs_timeline_appel

@@ -35,7 +35,7 @@ from core.etat_canal_prompt import bloc_etat_canal
 from core.zip_chat import iterer_statuts as _iterer_statuts_zip, obtenir_etat as _obtenir_etat_zip, construire_digest_zip as _construire_digest_zip
 from avancement_notions_ia import notions_pertinentes_pour_eleve, resoudre_code_actif_eleve
 from signalements import signalements_pertinents_pour_injection
-from mcp_tools import lister_outils_autorises_pour_agent, filtrer_catalogue_par_outil_force, appeler_outil
+from core.mcp_tools import lister_outils_autorises_pour_agent, filtrer_catalogue_par_outil_force, appeler_outil
 from registre_outils import CATEGORIES_OUTILS
 from fournisseurs_llm import generer_reponse_premium, creer_client_deepseek
 from identite_modele import message_systeme, systeme_avec_identite

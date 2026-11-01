@@ -32,7 +32,7 @@ from index_notion import parcourir_et_indexer  # noqa: E402
 from index_documents import indexer_texte, indexer_document, supprimer_chunks_existants  # noqa: E402
 from storage import upload_document, list_documents, delete_document  # noqa: E402
 from bibliotheque_fichiers import enregistrer_fichier, enregistrer_lien, lister_fichiers, supprimer_fichier  # noqa: E402
-from mcp_tools import lister_outils_autorises_pour_agent  # noqa: E402
+from core.mcp_tools import lister_outils_autorises_pour_agent  # noqa: E402
 from core.erreurs import erreur_api
 from core.fournisseurs_llm import modeles_disponibles_pour_agent, modeles_bientot_pour_agent, modele_id_est_autorise
 

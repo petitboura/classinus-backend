@@ -5,7 +5,7 @@
 # repetes en boucle.
 import json
 import logging
-from mcp_tools import parametres_outils, PARAMETRE_DELAI_OUTIL
+from core.mcp_tools import parametres_outils, PARAMETRE_DELAI_OUTIL
 from libelles_activite_ia import PARAMETRE_LIBELLE_OUTIL, arguments_sans_libelle
 # Meme chemin d'import que api/ et core/outils_action_agent.py : un seul module, donc un seul etat partage.
 from core.canal_agent_applicatif import retirer_messages_etudiant
