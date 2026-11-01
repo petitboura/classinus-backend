@@ -1,7 +1,8 @@
--- Moteur Higgsfield interne (Classinus) : 9 outils generation exposes au LLM
+-- Moteur Higgsfield interne (Classinus) : outils generation exposes au LLM
 -- API d'abord, MCP partage en repli MCP-only. Sans ces lignes,
 -- demander_outils(categorie="higgsfield_classinus") rend "rien trouve"
 -- meme si le code est pousse (registre_outils_plateforme filtre en base).
+-- 01/11/2026 : Genjutsu ajoute (motion/object/restyle + Light, via API).
 insert into registre_outils_plateforme (nom_outil, categorie, nom_serveur, disponible, updated_at) values
   ('lancer_video_higgsfield', 1, 'generation', true, now()),
   ('consulter_video_higgsfield', 1, 'generation', true, now()),
@@ -9,6 +10,7 @@ insert into registre_outils_plateforme (nom_outil, categorie, nom_serveur, dispo
   ('consulter_image_higgsfield', 1, 'generation', true, now()),
   ('estimer_cout_higgsfield', 1, 'generation', true, now()),
   ('annuler_generation_higgsfield', 1, 'generation', true, now()),
+  ('lancer_genjutsu_higgsfield', 1, 'generation', true, now()),
   ('lister_capacites_higgsfield', 1, 'generation', true, now()),
   ('generer_mcp_higgsfield', 1, 'generation', true, now()),
   ('etat_mcp_partage_higgsfield', 1, 'generation', true, now())
