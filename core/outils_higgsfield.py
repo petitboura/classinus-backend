@@ -17,6 +17,7 @@ from core.generation_video_higgsfield import (
 )
 from core.higgsfield_requetes import (
     ErreurHiggsfield,
+    construire_requete_genjutsu,
     construire_requete_image,
     construire_requete_video,
 )
@@ -230,8 +231,14 @@ if higgsfield_api_disponible():
         Mêmes liens de fichiers joints acceptés que lancer_video_higgsfield.
         """
         try:
-            if (genre or "").strip().lower() == "image":
+            g = (genre or "").strip().lower()
+            if g == "image":
                 adresse, corps = construire_requete_image(modele, prompt, format_video, qualite, images_reference)
+            elif g == "genjutsu":
+                # Pour Genjutsu, images_reference doit contenir au moins une image ;
+                # on estime avec une image fictive si non fournie.
+                refs = images_reference if images_reference else ["https://example.com/ref.jpg"]
+                adresse, corps = construire_requete_genjutsu(modele or "genjutsu-motion", image_url or "https://example.com/video.mp4", refs, prompt, qualite or "", "")
             else:
                 adresse, corps = construire_requete_video(
                     modele, prompt, duree_secondes, format_video, qualite, son, image_url, "",
@@ -242,6 +249,41 @@ if higgsfield_api_disponible():
             return f"Coût estimé : {prix['credits']} crédits."
         except Exception as e:
             return _message_erreur(e, "estimer le coût")
+
+    @mcp_generation.tool()
+    def lancer_genjutsu_higgsfield(
+        video_url: str,
+        titre: str,
+        modele: str = "genjutsu-motion",
+        prompt: str = "",
+        images_reference: Optional[List[str]] = None,
+        resolution: str = "",
+        preset_id: str = "",
+        ctx: Context = None,
+    ) -> str:
+        """
+        Version Classinus de Genjutsu Higgsfield (API de Classinus) : transforme
+        une vidéo existante avec des images de référence. `titre` (obligatoire)
+        même règle que lancer_video_higgsfield. Renvoie un identifiant à donner
+        à consulter_video_higgsfield. La vidéo source doit faire au moins 4s
+        (tronquée à 30s, 15s pour les variantes Light). `modele` :
+        "genjutsu-motion" (mouvement), "genjutsu-object" (objet/tenue),
+        "genjutsu-restyle" (style via preset_id), ou leurs variantes light
+        "genjutsu-light-motion" / "genjutsu-light-object" (moins cher, 15s max).
+        1 à 8 images_reference (0 à 5 pour restyle), toutes en https. `resolution`
+        480p/720p/1080p. Prompt optionnel. Estimation possible via
+        estimer_cout_higgsfield avec genre "genjutsu".
+        """
+        try:
+            adresse, corps = construire_requete_genjutsu(modele, video_url, images_reference, prompt, resolution, preset_id)
+            reserver_generation(_supabase_memoire, _id_utilisateur(ctx), "video")
+            resultat = lancer_generation(adresse, corps)
+            return (
+                f"Génération Genjutsu lancée (id: {resultat['request_id']}). "
+                f"Utilise ensuite consulter_video_higgsfield avec cet identifiant et le même titre ({titre})."
+            )
+        except Exception as e:
+            return _message_erreur(e, "lancer la génération Genjutsu")
 
     @mcp_generation.tool()
     def annuler_generation_higgsfield(request_id: str) -> str:

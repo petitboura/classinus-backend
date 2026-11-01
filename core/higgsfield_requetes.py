@@ -1,14 +1,17 @@
-"""Construction et vérification des demandes Higgsfield (vidéo et image).
+"""Construction et vérification des demandes Higgsfield (vidéo, image, Genjutsu).
 
 Aucun appel réseau ici : on transforme les choix de l'IA en une demande valide
 selon le catalogue (core/higgsfield_catalogue.py). Toute erreur est une
 ErreurHiggsfield avec un message lisible, que l'IA peut relayer telle quelle.
 """
 from core.higgsfield_catalogue import (
+    MODELE_GENJUTSU_DEFAUT,
+    MODELES_GENJUTSU,
     MODELES_IMAGE,
     MODELES_VIDEO,
     MODELE_IMAGE_DEFAUT,
     MODELE_VIDEO_DEFAUT,
+    noms_modeles_genjutsu,
     noms_modeles_image,
     noms_modeles_video,
 )
@@ -77,7 +80,6 @@ def construire_requete_video(
     description = (prompt or "").strip()
     depart = _adresse_publique(image_url, "L'image de départ")
     fin = _adresse_publique(image_fin_url, "L'image de fin")
-    # Sans limite connue (modèle sans références), le refus clair vient du contrôle juste dessous.
     limites = spec.get("max_references") or {"images": 99, "videos": 99, "audios": 99}
     refs_images = _liste_adresses(images_reference, "Les images de référence", limites["images"])
     refs_videos = _liste_adresses(videos_reference, "Les vidéos de référence", limites["videos"])
@@ -112,7 +114,6 @@ def construire_requete_video(
         if choix_format:
             corps["aspect_ratio"] = choix_format
     elif depart:
-        # Avec une image de départ, le cadrage suit l'image : pas de choix de format.
         corps["image_url"] = depart
         if fin:
             corps[spec["champ_image_fin"]] = fin
@@ -161,4 +162,38 @@ def construire_requete_image(modele, prompt, format_image="", qualite="", images
         raise ErreurHiggsfield(f"Maximum {spec['max_references']} images de référence.")
     if references:
         corps["image_urls"] = references
+    return spec["endpoint"], corps
+
+
+def construire_requete_genjutsu(modele, video_url, images_reference=None, prompt="", resolution="", preset_id=""):
+    """Renvoie (adresse_du_modele, corps) pour Genjutsu (vidéo -> vidéo)."""
+    cle = (modele or MODELE_GENJUTSU_DEFAUT).strip().lower()
+    spec = MODELES_GENJUTSU.get(cle)
+    if not spec:
+        raise ErreurHiggsfield(f"Modèle Genjutsu \"{cle}\" inconnu. Modèles disponibles : {noms_modeles_genjutsu()}.")
+    source = _adresse_publique(video_url, "La vidéo source")
+    if not source:
+        raise ErreurHiggsfield("Il faut une vidéo source (adresse https) pour Genjutsu.")
+    refs = _liste_adresses(images_reference, "Les images de référence", spec["max_images"])
+    # motion/object exigent 1-8 images, restyle 0-5.
+    if not spec["preset_requis"] and not refs:
+        raise ErreurHiggsfield("Genjutsu a besoin d'au moins 1 image de référence (1 à 8).")
+    preset = (preset_id or "").strip()
+    if spec["preset_requis"] and not preset:
+        raise ErreurHiggsfield("Ce modèle Genjutsu demande un preset_id (style). Liste-le d'abord ou donne son UUID.")
+    if preset and not spec["preset_requis"]:
+        raise ErreurHiggsfield(f"Le modèle {cle} n'accepte pas de preset_id : utilise genjutsu-restyle pour les styles.")
+    corps = {"video_url": source}
+    if refs:
+        corps["image_urls"] = refs
+    # prompt optionnel (défaut "" côté API)
+    if (prompt or "").strip():
+        corps["prompt"] = prompt.strip()[:10000]
+    choix_reso = _choix_valide(resolution, spec["resolutions"], "Résolution")
+    if choix_reso:
+        corps["resolution"] = choix_reso
+    elif spec["resolution_defaut"]:
+        corps["resolution"] = spec["resolution_defaut"]
+    if preset:
+        corps["preset_id"] = preset
     return spec["endpoint"], corps

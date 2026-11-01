@@ -33,6 +33,33 @@ CAPACITES = [
         "medias_requis": [],
     },
     {
+        "id": "genjutsu_motion",
+        "label": "Genjutsu Motion Transfer : mouvement sur nouveau decor",
+        "famille": "generation",
+        "voie": "api",
+        "modeles_api": ["genjutsu-motion", "genjutsu-light-motion"],
+        "outils_mcp": [],
+        "medias_requis": ["video", "image"],
+    },
+    {
+        "id": "genjutsu_object",
+        "label": "Genjutsu Object Swap : changer objet/tenue",
+        "famille": "generation",
+        "voie": "api",
+        "modeles_api": ["genjutsu-object", "genjutsu-light-object"],
+        "outils_mcp": [],
+        "medias_requis": ["video", "image"],
+    },
+    {
+        "id": "genjutsu_restyle",
+        "label": "Genjutsu Restyle : appliquer un style (preset)",
+        "famille": "generation",
+        "voie": "api",
+        "modeles_api": ["genjutsu-restyle"],
+        "outils_mcp": [],
+        "medias_requis": ["video"],
+    },
+    {
         "id": "audio_tts",
         "label": "Audio : texte vers voix",
         "famille": "generation",
@@ -198,9 +225,6 @@ CAPACITES = [
 
 _PAR_ID = {c["id"]: c for c in CAPACITES}
 
-# Outils MCP autorises sur le compte partage : union des candidats du
-# registre. Tout outil absent de cette liste est refuse, meme s'il existe
-# sur le serveur (pas d'acces libre au compte Classinus).
 OUTILS_MCP_AUTORISES = frozenset(
     outil for capacite in CAPACITES for outil in capacite["outils_mcp"]
 )
