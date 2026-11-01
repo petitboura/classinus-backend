@@ -78,7 +78,7 @@ from historique_conversation import (
 from historique_reponses_qcm import reponses_qcm_a_injecter
 from execution_outils import _resultat_pour_affichage, cle_autorisation_appel
 from autorisations_outils import enregistrer_autorisation
-from boucle_agent import _agent_groq, _capturer_reponse, _ajouter_segment_texte
+from boucle_agent import _agent_groq, _capturer_reponse, _ajouter_segment_texte, retirer_consigne_de_fin, consigne_de_reprise
 from erreur_tour import evenement_echec
 
 logging.basicConfig(level=logging.INFO)
@@ -462,6 +462,13 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # s'ajuster), pas au frontend de trancher en amont.
         etat = reprise["etat_reprise"]
         messages_agent = _messages_agent_avec_locale(etat["messages_agent"], langue_interface)
+        # Correctif 01/11/2026 (bouton Continuer, signale par Bourama) : l'etat gardé après une
+        # limite ou une répétition se termine par la consigne "conclus et dis que tu as atteint
+        # ta limite". Rejouée telle quelle, elle faisait redire la limite au lieu de continuer.
+        # On la retire, et sans texte tapé par l'utilisateur on la remplace par une consigne de
+        # reprise (budget neuf, poursuivre). Après un arrêt ou une erreur (genre None), rien ne
+        # change.
+        messages_agent, genre_fin_de_tour = retirer_consigne_de_fin(messages_agent)
         outils_mcp = etat["outils_mcp"]
         table_routage = etat["table_routage"]
         modele_reprise = etat.get("modele", GROQ_PRIMARY)
@@ -472,6 +479,10 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
 
         if reprise.get("message_utilisateur"):
             messages_agent.append({"role": "user", "content": reprise["message_utilisateur"]})
+        else:
+            consigne = consigne_de_reprise(genre_fin_de_tour)
+            if consigne:
+                messages_agent.append(consigne)
 
         client_groq = _client_pour_reprise(modele_reprise)
         reponse_accumulee = []

@@ -132,6 +132,58 @@ def messages_reprenables(messages_agent):
     return messages if identifiants <= repondus else messages[:dernier]
 
 
+# Debut des deux consignes systeme ecrites quand le tour s'arrete tout seul (limite d'actions
+# atteinte, repetition detectee). Elles disent au modele de conclure, et elles se retrouvent
+# dans etat_reprise. Rejouees telles quelles par le bouton Continuer ou Reessayer, elles lui
+# font redire qu'il a atteint sa limite au lieu de poursuivre le travail (01/11/2026,
+# signale par Bourama). Le texte complet des consignes commence toujours par ces debuts.
+DEBUT_CONSIGNE_LIMITE = "Tu as atteint la limite de "
+DEBUT_CONSIGNE_REPETITION = "Tu as répété "
+
+CONSIGNE_REPRISE_APRES_LIMITE = (
+    "L'utilisateur te demande de continuer. Tu disposes d'un nouveau budget d'actions : "
+    "poursuis le travail exactement là où tu t'es arrêté, sans refaire ce qui est déjà fait "
+    "et sans redire que tu as atteint une limite."
+)
+CONSIGNE_REPRISE_APRES_REPETITION = (
+    "L'utilisateur te demande de réessayer. Essaie une autre approche que celle qui a échoué, "
+    "sans répéter exactement la même action."
+)
+
+
+def retirer_consigne_de_fin(messages_agent):
+    """
+    Renvoie (messages, genre) : une copie de messages_agent sans les consignes systeme de fin
+    de tour placees tout a la fin, et ce qu'elles etaient ("limite", "repetition", ou None si
+    la liste n'en portait aucune, comme apres un arret ou une erreur). Fonctionne aussi sur
+    les etats de reprise deja envoyes au navigateur avant ce correctif.
+    """
+    messages = list(messages_agent)
+    genre = None
+    while messages:
+        dernier = messages[-1]
+        contenu = dernier.get("content") if isinstance(dernier, dict) else None
+        if not isinstance(dernier, dict) or dernier.get("role") != "system" or not isinstance(contenu, str):
+            break
+        if contenu.startswith(DEBUT_CONSIGNE_LIMITE):
+            genre = "limite"
+        elif contenu.startswith(DEBUT_CONSIGNE_REPETITION):
+            genre = "repetition"
+        else:
+            break
+        messages.pop()
+    return messages, genre
+
+
+def consigne_de_reprise(genre):
+    """Consigne a ajouter quand l'utilisateur clique Continuer ou Reessayer sans rien taper."""
+    if genre == "limite":
+        return {"role": "system", "content": CONSIGNE_REPRISE_APRES_LIMITE}
+    if genre == "repetition":
+        return {"role": "system", "content": CONSIGNE_REPRISE_APRES_REPETITION}
+    return None
+
+
 def _evenement_arret_tour(arret, messages_agent, outils_mcp, table_routage, modele, reasoning_effort, agent_nom):
     """
     Evenement envoye juste avant de fermer le flux quand l'utilisateur a clique sur Arrêter, pour
@@ -635,7 +687,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
             messages_agent.append({
                 "role": "system",
                 "content": (
-                    f"Tu as répété {tolerance_repetition} fois d'affilée exactement la "
+                    f"{DEBUT_CONSIGNE_REPETITION}{tolerance_repetition} fois d'affilée exactement la "
                     f"même action ({_nom_lisible_appel(appel_repete)}) sans y arriver. "
                     "Rédige maintenant ta réponse en expliquant clairement ce blocage à "
                     "l'utilisateur, avec ce que tu as quand même réussi à faire jusque-là. "
@@ -951,7 +1003,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
     messages_agent.append({
         "role": "system",
         "content": (
-            f"Tu as atteint la limite de {plafond_absolu} actions pour cette "
+            f"{DEBUT_CONSIGNE_LIMITE}{plafond_absolu} actions pour cette "
             "réponse. Rédige maintenant ta réponse finale à partir de ce que tu "
             "as déjà obtenu, en indiquant clairement à l'utilisateur que tu as "
             "atteint cette limite et qu'il peut te demander de continuer pour "
