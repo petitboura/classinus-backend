@@ -119,7 +119,9 @@ def estimer_cout(adresse_modele: str, corps: dict) -> dict:
     reponse = _post(f"estimate/{adresse_modele}", corps)
     _verifier(reponse, "estimation")
     donnees = reponse.json()
-    return {"credits": donnees.get("credits"), "usd": donnees.get("usd")}
+    # Credits seulement : aucun montant en argent ne remonte vers le LLM
+    # ni vers l'utilisateur (31/10/2026, demande de Bourama).
+    return {"credits": donnees.get("credits")}
 
 
 def _identifiant_valide(request_id: str) -> str:

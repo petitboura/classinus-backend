@@ -29,9 +29,9 @@ import time
 from openai import OpenAI
 
 try:
-    from adaptateur_commun import ClientCompatible
+    from adaptateur_commun import ClientCompatible, DELAI_APPEL_FOURNISSEUR_SECONDES
 except ImportError:
-    from core.adaptateur_commun import ClientCompatible
+    from core.adaptateur_commun import ClientCompatible, DELAI_APPEL_FOURNISSEUR_SECONDES
 
 BASE_URL_BASETEN = "https://inference.baseten.co/v1"
 BASE_URL_DEEPSEEK_DIRECT = "https://api.deepseek.com"
@@ -114,8 +114,15 @@ class ClientBaseten(ClientCompatible):
         modele_id = arguments.get("model")
         slug = self._slug_pour(modele_id)
         if slug is not None:
+            arguments = {**arguments, "model": slug}
+            # 01/11/2026 : sans modele de repli (Muse Spark Open, servi seulement par Baseten),
+            # le delai court de la cascade (10 s) coupait la reponse net quand le premier mot
+            # tardait (contexte lourd), puis chaque "Continuer" retombait sur la meme coupure.
+            # On donne alors la meme patience qu'aux autres fournisseurs sans repli.
+            if self._client_direct is None:
+                arguments["timeout"] = DELAI_APPEL_FOURNISSEUR_SECONDES
             try:
-                reponse = self._client_baseten.chat.completions.create(**{**arguments, "model": slug})
+                reponse = self._client_baseten.chat.completions.create(**arguments)
                 # Log temporaire (staging) : quelle route a repondu. En
                 # warning car le niveau info n'apparait pas dans les logs.
                 logging.warning(f"[ROUTE DEEPSEEK] Baseten a repondu ({modele_id}, slug {slug})")

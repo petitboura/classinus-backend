@@ -28,7 +28,10 @@ core/outils_rappel_resultats.py) si le modele en a reellement besoin. Les
 resultats RECENTS restent intacts.
 """
 
+import json
+
 from constantes_agent import SEUIL_CARACTERES_OUTILS_HISTORIQUE
+from core.plafonds_reglables import PLAFOND_ARGUMENTS_OUTIL_HISTORIQUE, PLAFOND_RESULTAT_OUTIL_HISTORIQUE
 
 # Un rappel ne remplace un resultat que si le resultat est nettement plus
 # long que le rappel lui-meme, sinon on ferait grossir le contexte au lieu
@@ -40,8 +43,44 @@ def _bloc_outil(o):
     """Un seul resultat d'outil (voir api/chat.py:OutilHistorique), mis en
     forme pour le modele."""
     nom = o.get("nomLisible") or o.get("nomOutil") or "Outil"
-    resultat = o.get("resultat") or ""
-    return f"[Résultat de l'outil déjà exécuté -- {nom}]\n{resultat}"
+    # Le resultat complet (resultatComplet) existe quand celui d'affichage a ete coupe pour
+    # l'ecran : le modele doit revoir le premier, jamais la version coupee.
+    resultat = o.get("resultatComplet") or o.get("resultat") or ""
+    arguments = (o.get("arguments") or "").strip()
+    entete = f"[Résultat de l'outil déjà exécuté -- {nom}]"
+    if arguments:
+        return f"{entete}\nAppel : {arguments}\n{resultat}"
+    return f"{entete}\n{resultat}"
+
+
+def _couper(texte, plafond):
+    if len(texte) <= plafond:
+        return texte
+    return texte[:plafond] + f"\n... (coupé, {len(texte)} caractères au total)"
+
+
+def champs_historique_outil(arguments, resultat_brut, resultat_affiche):
+    """
+    Champs a ajouter a l'evenement outil_resultat (et a meta.outils) pour que le modele
+    retrouve, aux tours suivants, ce que l'outil a fait.
+
+    `arguments` : arguments de l'appel, en texte JSON ou en dict (None ou vide : rien n'est
+    ajoute). `resultat_brut` : resultat complet de l'outil. `resultat_affiche` : version
+    deja coupee pour l'ecran. `resultat_complet` n'est ajoute que si la version d'affichage
+    a ete coupee, pour ne jamais envoyer le meme texte deux fois.
+    """
+    champs = {}
+    if isinstance(arguments, dict):
+        texte_arguments = json.dumps(arguments, ensure_ascii=False, default=str) if arguments else ""
+    else:
+        texte_arguments = (arguments or "").strip()
+    if texte_arguments and texte_arguments not in ("{}", "null"):
+        champs["arguments"] = _couper(texte_arguments, PLAFOND_ARGUMENTS_OUTIL_HISTORIQUE)
+    if not isinstance(resultat_brut, str):
+        resultat_brut = str(resultat_brut)
+    if resultat_brut != resultat_affiche:
+        champs["resultat_complet"] = _couper(resultat_brut, PLAFOND_RESULTAT_OUTIL_HISTORIQUE)
+    return champs
 
 
 def _pointeur_outil(o, mentionner_outil_rappel=True):
@@ -119,8 +158,14 @@ def enrichir_historique_avec_outils(historique, mentionner_outil_rappel=True):
                 coupure = k + 1
                 break
         anciens, recents = blocs[:coupure], blocs[coupure:]
+        # Les outils du dernier message qui en porte restent toujours entiers : c'est le
+        # travail en cours, le remplacer par un rappel ferait repartir le modele de zero.
+        dernier_idx = blocs[-1][0]
         allege = []
         for idx, o, texte in anciens:
+            if idx == dernier_idx:
+                allege.append((idx, o, texte))
+                continue
             rappel = _pointeur_outil(o, mentionner_outil_rappel)
             if len(texte) > len(rappel) + _MARGE_MIN_REMPLACEMENT:
                 allege.append((idx, o, rappel))

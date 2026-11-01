@@ -29,7 +29,7 @@ import connexions.notion as notion
 # ce qui ne marche que si core/ est dans le chemin de recherche. Même
 # contournement que api/agents.py.
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "core"))
-from mcp_tools import _appeler_outil_async  # noqa: E402
+from core.mcp_tools import _appeler_outil_async  # noqa: E402
 
 URL_MCP_NOTION = "https://mcp.notion.com/mcp"
 

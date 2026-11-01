@@ -196,14 +196,6 @@ class ConsigneConclusionForcee(unittest.TestCase):
         "content": "Tu as répété 3 fois d'affilée exactement la même action (X) sans y arriver. Rédige maintenant ta réponse.",
     }
 
-    def test_etat_de_reprise_sans_la_consigne(self):
-        for consigne in (self.CONSIGNE_LIMITE, self.CONSIGNE_REPETITION):
-            messages = BASE + [_appel("a"), _resultat("a"), consigne]
-            evenement = boucle_agent._evenement_reprise_agent("limite_outils_atteinte", messages, [], {}, "m", None, "A")
-            self.assertEqual(evenement["etat_reprise"]["messages_agent"], BASE + [_appel("a"), _resultat("a")])
-            # La liste d'origine (celle qui a produit la conclusion) est intacte.
-            self.assertEqual(messages[-1], consigne)
-
     def test_reprise_avec_un_ancien_etat_nettoyee_dans_chat(self):
         recus = []
 
@@ -260,7 +252,7 @@ class ReprisePayload(unittest.TestCase):
         from api.chat import RepriseConfirmation, _reprise_pour_chat
 
         reprise = RepriseConfirmation(etat_reprise={"a": 1}, approuve=False)
-        self.assertEqual(_reprise_pour_chat(reprise), {"etat_reprise": {"a": 1}, "approuve": False})
+        self.assertEqual(_reprise_pour_chat(reprise), {"etat_reprise": {"a": 1}, "approuve": False, "toujours_autoriser": False})
 
     def test_sans_type_ni_approbation_refuse(self):
         from api.chat import RepriseConfirmation

@@ -20,10 +20,19 @@ question, sinon poser_question_appareil renvoie tout de suite une erreur
 
 import asyncio
 import logging
+import sys
 import uuid
 from typing import Any
 
 from fastapi import WebSocket
+
+# Anticorruption double import (01/11/2026) : idem core/canal_agent_applicatif.py
+try:
+    _this_ctr = sys.modules[__name__]
+    sys.modules.setdefault("canal_temps_reel", _this_ctr)
+    sys.modules.setdefault("core.canal_temps_reel", _this_ctr)
+except Exception:
+    pass
 
 # Une seule connexion active par (utilisateur, appareil) a la fois : une
 # nouvelle connexion du MEME appareil (ex: reconnexion apres coupure

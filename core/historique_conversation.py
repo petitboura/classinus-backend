@@ -12,10 +12,10 @@ simple rappel gratuit (role + debut du message). Le texte complet reste
 recuperable a la demande via rappeler_echange_conversation. Rien n'est perdu.
 
 Deux seuils (constantes_agent.py) :
-- SEUIL_CARACTERES_HISTORIQUE_CONVERSATION (doux, 5000) : objectif affiche au
+- SEUIL_CARACTERES_HISTORIQUE_CONVERSATION (doux, 40000) : objectif affiche au
   modele quand la taille approche. Rien n'est force a ce niveau, c'est une
   consigne donnee au modele.
-- SEUIL_CARACTERES_HISTORIQUE_CONVERSATION_MAX (dur, 8000) : filet de securite.
+- SEUIL_CARACTERES_HISTORIQUE_CONVERSATION_MAX (dur, 60000) : filet de securite.
   Si le modele n'a pas allege assez, les plus vieux messages sont alleges
   automatiquement, en evitant d'abord ceux dont le sujet reste present dans
   les echanges recents.

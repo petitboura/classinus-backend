@@ -143,6 +143,44 @@ async def cas_ecrire_nominal():
     print("OK : memoire_ecrire, cas nominal -> bonne catégorie/sous-catégorie transmise, jamais les autres")
 
 
+async def cas_ecrire_contenu_deja_objet():
+    # 30/10/2026 : muse-spark-open envoie l'objet directement, sans le mettre en texte JSON.
+    ctx = construire_ctx(user_id="u1")
+    with patch.object(ome, "_ecrire_categorie", return_value=(True, None)) as mock:
+        resultat = ome.memoire_ecrire(
+            categorie="apprentissage", sous_categorie="maths",
+            contenu_json={"notions_vues": ["derivees"]}, description="Notions vues en maths", ctx=ctx,
+        )
+    mock.assert_called_once_with("u1", "apprentissage", "maths", {"notions_vues": ["derivees"]}, "Notions vues en maths")
+    assert resultat == "Mémoire mise à jour (apprentissage.maths).", resultat
+    print("OK : memoire_ecrire, contenu envoyé comme objet (et non comme texte JSON) -> accepté, même résultat")
+
+
+async def cas_ecrire_contenu_type_inattendu():
+    ctx = construire_ctx(user_id="u1")
+    for valeur in ([1, 2], 5, None):
+        resultat = ome.memoire_ecrire(categorie="scolarite", contenu_json=valeur, description="x", ctx=ctx)
+        assert "objet JSON" in resultat, (valeur, resultat)
+    print("OK : memoire_ecrire, liste, nombre ou vide en contenu -> refusé proprement, jamais de plantage")
+
+
+async def cas_completer_ajouts_deja_objet():
+    ctx = construire_ctx(user_id="u1")
+    with patch.object(ome, "_completer_categorie", return_value=(True, None)) as mock:
+        resultat = ome.memoire_completer(
+            categorie="apprentissage", sous_categorie="maths",
+            ajouts_json={"notions_vues": ["integrales"]}, description="Notions vues en maths", ctx=ctx,
+        )
+        resultat_texte = ome.memoire_completer(
+            categorie="apprentissage", sous_categorie="maths",
+            ajouts_json='{"notions_vues": ["integrales"]}', description="Notions vues en maths", ctx=ctx,
+        )
+    attendu = ("u1", "apprentissage", "maths", {"notions_vues": ["integrales"]}, "Notions vues en maths")
+    assert mock.call_count == 2 and all(c.args == attendu for c in mock.call_args_list), mock.call_args_list
+    assert resultat == resultat_texte == "Mémoire mise à jour (apprentissage.maths).", (resultat, resultat_texte)
+    print("OK : memoire_completer, ajouts envoyés comme objet ou comme texte JSON -> même résultat")
+
+
 async def cas_ecrire_echec_supabase():
     ctx = construire_ctx(user_id="u1")
     with patch.object(ome, "_ecrire_categorie", return_value=(False, "Erreur : nom de catégorie manquant ou invalide.")):
@@ -318,6 +356,9 @@ async def main():
     await cas_ecrire_json_pas_un_objet()
     await cas_ecrire_description_manquante()
     await cas_ecrire_nominal()
+    await cas_ecrire_contenu_deja_objet()
+    await cas_ecrire_contenu_type_inattendu()
+    await cas_completer_ajouts_deja_objet()
     await cas_ecrire_echec_supabase()
     await cas_injection_ajoute_les_3_outils_et_leur_routage()
     await cas_injection_sans_doublon()

@@ -36,6 +36,15 @@ PLAFOND_OUTILS_PAR_MESSAGE = _entier_positif_env("CLASSINUS_CHAT_MAX_OUTILS_PAR_
 PLAFOND_IMAGES_JOINTES = _entier_positif_env("CLASSINUS_CHAT_MAX_IMAGES_JOINTES", 30)
 PLAFOND_ZIPS_JOINTS = _entier_positif_env("CLASSINUS_CHAT_MAX_ZIPS_JOINTS", 20)
 
+# Copie d'un outil renvoyee au modele aux tours suivants (core/historique_outils.py). Le
+# resultat d'affichage reste coupe a 3000 caracteres pour l'ecran, mais le modele doit revoir
+# le resultat entier et les arguments de l'appel (code lance, chemin lu, requete envoyee),
+# sinon il ne sait plus ce qu'il a fait et recommence. Ces deux plafonds ne protegent que le
+# serveur contre un resultat demesure, ils ne servent pas a economiser du contexte (les vieux
+# resultats sont deja remplaces par un rappel, voir SEUIL_CARACTERES_OUTILS_HISTORIQUE).
+PLAFOND_RESULTAT_OUTIL_HISTORIQUE = _entier_positif_env("CLASSINUS_CHAT_RESULTAT_OUTIL_HISTORIQUE_MAX", 60000)
+PLAFOND_ARGUMENTS_OUTIL_HISTORIQUE = _entier_positif_env("CLASSINUS_CHAT_ARGUMENTS_OUTIL_HISTORIQUE_MAX", 20000)
+
 # Taille totale d'une requete vers /api/chat, en Mo. Protege la memoire du serveur : la requete
 # entiere est lue avant toute validation, et le chat est ouvert aux visiteurs non connectes.
 TAILLE_MAX_REQUETE_CHAT_MO = _entier_positif_env("CLASSINUS_CHAT_TAILLE_MAX_REQUETE_MO", 100)
@@ -49,6 +58,24 @@ AGE_TACHE_PERIMEE = timedelta(hours=_entier_positif_env("CLASSINUS_TACHE_PERIMEE
 # de reseau peut encore rattraper la fin du flux. Le plafond de tours termines gardes borne la
 # memoire du serveur. Le signe de vie garde la connexion ouverte pendant les longues attentes
 # d'outils (les proxys coupent une connexion restee muette trop longtemps).
-CONSERVATION_TOUR_DETACHE = timedelta(minutes=_entier_positif_env("CLASSINUS_TOUR_CONSERVATION_MINUTES", 30))
-MAX_TOURS_DETACHES_CONSERVES = _entier_positif_env("CLASSINUS_TOURS_CONSERVES_MAX", 200)
+CONSERVATION_TOUR_DETACHE = timedelta(minutes=_entier_positif_env("CLASSINUS_TOUR_CONSERVATION_MINUTES", 5))
+MAX_TOURS_DETACHES_CONSERVES = _entier_positif_env("CLASSINUS_TOURS_CONSERVES_MAX", 50)
+# Budget total de lignes SSE des tours TERMINES gardes en memoire (les tours en cours ne sont
+# jamais touches) : un nombre de tours seul ne borne pas la RAM, leur taille compte autant.
+MAX_OCTETS_TOURS_DETACHES_CONSERVES = _entier_positif_env("CLASSINUS_TOURS_CONSERVES_MAX_MO", 32) * 1024 * 1024
+# Garde-fou d'un tour en cours : au-dela, ses nouvelles lignes ne sont plus stockees (le travail
+# continue et sauvegarde normalement), seul un rattachement ulterieur serait partiel.
+MAX_OCTETS_TOUR_DETACHE = _entier_positif_env("CLASSINUS_TOUR_MAX_MO", 16) * 1024 * 1024
+INTERVALLE_PURGE_TOURS_DETACHES = timedelta(seconds=_entier_positif_env("CLASSINUS_TOURS_PURGE_SECONDES", 60))
 DELAI_SIGNE_VIE_FLUX = _entier_positif_env("CLASSINUS_FLUX_SIGNE_VIE_SECONDES", 15)
+
+# Persistance des tours detaches en base (core/persistance_tours.py, 31/10/2026). Les lignes SSE
+# sont ecrites par paquets pour ne pas faire une requete par evenement : un paquet part quand il
+# atteint TAILLE_PAQUET_TOUR lignes ou apres DELAI_ECRITURE_TOUR secondes. Le signe de vie en base
+# (maj_le) est rafraichi a chaque paquet : un tour "en_cours" sans signe de vie depuis plus de
+# AGE_TOUR_SANS_SIGNE_VIE est un orphelin (processus mort) et passe "interrompu" au redemarrage.
+# Les tours termines/interrompus sont purges apres CONSERVATION_TOURS_PERSISTES jours.
+TAILLE_PAQUET_TOUR = _entier_positif_env("CLASSINUS_TOUR_PAQUET_LIGNES", 50)
+DELAI_ECRITURE_TOUR_SECONDES = _entier_positif_env("CLASSINUS_TOUR_ECRITURE_SECONDES", 2)
+AGE_TOUR_SANS_SIGNE_VIE = timedelta(minutes=_entier_positif_env("CLASSINUS_TOUR_ORPHELIN_MINUTES", 5))
+CONSERVATION_TOURS_PERSISTES = timedelta(days=_entier_positif_env("CLASSINUS_TOURS_PERSISTES_JOURS", 7))

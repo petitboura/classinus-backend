@@ -667,6 +667,9 @@ OUTILS_SENSIBLES = {
     "lancer_video_higgsfield",
     # Image Higgsfield (25/10/2026) : payante aussi, donc TOUJOURS interrompue pour confirmation.
     "generer_image_higgsfield",
+    # Fonctions MCP-only (31/10/2026) : payantes sur le compte partage, donc
+    # TOUJOURS interrompues pour confirmation avant execution.
+    "generer_mcp_higgsfield",
     # ÉCRIT réellement sur un dépôt GitHub (voir
     # core/serveur_mcp_github.py, gerer_depot_github action
     # "modifier_fichier", consolidé le 26/08, ex modifier_fichier_depot_github) :
@@ -804,6 +807,9 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "gerer_execution_code:run_code": {"label": "Exécution de code", "icone": "Play", "onglet": None},
     "gerer_execution_code:run_command": {"label": "Commande shell", "icone": "Terminal", "onglet": None},
     "gerer_execution_code:write_file": {"label": "Ajout d'un fichier", "icone": "FilePlus", "onglet": None},
+    "gerer_execution_code:edit_file": {"label": "Édition ciblée", "icone": "FilePenLine", "onglet": None},
+    "gerer_execution_code:search_files": {"label": "Recherche de code", "icone": "Search", "onglet": None},
+    "gerer_execution_code:find_files": {"label": "Recherche fichiers", "icone": "FolderSearch", "onglet": None},
     "gerer_execution_code:importer_fichier": {"label": "Import de fichier", "icone": "FilePlus", "onglet": None},
     "gerer_execution_code:read_file": {"label": "Lecture de fichier", "icone": "FileText", "onglet": None},
     "gerer_execution_code:list_files": {"label": "Liste des fichiers", "icone": "FolderOpen", "onglet": None},
@@ -1201,6 +1207,9 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "consulter_image_higgsfield": {"label": "Suivi d'une image", "icone": "Image", "onglet": None, "appli": "higgsfield_mcp"},
     "estimer_cout_higgsfield": {"label": "Estimation du coût", "icone": "Coins", "onglet": None, "appli": "higgsfield_mcp"},
     "annuler_generation_higgsfield": {"label": "Annulation d'une génération", "icone": "Ban", "onglet": None, "appli": "higgsfield_mcp"},
+    "lister_capacites_higgsfield": {"label": "Capacités Higgsfield", "icone": "ListChecks", "onglet": None, "appli": "higgsfield_mcp"},
+    "generer_mcp_higgsfield": {"label": "Fonction Higgsfield via MCP", "icone": "Sparkles", "onglet": None, "appli": "higgsfield_mcp"},
+    "etat_mcp_partage_higgsfield": {"label": "État du MCP Higgsfield", "icone": "Activity", "onglet": None, "appli": "higgsfield_mcp"},
     "gerer_programme_catalogue_public": {"label": "Programmes publics", "icone": "GraduationCap", "onglet": None},
     "ajouter_commentaire_catalogue_public": {"label": "Ajout d'un commentaire public", "icone": "MessageSquarePlus", "onglet": None},
     "supprimer_commentaire_catalogue_public": {"label": "Suppression d'un commentaire public", "icone": "MessageSquareX", "onglet": None},
@@ -1504,6 +1513,13 @@ CATEGORIES_OUTILS = {
         "lancer_video_higgsfield", "consulter_video_higgsfield",
         "generer_image_higgsfield", "consulter_image_higgsfield",
         "estimer_cout_higgsfield", "annuler_generation_higgsfield",
+        "lancer_genjutsu_higgsfield",
+        # Moteur de fond (31/10/2026) : registre des capacites, fonctions
+        # MCP-only via notre MCP partage (API toujours en premier) et sante
+        # du compte partage. Le MCP personnel de l'utilisateur reste la
+        # categorie "higgsfield" ci-dessus, inchangee.
+        "lister_capacites_higgsfield", "generer_mcp_higgsfield",
+        "etat_mcp_partage_higgsfield",
     ],
     "google_drive": [
         "search_files", "read_file_content", "download_file_content",
@@ -1679,7 +1695,7 @@ INDEX_CATEGORIES_OUTILS = (
         ("netlify_mcp", "netlify_mcp"),
         ("notion", "notion"),
         ("google_drive", "google_drive"),
-        ("github", "github"),
+        ("github", "github (dépôts privés, issues, pull requests, commits, écriture ; pour lire le code d'un dépôt public, le cloner avec execution_code)"),
         ("vercel", "vercel (sites et déploiements)"),
     ])
     + ", "
@@ -1689,7 +1705,7 @@ INDEX_CATEGORIES_OUTILS = (
     "serveurs_personnalises (serveurs MCP ajoutés par l'utilisateur lui-même, quel que soit leur nom, "
     "par exemple Render ou un CRM ; le nom du serveur figure dans la description de chaque outil), "
     "generation_documents, "
-    "execution_code (lancer du code et des commandes, gérer des fichiers dans un espace de travail), "
+    "execution_code (lancer du code et des commandes, gérer, modifier et chercher dans des fichiers dans un espace de travail, cloner un dépôt GitHub public avec git pour le lire), "
     "montage_video (créer ou modifier une vidéo : couper, assembler, sous-titrer, effets, animations ; "
     "pas pour chercher une vidéo sur le web), "
     "recherche_web (web, actualité, images et vidéos ; pas le premier réflexe "
@@ -1737,6 +1753,16 @@ def outils_de_la_categorie(nom_categorie, outils_candidats):
 # marquer_sujet_clos et rappeler_* ne sont volontairement dans aucun groupe :
 # main.py les force lui-meme selon la taille de l'historique.
 # ---------------------------------------------------------------------------
+# Outils donnes a CHAQUE tour a un utilisateur connecte, sans passer par
+# demander_outils. Source unique : routage_outils.py les injecte dans la liste
+# d'outils, et construction_system_prompt.py les nomme a l'IA pour qu'elle les
+# appelle directement au lieu de les chercher. Ajouter un outil ici suffit pour
+# les deux.
+OUTILS_TOUJOURS_PRESENTS = (
+    "memoire_sommaire", "memoire_lire", "memoire_ecrire", "memoire_completer",
+)
+
+
 GROUPES_OUTILS = {
     "ecran_pc": [
         "lire_ecran", "pointer_ecran", "marquer_ecran", "cliquer_ecran",

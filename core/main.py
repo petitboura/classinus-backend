@@ -35,7 +35,7 @@ from core.etat_canal_prompt import bloc_etat_canal
 from core.zip_chat import iterer_statuts as _iterer_statuts_zip, obtenir_etat as _obtenir_etat_zip, construire_digest_zip as _construire_digest_zip
 from avancement_notions_ia import notions_pertinentes_pour_eleve, resoudre_code_actif_eleve
 from signalements import signalements_pertinents_pour_injection
-from mcp_tools import lister_outils_autorises_pour_agent, filtrer_catalogue_par_outil_force, appeler_outil
+from core.mcp_tools import lister_outils_autorises_pour_agent, filtrer_catalogue_par_outil_force, appeler_outil
 from registre_outils import CATEGORIES_OUTILS
 from fournisseurs_llm import generer_reponse_premium, creer_client_deepseek
 from identite_modele import message_systeme, systeme_avec_identite
@@ -66,7 +66,7 @@ from routage_outils import (
 )
 from construction_system_prompt import _construire_system_prompt, _est_timeout, _repli_si_reponse_partielle
 from persistance_echanges import _sauvegarder_echange, _finaliser_memoire_en_arriere_plan
-from historique_outils import enrichir_historique_avec_outils, a_des_outils_allegers
+from historique_outils import enrichir_historique_avec_outils, a_des_outils_allegers, champs_historique_outil
 from historique_conversation import (
     alleger_historique_ancien,
     note_avancement_historique,
@@ -76,8 +76,9 @@ from historique_conversation import (
     forcer_cloture_sujets_en_arriere_plan,
 )
 from historique_reponses_qcm import reponses_qcm_a_injecter
-from execution_outils import _resultat_pour_affichage
-from boucle_agent import _agent_groq, _capturer_reponse, _ajouter_segment_texte, messages_sans_consigne_conclusion
+from execution_outils import _resultat_pour_affichage, cle_autorisation_appel
+from autorisations_outils import enregistrer_autorisation
+from boucle_agent import _agent_groq, _capturer_reponse, _ajouter_segment_texte, retirer_consigne_de_fin, consigne_de_reprise
 from erreur_tour import evenement_echec
 
 logging.basicConfig(level=logging.INFO)
@@ -197,7 +198,7 @@ def _messages_agent_avec_locale(messages_agent, langue_interface):
     return messages
 
 
-def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None, effort_reflexion=None, arret_tour=None, message_enregistre=None, client=None, libelles_client=None, origine=None, langue_interface="fr", contexte_video=None, erreurs_typees=False):
+def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, agent_id=None, conversation_id=None, longueur_reponse="moyenne", image_url=None, image_urls=None, localisation=None, fuseau_horaire=None, images_base64=None, recherche_forcee=False, outil_force=None, ignorer_suggestion_outils=False, modele_force=None, sans_enseignant=False, natif=False, canal_en_direct=False, message_automatique=False, parent_id=None, regenerer=False, zips_en_attente=None, etat_editeur=None, effort_reflexion=None, arret_tour=None, message_enregistre=None, client=None, libelles_client=None, origine=None, langue_interface="fr", contexte_video=None, erreurs_typees=False, utilisateur_autorisations=None):
     """
     Generateur d'evenements. Chaque element produit est un dictionnaire :
     - {"type": "statut", "texte": "..."}         -> un outil MCP est en cours d'utilisation (ou, depuis le 11/09/2026, Gemini en train de lire une image/video jointe)
@@ -460,11 +461,14 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # modele de decider quoi en faire (continuer, s'arreter,
         # s'ajuster), pas au frontend de trancher en amont.
         etat = reprise["etat_reprise"]
-        # Etats emis avant le correctif du 31/10/2026 (voir boucle_agent.py) :
-        # ils contiennent encore la consigne "redige ta reponse finale", qui
-        # faisait redire la reponse de limite a chaque reprise. On la retire
-        # ici aussi, pour que les conversations deja bloquees repartent.
-        messages_agent = _messages_agent_avec_locale(messages_sans_consigne_conclusion(etat["messages_agent"]), langue_interface)
+        messages_agent = _messages_agent_avec_locale(etat["messages_agent"], langue_interface)
+        # Correctif 01/11/2026 (bouton Continuer, signale par Bourama) : l'etat gardé après une
+        # limite ou une répétition se termine par la consigne "conclus et dis que tu as atteint
+        # ta limite". Rejouée telle quelle, elle faisait redire la limite au lieu de continuer.
+        # On la retire, et sans texte tapé par l'utilisateur on la remplace par une consigne de
+        # reprise (budget neuf, poursuivre). Après un arrêt ou une erreur (genre None), rien ne
+        # change.
+        messages_agent, genre_fin_de_tour = retirer_consigne_de_fin(messages_agent)
         outils_mcp = etat["outils_mcp"]
         table_routage = etat["table_routage"]
         modele_reprise = etat.get("modele", GROQ_PRIMARY)
@@ -475,6 +479,10 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
 
         if reprise.get("message_utilisateur"):
             messages_agent.append({"role": "user", "content": reprise["message_utilisateur"]})
+        else:
+            consigne = consigne_de_reprise(genre_fin_de_tour)
+            if consigne:
+                messages_agent.append(consigne)
 
         client_groq = _client_pour_reprise(modele_reprise)
         reponse_accumulee = []
@@ -487,8 +495,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     modele=modele_reprise, reasoning_effort=reasoning_effort_reprise,
                     agent_nom=etat.get("agent_nom"), conversation_id=conversation_id,
                     catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
-                    user_id=user_id,
-                    arret=arret_tour,
+                    user_id=user_id, user_id_autorisations=utilisateur_autorisations, arret=arret_tour,
                 ),
                 reponse_accumulee,
                 meta_assistant,
@@ -547,6 +554,15 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         client_groq = _client_pour_reprise(modele_reprise)
 
         if approuve:
+            # "Toujours autoriser" (31/10/2026) : la clé est recalculée ici à partir de
+            # l'appel lui-même, jamais reprise telle quelle du navigateur, et refusée
+            # si l'action n'est pas une action sensible.
+            # La reprise ne transporte pas user_id : l'identifiant vient de la session, via
+            # utilisateur_autorisations, et ne sert qu'aux autorisations permanentes.
+            if reprise.get("toujours_autoriser") and utilisateur_autorisations:
+                cle_toujours = cle_autorisation_appel(appel)
+                if cle_toujours:
+                    enregistrer_autorisation(utilisateur_autorisations, cle_toujours, _nom_lisible_appel(appel))
             # 24/09/2026 (bug remonté par Bourama : après un clic sur Confirmer,
             # la suite était mal branchée et bloquait) : l'appel confirmé
             # doit porter les MÊMES identifiants que dans _traiter_appels
@@ -587,6 +603,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     "action": _action_appel(appel),
                     **_champs_domaines_appel(appel),
                     "resultat": resultat,
+                    **champs_historique_outil(arguments, resultat, resultat),
                     "id_appel": appel["id"],
                 }
                 messages_agent.append({
@@ -604,6 +621,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     "action": _action_appel(appel),
                     **_champs_domaines_appel(appel),
                     "resultat": _resultat_pour_affichage(resultat),
+                    **champs_historique_outil(arguments, resultat, _resultat_pour_affichage(resultat)),
                     "id_appel": appel["id"],
                 }
         else:
@@ -625,7 +643,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 modele=modele_reprise, reasoning_effort=reasoning_effort_reprise,
                 agent_nom=etat.get("agent_nom"), conversation_id=conversation_id,
                 catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
-                arret=arret_tour,
+                user_id=user_id, user_id_autorisations=utilisateur_autorisations, arret=arret_tour,
             )
         except Exception as e:
             logging.error(f"ERREUR GROQ (reprise apres confirmation) {modele_reprise}: {e}")

@@ -5,16 +5,21 @@
 # repetes en boucle.
 import json
 import logging
-from mcp_tools import parametres_outils, PARAMETRE_DELAI_OUTIL
+from core.mcp_tools import parametres_outils, PARAMETRE_DELAI_OUTIL
 from libelles_activite_ia import PARAMETRE_LIBELLE_OUTIL, arguments_sans_libelle
 # Meme chemin d'import que api/ et core/outils_action_agent.py : un seul module, donc un seul etat partage.
 from core.canal_agent_applicatif import retirer_messages_etudiant
 from core.plafond_outils_tour import plafond_tour
 from constantes_agent import GROQ_PRIMARY, MODELES_AVEC_REASONING_EFFORT, DELAI_MAX_PAR_APPEL
+try:
+    from reserve_tokens_sortie import reserve_tokens_sortie
+except ImportError:
+    from core.reserve_tokens_sortie import reserve_tokens_sortie
 from efforts_modeles import effort_valide_pour_modele, est_modele_avec_adaptateur
 from adaptateur_commun import CLE_ETAT_FOURNISSEUR
 from fournisseurs_llm import CONSIGNE_LANGUE_REFLEXION, DEEPSEEK_REASONING_EFFORT, ajouter_consigne_langue_reflexion, normaliser_effort_reflexion
-from execution_outils import _AttenteConfirmation, _traiter_appels
+from execution_outils import _AttenteConfirmation, _traiter_appels, cle_autorisation_appel
+from autorisations_outils import charger_autorisations
 from routage_outils import (
     _ecrire_outils_retenus,
     _separer_appels_garder_outils,
@@ -68,6 +73,8 @@ def _evenement_confirmation(attente, messages_agent, outils_mcp, table_routage, 
         # frontend peut afficher ce message directement, ou continuer à
         # composer le sien à partir de nom_lisible s'il préfère.
         "message": f"{agent_nom or 'Cet agent'} veut faire ceci : {_nom_lisible_appel(appel)}.",
+        # Clé envoyée au bouton "Toujours autoriser" (None : le bouton n'est pas proposé).
+        "cle_autorisation": cle_autorisation_appel(appel),
         "agent_nom": agent_nom,
         "arguments": arguments_dict,
         "etat_reprise": {
@@ -83,31 +90,6 @@ def _evenement_confirmation(attente, messages_agent, outils_mcp, table_routage, 
     }
 
 
-# Debut des consignes systeme de conclusion forcee (voir les deux fins de
-# boucle de _agent_groq : plafond_absolu atteint et repetition detectee).
-# Ces consignes ordonnent au modele de rediger sa reponse FINALE : elles ont
-# servi a produire la conclusion du tour, mais ne doivent JAMAIS partir dans
-# l'etat de reprise. Sinon, a la reprise, le dernier ordre systeme vu par le
-# modele reste "redige ta reponse finale, tu as atteint la limite" et il la
-# redige a nouveau au lieu de poursuivre le travail (bug signale le
-# 31/10/2026 : Continuer, puis meme un nouveau message tape, retombaient
-# toujours sur la meme reponse de limite).
-_DEBUTS_CONSIGNE_CONCLUSION_FORCEE = ("Tu as atteint la limite de", "Tu as répété")
-
-
-def messages_sans_consigne_conclusion(messages_agent):
-    """Copie de messages_agent sans la consigne de conclusion forcee."""
-    return [
-        m for m in messages_agent
-        if not (
-            isinstance(m, dict)
-            and m.get("role") == "system"
-            and isinstance(m.get("content"), str)
-            and m["content"].startswith(_DEBUTS_CONSIGNE_CONCLUSION_FORCEE)
-        )
-    ]
-
-
 def _evenement_reprise_agent(type_evenement, messages_agent, outils_mcp, table_routage, modele, reasoning_effort, agent_nom):
     """
     Meme principe que _evenement_confirmation, pour les deux cas ou la
@@ -116,15 +98,11 @@ def _evenement_reprise_agent(type_evenement, messages_agent, outils_mcp, table_r
     repetition detectee ("repetition_detectee", bouton Reessayer). Contrairement
     a la reprise apres confirmation, la reprise ici rappelle directement
     _agent_groq avec un budget neuf, sans rejouer d'appel -- voir chat().
-
-    L'etat part sans la consigne de conclusion forcee (voir
-    messages_sans_consigne_conclusion) : la conclusion qu'elle a produite a
-    deja ete montree a l'utilisateur, la reprise doit poursuivre le travail.
     """
     return {
         "type": type_evenement,
         "etat_reprise": {
-            "messages_agent": messages_sans_consigne_conclusion(messages_agent),
+            "messages_agent": messages_agent,
             "outils_mcp": outils_mcp,
             "table_routage": table_routage,
             "modele": modele,
@@ -152,6 +130,58 @@ def messages_reprenables(messages_agent):
     identifiants = {appel.get("id") for appel in messages[dernier]["tool_calls"]}
     repondus = {m.get("tool_call_id") for m in messages[dernier + 1:] if isinstance(m, dict) and m.get("role") == "tool"}
     return messages if identifiants <= repondus else messages[:dernier]
+
+
+# Debut des deux consignes systeme ecrites quand le tour s'arrete tout seul (limite d'actions
+# atteinte, repetition detectee). Elles disent au modele de conclure, et elles se retrouvent
+# dans etat_reprise. Rejouees telles quelles par le bouton Continuer ou Reessayer, elles lui
+# font redire qu'il a atteint sa limite au lieu de poursuivre le travail (01/11/2026,
+# signale par Bourama). Le texte complet des consignes commence toujours par ces debuts.
+DEBUT_CONSIGNE_LIMITE = "Tu as atteint la limite de "
+DEBUT_CONSIGNE_REPETITION = "Tu as répété "
+
+CONSIGNE_REPRISE_APRES_LIMITE = (
+    "L'utilisateur te demande de continuer. Tu disposes d'un nouveau budget d'actions : "
+    "poursuis le travail exactement là où tu t'es arrêté, sans refaire ce qui est déjà fait "
+    "et sans redire que tu as atteint une limite."
+)
+CONSIGNE_REPRISE_APRES_REPETITION = (
+    "L'utilisateur te demande de réessayer. Essaie une autre approche que celle qui a échoué, "
+    "sans répéter exactement la même action."
+)
+
+
+def retirer_consigne_de_fin(messages_agent):
+    """
+    Renvoie (messages, genre) : une copie de messages_agent sans les consignes systeme de fin
+    de tour placees tout a la fin, et ce qu'elles etaient ("limite", "repetition", ou None si
+    la liste n'en portait aucune, comme apres un arret ou une erreur). Fonctionne aussi sur
+    les etats de reprise deja envoyes au navigateur avant ce correctif.
+    """
+    messages = list(messages_agent)
+    genre = None
+    while messages:
+        dernier = messages[-1]
+        contenu = dernier.get("content") if isinstance(dernier, dict) else None
+        if not isinstance(dernier, dict) or dernier.get("role") != "system" or not isinstance(contenu, str):
+            break
+        if contenu.startswith(DEBUT_CONSIGNE_LIMITE):
+            genre = "limite"
+        elif contenu.startswith(DEBUT_CONSIGNE_REPETITION):
+            genre = "repetition"
+        else:
+            break
+        messages.pop()
+    return messages, genre
+
+
+def consigne_de_reprise(genre):
+    """Consigne a ajouter quand l'utilisateur clique Continuer ou Reessayer sans rien taper."""
+    if genre == "limite":
+        return {"role": "system", "content": CONSIGNE_REPRISE_APRES_LIMITE}
+    if genre == "repetition":
+        return {"role": "system", "content": CONSIGNE_REPRISE_APRES_REPETITION}
+    return None
 
 
 def _evenement_arret_tour(arret, messages_agent, outils_mcp, table_routage, modele, reasoning_effort, agent_nom):
@@ -289,7 +319,8 @@ def _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, 
 def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                  appels_en_cours_a_finir=None, modele=GROQ_PRIMARY, reasoning_effort=None, agent_nom=None,
                  rattrapage_tool_code_restant=1, conversation_id=None,
-                 catalogue_complet=None, table_routage_complet=None, user_id=None, arret=None):
+                 catalogue_complet=None, table_routage_complet=None, user_id=None, arret=None,
+                 user_id_autorisations=None):
     """
     Boucle d'agent generique sur le modele Groq utilise (par defaut
     GROQ_PRIMARY, mais peut recevoir n'importe quel modele Groq qui sait
@@ -365,9 +396,12 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
     if modele in MODELES_AVEC_REASONING_EFFORT and "gpt-oss" not in modele and reasoning_effort != "none":
         kwargs_reasoning["reasoning_format"] = "parsed"
 
+    # Actions déjà autorisées pour de bon par cette personne ("Toujours autoriser").
+    autorisations = charger_autorisations(user_id or user_id_autorisations)
+
     if appels_en_cours_a_finir:
         try:
-            for event in _traiter_appels(appels_en_cours_a_finir, messages_agent, table_routage, compteur_sources, arret=arret):
+            for event in _traiter_appels(appels_en_cours_a_finir, messages_agent, table_routage, compteur_sources, arret=arret, autorisations=autorisations):
                 yield event
         except _AttenteConfirmation as attente:
             yield _evenement_confirmation(attente, messages_agent, outils_mcp, table_routage, modele, reasoning_effort, agent_nom)
@@ -448,10 +482,9 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
         # meme temps que tool_choice="required" ci-dessus (05/09) : plus
         # d'appel purement structure sans prose, donc plus de raison de
         # reduire la reserve pour ce cas.
-        if modele == GROQ_PRIMARY:
-            reserve_tokens = 8192
-        else:
-            reserve_tokens = 4096
+        # 01/11/2026 : valeur par modele (voir core/reserve_tokens_sortie.py), Muse Spark
+        # Open n'est plus limite a 4096 comme les modeles de secours Groq.
+        reserve_tokens = reserve_tokens_sortie(modele, GROQ_PRIMARY)
 
         completion = client_groq.chat.completions.create(
             model=modele,
@@ -582,6 +615,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     conversation_id=conversation_id,
                     catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
                     user_id=user_id, arret=arret,
+                    user_id_autorisations=user_id_autorisations,
                 )
                 return
             else:
@@ -653,7 +687,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
             messages_agent.append({
                 "role": "system",
                 "content": (
-                    f"Tu as répété {tolerance_repetition} fois d'affilée exactement la "
+                    f"{DEBUT_CONSIGNE_REPETITION}{tolerance_repetition} fois d'affilée exactement la "
                     f"même action ({_nom_lisible_appel(appel_repete)}) sans y arriver. "
                     "Rédige maintenant ta réponse en expliquant clairement ce blocage à "
                     "l'utilisateur, avec ce que tu as quand même réussi à faire jusque-là. "
@@ -935,7 +969,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
 
         if appels_normaux:
             try:
-                for event in _traiter_appels(appels_normaux, messages_agent, table_routage, compteur_sources, arret=arret):
+                for event in _traiter_appels(appels_normaux, messages_agent, table_routage, compteur_sources, arret=arret, autorisations=autorisations):
                     yield event
             except _AttenteConfirmation as attente:
                 yield _evenement_confirmation(attente, messages_agent, outils_mcp, table_routage, modele, reasoning_effort, agent_nom)
@@ -969,7 +1003,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
     messages_agent.append({
         "role": "system",
         "content": (
-            f"Tu as atteint la limite de {plafond_absolu} actions pour cette "
+            f"{DEBUT_CONSIGNE_LIMITE}{plafond_absolu} actions pour cette "
             "réponse. Rédige maintenant ta réponse finale à partir de ce que tu "
             "as déjà obtenu, en indiquant clairement à l'utilisateur que tu as "
             "atteint cette limite et qu'il peut te demander de continuer pour "
@@ -1072,7 +1106,15 @@ def _capturer_reponse(generateur, accumulateur, meta=None, fichiers_generes_accu
             # pour survivre à la réouverture d'une conversation, absent sinon.
             if event.get("langage"):
                 entree_meta["langage"] = event["langage"]
-            meta.setdefault("outils", []).append(dict(entree_meta))
+            # Arguments de l'appel et resultat complet : gardes dans meta.outils seulement
+            # (source de la reinjection au modele), pas dans les segments d'affichage, pour
+            # ne pas stocker deux fois les memes gros textes.
+            entree_outils = dict(entree_meta)
+            if event.get("arguments"):
+                entree_outils["arguments"] = event["arguments"]
+            if event.get("resultat_complet"):
+                entree_outils["resultatComplet"] = event["resultat_complet"]
+            meta.setdefault("outils", []).append(entree_outils)
             meta.setdefault("segments", []).append({"type": "outil", **entree_meta})
         elif meta is not None and event["type"] == "sources" and meta.get("outils"):
             meta["outils"][-1]["sources"] = event["sources"]

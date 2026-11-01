@@ -281,3 +281,46 @@ def deconnecter(user_id):
     _supabase.table("higgsfield_oauth_connections").delete().eq("user_id", user_id).execute()
     _cache.pop(user_id, None)
     return True
+
+
+# Compte de service partage (31/10/2026, demande de Bourama) : un seul compte
+# Classinus connecte via le flux OAuth ci-dessus, utilise par le backend pour
+# les fonctions MCP-only de tous les utilisateurs. Son identifiant vient de
+# la variable Railway HIGGSFIELD_MCP_SERVICE_USER_ID (l'UUID Classinus du
+# compte qui a fait la connexion), jamais du code. Sans elle, le MCP partage
+# est simplement non configure. Les connexions personnelles des utilisateurs
+# ne sont ni lues ni modifiees par ces fonctions.
+
+def utilisateur_service():
+    valeur = (os.environ.get("HIGGSFIELD_MCP_SERVICE_USER_ID") or "").strip()
+    return valeur or None
+
+
+def etat_service():
+    """Etat du compte partage, en booleens seulement (aucune valeur de jeton)."""
+    service_id = utilisateur_service()
+    if not service_id:
+        return {"configure": False, "connecte": False, "a_reconnecter": False, "refresh_present": False}
+    try:
+        result = _supabase.table("higgsfield_oauth_connections").select(
+            "refresh_token, expires_at"
+        ).eq("user_id", service_id).execute()
+    except Exception as exc:
+        logging.error("Etat du MCP Higgsfield partage illisible: %s", exc)
+        return {"configure": True, "connecte": False, "a_reconnecter": True, "refresh_present": False}
+    if not result.data:
+        return {"configure": True, "connecte": False, "a_reconnecter": False, "refresh_present": False}
+    connecte = obtenir_token_valide(service_id) is not None
+    return {
+        "configure": True,
+        "connecte": connecte,
+        "a_reconnecter": not connecte,
+        "refresh_present": bool(result.data[0].get("refresh_token")),
+    }
+
+
+def obtenir_token_service():
+    service_id = utilisateur_service()
+    if not service_id:
+        return None
+    return obtenir_token_valide(service_id)

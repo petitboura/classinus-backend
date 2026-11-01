@@ -6,8 +6,8 @@ import json
 import logging
 from groq import Groq
 from constantes_agent import get_secret, supabase, MODELE_ROUTEUR_OUTILS, MODELE_ROUTEUR_OUTILS_REPLI, DELAI_MAX_PAR_APPEL
-from mcp_tools import lister_outils_autorises_pour_agent
-from registre_outils import NOMS_CATEGORIES_PROPOSEES_A_L_IA, INDEX_CATEGORIES_OUTILS
+from core.mcp_tools import lister_outils_autorises_pour_agent
+from registre_outils import NOMS_CATEGORIES_PROPOSEES_A_L_IA, INDEX_CATEGORIES_OUTILS, OUTILS_TOUJOURS_PRESENTS
 from libelles_activite_ia import schema_avec_libelle, libelle_ia_de_l_appel
 
 def _resume_description_outil(description, max_caracteres=200):
@@ -424,7 +424,7 @@ def _preparer_demander_outils(outils_mcp, catalogue_complet, table_routage_compl
     return (outils_mcp or []) + [_outil_demander_outils()]
 
 
-NOMS_OUTILS_MEMOIRE_TOUJOURS_DISPONIBLES = ("memoire_sommaire", "memoire_lire", "memoire_ecrire", "memoire_completer")
+NOMS_OUTILS_MEMOIRE_TOUJOURS_DISPONIBLES = OUTILS_TOUJOURS_PRESENTS
 
 
 def _outils_memoire_toujours_disponibles(outils_mcp, table_routage, catalogue_complet, table_routage_complet):

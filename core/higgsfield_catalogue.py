@@ -2,28 +2,27 @@
 
 Seuls les modèles dont le schéma a été lu dans la documentation officielle
 (docs.higgsfield.ai, 25/10/2026) sont ici. Pour en ajouter un : une entrée de
-plus dans MODELES_VIDEO ou MODELES_IMAGE, rien d'autre à toucher.
+plus dans MODELES_VIDEO, MODELES_IMAGE ou MODELES_GENJUTSU, rien d'autre à toucher.
 
 Chaque modèle vidéo a deux adresses : "texte" (vidéo depuis une description) et
 "image" (vidéo depuis une image de départ), plus "reference" quand le modèle accepte
 des références. Les valeurs permises viennent du
-schéma officiel de chaque adresse.
+schéma officiel de chaque adresse. Genjutsu transforme une vidéo existante.
 """
 
 MODELE_VIDEO_DEFAUT = "seedance"
 MODELE_IMAGE_DEFAUT = "grok"
+MODELE_GENJUTSU_DEFAUT = "genjutsu-motion"
 
 MODELES_VIDEO = {
     "seedance": {
         "label": "Seedance 2.0",
         "texte": "bytedance/seedance-2.0/text-to-video",
         "image": "bytedance/seedance-2.0/image-to-video",
-        # Vidéo guidée par des images, vidéos ou sons de référence (garder un personnage, un style).
         "reference": "bytedance/seedance-2.0/reference-to-video",
         "max_references": {"images": 9, "videos": 3, "audios": 3},
         "duree": (4, 15),
         "duree_defaut": 5,
-        # Format : seulement depuis du texte (avec une image, le cadrage suit l'image).
         "formats": ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9"],
         "qualites": ["480p", "720p", "1080p", "4k"],
         "qualite_defaut": "720p",
@@ -52,13 +51,72 @@ MODELES_VIDEO = {
 MODELES_IMAGE = {
     "grok": {
         "label": "Grok Image 2.0",
-        # Un seul point d'entrée : crée une image, ou en modifie jusqu'à 10 si on en donne.
         "endpoint": "xai/grok-imagine-image-2.0",
         "formats": ["auto", "1:1", "1:2", "2:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16"],
         "format_defaut": "auto",
         "qualites": ["1k", "2k"],
         "qualite_defaut": "1k",
         "max_references": 10,
+    },
+}
+
+# Genjutsu : transformation vidéo-à-vidéo (motion, object swap, restyle).
+# Schémas lus sur open.higgsfield.ai le 01/11/2026.
+MODELES_GENJUTSU = {
+    "genjutsu-motion": {
+        "label": "Genjutsu Motion Transfer",
+        "endpoint": "higgsfield/genjutsu/motion-transfer/v1.0",
+        "duree": (4, 30),
+        "resolutions": ["480p", "720p", "1080p"],
+        "resolution_defaut": "720p",
+        "max_images": 8,
+        "prompt_optionnel": True,
+        "preset_requis": False,
+        "light": False,
+    },
+    "genjutsu-object": {
+        "label": "Genjutsu Object Swap",
+        "endpoint": "higgsfield/genjutsu/object-swap/v1.0",
+        "duree": (4, 30),
+        "resolutions": ["480p", "720p", "1080p"],
+        "resolution_defaut": "720p",
+        "max_images": 8,
+        "prompt_optionnel": True,
+        "preset_requis": False,
+        "light": False,
+    },
+    "genjutsu-restyle": {
+        "label": "Genjutsu Restyle (preset)",
+        "endpoint": "higgsfield/genjutsu/restyle/v1.0",
+        "duree": (4, 30),
+        "resolutions": ["480p", "720p", "1080p"],
+        "resolution_defaut": "720p",
+        "max_images": 5,
+        "prompt_optionnel": True,
+        "preset_requis": True,
+        "light": False,
+    },
+    "genjutsu-light-motion": {
+        "label": "Genjutsu Light Motion Transfer",
+        "endpoint": "higgsfield/genjutsu-light/motion-transfer/v1.0",
+        "duree": (4, 15),
+        "resolutions": ["480p", "720p", "1080p"],
+        "resolution_defaut": "720p",
+        "max_images": 8,
+        "prompt_optionnel": True,
+        "preset_requis": False,
+        "light": True,
+    },
+    "genjutsu-light-object": {
+        "label": "Genjutsu Light Object Swap",
+        "endpoint": "higgsfield/genjutsu-light/object-swap/v1.0",
+        "duree": (4, 15),
+        "resolutions": ["480p", "720p", "1080p"],
+        "resolution_defaut": "720p",
+        "max_images": 8,
+        "prompt_optionnel": True,
+        "preset_requis": False,
+        "light": True,
     },
 }
 
@@ -69,3 +127,7 @@ def noms_modeles_video() -> str:
 
 def noms_modeles_image() -> str:
     return ", ".join(MODELES_IMAGE)
+
+
+def noms_modeles_genjutsu() -> str:
+    return ", ".join(MODELES_GENJUTSU)

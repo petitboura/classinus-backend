@@ -21,11 +21,25 @@ cote frontend (voir lib/canalAgentApplicatif.ts).
 
 import asyncio
 import logging
+import os
+import sys
 import threading
 import uuid
 from typing import Any
 
 from fastapi import WebSocket
+
+# Anticorruption double import (fix 01/11/2026) : le module est charge tantot comme
+# "core.canal_agent_applicatif" (prod normal) tantot comme "canal_agent_applicatif"
+# (quand core/ est ajoute a sys.path). Sans alias, deux dict _connexions
+# coexistent et le diagnostic repond toujours "injoignable".
+# On force les deux noms a designer le MEME objet module.
+try:
+    _this = sys.modules[__name__]
+    sys.modules.setdefault("canal_agent_applicatif", _this)
+    sys.modules.setdefault("core.canal_agent_applicatif", _this)
+except Exception:
+    pass
 
 # Cle = (user_id, appareil_id), meme convention que canal_temps_reel.py
 # ("" = session web / PC, sinon identifiant natif) -- gardee ici pour la
@@ -318,6 +332,14 @@ async def _diffuser_et_attendre(
             if relais:
                 connexions = relais
                 message = {**message, "via_renderer": True}
+            elif message.get("action_systeme") == "outil_telephone":
+                # Aucun relais déclaré (ancienne appli) : tenter quand même,
+                # mais jamais vers la connexion native "-systeme", qui ne
+                # connaît pas cet outil et répondrait une erreur immédiate
+                # avant que le renderer ait pu joindre le relais local.
+                connexions = [
+                    (cle, ws) for cle, ws in connexions if not cle[1].endswith("-systeme")
+                ]
 
     if not connexions:
         return None
@@ -412,6 +434,75 @@ async def a_app_systeme_connecte(user_id: str) -> bool:
             return any(cle[0] == user_id for cle in _relais_systeme)
     except Exception:
         return False
+
+
+async def a_app_telephone_connectee(user_id: str) -> bool:
+    """Vrai si l'appli PC est ouverte sur ce compte, même ancienne version.
+
+    Les anciennes applis ne déclarent pas toujours le relais renderer,
+    mais leur connexion système native (appareil en "-systeme", ouverte
+    par le processus principal Electron) prouve que l'appli PC tourne.
+    Dans ce cas l'outil téléphone est quand même tenté : la diffusion
+    exclut cette connexion native, qui ne sait pas l'exécuter.
+    Lecture seule, jamais d'exception.
+    """
+    try:
+        async with _verrou_connexions:
+            return any(
+                cle[0] == user_id
+                and (cle in _relais_systeme or cle[1].endswith("-systeme"))
+                for cle in _connexions
+            )
+    except Exception:
+        return False
+
+
+def _version_serveur() -> str:
+    """Commit du code qui tourne réellement (Railway ou Render), pour le diagnostic."""
+    for nom in ("RAILWAY_GIT_COMMIT_SHA", "RENDER_GIT_COMMIT", "GIT_COMMIT_SHA"):
+        valeur = os.environ.get(nom)
+        if valeur:
+            return valeur[:7]
+    return "inconnue"
+
+
+async def diagnostiquer_app_telephone(user_id: str) -> str:
+    """Dit en une phrase POURQUOI le serveur ne voit pas l'appli PC de ce compte.
+
+    01/11/2026, Bourama : « Téléphone injoignable » sortait sans qu'on sache
+    laquelle des causes était la bonne. Lecture seule, jamais d'exception.
+    """
+    try:
+        async with _verrou_connexions:
+            nb_total = len(_connexions)
+            du_compte = [cle for cle in _connexions if cle[0] == user_id]
+            nb_relais = sum(1 for cle in du_compte if cle in _relais_systeme)
+            nb_natives = sum(1 for cle in du_compte if cle[1].endswith("-systeme"))
+        if nb_total == 0:
+            cause = (
+                "AUCUNE connexion de l'appli sur ce serveur : l'appli vise un autre serveur, "
+                "ou ce serveur vient de redémarrer et l'appli ne s'est pas encore reconnectée"
+            )
+        elif not du_compte:
+            cause = (
+                f"{nb_total} connexion(s) sur ce serveur, mais AUCUNE pour ce compte : "
+                "l'appli PC est connectée avec un autre compte, ou pas connectée du tout"
+            )
+        elif nb_relais == 0 and nb_natives == 0:
+            cause = (
+                f"ce compte a {len(du_compte)} connexion(s) mais aucune ne se déclare appli PC "
+                "(onglet web ou téléphone seulement) : l'appli PC n'est pas ouverte, "
+                "ou c'est une ancienne version qui ne déclare pas le relais"
+            )
+        else:
+            cause = "l'appli PC est bien connectée"
+        return (
+            f"{cause}. Détail : serveur={_version_serveur()}, compte={str(user_id)[:8]}, "
+            f"connexions_serveur={nb_total}, connexions_compte={len(du_compte)}, "
+            f"relais_pc={nb_relais}, native_systeme={nb_natives}"
+        )
+    except Exception as e:
+        return f"diagnostic impossible ({e})"
 
 
 async def demander_execution_action(user_id: str, action_id: str, on_statut=None) -> Any | None:

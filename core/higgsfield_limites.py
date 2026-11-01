@@ -13,6 +13,9 @@ from core.higgsfield_requetes import ErreurHiggsfield
 _REGLAGES = {
     "video": ("HIGGSFIELD_LIMITE_VIDEOS_PAR_JOUR", 3, "vidéos"),
     "image": ("HIGGSFIELD_LIMITE_IMAGES_PAR_JOUR", 10, "images"),
+    # Fonctions MCP-only sur le compte partage : meme protection, plafond a
+    # part (migration 2026_10_31_higgsfield_usage_mcp.sql).
+    "mcp": ("HIGGSFIELD_LIMITE_MCP_PAR_JOUR", 10, "générations MCP partagées"),
 }
 
 

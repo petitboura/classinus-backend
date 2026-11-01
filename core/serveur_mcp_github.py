@@ -105,6 +105,14 @@ def gerer_depot_github(
     actions. `repo` (obligatoire pour toutes les actions) au format
     "proprietaire/nom-du-depot".
 
+    Pour LIRE, explorer ou chercher dans le code d'un dépôt PUBLIC, préfère
+    gerer_execution_code : clone le dépôt dans l'espace de travail (run_command
+    et git clone limité à la dernière version, la commande exacte est dans la
+    description de cet outil) puis utilise find_files, search_files et read_file,
+    bien plus rapide que lire les fichiers un par un avec cet outil. Si le
+    clonage est impossible, utilise cet outil. Garde-le pour les dépôts privés,
+    les issues, pull requests, commits, l'état des tests et toute écriture sur GitHub.
+
     `action` doit être l'une de :
     - "explorer" : liste l'arborescence COMPLÈTE (récursive, un seul
       appel API GitHub, pas de git clone, voir docstring du module) du

@@ -7,6 +7,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from configuration import get_system_prompt
 from profils_agents import INSTRUCTIONS_FORMATS_AFFICHAGE, INSTRUCTIONS_ARBITRAGE_CALCUL, REGLE_CONTEXTE_INVISIBLE, REGLE_ETAT_APPLICATION_TAIRE, REGLE_VISION_ECRAN, REGLE_MEMOIRE_ELEVE, INSTRUCTIONS_LONGUEUR_REPONSE, MODES_PEDAGOGIQUES, REGLE_BASCULE_MODE_PEDAGOGIQUE, construire_instruction_guide, construire_instruction_guide_visuel, construire_instruction_demo, MODES_SOURCE
+from registre_outils import OUTILS_TOUJOURS_PRESENTS
 from guide_conversation import obtenir_sections_guide
 from core.canal_agent_applicatif import obtenir_etat_editeur
 from core.origine_appareil import bloc_prompt_origine, lecture_ecran_pc_autorisee
@@ -20,6 +21,30 @@ import prompt_thonny
 # une ligne porte la fenêtre ou le panneau, le nom, l'état et la cible d'un
 # agrandissement. Couper plus court effacerait justement la fin de la ligne.
 LONGUEUR_MAX_LIGNE_ACTION = 240
+
+
+def _regle_priorite_workspace_code():
+    """Priorité de travail sur code : clone local dans le workspace avant l'API GitHub."""
+    return (
+        "\n\n<priorite_workspace_code>\n"
+        "Pour toute tâche de développement ou de modification d'un dépôt, demande d'abord la catégorie "
+        "execution_code avec demander_outils si gerer_execution_code n'est pas déjà disponible. "
+        "Utilise ensuite son workspace isolé comme environnement de travail. Vérifie ses domaines avec "
+        "l'action network ; github.com est normalement autorisé. Pour un dépôt public, clone-le avec "
+        "run_command et git clone --depth 1 https://github.com/OWNER/REPO.git [dossier]. Si le clone existe "
+        "déjà dans ce workspace, réutilise-le au lieu de le télécharger de nouveau. Ne parcours pas le code "
+        "fichier par fichier via l'API GitHub lorsqu'un clone dans le workspace est possible. "
+        "Dans le clone, utilise find_files pour l'arborescence ciblée, search_files pour rechercher du code, "
+        "read_file avec start_line/end_line pour lire les passages utiles, edit_file pour remplacer une "
+        "seule occurrence exacte, puis run_command pour lancer les tests pertinents. "
+        "Ne réécris pas un fichier entier lorsqu'une modification ciblée suffit. "
+        "Les changements restent dans le workspace tant qu'ils ne sont pas publiés. "
+        "Pour les opérations distantes GitHub (branche, commit, Pull Request, issue), utilise les outils "
+        "GitHub prévus et conserve leurs confirmations explicites. Si le dépôt privé ne peut pas être "
+        "cloné avec les accès disponibles, n'invente pas de jeton et n'en demande jamais un dans le chat : "
+        "explique le blocage ou utilise le connecteur GitHub uniquement en solution de repli.\n"
+        "</priorite_workspace_code>"
+    )
 
 
 def _texte_actions_application(actions, origine=None):
@@ -541,13 +566,23 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
             "</outils>"
         )
 
+    system_final += _regle_priorite_workspace_code()
+
     # 26/10/2026, demande de Bourama : l'IA a affirmé qu'un outil (Higgsfield) n'était pas chargé
     # et s'est contentée de l'expliquer, sans le demander. Cette règle vaut dans les DEUX cas
     # ci-dessus (outils préchargés ou non) : seul le résultat de demander_outils peut établir
     # qu'un outil n'existe pas. Elle ne dit jamais que demander_outils est présent s'il ne l'est pas.
     system_final += (
         "\n\n<regle_outils_absents>\n"
-        "RÈGLE ABSOLUE : tant que tu n'as pas appelé demander_outils pour le besoin en question, "
+        + "PRINCIPE : un outil qui figure déjà dans ta liste d'outils s'appelle directement, tout de suite. "
+        "demander_outils sert uniquement pour un besoin qu'AUCUN outil de ta liste ne couvre : ne l'appelle jamais "
+        "pour obtenir un outil que tu as déjà, ne demande jamais à l'utilisateur de te le donner, et ne dis jamais "
+        "que tu n'y as pas accès. "
+        + (
+            "Toujours présents, à lancer sans jamais les chercher : " + ", ".join(OUTILS_TOUJOURS_PRESENTS) + ". "
+            if user_id else ""
+        )
+        + "RÈGLE ABSOLUE : tant que tu n'as pas appelé demander_outils pour le besoin en question, "
         "et que sa réponse ne t'a pas confirmé que l'outil n'existe pas ou n'est pas possible, "
         "tu ne dis JAMAIS à l'utilisateur que tu n'as pas cet outil, qu'il n'existe pas, qu'il n'est "
         "pas chargé, pas disponible ou pas accessible ce tour-ci. Les outils ne sont pas tous "

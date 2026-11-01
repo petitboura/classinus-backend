@@ -35,6 +35,7 @@ from core.canal_agent_applicatif import (
 )
 from core.plafond_outils_tour import retirer_plafond_tour
 from core import tours_detaches
+from core.persistance_tours import PersistanceTour, dernier_tour_persiste, lire_tour_persiste
 from core.limitation_debit import limiteur
 from core.plafonds_reglables import (
     DELAI_SIGNE_VIE_FLUX, PLAFOND_IMAGES_JOINTES, PLAFOND_OUTILS_PAR_MESSAGE, PLAFOND_ZIPS_JOINTS,
@@ -58,6 +59,10 @@ class OutilHistorique(BaseModel):
     nomOutil: str = Field(max_length=120)
     nomLisible: str = Field(max_length=160)
     resultat: str
+    # Arguments de l'appel et resultat complet (le champ resultat est la version coupee pour
+    # l'ecran) : voir core/historique_outils.py. Absents pour les anciens messages.
+    arguments: Optional[str] = None
+    resultatComplet: Optional[str] = None
 
     # Correctif 31/10/2026 (conversation bloquee apres la limite d'outils) :
     # un libelle trop long ou un resultat non textuel ne doit pas faire
@@ -122,6 +127,8 @@ class RepriseConfirmation(BaseModel):
     """
     etat_reprise: dict
     approuve: Optional[bool] = None
+    # Bouton "Toujours autoriser" : approuve ET ne plus jamais redemander cette action.
+    toujours_autoriser: Optional[bool] = None
     type: Optional[Literal["continuer_agent"]] = None
     message_utilisateur: Optional[str] = None
 
@@ -376,7 +383,7 @@ def _reprise_pour_chat(reprise: RepriseConfirmation) -> dict:
             "type": "continuer_agent",
             "message_utilisateur": reprise.message_utilisateur,
         }
-    return {"etat_reprise": reprise.etat_reprise, "approuve": reprise.approuve}
+    return {"etat_reprise": reprise.etat_reprise, "approuve": reprise.approuve, "toujours_autoriser": bool(reprise.toujours_autoriser)}
 
 
 def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], langue_interface: str = "fr", email_utilisateur: Optional[str] = None):
@@ -402,6 +409,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
         if payload.reprise is not None:
             generateur = chat_generateur(
                 reprise=_reprise_pour_chat(payload.reprise),
+                utilisateur_autorisations=user_id,
                 # Correctif 31/10/2026 (bouton Continuer) : la reprise partait sans aucun
                 # identifiant, la continuation n'était donc rattachée à aucun fil et jamais
                 # sauvegardée. Le frontend envoie désormais conversation/agent/parent avec la
@@ -531,25 +539,73 @@ def _resume_du_tour(payload: EnvoyerMessagePayload) -> dict:
     }
 
 
+def _fabrique_persistance_tour(tour):
+    """Couche durable d'un tour detache (core/persistance_tours.py) : meme tour, en base."""
+    return PersistanceTour(tour.id, tour.user_id, tour.conversation_id, tour.resume)
+
+
+def _notifier_fin_tour(tour) -> None:
+    """Push "reponse terminee" quand un tour se termine sans personne qui le regarde
+    (31/10/2026) : l'utilisateur parti faire autre chose est prevenu, celui qui regarde
+    encore son ecran ne recoit rien. Echec silencieux : jamais bloquant pour le chat."""
+    try:
+        from core.notifications_push import envoyer_notification_push
+
+        envoyer_notification_push(tour.user_id, "Classinus", "La réponse est terminée.", "/chat")
+    except Exception as e:
+        logging.error("ERREUR notification fin de tour %s : %s", tour.id, e)
+
+
+def _lignes_tour_persiste(tour_persiste: dict, depuis: int):
+    """Rejoue les lignes d'un tour lu en base (apres redemarrage). Un tour interrompu se
+    termine par l'evenement d'erreur type que le chat sait afficher avec Continuer."""
+    lignes = list(tour_persiste.get("lignes") or [])[max(0, int(depuis)):]
+    statut = tour_persiste.get("statut")
+    # "en_cours" en base mais absent de la memoire = orphelin recent (le marquage au
+    # demarrage attend le delai sans signe de vie) : meme traitement qu'interrompu.
+    if statut in ("interrompu", "en_cours"):
+        lignes.append(f"data: {json.dumps({'type': 'erreur_tour', 'code': 'serveur', 'etat_reprise': None})}\n\n")
+        lignes.append(tours_detaches.LIGNE_FIN)
+    elif statut == "termine" and (not lignes or lignes[-1] != tours_detaches.LIGNE_FIN):
+        lignes.append(tours_detaches.LIGNE_FIN)
+    return lignes
+
+
 @router.get("/tour-en-cours")
 def tour_en_cours(conversation_id: str = Query(..., min_length=1, max_length=200), utilisateur=Depends(utilisateur_optionnel)):
     """
     Etat du dernier tour de chat de cette conversation (28/10/2026, demande de Bourama : changer de
     conversation ou recharger la page ne doit plus arreter le travail). Sert a la page qui se
     rouvre : si le tour tourne encore, elle se rattache a son flux (GET /api/chat/flux/{tour_id}).
-    Tient en memoire du serveur (core/tours_detaches.py) : un tour termine depuis longtemps ou un
-    serveur redemarre donnent "aucun", et l'historique sauvegarde fait foi.
+    Memoire d'abord, base ensuite (31/10/2026, core/persistance_tours.py) : apres un redemarrage,
+    le dernier tour persiste est retrouve, "interrompu" si le travail a ete coupe.
     """
     user_id = utilisateur.id if utilisateur else None
     tour = tours_detaches.dernier_de_conversation(user_id, conversation_id) if user_id else None
-    if tour is None:
+    if tour is not None:
+        return {
+            "statut": "termine" if tour.termine else "en_cours",
+            "tour_id": tour.id,
+            "nb_evenements": tour.nombre_evenements(),
+            "ids": tour.ids,
+            "resume": tour.resume,
+        }
+    # Apres un redemarrage, la memoire est vide mais le tour persiste en base
+    # (core/persistance_tours.py) : son texte partiel reste rejouable. Un tour encore
+    # marque "en_cours" en base mais absent de la memoire ne tourne plus (processus
+    # web unique) : il est presente "interrompu", l'interface propose Continuer.
+    persiste = dernier_tour_persiste(user_id, conversation_id) if user_id else None
+    if persiste is None:
         return {"statut": "aucun"}
+    statut = persiste.get("statut") or "interrompu"
+    if statut == "en_cours":
+        statut = "interrompu"
     return {
-        "statut": "termine" if tour.termine else "en_cours",
-        "tour_id": tour.id,
-        "nb_evenements": tour.nombre_evenements(),
-        "ids": tour.ids,
-        "resume": tour.resume,
+        "statut": statut,
+        "tour_id": persiste.get("id"),
+        "nb_evenements": persiste.get("nb_evenements") or 0,
+        "ids": persiste.get("ids_echange"),
+        "resume": persiste.get("resume") or {},
     }
 
 
@@ -564,12 +620,20 @@ def suivre_tour(tour_id: str, depuis: int = Query(0, ge=0), utilisateur=Depends(
     """
     user_id = utilisateur.id if utilisateur else None
     tour = tours_detaches.trouver(tour_id, user_id) if user_id else None
-    if tour is None:
+    if tour is not None:
+        return StreamingResponse(
+            tour.lire(depuis, signe_vie=DELAI_SIGNE_VIE_FLUX),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "X-Tour-Id": tour.id},
+        )
+    # Tour absent de la memoire (redemarrage) : rejeu depuis la base, sans direct.
+    persiste = lire_tour_persiste(tour_id, user_id) if user_id else None
+    if persiste is None:
         raise erreur_api(404, "TOUR_CHAT_INTROUVABLE")
     return StreamingResponse(
-        tour.lire(depuis, signe_vie=DELAI_SIGNE_VIE_FLUX),
+        iter(_lignes_tour_persiste(persiste, depuis)),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "X-Tour-Id": tour.id},
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "X-Tour-Id": tour_id},
     )
 
 
@@ -684,6 +748,8 @@ def envoyer_message(request: Request, payload: EnvoyerMessagePayload, utilisateu
             payload.conversation_id,
             lambda: _evenements_sse(payload, user_id, langue_interface, email_utilisateur),
             resume=_resume_du_tour(payload),
+            fabrique_persistance=_fabrique_persistance_tour,
+            a_la_cloture=_notifier_fin_tour,
             message_erreur=(
                 "Something went wrong. Please try again shortly." if langue_interface == "en"
                 else "Une erreur est survenue, réessaie dans un instant."
