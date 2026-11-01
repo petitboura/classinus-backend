@@ -21,11 +21,24 @@ cote frontend (voir lib/canalAgentApplicatif.ts).
 
 import asyncio
 import logging
+import sys
 import threading
 import uuid
 from typing import Any
 
 from fastapi import WebSocket
+
+# Anticorruption double import (fix 01/11/2026) : le module est charge tantot comme
+# "core.canal_agent_applicatif" (prod normal) tantot comme "canal_agent_applicatif"
+# (quand core/ est ajoute a sys.path). Sans alias, deux dict _connexions
+# coexistent et le diagnostic repond toujours "injoignable".
+# On force les deux noms a designer le MEME objet module.
+try:
+    _this = sys.modules[__name__]
+    sys.modules.setdefault("canal_agent_applicatif", _this)
+    sys.modules.setdefault("core.canal_agent_applicatif", _this)
+except Exception:
+    pass
 
 # Cle = (user_id, appareil_id), meme convention que canal_temps_reel.py
 # ("" = session web / PC, sinon identifiant natif) -- gardee ici pour la
