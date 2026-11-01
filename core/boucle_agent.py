@@ -11,6 +11,10 @@ from libelles_activite_ia import PARAMETRE_LIBELLE_OUTIL, arguments_sans_libelle
 from core.canal_agent_applicatif import retirer_messages_etudiant
 from core.plafond_outils_tour import plafond_tour
 from constantes_agent import GROQ_PRIMARY, MODELES_AVEC_REASONING_EFFORT, DELAI_MAX_PAR_APPEL
+try:
+    from reserve_tokens_sortie import reserve_tokens_sortie
+except ImportError:
+    from core.reserve_tokens_sortie import reserve_tokens_sortie
 from efforts_modeles import effort_valide_pour_modele, est_modele_avec_adaptateur
 from adaptateur_commun import CLE_ETAT_FOURNISSEUR
 from fournisseurs_llm import CONSIGNE_LANGUE_REFLEXION, DEEPSEEK_REASONING_EFFORT, ajouter_consigne_langue_reflexion, normaliser_effort_reflexion
@@ -426,10 +430,9 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
         # meme temps que tool_choice="required" ci-dessus (05/09) : plus
         # d'appel purement structure sans prose, donc plus de raison de
         # reduire la reserve pour ce cas.
-        if modele == GROQ_PRIMARY:
-            reserve_tokens = 8192
-        else:
-            reserve_tokens = 4096
+        # 01/11/2026 : valeur par modele (voir core/reserve_tokens_sortie.py), Muse Spark
+        # Open n'est plus limite a 4096 comme les modeles de secours Groq.
+        reserve_tokens = reserve_tokens_sortie(modele, GROQ_PRIMARY)
 
         completion = client_groq.chat.completions.create(
             model=modele,
