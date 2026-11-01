@@ -839,9 +839,15 @@ MESSAGE_TELEPHONE_SANS_REPONSE = (
 
 async def _appeler_telephone_via_app_async(nom_reel, arguments, user_id, delai):
     """Envoie un outil téléphone à l'appli PC et rend le texte du relais."""
-    from core.canal_agent_applicatif import a_app_telephone_connectee, demander_action_systeme
+    from core.canal_agent_applicatif import (
+        a_app_telephone_connectee, demander_action_systeme, diagnostiquer_app_telephone,
+    )
     if not await a_app_telephone_connectee(user_id):
-        return MESSAGE_TELEPHONE_SANS_APP
+        # 01/11/2026 : diagnostic en niveau WARNING (les INFO n'apparaissent pas
+        # dans les journaux de production) ET dans le message lui-même.
+        diagnostic = await diagnostiquer_app_telephone(user_id)
+        logging.warning(f"OUTIL TELEPHONE REFUSE ({nom_reel}) : {diagnostic}")
+        return f"{MESSAGE_TELEPHONE_SANS_APP} [Diagnostic : {diagnostic}. Recopie ce diagnostic tel quel à l'utilisateur.]"
     reponse = await demander_action_systeme(
         user_id,
         TYPE_ACTION_OUTIL_TELEPHONE,
@@ -849,7 +855,12 @@ async def _appeler_telephone_via_app_async(nom_reel, arguments, user_id, delai):
         delai_abandon_secondes=max(delai - 2, 5),
     )
     if reponse is None:
-        return MESSAGE_TELEPHONE_SANS_REPONSE
+        diagnostic = await diagnostiquer_app_telephone(user_id)
+        logging.warning(f"OUTIL TELEPHONE SANS REPONSE ({nom_reel}) apres {max(delai - 2, 5)} s : {diagnostic}")
+        return (
+            f"{MESSAGE_TELEPHONE_SANS_REPONSE} [Diagnostic : la demande a bien été envoyée à l'appli PC, "
+            f"mais elle n'a pas répondu à temps. {diagnostic}. Recopie ce diagnostic tel quel à l'utilisateur.]"
+        )
     if isinstance(reponse, dict):
         erreur = reponse.get("erreur")
         if isinstance(erreur, str) and erreur:

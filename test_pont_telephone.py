@@ -59,14 +59,16 @@ def test_sans_user_id_erreur_identification():
 def test_sans_app_message_ouverture_appli():
     with patch("canal_agent_applicatif.a_app_telephone_connectee", new=AsyncMock(return_value=False)):
         texte = mcp_tools.appeler_outil("detecter_telephone", {}, {"detecter_telephone": _route_telephone()})
-    assert texte == mcp_tools.MESSAGE_TELEPHONE_SANS_APP
+    assert texte.startswith(mcp_tools.MESSAGE_TELEPHONE_SANS_APP)
+    assert "Diagnostic" in texte and "AUCUNE connexion" in texte
 
 
 def test_sans_reponse_message_mise_a_jour():
     with patch("canal_agent_applicatif.a_app_telephone_connectee", new=AsyncMock(return_value=True)), \
          patch("canal_agent_applicatif.demander_action_systeme", new=AsyncMock(return_value=None)):
         texte = mcp_tools.appeler_outil("detecter_telephone", {}, {"detecter_telephone": _route_telephone()})
-    assert texte == mcp_tools.MESSAGE_TELEPHONE_SANS_REPONSE
+    assert texte.startswith(mcp_tools.MESSAGE_TELEPHONE_SANS_REPONSE)
+    assert "n'a pas répondu à temps" in texte
 
 
 def test_pont_renvoie_texte_du_relais_sans_cloud():

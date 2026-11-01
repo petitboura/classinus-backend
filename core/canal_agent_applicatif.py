@@ -21,6 +21,7 @@ cote frontend (voir lib/canalAgentApplicatif.ts).
 
 import asyncio
 import logging
+import os
 import sys
 import threading
 import uuid
@@ -454,6 +455,54 @@ async def a_app_telephone_connectee(user_id: str) -> bool:
             )
     except Exception:
         return False
+
+
+def _version_serveur() -> str:
+    """Commit du code qui tourne réellement (Railway ou Render), pour le diagnostic."""
+    for nom in ("RAILWAY_GIT_COMMIT_SHA", "RENDER_GIT_COMMIT", "GIT_COMMIT_SHA"):
+        valeur = os.environ.get(nom)
+        if valeur:
+            return valeur[:7]
+    return "inconnue"
+
+
+async def diagnostiquer_app_telephone(user_id: str) -> str:
+    """Dit en une phrase POURQUOI le serveur ne voit pas l'appli PC de ce compte.
+
+    01/11/2026, Bourama : « Téléphone injoignable » sortait sans qu'on sache
+    laquelle des causes était la bonne. Lecture seule, jamais d'exception.
+    """
+    try:
+        async with _verrou_connexions:
+            nb_total = len(_connexions)
+            du_compte = [cle for cle in _connexions if cle[0] == user_id]
+            nb_relais = sum(1 for cle in du_compte if cle in _relais_systeme)
+            nb_natives = sum(1 for cle in du_compte if cle[1].endswith("-systeme"))
+        if nb_total == 0:
+            cause = (
+                "AUCUNE connexion de l'appli sur ce serveur : l'appli vise un autre serveur, "
+                "ou ce serveur vient de redémarrer et l'appli ne s'est pas encore reconnectée"
+            )
+        elif not du_compte:
+            cause = (
+                f"{nb_total} connexion(s) sur ce serveur, mais AUCUNE pour ce compte : "
+                "l'appli PC est connectée avec un autre compte, ou pas connectée du tout"
+            )
+        elif nb_relais == 0 and nb_natives == 0:
+            cause = (
+                f"ce compte a {len(du_compte)} connexion(s) mais aucune ne se déclare appli PC "
+                "(onglet web ou téléphone seulement) : l'appli PC n'est pas ouverte, "
+                "ou c'est une ancienne version qui ne déclare pas le relais"
+            )
+        else:
+            cause = "l'appli PC est bien connectée"
+        return (
+            f"{cause}. Détail : serveur={_version_serveur()}, compte={str(user_id)[:8]}, "
+            f"connexions_serveur={nb_total}, connexions_compte={len(du_compte)}, "
+            f"relais_pc={nb_relais}, native_systeme={nb_natives}"
+        )
+    except Exception as e:
+        return f"diagnostic impossible ({e})"
 
 
 async def demander_execution_action(user_id: str, action_id: str, on_statut=None) -> Any | None:
