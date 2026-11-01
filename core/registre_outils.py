@@ -1752,6 +1752,16 @@ def outils_de_la_categorie(nom_categorie, outils_candidats):
 # marquer_sujet_clos et rappeler_* ne sont volontairement dans aucun groupe :
 # main.py les force lui-meme selon la taille de l'historique.
 # ---------------------------------------------------------------------------
+# Outils donnes a CHAQUE tour a un utilisateur connecte, sans passer par
+# demander_outils. Source unique : routage_outils.py les injecte dans la liste
+# d'outils, et construction_system_prompt.py les nomme a l'IA pour qu'elle les
+# appelle directement au lieu de les chercher. Ajouter un outil ici suffit pour
+# les deux.
+OUTILS_TOUJOURS_PRESENTS = (
+    "memoire_sommaire", "memoire_lire", "memoire_ecrire", "memoire_completer",
+)
+
+
 GROUPES_OUTILS = {
     "ecran_pc": [
         "lire_ecran", "pointer_ecran", "marquer_ecran", "cliquer_ecran",

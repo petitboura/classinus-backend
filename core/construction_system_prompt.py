@@ -7,6 +7,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from configuration import get_system_prompt
 from profils_agents import INSTRUCTIONS_FORMATS_AFFICHAGE, INSTRUCTIONS_ARBITRAGE_CALCUL, REGLE_CONTEXTE_INVISIBLE, REGLE_ETAT_APPLICATION_TAIRE, REGLE_VISION_ECRAN, REGLE_MEMOIRE_ELEVE, INSTRUCTIONS_LONGUEUR_REPONSE, MODES_PEDAGOGIQUES, REGLE_BASCULE_MODE_PEDAGOGIQUE, construire_instruction_guide, construire_instruction_guide_visuel, construire_instruction_demo, MODES_SOURCE
+from registre_outils import OUTILS_TOUJOURS_PRESENTS
 from guide_conversation import obtenir_sections_guide
 from core.canal_agent_applicatif import obtenir_etat_editeur
 from core.origine_appareil import bloc_prompt_origine, lecture_ecran_pc_autorisee
@@ -573,7 +574,15 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # qu'un outil n'existe pas. Elle ne dit jamais que demander_outils est présent s'il ne l'est pas.
     system_final += (
         "\n\n<regle_outils_absents>\n"
-        "RÈGLE ABSOLUE : tant que tu n'as pas appelé demander_outils pour le besoin en question, "
+        + "PRINCIPE : un outil qui figure déjà dans ta liste d'outils s'appelle directement, tout de suite. "
+        "demander_outils sert uniquement pour un besoin qu'AUCUN outil de ta liste ne couvre : ne l'appelle jamais "
+        "pour obtenir un outil que tu as déjà, ne demande jamais à l'utilisateur de te le donner, et ne dis jamais "
+        "que tu n'y as pas accès. "
+        + (
+            "Toujours présents, à lancer sans jamais les chercher : " + ", ".join(OUTILS_TOUJOURS_PRESENTS) + ". "
+            if user_id else ""
+        )
+        + "RÈGLE ABSOLUE : tant que tu n'as pas appelé demander_outils pour le besoin en question, "
         "et que sa réponse ne t'a pas confirmé que l'outil n'existe pas ou n'est pas possible, "
         "tu ne dis JAMAIS à l'utilisateur que tu n'as pas cet outil, qu'il n'existe pas, qu'il n'est "
         "pas chargé, pas disponible ou pas accessible ce tour-ci. Les outils ne sont pas tous "
