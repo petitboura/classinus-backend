@@ -139,6 +139,12 @@ class TestLectureSeule(Base):
         self.assertEqual(ligne["nom"], "Documents Word")
         self.assertEqual(r2.objets[f"plateforme/{OFFICIEL_WORD}/v1/SKILL.md"], b"Consignes officielles Word")
 
+    def test_exporter_un_skill_officiel_donne_un_refus_clair_et_non_un_faux_message_de_vide(self):
+        poser_officiel()
+        texte = A.executer(U1, "exporter_zip", skill_id=OFFICIEL_WORD)
+        self.assertTrue(texte.startswith("Erreur : ce skill est un skill officiel de Classinus"), texte)
+        self.assertNotIn("aucun skill à exporter", texte)
+
     def test_ecrire_sur_un_skill_personnel_marche_toujours(self):
         A.executer(U1, "creer", nom="Perso", description="d", contenu="c")
         sid = base.tables["skills"][-1]["id"]
