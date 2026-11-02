@@ -299,6 +299,11 @@ def executer(
             from core.skills_import_zip import importer_depuis_zip_chat
             return importer_depuis_zip_chat(user_id, reference)
         if action == "exporter_zip":
+            if (skill_id or "").strip() and _skill_officiel(skill_id) is not None:
+                raise _Refus(
+                    "ce skill est un skill officiel de Classinus : il n'est pas exportable depuis le chat. "
+                    "Tu peux le lire avec l'action consulter."
+                )
             return _exporter_zip(user_id, skill_id)
         if action == "ne_plus_proposer_officiels":
             return _definir_preference_officiels(user_id, True)
