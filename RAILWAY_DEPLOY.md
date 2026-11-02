@@ -64,3 +64,19 @@ enregistrement DNS wildcard (`*.djiguigne.com`) une fois le domaine
 personnalisé branché dans Railway, plus la lecture de l'agent depuis le
 sous-domaine de la requête plutôt que depuis l'auth utilisateur — reste à
 coder, pas commencé.
+
+## Serveur de montage vidéo séparé (03/11/2026)
+
+Deuxième service Railway, même dépôt, branche main. Il ne fait que le montage vidéo
+(`api/main_montage.py`) et le chat principal ne ralentit plus.
+
+- Construction : variable `RAILWAY_DOCKERFILE_PATH=Dockerfile.montage` sur ce service. Tout ce qui est lent
+  à installer (ffmpeg, Node, paquets Remotion, navigateur de rendu Remotion) l'est à la construction de l'image.
+- Variables du service de montage : `SUPABASE_URL`, `SUPABASE_SECRET` (le même que le service principal, c'est
+  le jeton interne), et les variables R2 du service principal (stockage des vidéos).
+  Facultatives : `MONTAGE_SIMULTANES` (défaut 2), `MONTAGE_ATTENTE_MAX_S` (défaut 600).
+- Branchement : sur le service principal, définir `MONTAGE_VIDEO_URL` avec l'adresse du service de montage
+  (sans chemin, ex. `http://nom-du-service.railway.internal:8000`). Sans cette variable, le montage tourne
+  sur le service principal comme avant : retirer la variable suffit pour revenir en arrière.
+- Les outils d'IA lourds (transcription Whisper, séparation Demucs, Real-ESRGAN) ne sont pas inclus.
+- Le service de montage doit lui aussi déployer la branche main.

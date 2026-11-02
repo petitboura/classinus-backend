@@ -1,0 +1,69 @@
+# Serveur de montage vidéo séparé (demande de Bourama, 03/11/2026).
+# Service Railway à part : variable RAILWAY_DOCKERFILE_PATH=Dockerfile.montage.
+# Tout ce qui est lent à installer l'est ici, une fois, à la construction de
+# l'image : ffmpeg, Node, paquets Remotion et navigateur de rendu Remotion.
+# Les outils d'IA lourds (Whisper, Demucs, Real-ESRGAN) ne sont pas inclus.
+FROM python:3.12-slim-bookworm
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    nodejs \
+    npm \
+    fonts-liberation \
+    fonts-dejavu-core \
+    shared-mime-info \
+    libglib2.0-0 \
+    libcairo2 \
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libgdk-pixbuf2.0-0 \
+    libffi-dev \
+    libnss3 \
+    libdbus-1-3 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libgbm1 \
+    libasound2 \
+    libxrandr2 \
+    libxkbcommon0 \
+    libxfixes3 \
+    libxcomposite1 \
+    libxdamage1 \
+    libcups2 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Projet Remotion de base, déjà installé, avec son navigateur de rendu.
+# Mêmes paquets que ceux écrits par remotion_create_project de mcp-video.
+# core/remotion_prepare.py en copie le node_modules dans chaque nouveau projet.
+ENV REMOTION_BASE_DIR=/opt/remotion-base
+RUN mkdir -p /opt/remotion-base && cd /opt/remotion-base \
+    && printf '%s\n' '{' \
+    '  "name": "remotion-base",' \
+    '  "version": "1.0.0",' \
+    '  "private": true,' \
+    '  "dependencies": {' \
+    '    "react": "^18",' \
+    '    "react-dom": "^18",' \
+    '    "remotion": "^4.0.0",' \
+    '    "@remotion/cli": "^4.0.0",' \
+    '    "@remotion/player": "^4.0.0"' \
+    '  },' \
+    '  "devDependencies": {' \
+    '    "@remotion/eslint-config": "^4.0.0",' \
+    '    "@types/react": "^18",' \
+    '    "typescript": "^5"' \
+    '  }' \
+    '}' > package.json \
+    && npm install --no-audit --no-fund --ignore-scripts \
+    && npx remotion browser ensure
+
+COPY . .
+
+EXPOSE 8000
+
+CMD ["sh", "-c", "uvicorn api.main_montage:app --host 0.0.0.0 --port ${PORT:-8000}"]

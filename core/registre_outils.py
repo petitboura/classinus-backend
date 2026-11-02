@@ -74,6 +74,11 @@ def _url_video(get_secret, user_id, agent_id, conversation_id=None):
     port = os.environ.get("PORT", "8000")
     from urllib.parse import urlencode
     params = urlencode({"user_id": user_id or "", "conversation_id": conversation_id or ""})
+    # Serveur de montage séparé (03/11/2026) : si MONTAGE_VIDEO_URL est définie, le montage
+    # tourne là-bas (api/main_montage.py). Sinon, comportement d'avant : ce même serveur.
+    base = (os.environ.get("MONTAGE_VIDEO_URL") or "").strip().rstrip("/")
+    if base.startswith(("http://", "https://")):
+        return f"{base}/mcp/video/?{params}"
     return f"http://localhost:{port}/mcp/video/?{params}"
 
 
