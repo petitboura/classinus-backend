@@ -316,11 +316,21 @@ def _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, 
         }
 
 
+class ReponseVideErreur(Exception):
+    """Le modele a fini son passage sans texte ni appel d'outil (01/11/2026, demande de Bourama).
+
+    Avant, la boucle s'arretait en silence : le chat voyait la fin du flux sans aucune reponse et
+    sans erreur. Levee seulement quand l'appelant la demande (erreur_si_vide=True), pour que
+    l'erreur typee (core/erreur_tour.py, code vide) parte avec l'etat de reprise : si des
+    outils avaient deja tourne, Continuer garde leurs resultats.
+    """
+
+
 def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                  appels_en_cours_a_finir=None, modele=GROQ_PRIMARY, reasoning_effort=None, agent_nom=None,
                  rattrapage_tool_code_restant=1, conversation_id=None,
                  catalogue_complet=None, table_routage_complet=None, user_id=None, arret=None,
-                 user_id_autorisations=None):
+                 user_id_autorisations=None, erreur_si_vide=False):
     """
     Boucle d'agent generique sur le modele Groq utilise (par defaut
     GROQ_PRIMARY, mais peut recevoir n'importe quel modele Groq qui sait
@@ -336,6 +346,10 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
     `arret` (12/10/2026, bouton Arrêter) : jeton d'arrêt du tour (core/arret_tour.py).
     Dès qu'il est levé, la boucle s'arrête sans exception (la cascade de chat() ne doit
     pas basculer sur un autre modèle) : plus d'appel au modèle, plus de nouvel outil.
+
+    `erreur_si_vide` (01/11/2026) : si vrai, un passage du modele sans texte ni appel d'outil leve
+    ReponseVideErreur au lieu de s'arreter en silence. Faux par defaut : la cascade de modeles
+    gratuits garde son comportement.
 
     Genere des evenements "statut"/"reponse"/"confirmation_requise".
     S'arrete (sans exception) des qu'une reponse finale a ete produite OU
@@ -616,6 +630,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
                     user_id=user_id, arret=arret,
                     user_id_autorisations=user_id_autorisations,
+                    erreur_si_vide=erreur_si_vide,
                 )
                 return
             else:
@@ -635,6 +650,14 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
             return
 
         if not appels_en_cours:
+            # Ni contenu ni outil. Si l'appelant l'a demande, c'est une erreur : le tour ne doit
+            # jamais se terminer sans rien dire (19 tours Muse Spark Open le 01/11/2026).
+            if erreur_si_vide:
+                logging.error(
+                    f"Passage sans texte ni outil sur {modele} (finish_reason={dernier_finish_reason}, "
+                    f"usage : {dernier_usage}) -- erreur envoyee au chat."
+                )
+                raise ReponseVideErreur(f"{modele} : aucun texte ni outil (finish_reason={dernier_finish_reason})")
             return  # ni contenu ni outil (rare) : rien a faire de plus
 
         # BUG CORRIGE (2026-07-26, trouve par Bourama) : avant ce fix, la

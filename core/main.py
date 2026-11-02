@@ -254,7 +254,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
       l'utilisateur tape autre chose a la place (ajustement, "j'arrete"...), ce texte doit
       passer par CE MEME chemin plutot que par un nouveau message normal, pour que le modele
       garde tout le contexte deja accumule (voir chat.py cote frontend, reprendreAgent()).
-    - {"type": "erreur_tour", "code": "delai" | "forte_demande" | "serveur", "etat_reprise": {...} | None}
+    - {"type": "erreur_tour", "code": "delai" | "forte_demande" | "vide" | "serveur", "etat_reprise": {...} | None}
       -> le tour a echoue (voir core/erreur_tour.py). Envoye a la place de la phrase d'excuse
       uniquement quand l'appelant passe erreurs_typees=True (le chat du site) ; les autres
       appelants gardent la phrase d'excuse en evenement "reponse". etat_reprise est present si
@@ -496,6 +496,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     agent_nom=etat.get("agent_nom"), conversation_id=conversation_id,
                     catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
                     user_id=user_id, user_id_autorisations=utilisateur_autorisations, arret=arret_tour,
+                    erreur_si_vide=True,
                 ),
                 reponse_accumulee,
                 meta_assistant,
@@ -644,6 +645,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 agent_nom=etat.get("agent_nom"), conversation_id=conversation_id,
                 catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
                 user_id=user_id, user_id_autorisations=utilisateur_autorisations, arret=arret_tour,
+                erreur_si_vide=True,
             )
         except Exception as e:
             logging.error(f"ERREUR GROQ (reprise apres confirmation) {modele_reprise}: {e}")
@@ -1670,7 +1672,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     _agent_groq(client_deepseek_choisi, messages_agent, outils_mcp, table_routage, agent_nom=_nom_agent(agent_id),
                                 modele=modele_force, reasoning_effort=effort_reflexion, conversation_id=conversation_id,
                                 catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
-                                user_id=user_id, arret=arret_tour),
+                                user_id=user_id, arret=arret_tour, erreur_si_vide=True),
                     reponse_accumulee,
                     meta_assistant,
                     fichiers_generes_accumules,

@@ -9,12 +9,13 @@ garde tous les resultats d'outils deja obtenus) au lieu d'un "Reessayer" qui rep
 Le client qui n'a pas demande ces erreurs typees (erreurs_typees=False : plugin Thonny,
 serveur MCP, import depuis une autre IA) recoit exactement l'ancienne phrase d'excuse.
 """
-from boucle_agent import _evenement_reprise_agent, messages_reprenables
+from boucle_agent import ReponseVideErreur, _evenement_reprise_agent, messages_reprenables
 from constantes_agent import MESSAGE_ERREUR
 
 CODE_DELAI = "delai"
 CODE_FORTE_DEMANDE = "forte_demande"
 CODE_SERVEUR = "serveur"
+CODE_VIDE = "vide"  # le modele a fini sans texte ni outil (01/11/2026)
 
 _STATUTS_FORTE_DEMANDE = {413, 429, 503, 529}
 _MOTS_FORTE_DEMANDE = (
@@ -24,7 +25,9 @@ _MOTS_FORTE_DEMANDE = (
 
 
 def classer_erreur(erreur):
-    """Code de l'erreur : delai, forte_demande ou serveur (jamais le texte technique)."""
+    """Code de l'erreur : delai, forte_demande, vide ou serveur (jamais le texte technique)."""
+    if isinstance(erreur, ReponseVideErreur):
+        return CODE_VIDE
     statut = getattr(erreur, "status_code", None)
     texte = str(erreur).lower() if erreur is not None else ""
     if statut in _STATUTS_FORTE_DEMANDE:

@@ -83,12 +83,6 @@ def filtrer_catalogue_par_origine(outils_pour_llm, table_routage, origine):
     return outils, table
 
 
-# Nombres de colonnes annoncés au LLM : ce sont ceux de classinus-frontend/lib/lisibilite.ts
-# (colonne des noms de lignes comprise). Les changer ici, c'est les changer là-bas aussi.
-MAX_COLONNES_TELEPHONE = 3
-MAX_COLONNES_PC = 6
-MAX_COLONNES_PC_LARGE = 10
-
 _ORIGINES_TELEPHONE = (ORIGINE_TELEPHONE_APPLI, ORIGINE_TELEPHONE_NAVIGATEUR)
 
 
@@ -96,14 +90,15 @@ def _consigne_mise_en_forme(origine):
     """Consigne courte de mise en forme selon la taille d'écran de l'appareil."""
     if origine in _ORIGINES_TELEPHONE:
         return (
-            f"Écran étroit : tableaux de {MAX_COLONNES_TELEPHONE} colonnes au maximum (colonne des noms "
-            "comprise), sinon coupe en plusieurs petits tableaux ou fais une liste. Diagrammes et "
-            "cartes mentales : peu de nœuds, libellés courts, pour qu'ils tiennent en entier à l'écran."
+            "Écran étroit : les tableaux restent dans la largeur de l'écran, le texte des cases passe à la "
+            "ligne et devient plus petit quand il y a beaucoup de colonnes. Garde des cases courtes "
+            "(quelques mots) et évite les tableaux très larges. Diagrammes et cartes mentales : peu de "
+            "nœuds, libellés courts, pour qu'ils restent lisibles."
         )
     return (
-        f"Grand écran : tableaux de {MAX_COLONNES_PC} colonnes au maximum (colonne des noms comprise), "
-        f"{MAX_COLONNES_PC_LARGE} seulement si c'est vraiment nécessaire. Diagrammes et cartes mentales "
-        "lisibles en entier à l'écran, sans les surcharger."
+        "Grand écran : les tableaux restent dans la largeur de la zone de texte, le texte des cases passe à "
+        "la ligne et devient plus petit quand il y a beaucoup de colonnes. Garde des cases courtes "
+        "(quelques mots). Diagrammes et cartes mentales lisibles en entier, sans les surcharger."
     )
 
 
