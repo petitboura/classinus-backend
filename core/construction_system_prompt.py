@@ -299,6 +299,41 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # (nom et description seulement, chargement progressif comme chez Claude). Le
     # contenu est lu à la demande par l'outil gerer_skill. Calculé dans chat()
     # (core/main.py), reçu ici en paramètre.
+    # 02/11/2026, demande Bourama : skills OFFICIELS de Classinus (fournis par l'entreprise, lecture
+    # seule), annoncés à part pour que l'IA ne les confonde jamais avec ceux de l'utilisateur. Le skill
+    # de l'utilisateur gagne toujours ; l'IA peut signaler l'officiel et proposer de comparer, sauf si
+    # l'utilisateur a demandé de ne plus le faire (préférence lue dans core/skills_catalogue.py).
+    officiels = (skills_catalogue or {}).get("officiels") or []
+    if officiels:
+        lignes_officiels = "\n".join(
+            f"- id={c['id']} : {c.get('nom') or '(sans nom)'} : {c.get('description') or '(sans description)'}"
+            for c in officiels
+        )
+        if (skills_catalogue or {}).get("ne_plus_proposer"):
+            regle_officiels = (
+                "Cet utilisateur a demandé de ne plus lui signaler les skills officiels équivalents aux siens : "
+                "ne les mentionne pas, ne propose aucune comparaison, utilise toujours son skill. "
+                "S'il veut de nouveau ces signalements, appelle gerer_skill avec l'action "
+                "\"reprendre_propositions_officielles\"."
+            )
+        else:
+            regle_officiels = (
+                "Si l'utilisateur a un skill du même domaine qu'un skill officiel, utilise TOUJOURS le sien. "
+                "Signale-lui en une phrase, une seule fois dans la conversation, que Classinus en a un officiel, "
+                "et propose de lui montrer les différences : vous tranchez ensemble lequel utiliser. "
+                "N'applique jamais le skill officiel à la place du sien sans son accord. "
+                "S'il te demande de ne plus lui signaler cela, appelle gerer_skill avec l'action "
+                "\"ne_plus_proposer_officiels\" et respecte-le ensuite."
+            )
+        system_final += (
+            "\n\nSKILLS OFFICIELS DE CLASSINUS (fournis par l'entreprise, identiques pour tous, en lecture seule) :\n"
+            f"{lignes_officiels}\n"
+            "Ce sont les méthodes de référence de Classinus. Quand la demande correspond à l'un d'eux et que "
+            "l'utilisateur n'a pas de skill équivalent, appelle gerer_skill (action \"consulter\", skill_id) pour "
+            "lire son SKILL.md AVANT de répondre, et suis-le. Tu ne peux ni les modifier ni les supprimer. "
+            f"{regle_officiels}"
+        )
+
     if skills_catalogue and skills_catalogue.get("skills"):
         lignes_skills = "\n".join(
             f"- id={c['id']} : {c.get('nom') or '(sans nom)'} : {c.get('description') or '(sans description)'}"

@@ -5,7 +5,7 @@ import concurrent.futures
 from groq import Groq
 from google import genai
 from google.genai import types
-from core.skills_catalogue import lister_catalogue_skills
+from core.skills_catalogue import lister_catalogue_complet
 from core.lecture_media_conversation import media_joint_present
 from core.lecture_document_conversation import document_joint_present
 from etat_connexions import bloc_prompt_pour_utilisateur as bloc_connexions_pour_utilisateur
@@ -728,7 +728,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # core/registre_outils.py::consulter_skills_chapitres_matiere) même si
     # c'est ce petit routeur qui décide de le déclencher, pas le grand LLM.
     # 25/10/2026 : catalogue des skills avec dossier et fichiers (vide pour un visiteur sans compte).
-    skills_catalogue = {"skills": [], "total": 0}
+    skills_catalogue = {"skills": [], "total": 0, "officiels": [], "ne_plus_proposer": False}
     # 26/10/2026 (demande de Bourama) : état des connexions et des MCP personnels, pour que l'IA
     # distingue ce qui est connecté, actif ou à proposer. None pour un visiteur sans compte.
     bloc_connexions = None
@@ -811,7 +811,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # parallèle pour ne rien ajouter au temps d'attente.
             f_sommaire_memoire = executor.submit(obtenir_sommaire_memoire, user_id)
             # Catalogue des skills (25/10/2026) : lecture indépendante, lancée dans le même lot parallèle.
-            f_skills_catalogue = executor.submit(lister_catalogue_skills, user_id)
+            f_skills_catalogue = executor.submit(lister_catalogue_complet, user_id)
             f_bloc_connexions = executor.submit(bloc_connexions_pour_utilisateur, user_id)
             rattachement_id_actif = f_rattachement_actif.result() if f_rattachement_actif else None
             comportements_etudiant_bruts = f_comportements_etudiant.result()
@@ -884,8 +884,8 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     outils_forces_contexte = []
     if contexte_video:
         outils_forces_contexte.extend(["video_lister_outils", "video_executer_outil"])
-    if skills_catalogue["skills"]:
-        # Le prompt annonce des skills : l'outil pour les lire doit être réellement branché.
+    if skills_catalogue["skills"] or skills_catalogue.get("officiels"):
+        # Le prompt annonce des skills (les siens ou les officiels de Classinus) : l'outil pour les lire doit être réellement branché.
         outils_forces_contexte.append("gerer_skill")
     if media_joint_present(message_utilisateur, historique):
         # 26/10/2026, demande Bourama : une vidéo ou un audio joint n'est plus lu à

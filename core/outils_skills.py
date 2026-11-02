@@ -25,6 +25,11 @@ def gerer_skill(
     dossier avec un fichier SKILL.md obligatoire et d'autres fichiers texte (scripts/,
     references/, assets/). Le SKILL.md commence par un en-tête avec name et description.
 
+    Il existe aussi des skills OFFICIELS de Classinus, fournis par l'entreprise, identiques
+    pour tous, en lecture seule : tu peux les consulter comme les autres, jamais les modifier
+    ni les supprimer. Le skill de l'utilisateur gagne toujours sur un skill officiel du même
+    domaine.
+
     Lecture progressive : le prompt ne donne que le nom et la description de chaque skill.
     Quand une demande correspond à la description d'un skill, lis son SKILL.md AVANT de
     répondre (action "consulter"), puis lis un autre fichier (action "consulter" avec
@@ -37,8 +42,9 @@ def gerer_skill(
     jamais les id à l'utilisateur, ce sont des détails techniques.
 
     `action` doit être l'une de :
-    - "lister" : tous les skills (actifs ou non) avec nom et description. Aucun paramètre.
-    - "consulter" : lit un fichier. Paramètres : `skill_id`, et `chemin` (vide : lit le
+    - "lister" : tous les skills de l'utilisateur (actifs ou non) puis les skills officiels de
+      Classinus, avec nom et description. Aucun paramètre.
+    - "consulter" : lit un fichier (d'un skill de l'utilisateur ou d'un skill officiel). Paramètres : `skill_id`, et `chemin` (vide : lit le
       SKILL.md et donne la liste des autres fichiers).
     - "creer" : crée un skill. Paramètres : `nom`, `description` (quand l'utiliser, c'est
       ce que lira l'IA pour décider d'ouvrir le skill), `contenu` (le texte du SKILL.md,
@@ -64,6 +70,11 @@ def gerer_skill(
       de Claude. Paramètre : `skill_id` (vide : tous les skills de l'utilisateur).
     - "supprimer" : supprime définitivement un skill et tous ses fichiers. Paramètre :
       `skill_id`. SENSIBLE : demande toujours confirmation avant.
+    - "ne_plus_proposer_officiels" : à appeler quand l'utilisateur demande de ne plus lui
+      signaler qu'un skill officiel de Classinus existe à côté d'un des siens. Aucun paramètre.
+      C'est mémorisé pour toutes ses conversations.
+    - "reprendre_propositions_officielles" : annule la précédente, si l'utilisateur veut de
+      nouveau ces signalements. Aucun paramètre.
 
     Après une écriture, dis en une phrase ce qui a été fait.
     """
