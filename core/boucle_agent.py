@@ -10,7 +10,7 @@ from libelles_activite_ia import PARAMETRE_LIBELLE_OUTIL, arguments_sans_libelle
 # Meme chemin d'import que api/ et core/outils_action_agent.py : un seul module, donc un seul etat partage.
 from core.canal_agent_applicatif import retirer_messages_etudiant
 from core.plafond_outils_tour import plafond_tour
-from constantes_agent import GROQ_PRIMARY, MODELES_AVEC_REASONING_EFFORT, DELAI_MAX_PAR_APPEL
+from constantes_agent import GROQ_PRIMARY, GROQ_FALLBACKS, MODELES_AVEC_REASONING_EFFORT, DELAI_MAX_PAR_APPEL
 try:
     from reserve_tokens_sortie import reserve_tokens_sortie
 except ImportError:
@@ -498,7 +498,9 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
         # reduire la reserve pour ce cas.
         # 01/11/2026 : valeur par modele (voir core/reserve_tokens_sortie.py), Muse Spark
         # Open n'est plus limite a 4096 comme les modeles de secours Groq.
-        reserve_tokens = reserve_tokens_sortie(modele, GROQ_PRIMARY)
+        # 02/11/2026 : les modeles hors Groq (DeepSeek, modele principal de la cascade) ne sont plus
+        # limites a 4096, qui coupait les fichiers de code un peu longs.
+        reserve_tokens = reserve_tokens_sortie(modele, GROQ_PRIMARY, GROQ_FALLBACKS)
 
         completion = client_groq.chat.completions.create(
             model=modele,

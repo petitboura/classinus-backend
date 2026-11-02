@@ -811,6 +811,11 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # l'affichage dans le chat change. Libellés de 18 caractères au plus (téléphone).
     "gerer_execution_code:run_code": {"label": "Exécution de code", "icone": "Play", "onglet": None},
     "gerer_execution_code:run_command": {"label": "Commande shell", "icone": "Terminal", "onglet": None},
+    # Commandes longues en arrière-plan (02/11/2026). Icônes déjà utilisées plus bas : le
+    # frontend les connaît, aucune nouvelle icône à ajouter côté interface.
+    "gerer_execution_code:run_background": {"label": "Commande en fond", "icone": "Terminal", "onglet": None},
+    "gerer_execution_code:command_status": {"label": "Suivi de commande", "icone": "FileText", "onglet": None},
+    "gerer_execution_code:command_stop": {"label": "Arrêt de commande", "icone": "Power", "onglet": None},
     "gerer_execution_code:write_file": {"label": "Ajout d'un fichier", "icone": "FilePlus", "onglet": None},
     "gerer_execution_code:edit_file": {"label": "Édition ciblée", "icone": "FilePenLine", "onglet": None},
     "gerer_execution_code:search_files": {"label": "Recherche de code", "icone": "Search", "onglet": None},
