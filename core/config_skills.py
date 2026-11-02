@@ -28,3 +28,8 @@ CATALOGUE_NB_MAX = _entier_env("SKILLS_CATALOGUE_NB_MAX", 100)
 CATALOGUE_DESCRIPTION_MAX = _entier_env("SKILLS_CATALOGUE_DESCRIPTION_MAX", 400)
 # Nombre maximal de caractères d'un fichier renvoyé à l'IA en une lecture.
 LECTURE_CARACTERES_MAX = _entier_env("SKILLS_LECTURE_CARACTERES_MAX", 60000)
+
+# Skills officiels de plateforme (02/11/2026). La liste est identique pour tous les comptes : elle
+# est gardée en mémoire ce nombre de secondes pour ne pas interroger la base à chaque message.
+# Après une synchronisation, elle est à jour au plus tard après ce délai.
+PLATEFORME_CACHE_SECONDES = _entier_env("SKILLS_PLATEFORME_CACHE_SECONDES", 60)

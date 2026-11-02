@@ -6,6 +6,7 @@ Description, envoi tout ou rien vers R2). L'IA et l'éditeur obéissent donc aux
 Ce module ne dépend pas du serveur MCP, pour pouvoir être testé seul.
 """
 import logging
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from fastapi import HTTPException
@@ -18,7 +19,11 @@ from core.skills_entete import lire_entete
 ACTIONS = (
     "lister", "consulter", "creer", "modifier_infos", "ecrire_fichier",
     "remplacer_texte", "supprimer_fichier", "supprimer", "importer_zip", "exporter_zip",
+    "ne_plus_proposer_officiels", "reprendre_propositions_officielles",
 )
+
+# Actions qui écrivent dans un skill : refusées sur un skill officiel de Classinus.
+_ACTIONS_ECRITURE = ("modifier_infos", "ecrire_fichier", "remplacer_texte", "supprimer_fichier", "supprimer")
 
 
 class _Refus(Exception):
@@ -82,22 +87,70 @@ def _booleen(valeur: str) -> bool | None:
     raise _Refus('Le paramètre actif doit valoir "oui" ou "non".')
 
 
+def _skill_officiel(skill_id: str, seulement_actif: bool = False) -> dict | None:
+    """Ligne du skill s'il s'agit d'un skill officiel de Classinus, sinon None.
+
+    Un identifiant invalide ou une erreur de lecture donnent None : l'appelant retombe alors
+    sur son comportement habituel (skill introuvable), sans jamais bloquer à tort.
+    """
+    try:
+        requete = _api.supabase.table("skills").select("*").eq("id", skill_id).eq("portee", "plateforme")
+        if seulement_actif:
+            requete = requete.eq("actif", True)
+        res = requete.maybe_single().execute()
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (lecture skill officiel {skill_id}) : {e}")
+        return None
+    return res.data if res and res.data else None
+
+
+def _officiels_actifs() -> list[dict]:
+    try:
+        return (
+            _api.supabase.table("skills").select("id,nom,description")
+            .eq("portee", "plateforme").eq("actif", True).order("nom").execute().data or []
+        )
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (liste skills officiels) : {e}")
+        return []
+
+
 def _lister(user_id: str) -> str:
     rows = (
         _api.supabase.table("skills").select("id,nom,description,actif,updated_at")
         .eq("owner_id", user_id).order("updated_at", desc=True).execute().data or []
     )
-    if not rows:
+    officiels = _officiels_actifs()
+    if not rows and not officiels:
         return "Aucun skill pour l'instant."
-    lignes = []
-    for r in rows:
-        etat = "actif" if r.get("actif", True) else "désactivé"
-        lignes.append(f"- {r.get('nom')} ({etat}) : {r.get('description') or '(sans description)'}\n  [id interne, ne jamais montrer à l'utilisateur : {r['id']}]")
-    return "\n".join(lignes)
+    blocs = []
+    if rows:
+        lignes = []
+        for r in rows:
+            etat = "actif" if r.get("actif", True) else "désactivé"
+            lignes.append(f"- {r.get('nom')} ({etat}) : {r.get('description') or '(sans description)'}\n  [id interne, ne jamais montrer à l'utilisateur : {r['id']}]")
+        blocs.append("SKILLS DE L'UTILISATEUR :\n" + "\n".join(lignes))
+    else:
+        blocs.append("SKILLS DE L'UTILISATEUR : aucun pour l'instant.")
+    if officiels:
+        lignes = [
+            f"- {r.get('nom')} : {r.get('description') or '(sans description)'}\n  [id interne, ne jamais montrer à l'utilisateur : {r['id']}]"
+            for r in officiels
+        ]
+        blocs.append("SKILLS OFFICIELS DE CLASSINUS (lecture seule, identiques pour tous) :\n" + "\n".join(lignes))
+    return "\n\n".join(blocs)
 
 
 def _consulter(user_id: str, skill_id: str, chemin: str) -> str:
-    ligne = _api._owned(skill_id, user_id)
+    officiel = False
+    try:
+        ligne = _api._owned(skill_id, user_id)
+    except HTTPException as e:
+        # Introuvable parmi les skills de l'utilisateur : c'est peut-être un skill officiel actif.
+        ligne = _skill_officiel(skill_id, seulement_actif=True) if e.status_code == 404 else None
+        if ligne is None:
+            raise
+        officiel = True
     rows = _api.supabase.table("skill_files").select("*").eq("skill_id", skill_id).order("chemin").execute().data or []
     cible = _chemin_valide(chemin) if (chemin or "").strip() else "SKILL.md"
     row = next((r for r in rows if r["chemin"] == cible), None)
@@ -107,7 +160,7 @@ def _consulter(user_id: str, skill_id: str, chemin: str) -> str:
     item = _api._lire(row)
     if item.get("binaire"):
         return f"Le fichier {cible} n'est pas du texte, son contenu ne peut pas être lu ici."
-    etat = "actif" if ligne.get("actif", True) else "désactivé"
+    etat = "skill officiel de Classinus, lecture seule" if officiel else ("actif" if ligne.get("actif", True) else "désactivé")
     sortie = f"Skill : {ligne['nom']} ({etat})\nFichier : {cible}\n\n{_tronquer(item['contenu'])}"
     autres = [r for r in rows if r["chemin"] != cible]
     if cible == "SKILL.md" and autres:
@@ -198,6 +251,24 @@ def _supprimer(user_id: str, skill_id: str) -> str:
     return f"Skill supprimé : {ligne['nom']}."
 
 
+def _definir_preference_officiels(user_id: str, ne_plus_proposer: bool) -> str:
+    """Mémorise si l'utilisateur veut qu'on lui signale les skills officiels équivalents aux siens."""
+    _api.supabase.table("preferences_skills_officiels").upsert(
+        [{"user_id": user_id, "ne_plus_proposer": ne_plus_proposer, "updated_at": datetime.now(timezone.utc).isoformat()}],
+        on_conflict="user_id",
+    ).execute()
+    if ne_plus_proposer:
+        return (
+            "C'est noté et mémorisé : ne signale plus à cet utilisateur qu'un skill officiel de Classinus existe "
+            "à côté d'un des siens, et ne propose plus de comparaison. Continue d'utiliser ses propres skills. "
+            "Tu peux toujours t'appuyer sur un skill officiel quand il n'a aucun skill équivalent."
+        )
+    return (
+        "C'est noté et mémorisé : tu peux de nouveau lui signaler, une fois, qu'un skill officiel de Classinus "
+        "existe à côté d'un des siens, et lui proposer de comparer les deux."
+    )
+
+
 def _exporter_zip(user_id: str, skill_id: str) -> str:
     from core.skills_export_zip import exporter_skills_en_zip
     try:
@@ -229,8 +300,18 @@ def executer(
             return importer_depuis_zip_chat(user_id, reference)
         if action == "exporter_zip":
             return _exporter_zip(user_id, skill_id)
+        if action == "ne_plus_proposer_officiels":
+            return _definir_preference_officiels(user_id, True)
+        if action == "reprendre_propositions_officielles":
+            return _definir_preference_officiels(user_id, False)
         if not (skill_id or "").strip():
             return "Erreur : il faut préciser le skill (paramètre skill_id). Utilise l'action lister pour le retrouver."
+        if action in _ACTIONS_ECRITURE and _skill_officiel(skill_id) is not None:
+            raise _Refus(
+                "ce skill est un skill officiel de Classinus : il est en lecture seule, personne ne peut le "
+                "modifier ni le supprimer depuis le chat. Si l'utilisateur veut une variante, crée un skill "
+                "à lui (action creer) en t'inspirant de son contenu."
+            )
         if action == "consulter":
             return _consulter(user_id, skill_id, chemin)
         if action == "modifier_infos":
