@@ -28,6 +28,10 @@ plus).
 | `RAILPACK_BUILD_APT_PACKAGES` / `RAILPACK_DEPLOY_APT_PACKAGES` | config Railpack native (voir aussi `railpack.json`) |
 | `RAILPACK_PYTHON_PLAYWRIGHT_INSTALL` | à mettre à `1` : installe le navigateur du rendu vidéo des animations (`core/rendu_animation_processus.py`), Railpack ne le fait plus par défaut depuis sa version 0.35 |
 
+## Variable facultative : adresse du serveur d'outils class-tech
+
+- `CLASSTECH_URL_MCP` — adresse complète du serveur MCP de diagnostic (lue par `core/registre_outils.py`). Absente ou vide : valeur par défaut `https://class-tech.up.railway.app/mcp/diagnostic` (service `class-tech`, projet Granink). À renseigner seulement si le serveur change d'adresse. Côté class-tech, la variable `MCP_HOTE_PUBLIC` doit contenir l'hôte public du service, sinon le serveur refuse les appels (protection anti-rebond DNS).
+
 ## Variable à ajouter pour l'intégration E2B (avant activation)
 
 - `E2B_API_KEY` — clé serveur E2B, lue par `core/outils_execution_code.py`. À configurer uniquement côté Railway, jamais dans le frontend.

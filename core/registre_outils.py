@@ -152,13 +152,21 @@ def _url_notion(get_secret, user_id, agent_id, conversation_id=None):
     return "https://mcp.notion.com/mcp"
 
 
+# 03/11/2026 (demande Bourama) : le serveur d'outils class-tech tourne sur
+# Railway (service class-tech, projet Granink), plus sur Render. L'adresse
+# vient de la variable d'environnement CLASSTECH_URL_MCP si elle existe
+# (changer d'hebergeur ne demande alors aucun deploiement de code), sinon de
+# cette valeur par defaut. Le diagnostic de reveil (/health) est derive de
+# cette URL par mcp_tools._url_reveil.
+URL_DIAGNOSTIC_CLASSTECH_DEFAUT = "https://class-tech.up.railway.app/mcp/diagnostic"
+
+
 def _url_diagnostic_classtech(get_secret, user_id, agent_id, conversation_id=None):
     # 28/10/2026 (demande Bourama) : serveur d'outils MCP Class-Tech
     # (diagnostic téléphone puis PC). Serveur public sans
-    # authentification : pas de headers_builder. URL prévue du service
-    # Render class-tech-outils, à corriger ici si le service déployé a
-    # une autre adresse.
-    return "https://class-tech-outils.onrender.com/mcp/diagnostic"
+    # authentification : pas de headers_builder.
+    url = (os.environ.get("CLASSTECH_URL_MCP") or "").strip()
+    return url or URL_DIAGNOSTIC_CLASSTECH_DEFAUT
 
 
 def _headers_notion(get_secret, user_id, agent_id):
