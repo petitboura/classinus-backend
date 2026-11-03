@@ -175,3 +175,24 @@ def test_reveil_derive_de_l_hote_railway():
     entree = _entree_diagnostic()
     url = "https://class-tech.up.railway.app/mcp/diagnostic"
     assert mcp_tools._url_reveil(entree, url) == "https://class-tech.up.railway.app/health"
+
+
+PROFONDS = (
+    "lire_temperatures_internes", "lire_historique_batterie",
+    "lire_trafic_par_appli", "lire_fluidite_ecran", "lire_saturation_systeme",
+    "lire_reveils_planifies", "lire_journaux_systeme", "lire_carte_systeme",
+    "lire_memoire_dans_le_temps", "lire_verrous_veille",
+)
+
+
+def test_outils_profonds_ranges_libelles_et_routes_vers_l_app():
+    """Les 10 outils profonds sont dans la categorie, ont un libelle et passent par l'appli PC."""
+    import registre_outils
+    categorie = registre_outils.CATEGORIES_OUTILS["diagnostic_classtech"]
+    entree = _entree_diagnostic()
+    for nom in PROFONDS:
+        assert nom in categorie, nom
+        assert registre_outils.REGISTRE_AFFICHAGE_OUTILS[nom]["label"], nom
+        assert registre_outils.REGISTRE_AFFICHAGE_OUTILS[nom]["icone"], nom
+        assert mcp_tools._route_via_app_telephone(entree, nom) is True, nom
+        assert nom not in registre_outils.OUTILS_SENSIBLES, nom
