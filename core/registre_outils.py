@@ -1823,6 +1823,43 @@ GROUPES_OUTILS = {
     "site": ["generer_site_zip", "deployer_site"],
 }
 
+# ---------------------------------------------------------------------------
+# Familles de categories qui se combinent (03/11/2026, demande Bourama).
+# Donnees pures, lues par core/consignes_outils.py. Quand demander_outils donne
+# des outils d'une categorie listee ici, la reponse ajoute la consigne de cette
+# categorie, et rappelle de demander aussi les categories "avec" que l'IA n'a
+# pas encore. Pas de prompt systeme, pas de fusion de categories : l'IA garde
+# des categories separees et sait seulement lesquelles vont ensemble.
+#
+# Une categorie peut avoir plusieurs partenaires dans "avec", et une meme
+# categorie peut figurer dans plusieurs familles (les consignes s'ajoutent).
+# Ajouter une famille = ajouter une ligne ici, aucun code a toucher.
+# Chaque nom de categorie doit exister dans CATEGORIES_OUTILS ou
+# CATEGORIES_OUTILS_PAR_PREFIXE (verifie par test_consignes_outils.py).
+# ---------------------------------------------------------------------------
+FAMILLES_OUTILS = {
+    "depots_et_code": {
+        "github": {
+            "avec": ["execution_code"],
+            "consigne": (
+                "Les outils GitHub servent à trouver et lister : les dépôts de l'utilisateur "
+                "(action mes_depots), la recherche d'un dépôt public (action chercher_depots), "
+                "les issues, les pull requests et les commits. Pour récupérer le code d'un dépôt "
+                "public, ou le modifier et le tester, combine-les avec l'exécution de code : "
+                "trouve le dépôt avec GitHub, puis clone-le avec git dans l'espace d'exécution de code."
+            ),
+        },
+        "execution_code": {
+            "avec": ["github"],
+            "consigne": (
+                "L'exécution de code lance du code et des commandes dans un espace de travail. "
+                "Pour cloner un dépôt public, trouve d'abord son adresse avec les outils GitHub "
+                "(recherche d'un dépôt, liste des dépôts de l'utilisateur), puis clone-le ici avec git."
+            ),
+        },
+    },
+}
+
 # DEPENDANCES_OUTILS : un outil qui exige qu'un autre soit appele AVANT lui
 # (sens unique). {outil: [outils a donner avec lui]}. Pour les serveurs MCP
 # dont le catalogue est trop grand pour une liste a la main, voir

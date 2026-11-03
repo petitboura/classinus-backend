@@ -31,6 +31,7 @@ from routage_outils import (
 )
 from recherche_outils import rechercher_outils_pertinents
 from completion_outils import completer_outils_trouves, prerequis_parmi
+from consignes_outils import consignes_familles, nombre_outils_restants, texte_outils_restants
 from registre_outils import REGISTRE_AFFICHAGE_OUTILS, outils_de_la_categorie
 import etat_connexions
 
@@ -831,6 +832,9 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                 # le reproposer.
                 trouves_total = []
                 lignes_detail = []
+                # Combien d'outils il reste dans chaque categorie demandee (03/11/2026, demande
+                # Bourama) : calcule sur le catalogue reel, voir consignes_outils.py.
+                restes_par_categorie = []
                 # Services que l'utilisateur peut connecter mais n'a pas encore connectés
                 # (26/10/2026, demande de Bourama) : proposés au lieu de répondre que rien n'existe.
                 propositions = {}
@@ -891,6 +895,14 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     )
                     trouves_total.extend(trouves)
                     trouves_total.extend(lien["outil"] for lien in liens)
+                    if recherche["categorie"]:
+                        restes_par_categorie.append((
+                            recherche["categorie"],
+                            nombre_outils_restants(
+                                recherche["categorie"], catalogue_complet,
+                                _outils_deja_en_main(outils_mcp) | {o["function"]["name"] for o in trouves_total},
+                            ),
+                        ))
                     etiquette_categorie = f" [{recherche['categorie']}]" if recherche["categorie"] else ""
                     if trouves:
                         lignes_detail.append(
@@ -948,6 +960,15 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     )
                     if note_doubles:
                         contenu_reponse += " " + note_doubles
+                    # Ce qu'il reste dans la categorie, puis les categories qui vont avec celles
+                    # recues (GitHub et execution de code...). outils_mcp contient deja les
+                    # outils trouves (ajoutes plus haut), donc il represente "en main" apres cette demande.
+                    texte_restes = texte_outils_restants(restes_par_categorie)
+                    if texte_restes:
+                        contenu_reponse += " " + texte_restes
+                    texte_familles = consignes_familles(trouves_total, outils_mcp)
+                    if texte_familles:
+                        contenu_reponse += " " + texte_familles
                 else:
                     if propositions:
                         contenu_reponse = ""

@@ -171,6 +171,26 @@ Ce serveur peut exposer d'autres outils non vérifiés ici
 (WolframLanguageContext, TestReport...) : à ajouter au registre s'ils
 s'avèrent utilisés par Clovis.
 
+## Demande d'outils : ce qu'il reste et les catégories qui vont ensemble
+
+Le 03/11/2026, la réponse de `demander_outils` (`core/boucle_agent.py`) donne deux
+informations de plus, calculées par `core/consignes_outils.py` :
+
+- **Ce qu'il reste.** Quand l'IA demande les outils d'une catégorie, la réponse dit combien
+  d'outils de cette catégorie elle n'a pas encore, et qu'elle peut redemander. Le nombre est
+  calculé sur le catalogue réel du tour (Notion, GitHub, serveurs ajoutés par l'utilisateur,
+  quel que soit leur nombre) : aucun chiffre n'est écrit à la main. Les outils déjà en main
+  sont exclus, une nouvelle demande ne les redonne jamais.
+- **Les catégories qui vont ensemble.** `FAMILLES_OUTILS` (`core/registre_outils.py`) liste les
+  catégories qui se combinent, avec une consigne par catégorie. Aujourd'hui : `github` et
+  `execution_code` (trouver ou lister un dépôt avec GitHub, le cloner et le tester avec
+  l'exécution de code). Quand l'IA reçoit les outils d'une de ces catégories, la réponse ajoute
+  la consigne, et lui rappelle de demander aussi les catégories partenaires qu'elle n'a pas
+  encore. Ajouter une famille, ou une troisième catégorie à une famille, se fait en ajoutant
+  une entrée dans ce dictionnaire, sans toucher au code. Rien n'est ajouté au prompt système.
+
+Tests : `python -m unittest test_consignes_outils`.
+
 ## Ce qui tourne en production
 
 - Backend FastAPI (`api/main.py`), déployé sur Railway (projet
