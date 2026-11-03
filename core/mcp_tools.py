@@ -131,6 +131,16 @@ except (TypeError, ValueError):
     _DELAI_REVEIL_SECONDES = 90
 
 
+# Delai maximal du listing des outils d'un serveur MCP (03/11/2026). Reglable
+# sans toucher au code par la variable d'environnement MCP_LISTING_DELAI_SECONDES.
+try:
+    _DELAI_LISTING_SECONDES = int(os.getenv("MCP_LISTING_DELAI_SECONDES", "10"))
+    if _DELAI_LISTING_SECONDES <= 0:
+        _DELAI_LISTING_SECONDES = 10
+except (TypeError, ValueError):
+    _DELAI_LISTING_SECONDES = 10
+
+
 def forcer_rechargement_catalogue_outils():
     """
     Vide tout le cache (droits ET catalogue d'outils MCP), pour forcer un
@@ -298,7 +308,12 @@ def _lister_outils_serveur_avec_cache(nom, url, headers, reveil_url=None):
     if reveil_url:
         _reveiller_serveur(reveil_url)
     try:
-        outils = asyncio.run(_lister_outils_async(url, headers))
+        # 03/11/2026 (demande Bourama : chat lent depuis le merge class-tech) :
+        # delai maximal sur le listing. Sans lui, un serveur qui accepte la
+        # connexion mais ne repond jamais bloquait chaque message du chat
+        # pendant des minutes. Au-dela du delai, l'echec part en cache negatif
+        # comme toute autre erreur et le chat continue sans ce serveur.
+        outils = asyncio.run(asyncio.wait_for(_lister_outils_async(url, headers), timeout=_DELAI_LISTING_SECONDES))
     except Exception:
         _cache_echecs_catalogue[nom] = time.time() + _DUREE_CACHE_NEGATIF_SECONDES
         raise
