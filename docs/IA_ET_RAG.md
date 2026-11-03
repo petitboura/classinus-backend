@@ -27,7 +27,7 @@ Les outils sont enregistrés et filtrés par les modules de registre et d’auto
 
 Deux usages de la recherche vectorielle sont distingués :
 
-- `core/retriever.py) : récupération de contenus indexés utilisés par le moteur IA.
+- `core/retriever.py` : récupération de contenus indexés utilisés par le moteur IA.
 - `core/bibliotheque_rag.py` : recherche dans la bibliothèque personnelle de fichiers de l’utilisateur.
 
 La vectorisation et le découpage de texte sont partagés via `core/embeddings.py`. Les migrations SQL et les fonctions RPC associées constituent une partie du contrat avec Supabase.
