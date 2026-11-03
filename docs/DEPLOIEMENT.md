@@ -13,7 +13,7 @@ La checklist opérationnelle et la liste des variables sont maintenues dans [`RA
 
 ## Service de montage vidéo
 
-Le dépôt contient aussi `api/main_montage.py` et `Dockerfile.montage) pour le service de montage séparé. Le backend principal peut lui déléguer le montage lorsque `MONTAGE_VIDEO_URL` est configurée. Les paramètres dédiés et variables de ce service sont décrits dans `RAILWAY_DEPLOY.md`.
+Le dépôt contient aussi `api/main_montage.py` et `Dockerfile.montage` pour le service de montage séparé. Le backend principal peut lui déléguer le montage lorsque `MONTAGE_VIDEO_URL` est configurée. Les paramètres dédiés et variables de ce service sont décrits dans `RAILWAY_DEPLOY.md`.
 
 ## Docker et environnements de test
 
