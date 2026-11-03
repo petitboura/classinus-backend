@@ -80,6 +80,7 @@ D’autres variables activent des fournisseurs, connecteurs, notifications et se
 | [Données et sécurité](docs/DONNEES_ET_SECURITE.md) | Supabase, migrations, authentification et secrets |
 | [Développement](docs/DEVELOPPEMENT.md) | environnement local, commandes et tests |
 | [Déploiement](docs/DEPLOIEMENT.md) | Railpack, Railway et services associés |
+| [Inventaire technique détaillé](docs/INVENTAIRE_TECHNIQUE_2026-11-03.md) | inventaire transféré de l’ancien README, référence datée |
 
 ## Dépôts liés
 
