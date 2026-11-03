@@ -41,7 +41,12 @@ def get_secret(key):
 
 
 # Ordre = hierarchie cumulative descendante (voir docstring plus haut).
-ORDRE_DISTRIBUTEURS = ["claude", "gpt", "gemini", "deepseek", "grok", "meta"]
+#
+# "vultr" (03/11/2026, hackathon Vultr Agent Rush) : modeles servis par Vultr Serverless
+# Inference, en dernier. Aucun modele n'est code ici : les identifiants se testent avec de vrais
+# appels (scripts/sonder_vultr.py) puis se posent dans Supabase (modeles_llm). Sans cle
+# VULTR_INFERENCE_API_KEY sur le serveur, ce fournisseur reste invisible, comme les autres.
+ORDRE_DISTRIBUTEURS = ["claude", "gpt", "gemini", "deepseek", "grok", "meta", "vultr"]
 
 # Ordre = hierarchie cumulative ascendante.
 ORDRE_PALIERS = ["essentiel", "avance", "pro", "specialise"]
@@ -135,7 +140,34 @@ VARIABLES_CLE_PAR_DISTRIBUTEUR = {
     "grok": "XAI_API_KEY",
     "deepseek": "DEEPSEEK_API_KEY",
     "meta": "MODEL_API_KEY",
+    # Cle Serverless Inference de Vultr, distincte de la cle de l'API Vultr qui sert a louer des
+    # serveurs (etape 5 du plan, pas encore utilisee).
+    "vultr": "VULTR_INFERENCE_API_KEY",
 }
+
+# Vultr Serverless Inference (03/11/2026) : API compatible OpenAI (Chat Completions), seule la
+# base_url change. L'adresse se regle par la variable VULTR_INFERENCE_BASE_URL ; a defaut, celle
+# donnee par la page du hackathon.
+ADRESSE_VULTR_PAR_DEFAUT = "https://api.vultrinference.com/v1"
+VARIABLE_ADRESSE_VULTR = "VULTR_INFERENCE_BASE_URL"
+
+
+def adresse_vultr():
+    """Adresse de l'API Vultr Serverless Inference (variable d'environnement, sinon valeur par defaut)."""
+    return get_secret(VARIABLE_ADRESSE_VULTR) or ADRESSE_VULTR_PAR_DEFAUT
+
+
+def creer_client_vultr(cle=None):
+    """
+    Client OpenAI pointe sur Vultr. Meme appel que le SDK OpenAI (client.chat.completions.create),
+    donc la boucle d'agent s'en sert sans adaptateur, comme avec Groq. None si la cle est absente
+    (l'appelant retombe alors sur son chemin habituel).
+    """
+    cle = cle or cle_api_du_distributeur("vultr")
+    if not cle:
+        return None
+    from openai import OpenAI
+    return OpenAI(api_key=cle, base_url=adresse_vultr(), max_retries=1)
 
 
 def cle_api_du_distributeur(distributeur):
@@ -785,6 +817,27 @@ def _stream_baseten_seul(modele_id, system_prompt, messages):
             yield delta.content
 
 
+def _stream_vultr(modele_id, system_prompt, messages):
+    # Vultr Serverless Inference (03/11/2026) : API compatible OpenAI, seule la base_url change
+    # (voir creer_client_vultr). Chemin texte seul, comme Grok et Meta : la boucle avec outils
+    # passe par client_avec_outils (core/clients_outils_llm.py). La reflexion du modele, si Vultr
+    # l'envoie, est remontee comme evenement et jamais ajoutee a la reponse.
+    client = creer_client_vultr()
+    if client is None:
+        raise RuntimeError(f"{modele_id} : cle Vultr absente (VULTR_INFERENCE_API_KEY)")
+    messages_openai = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + messages
+    flux = client.chat.completions.create(model=modele_id, messages=messages_openai, stream=True)
+    for morceau in flux:
+        if not morceau.choices:
+            continue
+        delta = morceau.choices[0].delta
+        reflexion = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
+        if reflexion:
+            yield {"type": "raisonnement", "texte": reflexion}
+        if delta.content:
+            yield delta.content
+
+
 def _stream_gemini(modele_id, system_prompt, messages):
     # Reutilise le client google-genai deja initialise ailleurs dans le
     # projet (voir core/main.py) -- instancie ici localement pour garder
@@ -812,6 +865,7 @@ _STREAMERS_PAR_DISTRIBUTEUR = {
     "deepseek": _stream_deepseek,
     "grok": _stream_grok,
     "meta": _stream_meta,
+    "vultr": _stream_vultr,
     "gemini": _stream_gemini,
 }
 
