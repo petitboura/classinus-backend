@@ -327,3 +327,12 @@ Variables requises :
 - `RAILWAY_OAUTH_CLIENT_ID` et `RAILWAY_OAUTH_CLIENT_SECRET` : identifiants de l'application OAuth Classinus créée dans Railway, avec la même URL de retour enregistrée.
 
 Vercel et Supabase utilisent la découverte OAuth MCP et l'enregistrement dynamique du client lorsque le fournisseur les annonce. Railway nécessite une application OAuth enregistrée. Routes communes : `/api/connexions/{service}/demarrer`, `/api/connexions/{service}/statut` et `/api/connexions/finaliser`.
+
+## Skills officiels de Classinus
+
+Les skills officiels (Word, Excel, PowerPoint) vivent dans `skills_plateforme/<nom>/SKILL.md`. Ils sont en lecture seule pour tous les comptes et le skill d'un utilisateur passe toujours avant. Pour en ajouter un, crée un dossier avec son `SKILL.md` (en-tête `name` et `description`) et pousse : la synchronisation part toute seule au déploiement.
+
+- Commande de pré-déploiement Railway, en une seule commande : `python scripts/predeploiement.py`. Elle synchronise les skills officiels (sans jamais bloquer le déploiement) puis lance le test Gemini Live.
+- À la main : `python -m scripts.synchroniser_skills_plateforme simuler`, puis `appliquer`.
+- `SKILLS_PLATEFORME_SYNCHRO=non` désactive la synchronisation au déploiement.
+- Migration à appliquer une fois par base : `migrations/2026_11_02_skills_plateforme.sql`.
