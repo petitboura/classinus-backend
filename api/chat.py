@@ -756,7 +756,7 @@ def envoyer_message(request: Request, payload: EnvoyerMessagePayload, utilisateu
             ),
         )
         return StreamingResponse(
-            tour.lire(0),
+            tour.lire(0, signe_vie=DELAI_SIGNE_VIE_FLUX),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
