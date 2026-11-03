@@ -152,13 +152,21 @@ def _url_notion(get_secret, user_id, agent_id, conversation_id=None):
     return "https://mcp.notion.com/mcp"
 
 
+# 03/11/2026 (demande Bourama) : le serveur d'outils class-tech tourne sur
+# Railway (service class-tech, projet Granink), plus sur Render. L'adresse
+# vient de la variable d'environnement CLASSTECH_URL_MCP si elle existe
+# (changer d'hebergeur ne demande alors aucun deploiement de code), sinon de
+# cette valeur par defaut. Le diagnostic de reveil (/health) est derive de
+# cette URL par mcp_tools._url_reveil.
+URL_DIAGNOSTIC_CLASSTECH_DEFAUT = "https://class-tech.up.railway.app/mcp/diagnostic"
+
+
 def _url_diagnostic_classtech(get_secret, user_id, agent_id, conversation_id=None):
     # 28/10/2026 (demande Bourama) : serveur d'outils MCP Class-Tech
     # (diagnostic téléphone puis PC). Serveur public sans
-    # authentification : pas de headers_builder. URL prévue du service
-    # Render class-tech-outils, à corriger ici si le service déployé a
-    # une autre adresse.
-    return "https://class-tech-outils.onrender.com/mcp/diagnostic"
+    # authentification : pas de headers_builder.
+    url = (os.environ.get("CLASSTECH_URL_MCP") or "").strip()
+    return url or URL_DIAGNOSTIC_CLASSTECH_DEFAUT
 
 
 def _headers_notion(get_secret, user_id, agent_id):
@@ -1265,6 +1273,17 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "tester_micro": {"label": "Test micro", "icone": "Mic", "onglet": None},
     "tester_haut_parleur": {"label": "Test haut-parleur", "icone": "Volume2", "onglet": None},
     "tester_vibreur": {"label": "Test vibreur", "icone": "Vibrate", "onglet": None},
+    # 03/11/2026 (demande Bourama) : outils profonds sans root, lecture seule.
+    "lire_temperatures_internes": {"label": "Températures internes", "icone": "Thermometer", "onglet": None},
+    "lire_historique_batterie": {"label": "Batterie détaillée", "icone": "History", "onglet": None},
+    "lire_trafic_par_appli": {"label": "Trafic par appli", "icone": "ArrowUpDown", "onglet": None},
+    "lire_fluidite_ecran": {"label": "Fluidité de l'écran", "icone": "Gauge", "onglet": None},
+    "lire_saturation_systeme": {"label": "Saturation CPU/RAM", "icone": "Cpu", "onglet": None},
+    "lire_reveils_planifies": {"label": "Réveils planifiés", "icone": "AlarmClock", "onglet": None},
+    "lire_journaux_systeme": {"label": "Journaux système", "icone": "FileText", "onglet": None},
+    "lire_carte_systeme": {"label": "Carte système", "icone": "Map", "onglet": None},
+    "lire_memoire_dans_le_temps": {"label": "RAM dans le temps", "icone": "MemoryStick", "onglet": None},
+    "lire_verrous_veille": {"label": "Verrous de veille", "icone": "Lock", "onglet": None},
     "tester_camera": {"label": "Test caméra", "icone": "Camera", "onglet": None},
     "tester_boutons": {"label": "Test boutons", "icone": "Power", "onglet": None},
     "analyser_memoire_vive": {"label": "Mémoire vive", "icone": "MemoryStick", "onglet": None},
@@ -1551,6 +1570,12 @@ CATEGORIES_OUTILS = {
         "tester_boutons", "analyser_memoire_vive", "analyser_cpu",
         "analyser_applications_gourmandes", "lister_permissions_risquees",
         "revoquer_permission", "verifier_securite", "verifier_mises_a_jour",
+        # 03/11/2026 : outils profonds sans root (lecture seule).
+        "lire_temperatures_internes", "lire_historique_batterie",
+        "lire_trafic_par_appli", "lire_fluidite_ecran",
+        "lire_saturation_systeme", "lire_reveils_planifies",
+        "lire_journaux_systeme", "lire_carte_systeme",
+        "lire_memoire_dans_le_temps", "lire_verrous_veille",
     ],
 }
 
