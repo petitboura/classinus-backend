@@ -1,107 +1,130 @@
-# Chantier — Nouveau produit étudiant (Clovis)
+# Project: new student product (Clovis)
+
+[English version] · [Français](chantier-programme-etudiant.fr.md)
 
 ---
 
-## Partie 1 — Structure du programme (rappel utile pour la partie 2 et 3)
+## Part 1: Programme structure (context for Parts 2 and 3)
 
-- Hiérarchie : **programme** (par classe/niveau) → **matières** → **chapitres**.
-- "Niveau" = simple rattachement organisationnel, pas une logique de droits.
-- Contenu pratique rattaché : **documents** et **exercices** (1 seul chapitre), **examens/devoirs** (many-to-many avec les chapitres).
-- Classement transversal superposé (semestre, année, section libre), applicable à matière/chapitre/document/exercice/examen.
-- But : donner à l'IA un cadre structurant (jamais hors-programme, jamais hors-niveau) pour générer du contenu à la demande.
+- Hierarchy: **Programme** (by class/grade) → **subjects** → **chapters**.
+- "Grade" is an organizational relationship only, not an access-control rule.
+- Attached practical content: **documents** and **exercises** (each linked to one chapter), **exams/assignments** (many-to-many relationship with chapters).
+- An additional cross-cutting classification (semester, year, free-form section) applies to subjects, chapters, documents, exercises, and exams.
+- Goal: give the AI a structured framework so it never generates content outside the Programme or grade, while still allowing on-demand generation.
 
-*(Implémentation déjà en place dans `clovis-backend` : tables `programmes`/`matieres`/`chapitres`, `documents_programme`, `exercices_programme`, `examens_programme` + `examen_chapitres`, `classements_transversaux` + `classement_transversal_items`, système de plugins `plugins_programme`/`plugin_telechargements`. Pour le détail complet — limites de contenu par matière/chapitre, système de plugins et son modèle économique — voir les migrations `2026_08_12_*` et `2026_08_14_plugin_examens_transverses.sql`.)*
-
----
-
-## Partie 2 — Section "Notion-like" intégrée à l'app
-
-### Principe
-- Une section dans l'appli existante (Clovis) — **pas une nouvelle app séparée**.
-- Inspirée de Notion, mais **simplifiée** : uniquement les fonctionnalités utiles pour les chercheurs.
-- Pas deux publics distincts : les étudiants sont eux-mêmes des chercheurs (démarche de recherche/organisation/synthèse) → un seul outil, pas un espace "chercheurs" séparé d'un espace "étudiants".
-
-### Relation avec le reste de l'appli
-- Cette section n'est **pas mélangée/fusionnée** avec le reste de l'appli — elle reste distincte.
-- Mais elle est **liée** : une page peut décrire/référencer où se trouve tel ou tel contenu ailleurs dans l'appli (ex. un chapitre, un document), pour tout retrouver depuis une seule page plutôt que naviguer entre différents endroits de stockage.
-- But : **centraliser**, servir de point d'accès unique.
-- Cette page de liens/références est elle-même une page dans la section Notion-like — indépendante des autres pages de cette section (donc deux types de pages : pages de contenu classique, et pages "carrefour" qui pointent vers d'autres emplacements — typiquement vers la structure programme de la partie 1).
-
-### Recherche — usages réels de Notion par les étudiants
-Fonctionnalités les plus utilisées à retenir :
-- Une page par matière, avec sous-pages pour cours/devoirs/projets/révisions.
-- Bases de données de révision (tableaux/listes) pour suivre la progression, avec plusieurs modes d'affichage (liste, tableau, calendrier, Kanban).
-- Support des équations mathématiques et symboles en LaTeX — précieux pour les matières scientifiques.
-- Gestion de tâches : classer les devoirs par priorité, sous-tâches par projet.
-- Répétition espacée (spaced repetition) pour réviser sur plusieurs semaines — un vrai différenciateur des meilleurs modèles Notion étudiants.
-- Collaboration fluide entre camarades, ressources centralisées.
-
-Fonctionnalités à écarter (trop complexes pour l'objectif de simplicité) :
-- Bases de données relationnelles avancées, widgets tiers, intégrations externes (Google Calendar, météo, flux Twitter...).
-- Marketplace de templates payants (jusqu'à $19 chez Notion) — chez Clovis ce rôle est déjà couvert par le système de plugins (partie 1).
-
-Point clé : Notion donne déjà gratuitement son plan payant aux étudiants (email universitaire) — donc l'avantage différenciant n'est pas le prix, c'est la **simplicité immédiate** (zéro configuration, contrairement à Notion où la configuration relationnelle prend du temps à un utilisateur expérimenté) et le fait que **c'est déjà dans l'écosystème** (pas de compte à créer, connecté nativement à la structure classe/matière/chapitre de la partie 1).
+*(Implementation was already present in `clovis-backend`: tables `programmes`, `matieres`, `chapitres`, `documents_programme`, `exercices_programme`, `examens_programme`, `examen_chapitres`, `classements_transversaux`, `classement_transversal_items`, and the plugin system `plugins_programme` / `plugin_telechargements`. For full details on per-subject/chapter content limits, the plugin system, and its business model, see migrations `2026_08_12_*` and `2026_08_14_plugin_examens_transverses.sql`.)*
 
 ---
 
-## Partie 3 — Agent IA avec contrôle des appareils
+## Part 2: a Notion-like section integrated into the app
 
-### Principe général
-Portée : ce que l'étudiant autorise et demande explicitement. Ordre des couches de permission : (1) ce que l'appli autorise en interne, (2) ce que l'OS autorise, (3) ce que l'utilisateur autorise en plus, explicitement.
+### Principle
 
-### Téléphone (version simplifiée, mise à jour)
-Fini l'idée initiale de contrôle total du téléphone façon "agent autonome" (accessibilité, clics à l'écran) — trop de risque de blocage par Google Play. Nouvelle approche : uniquement des actions qui passent par des mécanismes officiels et légers, sans jamais toucher à l'API d'accessibilité.
+- A section inside the existing app (Clovis), **not a separate application**.
+- Inspired by Notion but **simplified** to include only features useful to researchers.
+- No separate researcher and student audiences. Students are researchers too, in the sense of research, organization, and synthesis. One tool serves both; there is no separate researcher workspace.
 
-**Ce qu'on ajoute, sans aucun risque**
+### Relationship with the rest of the app
 
-*Suivi et information*
-- Voir le temps passé par app (historique d'utilisation).
-- Savoir quelle app est active en ce moment (même mécanisme que le temps passé).
-- Naviguer, éditer, ajouter, classer et créer des dossiers/fichiers — mais uniquement dans les dossiers que l'étudiant a explicitement désignés une fois (choix persistant, pas à redemander à chaque fois).
+- This section is **not merged into** the rest of the app. It remains distinct.
+- It is nevertheless linked: a page can describe or reference where content lives elsewhere in the app (for example, a chapter or document). This lets users find everything from one page rather than navigating between separate storage areas.
+- Goal: **centralize access** and provide a single entry point.
+- A link/reference page is itself a page in the Notion-like section, independent of other pages in that section. There are two page types: regular content pages and "hub" pages that point to other locations, typically the Programme structure from Part 1.
 
-*Actions et rappels*
-- Envoyer des notifications classiques.
-- Ouvrir une app à la demande.
-- Notifications en plein écran (jouable, mais à réserver à un usage type "alarme/rappel important" pour rester dans les clous de la review Google).
-- Créer des rappels/alarmes via l'app native d'horloge.
-- Créer/lire des événements calendrier.
-- Activer/désactiver le mode Ne pas déranger pendant une session.
-- Ajuster le volume/sonnerie pendant une session.
+### Research: how students actually use Notion
 
-*Clovis qui agit pour l'étudiant (pas l'inverse)*
-- Permettre à Clovis d'utiliser une app tierce via l'API propre de cette app ou un connecteur MCP (comme Notion, Google Calendar, Gmail, Drive...) — même principe que les connecteurs Claude actuels. Ne fonctionne que pour les apps qui exposent une API/MCP publique (donc pas Instagram, TikTok, WhatsApp perso).
+Key features to retain:
 
-**Ce qui reste explicitement écarté (pas dans le scope)**
-- Fermer une autre app à distance — impossible techniquement, pas juste risqué.
-- Bloquer/débloquer l'accès à une app — même limite technique.
-- Cliquer/remplir des champs dans d'autres apps — nécessite l'accessibilité, écarté depuis le début.
-- Accès à tous les fichiers du téléphone sans désignation explicite — réservé aux gestionnaires de fichiers, refus quasi certain de Google Play.
-- Détecter automatiquement un nouveau dossier ajouté ailleurs sur le téléphone (hors des dossiers désignés) — bloqué par le système lui-même, pas de contournement possible sans le même accès large refusé plus haut.
+- One page per subject, with subpages for courses, homework, projects, and revision.
+- Revision databases (tables/lists) to track progress, with multiple views: list, table, calendar, and Kanban.
+- Support for mathematical equations and LaTeX symbols, especially useful for science subjects.
+- Task management: prioritize homework and create subtasks for each project.
+- Spaced repetition for revision over several weeks, a real differentiator of the best student Notion templates.
+- Smooth collaboration between classmates and centralized resources.
 
-**Mécanique commune à tout ce qui touche aux fichiers/dossiers**
-L'initiative part toujours de l'étudiant. Clovis peut proposer ("veux-tu me donner accès à un autre dossier ?"), mais c'est toujours l'étudiant qui choisit via le sélecteur système. Une fois donné, l'accès persiste — pas de reconfirmation à chaque fois (même logique que l'appairage entre appareils, façon WhatsApp Web).
+Features to exclude because they are too complex for the simplicity goal:
 
-### PC/ordinateur (inchangé)
-- Plus simple techniquement que le mobile : Windows/macOS/Linux ont des APIs d'automatisation plus ouvertes et matures, pas de restriction App Store, pas de sandbox aussi stricte.
-- Même logique de type "computer use" (Claude Cowork) : agent qui pilote souris/clavier/fichiers/apps avec permission de l'utilisateur.
+- Advanced relational databases, third-party widgets, and external integrations (Google Calendar, weather, Twitter feeds, etc.).
+- Paid template marketplace (up to $19 on Notion). In Clovis, the plugin system from Part 1 already covers this role.
 
-### Décision : agent unifié (inchangé)
-- **Un seul "cerveau"** (compréhension, planification, raisonnement, respect des permissions, mémoire de contexte) partagé entre téléphone et PC.
-- **Deux "mains" différentes** en dessous : côté téléphone désormais limitées aux mécanismes officiels décrits ci-dessus (plus d'accessibilité), côté PC via automatisation desktop classique.
-- Avantages : cohérence produit (une seule expérience mentale pour l'étudiant), maintenance simplifiée (une seule amélioration du raisonnement profite aux deux plateformes), continuité possible entre appareils.
+Key point: Notion already gives students its paid plan for free with a university email address. Therefore, the differentiator is not price. It is **immediate simplicity** (zero setup, unlike Notion where relational configuration takes time even for an experienced user) and the fact that **the tool is already part of the ecosystem** (no new account, natively connected to the class/subject/chapter structure from Part 1).
 
-### Lien entre appareils (inchangé)
-Exigence : pouvoir rester sur PC et faire exécuter une action sur le téléphone, et inversement rester sur le téléphone et faire exécuter une action sur le PC.
+---
 
-Deux options de liaison évaluées :
+## Part 3: AI agent with device control
 
-| Option | Sécurité | Fonctionnement |
+### General principle
+
+Scope: what the student explicitly authorizes and requests. Permission layers, in order:
+
+1. What the application permits internally.
+2. What the operating system permits.
+3. Any additional permission explicitly granted by the user.
+
+### Phone (simplified, updated approach)
+
+The original idea of full phone control like an "autonomous agent" (Accessibility Service and screen clicks) is abandoned because of the risk of rejection by Google Play.
+
+The new approach uses only official, lightweight mechanisms and never uses the Accessibility API.
+
+**Capabilities to add, without introducing this broad-access risk**
+
+*Monitoring and information*
+
+- See time spent in each app (usage history).
+- Know which app is currently active (using the same mechanism as screen-time tracking).
+- Browse, edit, add, classify, and create folders/files, but only inside folders explicitly selected by the student once. The selection persists; access must not be requested again for every operation.
+
+*Actions and reminders*
+
+- Send standard notifications.
+- Open an app on request.
+- Full-screen notifications are possible, but should be reserved for alarm/important-reminder use cases to stay within Google review requirements.
+- Create reminders/alarms through the native clock app.
+- Create and read calendar events.
+- Enable/disable Do Not Disturb during a session.
+- Adjust volume/ringer during a session.
+
+*Classinus acting on behalf of the student*
+
+- Allow Classinus to use a third-party app through that app's own API or an MCP connector (such as Notion, Google Calendar, Gmail, and Drive), following the same principle as current Claude connectors. This works only for apps that expose a public API/MCP, not personal Instagram, TikTok, or WhatsApp accounts.
+
+**Explicitly out of scope**
+
+- Remotely close another app: technically impossible, not merely risky.
+- Block/unblock access to an app: same technical limitation.
+- Click or fill in fields in other apps: requires Accessibility access and has been excluded from the beginning.
+- Access every file on the phone without explicit folder selection: reserved for file managers and very likely to be rejected by Google Play.
+- Automatically detect a new folder added elsewhere on the phone (outside designated folders): blocked by the operating system itself. There is no workaround without the broad access described above, which has been rejected.
+
+**Shared mechanism for file/folder access**
+
+The student always initiates access. Classinus may offer to request access to another folder, but the student chooses it through the system picker. Once granted, access persists and does not need to be reconfirmed each time. This follows the same idea as pairing devices, similar to WhatsApp Web.
+
+### PC / desktop (unchanged)
+
+- Technically simpler than mobile: Windows, macOS, and Linux have more open and mature automation APIs, no App Store restrictions, and less restrictive sandboxes.
+- Use a computer-use model similar to Claude Cowork: an agent that controls mouse, keyboard, files, and apps with the user's permission.
+
+### Decision: one unified agent (unchanged)
+
+- **One "brain"** shared by phone and PC: understanding, planning, reasoning, permission enforcement, and context memory.
+- **Two different "hands":** on phone, use only the official mechanisms described above (no Accessibility); on PC, use conventional desktop automation.
+- Benefits: a consistent product experience, simpler maintenance (one reasoning improvement benefits both platforms), and possible continuity across devices.
+
+### Device linking (unchanged)
+
+Requirement: the user can stay on PC and have an action performed on the phone, and vice versa.
+
+Two linking options were evaluated:
+
+| Option | Security | Behavior |
 |---|---|---|
-| **Liaison automatique par compte** | ❌ Plus risquée | Dès connexion au même compte sur les deux appareils, ils sont liés. Risque : un seul point de défaillance (le compte) — si compromis à distance (phishing, session volée), l'attaquant contrôle les deux appareils sans rien de plus. |
-| **Appairage explicite** | ✅ Plus sûre (recommandée) | Code à scanner / confirmation sur les deux appareils au moment de la liaison. Exige une action physique sur les appareils déjà liés — impossible à faire uniquement depuis un compte volé à distance. |
+| **Automatic account linking** | Higher risk | Devices are linked as soon as the same account signs in on both. This creates a single point of failure: if the account is compromised remotely (phishing or a stolen session), an attacker controls both devices without any additional check. |
+| **Explicit pairing** | Safer (recommended) | Scan a code or confirm on both devices when linking. It requires physical access to an already linked device, so a remotely stolen account alone cannot complete the pairing. |
 
-**Recommandation retenue** : appairage explicite obligatoire **une seule fois**, au moment de créer le lien (comme WhatsApp Web — scan une fois, reste lié jusqu'à révocation manuelle) — pas de reconfirmation à chaque action, pour rester utilisable au quotidien.
+**Selected recommendation:** require explicit pairing **once**, when creating the link (like WhatsApp Web: scan once, remain linked until manually revoked). Do not require confirmation before every action, so the feature remains practical for daily use.
 
 ---
 
-*Document généré à partir des sessions de réflexion — chantier Clovis, distinct des dépôts Djiguignè.*
+*Document generated from project-planning sessions: the Clovis project, separate from the Djiguignè repositories.*

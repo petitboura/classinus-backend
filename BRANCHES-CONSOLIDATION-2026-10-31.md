@@ -1,24 +1,29 @@
-# Consolidation des branches en doute — 31/10/2026
+# Branch consolidation notes: 31 October 2026
 
-Note pour les créateurs des branches concernées (décision Bourama, analyse Git : ancêtres, `git cherry`, diffs d'arbres vs `staging`).
+[English version] · [Français](BRANCHES-CONSOLIDATION-2026-10-31.fr.md)
 
-## Branche à utiliser désormais
+Note for the owners of the affected branches. Decision by Bourama, based on Git analysis: ancestry, `git cherry`, and tree diffs against `staging`.
+
+## Branch to use from now on
+
 - **`feat/workspace-code-tools`** (`d1863b6504af671eae2c4f8f269d067106d89a5b`)
-  - Contient déjà `fix/memoire-contenu-objet` (ancêtre prouvé).
-  - Contient les autorisations « Toujours autoriser », l'historique outils complet et la restauration de `api/main.py`.
-  - Continuez tout le travail mémoire / workspace-code sur cette branche, pas sur les anciennes.
+  - Already includes `fix/memoire-contenu-objet` as a proven ancestor.
+  - Also includes the "Always allow" permissions, complete tool history, and restoration of `api/main.py`.
+  - Continue all memory / workspace-code work on this branch, not the older ones.
 
-## Branches supprimées le 31/10/2026
-| Branche supprimée | SHA (restauration possible) | Raison |
+## Branches deleted on 31 October 2026
+
+| Deleted branch | SHA (can be restored) | Reason |
 |---|---|---|
-| `fix/memoire-contenu-objet` | `e14088373e97a2b5345f54b5afc309e765cefe4a` | Déjà incluse dans `feat/workspace-code-tools` |
-| `djiguigne-modif-1793394411` | `284bb281175574db8906bf5e7584642da0890dd7` | Version cassée : vidait `api/main.py` (-967 lignes), corrigé dans `feat/workspace-code-tools` |
-| `djiguigne-modif-1792901222` | `f0226b9bf82181b347036262853aa5d61dc0e4da` | Supprimait seulement une migration SQL, divergée de 209 commits |
+| `fix/memoire-contenu-objet` | `e14088373e97a2b5345f54b5afc309e765cefe4a` | Already included in `feat/workspace-code-tools` |
+| `djiguigne-modif-1793394411` | `284bb281175574db8906bf5e7584642da0890dd7` | Broken version: emptied `api/main.py` (-967 lines); fixed in `feat/workspace-code-tools` |
+| `djiguigne-modif-1792901222` | `f0226b9bf82181b347036262853aa5d61dc0e4da` | Removed only one SQL migration and diverged by 209 commits |
 
-## Restaurer une branche si vraiment nécessaire
+## Restore a branch if genuinely needed
+
 ```bash
-git branch <nom-branche> <sha-ci-dessus>
-git push origin <nom-branche>
+git branch <branch-name> <sha-above>
+git push origin <branch-name>
 ```
 
-Non touchés : `main`, `staging` et toutes les autres branches utiles / PR ouvertes.
+Unaffected: `main`, `staging`, and all other useful branches and open PRs.
