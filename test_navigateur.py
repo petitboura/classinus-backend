@@ -372,6 +372,38 @@ class Approbation(unittest.TestCase):
         self.assertEqual(_nom_lisible_appel(appel), "Action finale")
 
 
+class IntegrationAuxAutresOutils(unittest.TestCase):
+    """Le navigateur respecte la catégorisation et l'affichage des autres outils."""
+
+    def test_le_site_ouvert_apparait_dans_la_frise_comme_pour_les_autres_outils(self):
+        from core.domaines_affichage import domaines_de_l_appel
+        self.assertEqual(
+            domaines_de_l_appel("gerer_execution_code", {"action": "browser_open", "url": "https://www.exemple.org/page"}),
+            ["exemple.org"],
+        )
+        for autre in ({"action": "browser_click", "text": "Suivant"}, {"action": "run_command", "command": "ls"}):
+            self.assertEqual(domaines_de_l_appel("gerer_execution_code", autre), [])
+
+    def test_le_modele_trouve_l_outil_quand_il_demande_un_navigateur(self):
+        import asyncio
+        from core.outils_execution_code import mcp_execution_code
+        from recherche_outils import rechercher_outils_pertinents
+        vrai = next(o for o in asyncio.run(mcp_execution_code.list_tools()) if o.name == "gerer_execution_code")
+        for action in navigateur_boite.ACTIONS:
+            self.assertIn(action, json.dumps(vrai.input_schema))
+
+        def fn(nom, desc):
+            return {"type": "function", "function": {"name": nom, "description": desc, "parameters": {}}}
+        candidats = [
+            fn("gerer_execution_code", vrai.description),
+            fn("tavily_search", "Search the web for current information and news."),
+            fn("generer_document_excel", "Genere un fichier Excel a partir de donnees."),
+            fn("ui_photo", "Prend une photo avec la camera du telephone."),
+        ]
+        trouves = rechercher_outils_pertinents("ouvrir un site web dans un navigateur et prendre une capture d'ecran", candidats)
+        self.assertEqual(trouves[0]["function"]["name"], "gerer_execution_code")
+
+
 class CapturesModele(unittest.TestCase):
     ENVELOPPE = json.dumps({
         captures_modele.MARQUE: True, "text": "Page A",
