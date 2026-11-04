@@ -24,11 +24,12 @@ LONGUEUR_MAX_LIBELLE = 90
 
 _DESCRIPTION_PARAMETRE = (
     "Optionnel mais à toujours remplir. Un court libellé (moins de 8 mots) qui dit à "
-    "l'utilisateur ce que tu fais en ce moment, avec son sujet réel, écrit dans la langue "
-    "dans laquelle il t'écrit. Il doit être un groupe nominal : un nom d'action suivi de son "
-    "sujet, jamais une phrase avec un verbe conjugué, jamais à la première personne, jamais "
-    "au présent (pas de « Je cherche », « Je lis », « I'm looking for »). "
-    "Sans nom d'outil, sans nom de fichier, sans jargon technique, sans point final. "
+    "l'utilisateur ce que tu fais en ce moment, avec son sujet réel. Écris-le dans la langue "
+    "de l'interface : en anglais si les consignes de langue de ce système demandent l'anglais "
+    "(LANGUAGE REQUIREMENT), sinon dans la langue dans laquelle l'utilisateur t'écrit. Il doit "
+    "être un groupe nominal : un nom d'action suivi de son sujet, jamais une phrase avec un verbe "
+    "conjugué, jamais à la première personne, jamais au présent (pas de « Je cherche », « Je lis », "
+    "« I'm looking for »). Sans nom d'outil, sans nom de fichier, sans jargon technique, sans point final. "
     "Exemples : « Recherche de vidéos sur les dérivées », « Lecture de ton cours de chimie », "
     "« Video search on derivatives », « Chemistry course reading »."
 )
