@@ -20,6 +20,7 @@ cote frontend (voir lib/canalAgentApplicatif.ts).
 """
 
 import asyncio
+import functools
 import logging
 import os
 import sys
@@ -102,6 +103,39 @@ DELAI_ABANDON_SECONDES = 30
 
 TEXTE_STATUT_1 = "Classinus interagit avec l'application..."
 TEXTE_STATUT_2 = "Ça prend un peu plus de temps que prévu..."
+
+
+def _sur_boucle_principale(fonction):
+    """Fait toujours tourner `fonction` sur la boucle d'evenements du serveur.
+
+    04/11/2026, Bourama : les outils telephone lancent chacun leur propre boucle
+    (asyncio.run dans un fil de travail, voir core/mcp_tools.py), alors que les
+    connexions WebSocket, les verrous et les attentes de ce module vivent sur la
+    boucle principale. Dès que plusieurs outils partaient en parallele, le verrou
+    d'envoi refusait la seconde boucle (\"is bound to a different event loop\"), le
+    message n'etait jamais envoye a l'appli PC et l'outil abandonnait apres 58 s.
+    Ici, si on est appele depuis une autre boucle, on delegue a la boucle principale
+    et on attend le resultat ; sur la boucle principale (ou sans boucle principale
+    connue) on appelle directement, comme avant. L'annulation est transmise.
+    """
+    @functools.wraps(fonction)
+    async def enveloppe(*args, **kwargs):
+        boucle = _boucle_evenements
+        try:
+            courante = asyncio.get_running_loop()
+        except RuntimeError:
+            courante = None
+        if (
+            boucle is None
+            or boucle is courante
+            or boucle.is_closed()
+            or not boucle.is_running()
+        ):
+            return await fonction(*args, **kwargs)
+        futur = asyncio.run_coroutine_threadsafe(fonction(*args, **kwargs), boucle)
+        return await asyncio.wrap_future(futur)
+
+    return enveloppe
 
 
 async def _verrou_envoi_pour(cle: tuple[str, str]) -> asyncio.Lock:
@@ -299,6 +333,7 @@ async def _appeler_statut(on_statut, texte: str) -> None:
         logging.error(f"ERREUR callback statut canal agent applicatif : {e}")
 
 
+@_sur_boucle_principale
 async def _diffuser_et_attendre(
     user_id: str,
     message: dict[str, Any],
@@ -436,6 +471,7 @@ async def a_app_systeme_connecte(user_id: str) -> bool:
         return False
 
 
+@_sur_boucle_principale
 async def a_app_telephone_connectee(user_id: str) -> bool:
     """Vrai si l'appli PC est ouverte sur ce compte, même ancienne version.
 
@@ -466,6 +502,7 @@ def _version_serveur() -> str:
     return "inconnue"
 
 
+@_sur_boucle_principale
 async def diagnostiquer_app_telephone(user_id: str) -> str:
     """Dit en une phrase POURQUOI le serveur ne voit pas l'appli PC de ce compte.
 
