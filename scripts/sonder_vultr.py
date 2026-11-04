@@ -180,7 +180,7 @@ def main():
     analyse.add_argument("--voir-code", action="store_true", help="affiche le code reçu pour juger la qualité")
     options = analyse.parse_args()
 
-    variable = fournisseurs_llm.VARIABLES_CLE_PAR_DISTRIBUTEUR["vultr"]
+    variable = fournisseurs_llm.VARIABLE_CLE_VULTR
     client = fournisseurs_llm.creer_client_vultr(os.environ.get(variable))
     if client is None:
         print(f"Clé absente : définissez la variable d'environnement {variable} (clé Serverless Inference).")

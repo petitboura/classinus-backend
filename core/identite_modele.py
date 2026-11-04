@@ -25,9 +25,6 @@ NOMS_FOURNISSEURS = {
     "deepseek": "DeepSeek",
     "grok": "xAI",
     "meta": "Meta",
-    # Vultr heberge des modeles d'autres createurs : le vrai nom du createur se regle dans
-    # Supabase (nom_affiche), ce repli dit seulement qui sert le modele.
-    "vultr": "Vultr",
 }
 
 # Modèles de la cascade (core/constantes_agent.py), qui ne sont pas tous dans la

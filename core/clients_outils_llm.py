@@ -1,5 +1,5 @@
 """
-Fabrique des clients avec outils pour les modèles Claude, GPT, Gemini, Grok, Meta et Vultr (20/10/2026, Meta le 28/10/2026, Vultr le 03/11/2026).
+Fabrique des clients avec outils pour les modèles Claude, GPT, Gemini, Grok et Meta (20/10/2026, Meta le 28/10/2026).
 
 Chaque client expose le même appel que le SDK OpenAI (client.chat.completions.create), ce qui
 permet à la boucle d'agent (core/boucle_agent.py:_agent_groq) de s'en servir sans rien changer :
@@ -56,10 +56,6 @@ def client_avec_outils(modele_id):
         except ImportError:
             from core.adaptateur_gemini import ClientGemini
         return ClientGemini(cle)
-    # Vultr (03/11/2026) : Chat Completions compatible OpenAI, donc le client OpenAI tel quel,
-    # sans adaptateur (voir fournisseurs_llm.creer_client_vultr).
-    if distributeur == "vultr":
-        return fournisseurs_llm.creer_client_vultr(cle)
     try:
         from adaptateur_responses import ClientResponses
     except ImportError:

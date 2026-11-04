@@ -150,9 +150,9 @@ class ModelesGrok(unittest.TestCase):
     def tearDown(self):
         reinitialiser_cache_config_modeles()
 
-    def test_ordre_finit_par_grok_puis_meta_puis_vultr(self):
+    def test_ordre_finit_par_grok_puis_meta(self):
         from core.fournisseurs_llm import ORDRE_DISTRIBUTEURS
-        self.assertEqual(ORDRE_DISTRIBUTEURS, ["claude", "gpt", "gemini", "deepseek", "grok", "meta", "vultr"])
+        self.assertEqual(ORDRE_DISTRIBUTEURS, ["claude", "gpt", "gemini", "deepseek", "grok", "meta"])
 
     def test_grok_deux_modeles_trois_niveaux_et_bientot(self):
         config = _config_modeles_de_repli()

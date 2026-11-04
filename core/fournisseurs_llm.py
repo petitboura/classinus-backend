@@ -41,12 +41,7 @@ def get_secret(key):
 
 
 # Ordre = hierarchie cumulative descendante (voir docstring plus haut).
-#
-# "vultr" (03/11/2026, hackathon Vultr Agent Rush) : modeles servis par Vultr Serverless
-# Inference, en dernier. Aucun modele n'est code ici : les identifiants se testent avec de vrais
-# appels (scripts/sonder_vultr.py) puis se posent dans Supabase (modeles_llm). Sans cle
-# VULTR_INFERENCE_API_KEY sur le serveur, ce fournisseur reste invisible, comme les autres.
-ORDRE_DISTRIBUTEURS = ["claude", "gpt", "gemini", "deepseek", "grok", "meta", "vultr"]
+ORDRE_DISTRIBUTEURS = ["claude", "gpt", "gemini", "deepseek", "grok", "meta"]
 
 # Ordre = hierarchie cumulative ascendante.
 ORDRE_PALIERS = ["essentiel", "avance", "pro", "specialise"]
@@ -140,14 +135,16 @@ VARIABLES_CLE_PAR_DISTRIBUTEUR = {
     "grok": "XAI_API_KEY",
     "deepseek": "DEEPSEEK_API_KEY",
     "meta": "MODEL_API_KEY",
-    # Cle Serverless Inference de Vultr, distincte de la cle de l'API Vultr qui sert a louer des
-    # serveurs (etape 5 du plan, pas encore utilisee).
-    "vultr": "VULTR_INFERENCE_API_KEY",
 }
 
-# Vultr Serverless Inference (03/11/2026) : API compatible OpenAI (Chat Completions), seule la
-# base_url change. L'adresse se regle par la variable VULTR_INFERENCE_BASE_URL ; a defaut, celle
-# donnee par la page du hackathon.
+# Vultr Serverless Inference (04/11/2026, hackathon Vultr Agent Rush, demande Bourama) : API
+# compatible OpenAI (Chat Completions), seule la base_url change. Vultr n'est PAS un fournisseur
+# du selecteur : c'est une route possible pour DeepSeek, exactement comme Baseten (interrupteur
+# vultr_actif dans Supabase, voir core/adaptateur_vultr_deepseek.py).
+# Cle Serverless Inference, distincte de la cle de l'API Vultr qui sert a louer des serveurs.
+VARIABLE_CLE_VULTR = "VULTR_INFERENCE_API_KEY"
+# L'adresse se regle par la variable VULTR_INFERENCE_BASE_URL ; a defaut, celle donnee par la
+# page du hackathon.
 ADRESSE_VULTR_PAR_DEFAUT = "https://api.vultrinference.com/v1"
 VARIABLE_ADRESSE_VULTR = "VULTR_INFERENCE_BASE_URL"
 
@@ -159,11 +156,10 @@ def adresse_vultr():
 
 def creer_client_vultr(cle=None):
     """
-    Client OpenAI pointe sur Vultr. Meme appel que le SDK OpenAI (client.chat.completions.create),
-    donc la boucle d'agent s'en sert sans adaptateur, comme avec Groq. None si la cle est absente
-    (l'appelant retombe alors sur son chemin habituel).
+    Client OpenAI pointe sur Vultr. Meme appel que le SDK OpenAI (client.chat.completions.create).
+    None si la cle est absente (l'appelant retombe alors sur son chemin habituel).
     """
-    cle = cle or cle_api_du_distributeur("vultr")
+    cle = cle or get_secret(VARIABLE_CLE_VULTR)
     if not cle:
         return None
     from openai import OpenAI
@@ -199,19 +195,38 @@ def correspondance_baseten(config=None):
     return correspondance
 
 
+def correspondance_vultr(config=None):
+    """
+    {identifiant direct DeepSeek: identifiant chez Vultr} pour les modeles qui en ont un (colonne
+    modele_id_vultr de Supabase). Pas de valeur de repli dans le code : sans Supabase, rien
+    ne passe par Vultr et DeepSeek repart par sa route habituelle.
+    """
+    config = config or _config_modeles()
+    correspondance = {}
+    for paliers in (config.get("modeles") or {}).get("deepseek", {}).values():
+        if paliers.get("vultr"):
+            correspondance[paliers["id"]] = paliers["vultr"]
+    return correspondance
+
+
 def creer_client_deepseek(modele_id):
     """
-    Client DeepSeek : via Baseten quand l'interrupteur est ON (colonne
-    baseten_actif, cle BASETEN_API_KEY presente, slug connu et Baseten
-    pas mis a l'ecart), en direct sinon. None si aucune route n'a sa cle
-    (l'appelant retombe alors sur son repli habituel, comme avant).
-    Le repli Baseten -> direct en cas de credit epuise est gere dans
-    l'adaptateur lui-meme (voir core/adaptateur_baseten.py).
+    Client DeepSeek. Trois routes, de la plus prioritaire a la moins prioritaire :
+    Vultr quand l'interrupteur est ON (colonne vultr_actif, cle VULTR_INFERENCE_API_KEY presente,
+    identifiant Vultr connu pour ce modele, Vultr pas mis a l'ecart) ; sinon Baseten quand son
+    interrupteur est ON (colonne baseten_actif, cle BASETEN_API_KEY, slug connu) ; sinon en
+    direct. Chaque route qui refuse pour une raison de credit, quota ou cle repart sur la
+    suivante sans erreur pour l'eleve. None si aucune route n'a sa cle (l'appelant retombe
+    alors sur son repli habituel, comme avant).
+    Les replis sont geres dans les adaptateurs eux-memes (core/adaptateur_vultr_deepseek.py,
+    core/adaptateur_baseten.py).
     """
     try:
         from adaptateur_baseten import ClientBaseten
+        from adaptateur_vultr_deepseek import ClientVultrDeepseek
     except ImportError:
         from core.adaptateur_baseten import ClientBaseten
+        from core.adaptateur_vultr_deepseek import ClientVultrDeepseek
     config = _config_modeles()
     fournisseur = config["fournisseurs"].get("deepseek") or {}
     interrupteur = bool(fournisseur.get("baseten_actif"))
@@ -220,8 +235,17 @@ def creer_client_deepseek(modele_id):
     cle_directe = get_secret(variable_directe) if variable_directe else None
     correspondance = correspondance_baseten(config)
     if cle_directe is None and (cle_baseten is None or modele_id not in correspondance):
-        return None
-    return ClientBaseten(correspondance, cle_baseten=cle_baseten, cle_directe=cle_directe)
+        client_habituel = None
+    else:
+        client_habituel = ClientBaseten(correspondance, cle_baseten=cle_baseten, cle_directe=cle_directe)
+
+    correspondance_chez_vultr = correspondance_vultr(config)
+    cle_vultr = get_secret(VARIABLE_CLE_VULTR) if fournisseur.get("vultr_actif") else None
+    if cle_vultr is None or modele_id not in correspondance_chez_vultr:
+        return client_habituel
+    return ClientVultrDeepseek(
+        correspondance_chez_vultr, creer_client_vultr(cle_vultr), client_habituel=client_habituel
+    )
 
 
 def info_baseten_seul(modele_id, config=None):
@@ -330,6 +354,9 @@ def _config_modeles_de_repli():
             # Interrupteur Baseten (29/10/2026, demande Bourama) : OFF par
             # defaut, le direct reste la route tant que Bourama ne l'allume pas.
             "baseten_actif": False,
+            # Interrupteur Vultr (04/11/2026, demande Bourama) : OFF par defaut, le direct
+            # (ou Baseten) reste la route tant que Bourama ne l'allume pas.
+            "vultr_actif": False,
         }
     return {
         "distributeurs": list(ORDRE_DISTRIBUTEURS),
@@ -428,6 +455,19 @@ def _lire_config_modeles_supabase():
     except Exception as e:
         logging.warning(f"Colonne baseten_seul absente ou illisible (migration a appliquer) : {e}")
 
+    # Interrupteur Vultr + identifiants (04/11/2026) : lus a part, comme ceux de Baseten, pour
+    # qu'une migration pas encore appliquee ne casse rien (colonnes absentes : interrupteur OFF).
+    vultr_actif_par_distributeur = {}
+    identifiant_vultr_par_modele = {}
+    try:
+        for ligne in client.table("fournisseurs_llm").select("distributeur, vultr_actif").execute().data or []:
+            vultr_actif_par_distributeur[ligne["distributeur"]] = bool(ligne.get("vultr_actif"))
+        for ligne in client.table("modeles_llm").select("distributeur, palier, modele_id_vultr").execute().data or []:
+            if ligne.get("modele_id_vultr"):
+                identifiant_vultr_par_modele[(ligne["distributeur"], ligne["palier"])] = ligne["modele_id_vultr"]
+    except Exception as e:
+        logging.warning(f"Colonnes Vultr absentes ou illisibles (migration a appliquer) : {e}")
+
     fournisseurs = {}
     for ligne in lignes_fournisseurs:
         fournisseurs[ligne["distributeur"]] = {
@@ -436,6 +476,7 @@ def _lire_config_modeles_supabase():
             "variable_cle_api": ligne.get("variable_cle_api"),
             "nom_affiche": ligne.get("nom_affiche"),
             "baseten_actif": baseten_actif_par_distributeur.get(ligne["distributeur"], False),
+            "vultr_actif": vultr_actif_par_distributeur.get(ligne["distributeur"], False),
         }
     modeles = {}
     niveaux = {}
@@ -449,6 +490,9 @@ def _lire_config_modeles_supabase():
         slug_baseten = slug_baseten_par_modele.get((ligne["distributeur"], ligne["palier"]))
         if slug_baseten:
             entree_modele["baseten"] = slug_baseten
+        identifiant_vultr = identifiant_vultr_par_modele.get((ligne["distributeur"], ligne["palier"]))
+        if identifiant_vultr:
+            entree_modele["vultr"] = identifiant_vultr
         if (ligne["distributeur"], ligne["palier"]) in baseten_seul_par_modele and slug_baseten:
             entree_modele["baseten_seul"] = True
         modeles.setdefault(ligne["distributeur"], {})[ligne["palier"]] = entree_modele
@@ -817,27 +861,6 @@ def _stream_baseten_seul(modele_id, system_prompt, messages):
             yield delta.content
 
 
-def _stream_vultr(modele_id, system_prompt, messages):
-    # Vultr Serverless Inference (03/11/2026) : API compatible OpenAI, seule la base_url change
-    # (voir creer_client_vultr). Chemin texte seul, comme Grok et Meta : la boucle avec outils
-    # passe par client_avec_outils (core/clients_outils_llm.py). La reflexion du modele, si Vultr
-    # l'envoie, est remontee comme evenement et jamais ajoutee a la reponse.
-    client = creer_client_vultr()
-    if client is None:
-        raise RuntimeError(f"{modele_id} : cle Vultr absente (VULTR_INFERENCE_API_KEY)")
-    messages_openai = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + messages
-    flux = client.chat.completions.create(model=modele_id, messages=messages_openai, stream=True)
-    for morceau in flux:
-        if not morceau.choices:
-            continue
-        delta = morceau.choices[0].delta
-        reflexion = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
-        if reflexion:
-            yield {"type": "raisonnement", "texte": reflexion}
-        if delta.content:
-            yield delta.content
-
-
 def _stream_gemini(modele_id, system_prompt, messages):
     # Reutilise le client google-genai deja initialise ailleurs dans le
     # projet (voir core/main.py) -- instancie ici localement pour garder
@@ -865,7 +888,6 @@ _STREAMERS_PAR_DISTRIBUTEUR = {
     "deepseek": _stream_deepseek,
     "grok": _stream_grok,
     "meta": _stream_meta,
-    "vultr": _stream_vultr,
     "gemini": _stream_gemini,
 }
 

@@ -290,7 +290,7 @@ Le backend est hébergé sur Render. Toutes les variables d'environnement doiven
 | `GITHUB_TOKEN` (optionnel) | `core/serveur_mcp_github.py` — sans lui, l'API GitHub non authentifiée est plafonnée à 60 requêtes/heure PAR IP ; un classic token `public_repo` fait passer la limite à 5000/heure |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | `connexions/oauth_generique.py` (connexion OAuth GitHub par agent) |
 | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` / `DEEPSEEK_API_KEY` / `MODEL_API_KEY` (Meta, staging) | `core/fournisseurs_llm.py` (LLM premium optionnels — absents, seuls Gemini/DeepSeek de secours restent proposés) |
-| `VULTR_INFERENCE_API_KEY` (clé Serverless Inference de Vultr) / `VULTR_INFERENCE_BASE_URL` (optionnel, par défaut `https://api.vultrinference.com/v1`) | `core/fournisseurs_llm.py` (fournisseur « vultr », hackathon Vultr Agent Rush ; sans la clé il reste invisible ; les modèles se posent dans Supabase après `scripts/sonder_vultr.py`) |
+| `VULTR_INFERENCE_API_KEY` (clé Serverless Inference de Vultr) / `VULTR_INFERENCE_BASE_URL` (optionnel, par défaut `https://api.vultrinference.com/v1`) | `core/fournisseurs_llm.py` (route Vultr de DeepSeek, hackathon Vultr Agent Rush : interrupteur `vultr_actif` et colonne `modele_id_vultr` dans Supabase, migration `2026_11_04_deepseek_vultr.sql`, repli automatique si Vultr refuse ; sans la clé ou interrupteur éteint, rien ne change ; voir `core/adaptateur_vultr_deepseek.py`) |
 
 Pour vérifier chaque fournisseur avec ses vraies clés (texte, appel d'outil aller-retour, chaque effort) : `python scripts/verifier_fournisseurs.py [--efforts] [--fournisseur claude]`, à lancer là où les clés existent.
 
