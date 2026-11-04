@@ -32,7 +32,7 @@ class ReglagesParVariable(unittest.TestCase):
         r = self._recharger()
         self.assertEqual(
             (r.PLAFOND_OUTILS_PAR_MESSAGE, r.PLAFOND_IMAGES_JOINTES, r.PLAFOND_ZIPS_JOINTS, r.TAILLE_MAX_REQUETE_CHAT_MO),
-            (50, 30, 20, 100),
+            (10000, 30, 20, 100),
         )
         self.assertEqual(r.AGE_TACHE_PERIMEE.total_seconds(), 2 * 3600)
 

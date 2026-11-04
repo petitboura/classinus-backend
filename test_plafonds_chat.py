@@ -65,9 +65,10 @@ class PlafondsDeNombre(unittest.TestCase):
         with self.assertRaises(Exception):
             self.P(message="a", **kw)
 
-    def test_outils_par_message_50(self):
-        self._accepte(historique=[{"role": "assistant", "content": "a", "outils": _outils(50)}])
-        self._refuse(historique=[{"role": "assistant", "content": "a", "outils": _outils(51)}])
+    def test_outils_par_message_10000(self):
+        self._accepte(historique=[{"role": "assistant", "content": "a", "outils": _outils(500)}])
+        self._accepte(historique=[{"role": "assistant", "content": "a", "outils": _outils(10000)}])
+        self._refuse(historique=[{"role": "assistant", "content": "a", "outils": _outils(10001)}])
 
     def test_images_jointes_30(self):
         self._accepte(image_urls=["u"] * 30)

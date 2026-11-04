@@ -32,7 +32,7 @@ def _entier_positif_env(nom: str, defaut: int) -> int:
 
 
 # Nombre de pieces par message du chat (api/chat.py).
-PLAFOND_OUTILS_PAR_MESSAGE = _entier_positif_env("CLASSINUS_CHAT_MAX_OUTILS_PAR_MESSAGE", 50)
+PLAFOND_OUTILS_PAR_MESSAGE = _entier_positif_env("CLASSINUS_CHAT_MAX_OUTILS_PAR_MESSAGE", 10000)
 PLAFOND_IMAGES_JOINTES = _entier_positif_env("CLASSINUS_CHAT_MAX_IMAGES_JOINTES", 30)
 PLAFOND_ZIPS_JOINTS = _entier_positif_env("CLASSINUS_CHAT_MAX_ZIPS_JOINTS", 20)
 
