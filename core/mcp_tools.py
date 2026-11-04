@@ -567,8 +567,10 @@ async def _appeler_outil_async(url, nom_outil, arguments, headers=None):
 
 def _raison_execution_code_masque(conversation_id):
     """Pourquoi le serveur d'exécution de code n'est pas proposé (None s'il l'est)."""
-    if not os.environ.get("E2B_API_KEY"):
-        return "la variable E2B_API_KEY est absente du serveur"
+    from core import boites_isolees
+    raison_fournisseur = boites_isolees.raison_non_configuree()
+    if raison_fournisseur:
+        return raison_fournisseur
     if not conversation_id:
         return "aucune conversation identifiée pour cette demande"
     return None

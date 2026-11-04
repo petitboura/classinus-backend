@@ -1,0 +1,36 @@
+# À déployer sur le serveur Vultr (Coolify : nouvelle ressource, Docker Compose, ce fichier).
+# Les chemins de construction partent de la racine du dépôt classinus-backend
+# (Coolify : Base Directory = /, Docker Compose Location = /boites_service/docker-compose.yml).
+services:
+  boites-service:
+    build:
+      context: .
+      dockerfile: boites_service/Dockerfile
+    container_name: boites-service
+    restart: unless-stopped
+    environment:
+      BOITES_TOKEN: ${BOITES_TOKEN:?définir BOITES_TOKEN}
+      BOITES_MAX: ${BOITES_MAX:-20}
+      BOITES_MEMOIRE: ${BOITES_MEMOIRE:-512m}
+      BOITES_CPUS: ${BOITES_CPUS:-1}
+      BOITES_DISQUE: ${BOITES_DISQUE:-256m}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "${BOITES_PORT_HOTE:-8787}:8080"
+    networks:
+      - default
+      - boites_internes
+
+  boite-image:
+    build:
+      context: ./boites_service
+      dockerfile: Dockerfile.boite
+    image: classinus-boite:latest
+    command: ["true"]
+    restart: "no"
+
+networks:
+  boites_internes:
+    name: boites_internes
+    internal: true
