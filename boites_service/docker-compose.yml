@@ -13,7 +13,7 @@ services:
       BOITES_MAX: ${BOITES_MAX:-20}
       BOITES_MEMOIRE: ${BOITES_MEMOIRE:-512m}
       BOITES_CPUS: ${BOITES_CPUS:-1}
-      BOITES_DISQUE: ${BOITES_DISQUE:-512m}
+      BOITES_DISQUE: ${BOITES_DISQUE:-256m}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     ports:

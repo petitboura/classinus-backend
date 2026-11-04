@@ -50,7 +50,7 @@ class Docker:
         self.memoire = os.environ.get("BOITES_MEMOIRE", "512m")
         self.cpus = os.environ.get("BOITES_CPUS", "1")
         self.pids = str(_entier("BOITES_PIDS", 256))
-        self.disque = os.environ.get("BOITES_DISQUE", "512m")
+        self.disque = os.environ.get("BOITES_DISQUE", "256m")
         self.hote_proxy = os.environ.get("BOITES_HOTE_PROXY", "boites-service")
         self.port_proxy = _entier("BOITES_PORT_PROXY", 3128)
         self.sortie_max = _entier("BOITES_SORTIE_MAX", 2_000_000)
