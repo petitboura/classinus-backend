@@ -1,44 +1,50 @@
 ---
-name: "Documents PowerPoint"
-description: "Méthode officielle Classinus pour créer ou modifier une présentation PowerPoint (.pptx) lisible : format 16:9, une idée par diapositive, graphiques natifs, notes de l'orateur. À lire avant de produire un fichier .pptx."
+name: "PowerPoint Presentations"
+description: "Official Classinus method for creating or editing a readable PowerPoint presentation (.pptx): 16:9 format, one idea per slide, native charts, and speaker notes. Read before producing a .pptx file."
 ---
 
-# Présentations PowerPoint (.pptx)
+# PowerPoint presentations (.pptx)
 
-À utiliser quand l'utilisateur veut un fichier PowerPoint, à créer ou à modifier. Pour un plan de présentation à lire dans le chat, ne fabrique pas de fichier.
+Use this skill when the user wants a PowerPoint file created or modified. If they only need a presentation outline to read in chat, do not create a file.
 
-## 1. Préparer le bac à sable
+[English version] · [Français](SKILL.fr.md)
 
-Travaille avec l'outil gerer_execution_code.
+## 1. Prepare the sandbox
 
-1. Vérifie la bibliothèque : `python -c "import pptx; print(pptx.__version__)"`.
-2. Si elle manque : `pip install python-pptx`. Si l'installation échoue faute de réseau, appelle l'action network, puis demander_acces_reseau pour pypi.org si besoin. Si pip refuse à cause d'un environnement géré, crée un environnement virtuel : `python -m venv /home/user/venv` puis `/home/user/venv/bin/pip install python-pptx`.
-3. Si rien ne marche, dis-le et propose l'outil simple generer_document_powerpoint (titre et texte seulement).
+Use the `gerer_execution_code` tool.
 
-Limites : une commande dure 60 secondes au plus, run_command accepte 10000 caractères, un fichier ou un script ne dépasse pas 1 Mo. Les images embarquées comptent dans cette taille : réduis-les (Pillow, largeur 1600 px au plus, JPEG) avant de les insérer.
+1. Check the library: `python -c "import pptx; print(pptx.__version__)"`.
+2. If it is missing: `pip install python-pptx`. If installation fails because there is no network, call the network action, then use `demander_acces_reseau` for `pypi.org` if needed. If pip refuses because the environment is managed, create a virtual environment: `python -m venv /home/user/venv`, then `/home/user/venv/bin/pip install python-pptx`.
+3. If nothing works, explain that and offer the simple `generer_document_powerpoint` tool (titles and text only).
 
-## 2. Construire la présentation
+Limits: each command may run for at most 60 seconds; `run_command` accepts up to 10,000 characters; a file or script must not exceed 1 MB. Embedded images count toward this limit: reduce them with Pillow (maximum width 1600 px, JPEG) before inserting them.
 
-- Format 16:9 : `prs.slide_width = Inches(13.333)` et `prs.slide_height = Inches(7.5)`. Le modèle par défaut de python-pptx est en 4:3.
-- Utilise la mise en page vide (`prs.slide_layouts[6]`) et place toi-même les zones de texte et les formes : les mises en page du modèle par défaut sont dessinées pour le 4:3 et se décalent en 16:9.
-- Une idée par diapositive. Le titre dit la conclusion (8 mots au plus), pas le sujet. Environ 30 mots de corps au plus. Trois à cinq puces courtes, ou un visuel.
-- Tailles : titre 32 à 40 pt, corps 18 à 24 pt, jamais sous 14 pt. Si le texte ne tient pas, coupe la diapositive en deux, ne réduis pas la police.
-- Une palette : une couleur dominante, une couleur d'accent, du texte à fort contraste sur le fond. Une seule famille de police. Mêmes marges (0,6 pouce) et mêmes positions de titre sur toutes les diapositives.
-- Diapositive d'ouverture (titre, sous-titre), une diapositive par idée, une conclusion avec la suite à donner. Pas de diapositive "Merci" vide.
-- Graphiques natifs : `CategoryChartData` et `slide.shapes.add_chart(XL_CHART_TYPE.COLUMN_CLUSTERED, ...)`, avec titre et légende lisibles. Un graphique natif reste modifiable par l'utilisateur, contrairement à une image.
-- Images : seulement celles que l'utilisateur fournit ou qui servent le propos, jamais décoratives. Conserve les proportions.
-- Notes de l'orateur quand c'est utile : `slide.notes_slide.notes_text_frame.text = "..."`.
+## 2. Build the presentation
 
-## 3. Modifier une présentation existante
+- Use 16:9 format: `prs.slide_width = Inches(13.333)` and `prs.slide_height = Inches(7.5)`. python-pptx defaults to 4:3.
+- Use the blank layout (`prs.slide_layouts[6]`) and place text areas and shapes manually. Default template layouts are designed for 4:3 and will be misaligned in 16:9.
+- One idea per slide. The title should state the conclusion (eight words maximum), not just the topic. Keep body text to about 30 words maximum. Use three to five short bullets or one visual.
+- Font sizes: title 32–40 pt, body 18–24 pt, never below 14 pt. If text does not fit, split the slide in two instead of shrinking the font.
+- Use one palette: one dominant color, one accent color, and high-contrast text. Use one font family. Keep the same margins (0.6 inch) and title positions on every slide.
+- Include an opening slide (title and subtitle), one slide per idea, and a conclusion with next steps. Do not add an empty "Thank you" slide.
+- Use native charts: `CategoryChartData` and `slide.shapes.add_chart(XL_CHART_TYPE.COLUMN_CLUSTERED, ...)`, with readable titles and legends. A native chart remains editable by the user, unlike an image.
+- Use images only when provided by the user or when they support the content. Never use decorative images. Preserve their aspect ratio.
+- Add speaker notes when useful: `slide.notes_slide.notes_text_frame.text = "..."`.
 
-1. Copie le fichier joint dans le bac à sable avec importer_fichier (url_fichier : le lien réel indiqué après le fichier, jamais inventé).
-2. Ouvre-le avec `Presentation(chemin)`, garde ses mises en page et son thème, et modifie seulement ce qui est demandé.
-3. Enregistre sous un nouveau nom. L'original reste intact.
+## 3. Modify an existing presentation
 
-## 4. Vérifier avant de livrer
+1. Copy the attached file into the sandbox with `importer_fichier` (use the real `url_fichier` link shown after the attachment; never invent one).
+2. Open it with `Presentation(path)`, preserve its layouts and theme, and change only what was requested.
+3. Save under a new name. Leave the original unchanged.
 
-Tu ne peux pas voir le rendu dans ce bac à sable : vérifie par les mesures. Rouvre le fichier et, pour chaque diapositive, contrôle que chaque forme reste dans les limites de la diapositive (`left + width <= slide_width`, `top + height <= slide_height`), compte les mots, et signale celles qui dépassent 40 mots ou dont une forme déborde. Relis le texte pour les fautes. Dis honnêtement à l'utilisateur que tu n'as pas pu contrôler le rendu à l'œil si c'est le cas.
+## 4. Verify before delivery
 
-## 5. Livrer
+You cannot inspect the visual rendering in this sandbox, so verify dimensions instead. Reopen the output and, for every slide, check that each shape remains inside the slide bounds (`left + width <= slide_width`, `top + height <= slide_height)). Count words and flag slides that exceed 40 words or contain an overflowing shape.
 
-Utilise l'action download_files avec path vers ce seul fichier. Si le fichier dépasse la limite de taille de téléchargement, dis-le. Termine par une phrase : le nombre de diapositives, le fil de la présentation et les choix de design.
+Proofread the text. Be transparent if you could not visually inspect the rendered slides.
+
+## 5. Deliver
+
+Use the `download_files` action with the path to this file only. If the file exceeds the download size limit, say so.
+
+Finish with one sentence stating the number of slides, presentation storyline, and design choices.

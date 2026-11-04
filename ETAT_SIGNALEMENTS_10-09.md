@@ -1,121 +1,61 @@
-# Refonte du système de signalements pédagogiques — état au 11/09/2026
+# Pedagogical reporting system redesign: status as of 11 September 2026
 
-Ce document est sur la branche `refonte-signalements-10-09` (backend **et**
-frontend, même nom de branche dans les deux dépôts).
+[English version] · [Français](ETAT_SIGNALEMENTS_10-09.fr.md)
 
-## Mise à jour 11/09/2026
+This document is on branch `refonte-signalements-10-09` in both repositories (backend and frontend).
 
-- **Rebasée sur `main`** (les deux dépôts) : backend sans aucun conflit,
-  frontend sans conflit non plus (2 fichiers se recoupaient --
-  `ChatIA.tsx`, `lib/api.ts` -- mais les changements ne touchaient pas les
-  mêmes lignes). Vérifié après coup : `signalerPedagogique` toujours bien
-  câblé dans `ChatIA.tsx`, `npx tsc --noEmit` propre côté frontend, tout
-  `core/*.py` + `api/*.py` compile côté backend.
-- **Injection automatique** matière/notion branchée (le point qui manquait
-  du système hybride) : `core/signalements.py::signalements_pertinents_pour_injection`,
-  appelée dans `core/main.py` juste après le calcul des notions pertinentes
-  (même `code_id` actif, aucune requête sémantique en plus), injectée dans
-  le prompt système par `construction_system_prompt.py` (nouveau bloc
-  "NOTES DU PROF SUR DES SIGNALEMENTS PASSÉS").
-- **Nouvel outil élève** `consulter_signalements_pertinents` (option
-  secondaire, même pattern que `consulter_avancement_notion`) : la fonction
-  `consulter_par_notion` existait déjà dans `core/signalements.py` mais
-  n'était appelée nulle part, donc inutilisable par le LLM.
-- **Trou trouvé dans la migration** : le code utilisait `notion_id` partout
-  (`rattacher_signalement`, `consulter_par_notion`...) mais la colonne
-  n'était jamais créée. Ajoutée dans
-  `migrations/2026_09_10_refonte_signalements.sql`, plus 3 index pour les
-  requêtes d'injection qui tournent maintenant à chaque message d'élève
-  rattaché à un code.
-- **Décision Bourama (11/09)** : la cascade de supervision (Partie 10)
-  disparaît entièrement, pas de survie en signal passif -- cohérent avec ce
-  que cette branche faisait déjà.
-- **Supabase pas touché** cette session (demande explicite de Bourama) : la
-  migration ci-dessus est écrite et prête, mais **pas appliquée**.
+[English version] · [Français](ETAT_SIGNALEMENTS_10-09.fr.md)
 
-## Contexte de la refonte
+## Update: 11 September 2026
 
-Remplace intégralement l'ancien système "corrections_pedagogiques" (type
-A/B, génération automatique de comportement/skill, cascade de supervision
-avec neutralisation automatique). Décision : plus aucune action automatique
-du système, le prof discute librement avec le LLM, l'élève choisit ce qu'il
-partage.
+- **Rebased onto `main` in both repositories.** The backend had no conflicts, and neither did the frontend. Two files overlapped (`ChatIA.tsx` and `lib/api.ts`), but the changes touched different lines. Verified afterward: `signalerPedagogique` remained correctly wired in `ChatIA.tsx`, `npx tsc --noEmit` passed on the frontend, and all `core/*.py` and `api/*.py` files compiled on the backend.
+- **Automatic subject/concept injection connected.** This was the missing part of the hybrid system. `core/signalements.py::signalements_pertinents_pour_injection` is called from `core/main.py` immediately after relevant concepts are calculated. It uses the same active `code_id` and adds no semantic query. The result is injected into the system prompt by `construction_system_prompt.py` in a new block named **TEACHER NOTES FROM PREVIOUS REPORTS**.
+- **New student tool:** `consulter_signalements_pertinents`, a secondary option following the same pattern as `consulter_avancement_notion`. The `consulter_par_notion` function already existed in `core/signalements.py`, but was never called and therefore could not be used by the LLM.
+- **Migration issue found:** the code used `notion_id` throughout (`rattacher_signalement`, `consulter_par_notion`, etc.), but the column was never created. It was added to `migrations/2026_09_10_refonte_signalements.sql`, along with three indexes for injection queries that now run on every student message linked to a code.
+- **Bourama's decision (11 September):** the supervision cascade (Part 10) is removed completely, with no passive signal left behind. This matches what the branch already did.
+- **Supabase was not touched during this session**, as Bourama explicitly requested. The migration above is written and ready, but has **not been applied**.
 
-## Fait, vérifié (syntaxe OK, plus de référence morte dans les deux dépôts)
+## Redesign context
 
-**Backend**
-- `core/signalements.py` (nouveau) : création, visibilité par élément,
-  demande/confirmation, discussion, note libre, rattachement matière/notion
-- `api/signalements_pedagogiques.py` (nouveau) : API REST correspondante
-- `core/outils_signalements.py` + `core/outils_signalements_espace.py`
-  (nouveaux) : outils MCP interne + public. `signalement_id` est un
-  **paramètre explicite** passé par le modèle (plus de query-param magique
-  côté serveur MCP — c'est ce qui cassait l'ancien `enregistrer_correction_prof`)
-- `core/audit_hebdomadaire_corrections.py` + `api/...` : adaptés (regroupement
-  par notion, plus de type A/B)
-- `core/cascade_supervision.py`, `api/cascade_supervision.py`,
-  `core/corrections_pedagogiques.py`, `api/corrections_pedagogiques.py`,
-  `core/outils_corrections_pedagogiques.py`, `core/outils_corrections_espace.py`
-  : supprimés
-- `api/main.py`, `core/notifications.py`, `core/etablissements.py`,
-  `core/serveur_mcp_generation.py`, `core/serveur_mcp_espace.py` : nettoyés
-  (imports, routers, planificateur cascade, types de notification)
-- `migrations/2026_09_10_refonte_signalements.sql` : migration écrite et
-  **déjà appliquée manuellement à Supabase** (voir incident ci-dessous)
+This completely replaces the previous `corrections_pedagogiques` system (A/B types, automatic behavior/skill generation, and a supervision cascade with automatic neutralization).
 
-**Frontend**
-- `MenuSignalementCorrection.tsx` : un seul type, cases à cocher
-  question/réponse/conversation, champ libre optionnel
-- `ListeCorrectionsProf.tsx` : onglets Nouveaux/En discussion, bouton
-  "Demander" ce qui manque, "Discuter" (ouvre le chat), rattachement
-  matière/notion avec de vrais sélecteurs (avant : aucune UI du tout)
-- `/signalements/[id]` + `ConfirmerVisibiliteSignalement.tsx` (nouveaux) :
-  l'élève coche oui/non par élément demandé par le prof
-- `CascadesEtablissement.tsx`, `IndicateurCascadeSupervision.tsx` : supprimés,
-  Bureau et `EtablissementDetail.tsx` nettoyés
-- `lib/api.ts`, `AuditCorrections.tsx` : alignés sur le nouveau format
+Decision: the system no longer takes automatic actions. The teacher can discuss freely with the LLM, and the student chooses what to share.
 
-## Incident pendant la session (important)
+## Completed and verified
 
-Pendant qu'on travaillait, `main` (backend) a été force-push avec un
-historique différent (61 fichiers, +3268 lignes, autre chantier en
-parallèle). Un `git fetch` fait par précaution juste avant de pousser a
-silencieusement remis mon dossier de travail local dans l'état de ce nouveau
-`main`, effaçant une partie de mes modifications sur disque (mais pas les
-nouveaux fichiers). Je les ai reconstruites avant de committer — le diff
-final a été revérifié pour confirmer qu'il correspond exactement à ce qui
-est décrit dans ce document.
+Syntax checks pass, and no dead references remain in either repository.
 
-**Erreur corrigée après coup, celle-là bien plus grave** : j'avais aussi
-remigré Supabase pour qu'il corresponde à MA branche (`signalements`, sans
-`cascades_supervision`) alors que Supabase est une base unique et partagée
--- elle doit suivre ce qui tourne réellement en production (`main`), pas une
-branche qui n'est déployée nulle part. Pendant que c'était dans cet état,
-`main` (et son propre chantier en cours) ne pouvait plus fonctionner
-correctement sur tout ce qui touche aux signalements. Remis dans l'état
-attendu par `main` actuel (schéma vérifié colonne par colonne contre les
-migrations réelles de `main`, pas contre mon souvenir de l'ancien schéma).
-Une vraie ligne de signalement du 07/09 (antérieure à cette session) a été
-préservée au passage. Effet de bord découvert en cours de réparation : mon
-insertion initiale dans `registre_outils_plateforme` avait déclenché un
-envoi automatique de notification "nouvel outil disponible" à ~21
-utilisateurs réels pour 3 outils qui n'existent que sur ma branche --
-notifications et entrées de registre supprimées.
+### Backend
 
-**Leçon pour la suite** : ne plus jamais modifier Supabase en direct pour
-une branche non déployée. Le fichier de migration
-`migrations/2026_09_10_refonte_signalements.sql` sur cette branche est prêt
-et correct, mais ne doit être appliqué à Supabase qu'au moment où cette
-branche est réellement fusionnée/déployée -- pas avant.
+- `core/signalements.py` (new): creation, item-level visibility, requests/confirmation, discussion, free-form notes, and subject/concept association.
+- `api/signalements_pedagogiques.py` (new): corresponding REST API.
+- `core/outils_signalements.py` and `core/outils_signalements_espace.py` (new): internal and public MCP tools. `signalement_id` is an **explicit parameter** passed by the model. There is no longer a magic query parameter on the MCP server, which was what broke the old `enregistrer_correction_prof` tool.
+- `core/audit_hebdomadaire_corrections.py` and related `api/...` files: adapted to group by concept; A/B types removed.
+- `core/cascade_supervision.py`, `api/cascade_supervision.py`, `core/corrections_pedagogiques.py`, `api/corrections_pedagogiques.py`, `core/outils_corrections_pedagogiques.py`, and `core/outils_corrections_espace.py`: deleted.
+- `api/main.py`, `core/notifications.py`, `core/etablissements.py`, `core/serveur_mcp_generation.py`, and `core/serveur_mcp_espace.py`: cleaned up (imports, routers, cascade scheduler, and notification types).
+- `migrations/2026_09_10_refonte_signalements.sql`: migration written and **manually applied to Supabase** at that time (see incident below).
 
-## Pas encore fait
+### Frontend
 
-- **Appliquer la migration à Supabase** (et déployer) -- volontairement pas
-  fait cette session, attend le feu vert explicite de Bourama (voir incident
-  ci-dessus : ne plus jamais le faire pour une branche pas encore déployée).
-- **Lien conversation ↔ signalement** : `conversation_discussion_id` existe
-  en base mais n'est jamais renseigné (le frontend ne connaît l'id d'une
-  conversation qu'après son premier message). Ça marche quand même : l'id du
-  signalement est repris tel quel par le modèle depuis le texte pré-rempli.
-  Mais pas de "reprendre la discussion précédente" pour l'instant — un
-  nouveau clic sur "Discuter" ouvre toujours une nouvelle conversation.
+- `MenuSignalementCorrection.tsx`: one report type, checkboxes for question/answer/conversation, and an optional free-text field.
+- `ListeCorrectionsProf.tsx`: New / In discussion tabs, a **Request** button for missing information, a **Discuss** action that opens chat, and actual subject/concept selectors (there was no UI for this previously).
+- `/signalements/[id]` and new `ConfirmerVisibiliteSignalement.tsx`: the student selects yes/no for every item requested by the teacher.
+- `CascadesEtablissement.tsx` and `IndicateurCascadeSupervision.tsx`: deleted; Workspace and `EtablissementDetail.tsx` cleaned up.
+- `lib/api.ts` and `AuditCorrections.tsx`: aligned with the new format.
+
+## Incident during the session (important)
+
+While work was in progress, the backend `main` branch was force-pushed with a different history (61 files, +3,268 lines, from another parallel project). A precautionary `git fetch` immediately before pushing silently reset my local working directory to this new `main`, deleting some modifications from disk (but not the new files). I reconstructed them before committing. The final diff was checked again to confirm that it matched this document exactly.
+
+**A more serious mistake was also corrected afterward:** I had migrated Supabase to match MY branch (`signalements`, without `cascades_supervision`). Supabase is a single shared database and must match what is actually running in production (`main`), not a branch that has not been deployed. While the database was in that state, `main` and its own active work could not operate correctly for anything involving reports.
+
+The schema was restored to the state expected by the current `main`, checking every column against the actual migrations on `main), not relying on memory of the old schema. A real report from 7 September (before this session) was preserved.
+
+A side effect was discovered during recovery: my initial insertion into `registre_outils_plateforme` triggered an automatic "new tool available" notification to about 21 real users for three tools that existed only on my branch. The notifications and registry entries were removed.
+
+**Lesson for future work:** never modify Supabase directly for an undeployed branch. The `migrations/2026_09_10_refonte_signalements.sql` file on this branch is ready and correct, but it must be applied to Supabase only when the branch is actually merged and deployed, never before.
+
+## Not completed yet
+
+- **Apply the migration to Supabase and deploy.** This was intentionally not done during the session and requires Bourama's explicit approval. See the incident above: never do this for a branch that has not been deployed.
+- **Conversation ↔ report link:** `conversation_discussion_id` exists in the database but is never populated. The frontend only learns a conversation ID after its first message. The flow still works because the model takes the report ID from the prefilled text. However, there is no **Resume previous discussion** behavior yet: every click on **Discuss** opens a new conversation.
