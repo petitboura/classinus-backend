@@ -177,3 +177,24 @@ class BoiteDocker:
         """Règles réseau au format de l'outil : tout refusé sauf les domaines de allow_out."""
         autorises = list((options or {}).get("allow_out") or [])
         _appeler("PUT", f"/boites/{self.sandbox_id}/reseau", json={"allow_out": autorises})
+
+
+def ouvrir_navigateur(cle: str, utilisateur: str, network=None) -> "BoiteDocker":
+    """Boîte navigateur de la conversation : créée ou reprise par le service, réseau réglé à chaque appel."""
+    reponse = _appeler("POST", "/navigateurs", json={"cle": cle, "utilisateur": utilisateur})
+    boite = BoiteDocker(reponse.json()["id"])
+    try:
+        boite.update_network(network)
+    except Exception:
+        # Une boîte dont le réseau n'a pas pu être réglé ne reste pas ouverte : fermée par défaut.
+        try:
+            BoiteDocker.kill(boite.sandbox_id)
+        except Exception:
+            pass
+        raise
+    return boite
+
+
+def detruire_navigateurs_utilisateur(utilisateur: str) -> None:
+    """Détruit toutes les boîtes navigateur d'un utilisateur (suppression de compte)."""
+    _appeler("DELETE", "/navigateurs", params={"utilisateur": utilisateur})

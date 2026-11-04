@@ -611,7 +611,9 @@ class TestSchemaDeLOutil(unittest.TestCase):
             "command_status": "read_file",
         }
         for action in actions:
-            if action not in ("network", "demander_acces_reseau", "importer_fichier"):
+            # Les actions browser_* (04/11/2026, navigateur Docker) ont leur propre boîte et ne passent
+            # jamais par execution_code_reserver : la liste blanche SQL n'a pas à les contenir.
+            if action not in ("network", "demander_acces_reseau", "importer_fichier") and not action.startswith("browser_"):
                 self.assertIn(f"'{alias_reservation.get(action, action)}'", migration)
         self.assertIn("'github.com'", migration)
 

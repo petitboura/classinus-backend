@@ -156,6 +156,18 @@ def _detacher_etablissements(supabase, user_id: str) -> None:
             logging.error(f"ERREUR SUPABASE (purge compte, détachement {table}.{colonne} pour {user_id}) : {e}")
 
 
+def _purger_navigateurs(user_id: str) -> None:
+    """Détruit les boîtes navigateur du compte (elles n'ont aucune ligne de suivi en base)."""
+    from core import boites_isolees, navigateur_boite
+    if navigateur_boite.raison_indisponible() is not None:
+        return
+    try:
+        _cle, utilisateur = navigateur_boite.empreintes(user_id, "")
+        boites_isolees.detruire_navigateurs_utilisateur(utilisateur)
+    except Exception as e:
+        logging.warning("ERREUR purge compte (navigateurs): %s", type(e).__name__)
+
+
 def _purger_sandboxes_execution_code(supabase, user_id: str) -> None:
     """Arrête les sandboxes liées au compte avant de supprimer leur suivi."""
     from core import boites_isolees
@@ -211,6 +223,7 @@ def purger_donnees_compte(supabase, user_id: str) -> None:
     except Exception as e:
         logging.error(f"ERREUR purge compte (tours de chat en mémoire pour {user_id}) : {e}")
     _purger_sandboxes_execution_code(supabase, user_id)
+    _purger_navigateurs(user_id)
     _detacher_etablissements(supabase, user_id)
     # Les objets R2 des skills sont indépendants des lignes Supabase.
     try:

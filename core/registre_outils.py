@@ -695,6 +695,9 @@ OUTILS_SENSIBLES = {
     # 25/10/2026 (demande Bourama) : ouvrir un domaine du réseau du workspace d'exécution de code
     # n'est jamais automatique, l'élève doit confirmer. Valable pour la conversation seulement.
     "gerer_execution_code:demander_acces_reseau",
+    # 04/11/2026 (hackathon Vultr, étape 6) : l'action finale dans le navigateur (envoyer, payer,
+    # supprimer, publier) n'est jamais automatique : la personne confirme après avoir vu la capture.
+    "gerer_execution_code:browser_submit",
     # Actions GitHub ajoutées le 20/10/2026 qui écrivent ou agissent au nom
     # de la personne connectée : toutes interrompues pour confirmation.
     "gerer_depot_github:creer_issue",
@@ -834,6 +837,14 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "gerer_execution_code:download_files": {"label": "Export de fichiers", "icone": "Download", "onglet": None},
     "gerer_execution_code:demander_acces_reseau": {"label": "Accès à un site", "icone": "Globe", "onglet": None},
     "gerer_execution_code:network": {"label": "Réseau autorisé", "icone": "Terminal", "onglet": None},
+    # Navigateur de la boîte Docker (04/11/2026, hackathon Vultr). Icônes lucide-react, résolues par
+    # nom côté frontend : aucune icône à ajouter dans l'interface.
+    "gerer_execution_code:browser_open": {"label": "Ouverture de site", "icone": "Globe", "onglet": None},
+    "gerer_execution_code:browser_click": {"label": "Clic sur la page", "icone": "MousePointerClick", "onglet": None},
+    "gerer_execution_code:browser_type": {"label": "Saisie sur la page", "icone": "Keyboard", "onglet": None},
+    "gerer_execution_code:browser_screenshot": {"label": "Capture de la page", "icone": "Camera", "onglet": None},
+    "gerer_execution_code:browser_submit": {"label": "Action finale", "icone": "ShieldCheck", "onglet": None},
+    "gerer_execution_code:browser_close": {"label": "Fermeture du site", "icone": "Power", "onglet": None},
     "gerer_execution_code:close": {"label": "Fin de l'espace", "icone": "Power", "onglet": None},
     "generer_site_zip": {"label": "Génération d'un site (zip)", "icone": "Package", "onglet": "generer"},
     "generer_bundle": {"label": "Génération d'une archive", "icone": "Archive", "onglet": "generer"},
@@ -1393,6 +1404,10 @@ VERBES_ACTIONS = {
     "stop": (None, "Square"),
     "convert": (None, "ArrowRightLeft"),
     "check": (None, "Check"),
+    # Navigateur de la boîte (04/11/2026) : mots rares, donc sans effet sur les autres outils.
+    "click": (None, "MousePointerClick"),
+    "screenshot": (None, "Camera"),
+    "submit": (None, "Send"),
 }
 
 
