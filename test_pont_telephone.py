@@ -21,7 +21,7 @@ from registre_outils import SERVEURS_MCP
 
 
 def _route_telephone(**extra):
-    route = {"url": "https://class-tech-outils.onrender.com/mcp/diagnostic",
+    route = {"url": "https://class-tech.up.railway.app/mcp/diagnostic",
              "headers": None, "via_app_telephone": True, "user_id": "u1"}
     route.update(extra)
     return route
@@ -154,3 +154,45 @@ def test_diffusion_telephone_exclut_connexion_native_sans_relais():
     finally:
         canal._connexions.pop(("u7", "pc7-systeme"), None)
         canal._connexions.pop(("u7", "web7"), None)
+
+
+def test_url_diagnostic_par_defaut_et_surcharge_par_variable(monkeypatch):
+    """L'adresse du serveur class-tech vient de CLASSTECH_URL_MCP, sinon du defaut Railway."""
+    import registre_outils
+    entree = _entree_diagnostic()
+    monkeypatch.delenv("CLASSTECH_URL_MCP", raising=False)
+    url = entree["url_builder"](lambda nom: None, "u1", "a1")
+    assert url == registre_outils.URL_DIAGNOSTIC_CLASSTECH_DEFAUT
+    assert "onrender.com" not in url
+    monkeypatch.setenv("CLASSTECH_URL_MCP", "  https://autre.example.com/mcp/diagnostic  ")
+    assert entree["url_builder"](lambda nom: None, "u1", "a1") == "https://autre.example.com/mcp/diagnostic"
+    monkeypatch.setenv("CLASSTECH_URL_MCP", "   ")
+    assert entree["url_builder"](lambda nom: None, "u1", "a1") == registre_outils.URL_DIAGNOSTIC_CLASSTECH_DEFAUT
+
+
+def test_reveil_derive_de_l_hote_railway():
+    """Le /health de reveil suit l'hote de l'URL, jamais une adresse en dur."""
+    entree = _entree_diagnostic()
+    url = "https://class-tech.up.railway.app/mcp/diagnostic"
+    assert mcp_tools._url_reveil(entree, url) == "https://class-tech.up.railway.app/health"
+
+
+PROFONDS = (
+    "lire_temperatures_internes", "lire_historique_batterie",
+    "lire_trafic_par_appli", "lire_fluidite_ecran", "lire_saturation_systeme",
+    "lire_reveils_planifies", "lire_journaux_systeme", "lire_carte_systeme",
+    "lire_memoire_dans_le_temps", "lire_verrous_veille",
+)
+
+
+def test_outils_profonds_ranges_libelles_et_routes_vers_l_app():
+    """Les 10 outils profonds sont dans la categorie, ont un libelle et passent par l'appli PC."""
+    import registre_outils
+    categorie = registre_outils.CATEGORIES_OUTILS["diagnostic_classtech"]
+    entree = _entree_diagnostic()
+    for nom in PROFONDS:
+        assert nom in categorie, nom
+        assert registre_outils.REGISTRE_AFFICHAGE_OUTILS[nom]["label"], nom
+        assert registre_outils.REGISTRE_AFFICHAGE_OUTILS[nom]["icone"], nom
+        assert mcp_tools._route_via_app_telephone(entree, nom) is True, nom
+        assert nom not in registre_outils.OUTILS_SENSIBLES, nom

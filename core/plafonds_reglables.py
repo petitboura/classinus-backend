@@ -45,6 +45,14 @@ PLAFOND_ZIPS_JOINTS = _entier_positif_env("CLASSINUS_CHAT_MAX_ZIPS_JOINTS", 20)
 PLAFOND_RESULTAT_OUTIL_HISTORIQUE = _entier_positif_env("CLASSINUS_CHAT_RESULTAT_OUTIL_HISTORIQUE_MAX", 60000)
 PLAFOND_ARGUMENTS_OUTIL_HISTORIQUE = _entier_positif_env("CLASSINUS_CHAT_ARGUMENTS_OUTIL_HISTORIQUE_MAX", 20000)
 
+# Reserve de tokens de sortie demandee aux modeles qui ne passent PAS par Groq, comme DeepSeek, le
+# modele principal de la cascade (core/reserve_tokens_sortie.py, 02/11/2026). Avant, ces modeles
+# recevaient la reserve minimale pensee pour les limites par minute de Groq, soit 4096 tokens
+# reflexion comprise : un fichier de code un peu long etait coupe en plein milieu. Seuls les tokens
+# reellement generes sont factures, la reserve ne coute rien. 32768 couvre un fichier d'environ mille
+# lignes et reste tres en dessous du maximum de sortie documente pour DeepSeek V4 (384000).
+RESERVE_TOKENS_SORTIE_HORS_GROQ = _entier_positif_env("CLASSINUS_RESERVE_TOKENS_SORTIE_HORS_GROQ", 32768)
+
 # Taille totale d'une requete vers /api/chat, en Mo. Protege la memoire du serveur : la requete
 # entiere est lue avant toute validation, et le chat est ouvert aux visiteurs non connectes.
 TAILLE_MAX_REQUETE_CHAT_MO = _entier_positif_env("CLASSINUS_CHAT_TAILLE_MAX_REQUETE_MO", 100)

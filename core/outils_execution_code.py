@@ -408,7 +408,7 @@ def _fichiers_workspace(sandbox, configuration: dict) -> str:
     commande = (
         "find /home/user -type f "
         "-not -path '*/node_modules/*' -not -path '*/.git/*' "
-        "-not -path '*/.cache/*' -not -path '*/__pycache__/*' "
+        "-not -path '*/.cache/*' -not -path '*/__pycache__/*' -not -path '*/.classinus_taches/*' "
         "-not -name '.env' -not -name '.env.*' "
         "-not -name '*.pem' -not -name '*.key' -not -name '*.p12' -not -name '*.pfx' "
         "-not -name 'id_rsa*' "
@@ -575,11 +575,163 @@ def _nom_de_fichier_invalide(motif: str) -> bool:
     return "/" in motif or motif in (".", "..") or len(motif) > 255
 
 
+# Commandes longues en arrière-plan (02/11/2026, demande de Bourama). Une commande normale est
+# bornée à 60 secondes par la base de données : une installation de paquets, un build ou une
+# suite de tests la dépasse vite. Ici la commande démarre détachée, sa sortie va dans un journal,
+# et le modèle revient la lire. Aucune migration : ces actions réutilisent les catégories de
+# quota existantes (voir _action_pour_reservation).
+_DOSSIER_TACHES = f"{_ROOT}/.classinus_taches"
+_MOTIF_ID_TACHE = re.compile(r"^[a-f0-9]{8}$")
+# Place gardée pour le titre et l'en-tête dans la réponse de command_status (voir _lire_tache).
+_MARGE_ENTETE_TACHE = 400
+
+
+def _id_tache_valide(identifiant: str) -> bool:
+    """Vrai pour un identifiant produit par _lancer_en_arriere_plan, jamais pour autre chose.
+
+    L'identifiant finit dans un chemin de shell : seule cette forme stricte est acceptée.
+    """
+    return bool(_MOTIF_ID_TACHE.match(str(identifiant or "").strip()))
+
+
+def _lancer_en_arriere_plan(sandbox, commande: str, timeout_fichier: int, configuration: dict) -> str:
+    identifiant = uuid.uuid4().hex[:8]
+    dossier = f"{_DOSSIER_TACHES}/{identifiant}"
+    interne = "bash -lc " + shlex.quote(f"cd {_ROOT} && {commande}")
+    # $$ est le numéro du processus détaché. setsid en fait le chef de son propre groupe, ce qui
+    # permet de tout arrêter d'un coup. Le code de sortie est écrit à la fin, sauf si la tâche
+    # est tuée avant : l'absence de ce fichier sert alors à reconnaître une tâche interrompue.
+    script = f"echo $$ > {dossier}/pid; {interne}; echo $? > {dossier}/sortie"
+    lancement = (
+        f"mkdir -p {dossier} && cd {_ROOT}; "
+        f"setsid nohup bash -c {shlex.quote(script)} > {dossier}/journal 2>&1 < /dev/null & "
+        f"for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do [ -s {dossier}/pid ] && break; sleep 0.2; done; "
+        f"[ -s {dossier}/pid ]"
+    )
+    resultat = _lancer_commande(
+        sandbox, "bash -lc " + shlex.quote(lancement), timeout_fichier, timeout_fichier + 10
+    )
+    if getattr(resultat, "exit_code", 1) != 0:
+        return "Impossible de lancer la commande en arrière-plan."
+    inactivite = max(60, int(configuration.get("inactivity_seconds", 300)))
+    minutes = max(1, inactivite // 60)
+    return (
+        f"Tâche lancée en arrière-plan : job_id {identifiant}\n"
+        "Elle continue pendant que tu fais autre chose. Lis son état et la fin de sa sortie avec "
+        f"command_status (job_id {identifiant}), arrête-la avec command_stop. Reviens la lire "
+        f"régulièrement : si le workspace reste inactif plus de {minutes} minutes, il est mis en "
+        "pause et la tâche est interrompue (les fichiers restent)."
+    )
+
+
+_SCRIPT_ETAT_TACHE = (
+    "cd __DOSSIER__ 2>/dev/null || { echo INTROUVABLE; exit 0; }; "
+    "if [ -f sortie ]; then echo \"TERMINEE $(cat sortie)\"; "
+    "elif [ -f arretee ]; then echo ARRETEE; "
+    "else p=$(cat pid 2>/dev/null); "
+    # Le numéro de processus peut avoir été réutilisé après une pause du workspace : on vérifie
+    # que ce processus porte bien l'identifiant de la tâche dans sa ligne de commande.
+    "if [ -n \"$p\" ] && [ -r /proc/$p/cmdline ] && tr '\\0' ' ' < /proc/$p/cmdline | grep -qF __ID__; "
+    "then echo \"ENCOURS $(( $(date +%s) - $(stat -c %Y pid) ))\"; "
+    "else echo INTERROMPUE; fi; fi"
+)
+
+
+def _etat_tache(sandbox, identifiant: str, timeout_fichier: int) -> tuple[str, int | None]:
+    """Renvoie (etat, valeur) : INTROUVABLE, TERMINEE (code de sortie), ARRETEE, ENCOURS (secondes)
+    ou INTERROMPUE."""
+    dossier = f"{_DOSSIER_TACHES}/{identifiant}"
+    script = _SCRIPT_ETAT_TACHE.replace("__DOSSIER__", dossier).replace("__ID__", shlex.quote(identifiant))
+    resultat = _lancer_commande(sandbox, "bash -lc " + shlex.quote(script), timeout_fichier, timeout_fichier + 10)
+    morceaux = (getattr(resultat, "stdout", "") or "").strip().split()
+    if not morceaux:
+        return "INTERROMPUE", None
+    valeur = None
+    if len(morceaux) > 1:
+        try:
+            valeur = int(morceaux[1])
+        except ValueError:
+            valeur = None
+    return morceaux[0], valeur
+
+
+def _lire_tache(sandbox, identifiant: str, timeout_fichier: int, max_chars: int) -> str:
+    etat, valeur = _etat_tache(sandbox, identifiant, timeout_fichier)
+    if etat == "INTROUVABLE":
+        return (
+            f"Aucune tâche {identifiant} dans ce workspace. Vérifie le job_id renvoyé au lancement "
+            "(un workspace fermé a perdu ses tâches)."
+        )
+    if etat == "ENCOURS":
+        titre = f"Tâche {identifiant} : en cours depuis {valeur if valeur is not None else '?'} secondes."
+    elif etat == "TERMINEE":
+        titre = (
+            f"Tâche {identifiant} : terminée, code de sortie {valeur if valeur is not None else '?'}."
+        )
+    elif etat == "ARRETEE":
+        titre = f"Tâche {identifiant} : arrêtée à ta demande."
+    else:
+        titre = (
+            f"Tâche {identifiant} : interrompue avant la fin (workspace mis en pause ou fermé). "
+            "Les fichiers du workspace restent, relance la commande si besoin."
+        )
+    journal = f"{_DOSSIER_TACHES}/{identifiant}/journal"
+    limite = max(1000, int(max_chars))
+    # On lit la FIN du journal (l'erreur d'un build est dans les dernières lignes) et on garde de
+    # la place pour le titre et l'en-tête : sans cette marge, la troncature finale couperait la
+    # fin du journal pour garder son début, l'inverse de ce qu'il faut.
+    fenetre = max(500, limite - _MARGE_ENTETE_TACHE)
+    lecture = _lancer_commande(
+        sandbox,
+        f"s=$(stat -c %s {journal} 2>/dev/null || echo 0); echo $s; tail -c {fenetre} {journal} 2>/dev/null",
+        timeout_fichier,
+        timeout_fichier + 10,
+    )
+    brut = getattr(lecture, "stdout", "") or ""
+    premiere, _, reste = brut.partition("\n")
+    try:
+        taille = int(premiere.strip())
+    except ValueError:
+        taille = 0
+    reste = reste.rstrip()
+    if not reste:
+        return f"{titre}\nAucune sortie pour l'instant."
+    entete = f"Sortie ({fenetre} derniers caractères sur {taille}) :" if taille > fenetre else "Sortie :"
+    return _tronquer(f"{titre}\n{entete}\n{reste}", limite)
+
+
+def _arreter_tache(sandbox, identifiant: str, timeout_fichier: int) -> str:
+    etat, valeur = _etat_tache(sandbox, identifiant, timeout_fichier)
+    if etat == "INTROUVABLE":
+        return f"Aucune tâche {identifiant} dans ce workspace."
+    if etat == "TERMINEE":
+        return f"La tâche {identifiant} est déjà terminée (code de sortie {valeur})."
+    if etat != "ENCOURS":
+        return f"La tâche {identifiant} n'est plus en cours."
+    dossier = f"{_DOSSIER_TACHES}/{identifiant}"
+    lecture = _lancer_commande(sandbox, f"cat {dossier}/pid", timeout_fichier, timeout_fichier + 10)
+    try:
+        pid = int((getattr(lecture, "stdout", "") or "").strip())
+    except ValueError:
+        return f"Impossible d'arrêter la tâche {identifiant} : son processus est introuvable."
+    if pid < 2:
+        return f"Impossible d'arrêter la tâche {identifiant} : son processus est introuvable."
+    # Le fichier arretee est posé AVANT l'arrêt : le groupe tué n'écrit jamais son code de sortie.
+    # Un premier signal laisse la tâche se terminer proprement, le second ne laisse aucun survivant.
+    _lancer_commande(
+        sandbox,
+        f"touch {dossier}/arretee; kill -TERM -{pid} 2>/dev/null; sleep 2; kill -KILL -{pid} 2>/dev/null; true",
+        timeout_fichier,
+        timeout_fichier + 10,
+    )
+    return f"Tâche {identifiant} arrêtée."
+
+
 def _executer_action(sandbox, action: str, language: str, code: str, command: str,
                      path: str, content: str, configuration: dict, fichier_importe=None,
                      pattern: str = "", old_text: str = "", new_text: str = "",
                      start_line: int | None = None, end_line: int | None = None,
-                     replace_all: bool = False, glob: str = "") -> str:
+                     replace_all: bool = False, glob: str = "", job_id: str = "") -> str:
     max_chars = max(1000, int(configuration.get("max_output_chars", 20000)))
     max_bytes = max(1024, int(configuration.get("max_file_bytes", 1048576)))
     max_command_chars = max(256, int(configuration.get("max_command_chars", 10000)))
@@ -603,6 +755,23 @@ def _executer_action(sandbox, action: str, language: str, code: str, command: st
             return f"La commande dépasse la limite configurée de {max_command_chars} caractères."
         wrapped = "bash -lc " + shlex.quote(f"cd {_ROOT} && {command}")
         return _resultat_commande(sandbox, wrapped, max_command_seconds, max_chars)
+
+    if action == "run_background":
+        if not command.strip():
+            return "Aucune commande fournie."
+        if len(command) > max_command_chars:
+            return f"La commande dépasse la limite configurée de {max_command_chars} caractères."
+        return _lancer_en_arriere_plan(sandbox, command, timeout_fichier, configuration)
+
+    if action == "command_status":
+        if not _id_tache_valide(job_id):
+            return "Indique job_id : l'identifiant renvoyé au lancement de la tâche."
+        return _lire_tache(sandbox, job_id.strip(), timeout_fichier, max_chars)
+
+    if action == "command_stop":
+        if not _id_tache_valide(job_id):
+            return "Indique job_id : l'identifiant renvoyé au lancement de la tâche."
+        return _arreter_tache(sandbox, job_id.strip(), timeout_fichier)
 
     if action == "write_file":
         distant = _chemin_distant(path)
@@ -744,7 +913,7 @@ def _executer_action(sandbox, action: str, language: str, code: str, command: st
             filtre_nom = f"--include={shlex.quote(nom_glob)} "
         exclusions = (
             "--exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.cache "
-            "--exclude-dir=__pycache__ --exclude-dir=.venv --exclude-dir=venv "
+            "--exclude-dir=__pycache__ --exclude-dir=.classinus_taches --exclude-dir=.venv --exclude-dir=venv "
             "--exclude-dir=dist --exclude-dir=build "
             "--exclude='.env' --exclude='.env.*' --exclude='*.pem' --exclude='*.key' "
             "--exclude='*.p12' --exclude='*.pfx' --exclude='id_rsa*'"
@@ -777,7 +946,7 @@ def _executer_action(sandbox, action: str, language: str, code: str, command: st
         limite = max(1, min(500, int(configuration.get("max_files_per_download", 50))))
         exclusions = (
             "-not -path '*/.git/*' -not -path '*/node_modules/*' "
-            "-not -path '*/.cache/*' -not -path '*/__pycache__/*' "
+            "-not -path '*/.cache/*' -not -path '*/__pycache__/*' -not -path '*/.classinus_taches/*' "
             "-not -path '*/.venv/*' -not -path '*/venv/*' "
             "-not -path '*/dist/*' -not -path '*/build/*' "
             "-not -name '.env' -not -name '.env.*' "
@@ -797,7 +966,7 @@ def _executer_action(sandbox, action: str, language: str, code: str, command: st
         commande = (
             "find /home/user -type f "
             "-not -path '*/node_modules/*' -not -path '*/.git/*' "
-            "-not -path '*/.cache/*' -not -path '*/__pycache__/*' "
+            "-not -path '*/.cache/*' -not -path '*/__pycache__/*' -not -path '*/.classinus_taches/*' "
         "-not -name '.env' -not -name '.env.*' "
         "-not -name '*.pem' -not -name '*.key' -not -name '*.p12' -not -name '*.pfx' "
         "-not -name 'id_rsa*' "
@@ -819,6 +988,12 @@ def _action_pour_reservation(action: str) -> str:
         "edit_file": "write_file",
         "search_files": "read_file",
         "find_files": "read_file",
+        # Commandes longues (02/11/2026) : lancer et arrêter sont de courtes opérations de
+        # fichier côté quota, lire l'état est une lecture. Le temps de la tâche elle-même est
+        # compté par l'inactivité du workspace, pas par la réservation de l'appel.
+        "run_background": "write_file",
+        "command_stop": "write_file",
+        "command_status": "read_file",
     }.get(action, action)
 
 
@@ -849,7 +1024,7 @@ def _message_refus(reservation: dict) -> str:
 
 @mcp_execution_code.tool()
 def gerer_execution_code(
-    action: Literal["run_code", "run_command", "write_file", "edit_file", "read_file", "search_files", "find_files", "list_files", "download_files", "importer_fichier", "network", "demander_acces_reseau", "close"],
+    action: Literal["run_code", "run_command", "write_file", "edit_file", "read_file", "search_files", "find_files", "list_files", "download_files", "importer_fichier", "run_background", "command_status", "command_stop", "network", "demander_acces_reseau", "close"],
     ctx: Context,
     language: Literal["python", "javascript", "typescript", "bash"] = "python",
     code: str = "",
@@ -865,11 +1040,18 @@ def gerer_execution_code(
     url_fichier: str = "",
     replace_all: bool = False,
     glob: str = "",
+    job_id: str = "",
 ) -> str:
     """Execute du code ou gère les fichiers d'un workspace Linux isolé propre à cette conversation.
 
     Actions : run_code exécute du code en Python, JavaScript, TypeScript ou Bash;
-    run_command lance une commande shell; write_file écrit un fichier; edit_file remplace le texte exact
+    run_command lance une commande shell courte (60 secondes au plus, sinon elle est coupée);
+    run_background lance une commande LONGUE (installation de paquets, build, suite de tests) qui
+    continue en arrière-plan sans cette limite de 60 secondes et renvoie un job_id;
+    command_status (paramètre job_id) renvoie l'état de cette tâche (en cours, terminée avec son
+    code de sortie, arrêtée ou interrompue) et la fin de sa sortie : relis-la régulièrement, car un
+    workspace inactif plus de quelques minutes est mis en pause et la tâche s'arrête;
+    command_stop (paramètre job_id) l'arrête; write_file écrit un fichier; edit_file remplace le texte exact
     old_text par new_text dans path, seulement si old_text apparaît exactement une fois (sinon aucun changement),
     sauf si replace_all vaut true : toutes les occurrences sont alors remplacées (utile pour renommer);
     read_file lit path en entier ou la plage inclusive start_line/end_line (numérotation à partir de 1, les deux
@@ -915,8 +1097,10 @@ def gerer_execution_code(
 
     if action == "run_code" and not code.strip():
         return "Aucun code fourni. Envoie le code à exécuter."
-    if action == "run_command" and not command.strip():
+    if action in ("run_command", "run_background") and not command.strip():
         return "Aucune commande fournie."
+    if action in ("command_status", "command_stop") and not _id_tache_valide(job_id):
+        return "Indique job_id : l'identifiant renvoyé au lancement de la tâche."
     if action in ("read_file", "write_file", "edit_file"):
         try:
             _chemin_relatif_sur(path)
@@ -1057,7 +1241,7 @@ def gerer_execution_code(
 
         resultat = _executer_action(
             sandbox, action, language, code, command, path, content, configuration, fichier_importe,
-            pattern, old_text, new_text, start_line, end_line, replace_all, glob,
+            pattern, old_text, new_text, start_line, end_line, replace_all, glob, job_id,
         )
         garder = True
     except Exception as e:

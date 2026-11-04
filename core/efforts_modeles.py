@@ -38,6 +38,9 @@ EFFORTS_PAR_FOURNISSEUR = {
     "gemini": ("low", "medium", "high"),
     "grok": ("low", "medium", "high"),
     "meta": ("minimal", "low", "medium", "high", "xhigh", "max"),
+    # Vultr (03/11/2026) : aucun reglage d'effort envoye tant qu'un test reel n'a pas montre
+    # lequel un modele accepte (liste vide : le modele est presente sans reglage d'effort).
+    "vultr": (),
 }
 
 # Règles précises, par début d'identifiant de modèle. La première qui correspond gagne.
@@ -59,7 +62,9 @@ EFFORTS_PAR_PREFIXE_MODELE = (
 
 # Fournisseurs dont les modèles passent par un adaptateur d'outils (voir
 # core/clients_outils_llm.py). DeepSeek garde son propre chemin.
-DISTRIBUTEURS_AVEC_ADAPTATEUR = ("claude", "gpt", "gemini", "grok", "meta")
+# Vultr (03/11/2026) y figure aussi : son client est un simple client OpenAI (voir
+# fournisseurs_llm.creer_client_vultr), mais il suit le meme chemin que les autres.
+DISTRIBUTEURS_AVEC_ADAPTATEUR = ("claude", "gpt", "gemini", "grok", "meta", "vultr")
 
 # Effort choisi quand rien de valide n'a été demandé : le plus rapide qui existe, comme le
 # défaut historique de DeepSeek (DEEPSEEK_REASONING_EFFORT = "low").

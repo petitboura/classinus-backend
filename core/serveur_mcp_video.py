@@ -29,6 +29,8 @@ from typing import Any
 from mcp.server.mcpserver import MCPServer as FastMCP, Context
 
 from core.import_fichier_montage import importer_fichier_conversation
+from core.montage_file_attente import AttenteTropLongue, liberer_place, prendre_place
+from core.remotion_prepare import preparer_node_modules
 from core.video_workspaces import (
     EXTENSIONS_SOURCES,
     chemin_interne,
@@ -558,6 +560,9 @@ def _assurer_dependances_remotion(projet: Path) -> None:
     with _verrou_projet(projet):
         if (projet / "node_modules").is_dir():
             return
+        # Serveur de montage : copie du projet de base déjà installé (rapide).
+        if preparer_node_modules(projet):
+            return
         try:
             resultat = subprocess.run(
                 # --ignore-scripts : aucun script d'installation de paquet ne s'exécute sur le
@@ -682,6 +687,10 @@ def video_executer_outil(ctx: Context, nom_outil: str, arguments: dict[str, Any]
             ),
         }
     try:
+        prendre_place()
+    except AttenteTropLongue as exc:
+        return {"success": False, "outil": nom_outil, "error": str(exc)}
+    try:
         # Un appel MCP peut atterrir sur une autre instance Railway que le
         # POST initial. Recharge les projets/résultats du workspace, puis la
         # vidéo source nommée par ses identifiants opaques.
@@ -715,3 +724,5 @@ def video_executer_outil(ctx: Context, nom_outil: str, arguments: dict[str, Any]
     except Exception as exc:
         logging.exception("Échec outil mcp-video %s", nom_outil)
         return {"success": False, "outil": nom_outil, "error": str(exc)}
+    finally:
+        liberer_place()

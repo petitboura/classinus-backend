@@ -473,6 +473,9 @@ class TestActionsWorkspace(unittest.TestCase):
         self.assertEqual(_action_pour_reservation("edit_file"), "write_file")
         self.assertEqual(_action_pour_reservation("search_files"), "read_file")
         self.assertEqual(_action_pour_reservation("find_files"), "read_file")
+        self.assertEqual(_action_pour_reservation("run_background"), "write_file")
+        self.assertEqual(_action_pour_reservation("command_stop"), "write_file")
+        self.assertEqual(_action_pour_reservation("command_status"), "read_file")
 
 
 def _grep_et_sed_gnu_disponibles():
@@ -602,6 +605,10 @@ class TestSchemaDeLOutil(unittest.TestCase):
             "edit_file": "write_file",
             "search_files": "read_file",
             "find_files": "read_file",
+            # Commandes longues (02/11/2026) : aucune nouvelle action SQL, ce sont des alias.
+            "run_background": "write_file",
+            "command_stop": "write_file",
+            "command_status": "read_file",
         }
         for action in actions:
             if action not in ("network", "demander_acces_reseau", "importer_fichier"):

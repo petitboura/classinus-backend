@@ -171,6 +171,26 @@ Ce serveur peut exposer d'autres outils non vérifiés ici
 (WolframLanguageContext, TestReport...) : à ajouter au registre s'ils
 s'avèrent utilisés par Clovis.
 
+## Demande d'outils : ce qu'il reste et les catégories qui vont ensemble
+
+Le 03/11/2026, la réponse de `demander_outils` (`core/boucle_agent.py`) donne deux
+informations de plus, calculées par `core/consignes_outils.py` :
+
+- **Ce qu'il reste.** Quand l'IA demande les outils d'une catégorie, la réponse dit combien
+  d'outils de cette catégorie elle n'a pas encore, et qu'elle peut redemander. Le nombre est
+  calculé sur le catalogue réel du tour (Notion, GitHub, serveurs ajoutés par l'utilisateur,
+  quel que soit leur nombre) : aucun chiffre n'est écrit à la main. Les outils déjà en main
+  sont exclus, une nouvelle demande ne les redonne jamais.
+- **Les catégories qui vont ensemble.** `FAMILLES_OUTILS` (`core/registre_outils.py`) liste les
+  catégories qui se combinent, avec une consigne par catégorie. Aujourd'hui : `github` et
+  `execution_code` (trouver ou lister un dépôt avec GitHub, le cloner et le tester avec
+  l'exécution de code). Quand l'IA reçoit les outils d'une de ces catégories, la réponse ajoute
+  la consigne, et lui rappelle de demander aussi les catégories partenaires qu'elle n'a pas
+  encore. Ajouter une famille, ou une troisième catégorie à une famille, se fait en ajoutant
+  une entrée dans ce dictionnaire, sans toucher au code. Rien n'est ajouté au prompt système.
+
+Tests : `python -m unittest test_consignes_outils`.
+
 ## Ce qui tourne en production
 
 - Backend FastAPI (`api/main.py`), déployé sur Railway (projet
@@ -270,8 +290,11 @@ Le backend est hébergé sur Render. Toutes les variables d'environnement doiven
 | `GITHUB_TOKEN` (optionnel) | `core/serveur_mcp_github.py` — sans lui, l'API GitHub non authentifiée est plafonnée à 60 requêtes/heure PAR IP ; un classic token `public_repo` fait passer la limite à 5000/heure |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | `connexions/oauth_generique.py` (connexion OAuth GitHub par agent) |
 | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` / `DEEPSEEK_API_KEY` / `MODEL_API_KEY` (Meta, staging) | `core/fournisseurs_llm.py` (LLM premium optionnels — absents, seuls Gemini/DeepSeek de secours restent proposés) |
+| `VULTR_INFERENCE_API_KEY` (clé Serverless Inference de Vultr) / `VULTR_INFERENCE_BASE_URL` (optionnel, par défaut `https://api.vultrinference.com/v1`) | `core/fournisseurs_llm.py` (fournisseur « vultr », hackathon Vultr Agent Rush ; sans la clé il reste invisible ; les modèles se posent dans Supabase après `scripts/sonder_vultr.py`) |
 
 Pour vérifier chaque fournisseur avec ses vraies clés (texte, appel d'outil aller-retour, chaque effort) : `python scripts/verifier_fournisseurs.py [--efforts] [--fournisseur claude]`, à lancer là où les clés existent.
+
+Pour choisir les modèles Vultr avec de vrais appels (liste, texte, outils, vision, code, efforts) avant de les poser dans Supabase : `python scripts/sonder_vultr.py [--modeles ID ...] [--efforts]`.
 | `TOGETHER_API_KEY` | `core/generation_images.py` (meilleure fiabilité que le fournisseur par défaut) |
 | `HIGGSFIELD_API_KEY` ou `HIGGSFIELD_API_KEY_ID` + `HIGGSFIELD_API_KEY_SECRET` | `core/generation_video_higgsfield.py` (envoi, suivi, prix, annulation), `core/higgsfield_catalogue.py` (modèles ouverts : vidéo seedance et kling, image grok), `core/higgsfield_requetes.py` (vérification des réglages), `core/outils_higgsfield.py` (outils vidéo avec images, vidéos et sons de référence, animation d'image, image, estimation du coût, annulation), `core/higgsfield_limites.py` (limite par jour et par utilisateur, variables Railway HIGGSFIELD_LIMITE_VIDEOS_PAR_JOUR et HIGGSFIELD_LIMITE_IMAGES_PAR_JOUR, table higgsfield_usage), outils exposés uniquement si une clé API est configurée |
 | `URL_RETOUR_APP` + migration `2026_10_20_higgsfield_mcp_oauth.sql` | `connexions/higgsfield_mcp.py` : connexion OAuth DCR par utilisateur au MCP Higgsfield; aucune clé API partagée requise |

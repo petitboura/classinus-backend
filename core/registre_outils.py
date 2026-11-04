@@ -74,6 +74,11 @@ def _url_video(get_secret, user_id, agent_id, conversation_id=None):
     port = os.environ.get("PORT", "8000")
     from urllib.parse import urlencode
     params = urlencode({"user_id": user_id or "", "conversation_id": conversation_id or ""})
+    # Serveur de montage séparé (03/11/2026) : si MONTAGE_VIDEO_URL est définie, le montage
+    # tourne là-bas (api/main_montage.py). Sinon, comportement d'avant : ce même serveur.
+    base = (os.environ.get("MONTAGE_VIDEO_URL") or "").strip().rstrip("/")
+    if base.startswith(("http://", "https://")):
+        return f"{base}/mcp/video/?{params}"
     return f"http://localhost:{port}/mcp/video/?{params}"
 
 
@@ -147,13 +152,21 @@ def _url_notion(get_secret, user_id, agent_id, conversation_id=None):
     return "https://mcp.notion.com/mcp"
 
 
+# 03/11/2026 (demande Bourama) : le serveur d'outils class-tech tourne sur
+# Railway (service class-tech, projet Granink), plus sur Render. L'adresse
+# vient de la variable d'environnement CLASSTECH_URL_MCP si elle existe
+# (changer d'hebergeur ne demande alors aucun deploiement de code), sinon de
+# cette valeur par defaut. Le diagnostic de reveil (/health) est derive de
+# cette URL par mcp_tools._url_reveil.
+URL_DIAGNOSTIC_CLASSTECH_DEFAUT = "https://class-tech.up.railway.app/mcp/diagnostic"
+
+
 def _url_diagnostic_classtech(get_secret, user_id, agent_id, conversation_id=None):
     # 28/10/2026 (demande Bourama) : serveur d'outils MCP Class-Tech
     # (diagnostic téléphone puis PC). Serveur public sans
-    # authentification : pas de headers_builder. URL prévue du service
-    # Render class-tech-outils, à corriger ici si le service déployé a
-    # une autre adresse.
-    return "https://class-tech-outils.onrender.com/mcp/diagnostic"
+    # authentification : pas de headers_builder.
+    url = (os.environ.get("CLASSTECH_URL_MCP") or "").strip()
+    return url or URL_DIAGNOSTIC_CLASSTECH_DEFAUT
 
 
 def _headers_notion(get_secret, user_id, agent_id):
@@ -806,6 +819,11 @@ REGISTRE_AFFICHAGE_OUTILS = {
     # l'affichage dans le chat change. Libellés de 18 caractères au plus (téléphone).
     "gerer_execution_code:run_code": {"label": "Exécution de code", "icone": "Play", "onglet": None},
     "gerer_execution_code:run_command": {"label": "Commande shell", "icone": "Terminal", "onglet": None},
+    # Commandes longues en arrière-plan (02/11/2026). Icônes déjà utilisées plus bas : le
+    # frontend les connaît, aucune nouvelle icône à ajouter côté interface.
+    "gerer_execution_code:run_background": {"label": "Commande en fond", "icone": "Terminal", "onglet": None},
+    "gerer_execution_code:command_status": {"label": "Suivi de commande", "icone": "FileText", "onglet": None},
+    "gerer_execution_code:command_stop": {"label": "Arrêt de commande", "icone": "Power", "onglet": None},
     "gerer_execution_code:write_file": {"label": "Ajout d'un fichier", "icone": "FilePlus", "onglet": None},
     "gerer_execution_code:edit_file": {"label": "Édition ciblée", "icone": "FilePenLine", "onglet": None},
     "gerer_execution_code:search_files": {"label": "Recherche de code", "icone": "Search", "onglet": None},
@@ -1255,6 +1273,17 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "tester_micro": {"label": "Test micro", "icone": "Mic", "onglet": None},
     "tester_haut_parleur": {"label": "Test haut-parleur", "icone": "Volume2", "onglet": None},
     "tester_vibreur": {"label": "Test vibreur", "icone": "Vibrate", "onglet": None},
+    # 03/11/2026 (demande Bourama) : outils profonds sans root, lecture seule.
+    "lire_temperatures_internes": {"label": "Températures internes", "icone": "Thermometer", "onglet": None},
+    "lire_historique_batterie": {"label": "Batterie détaillée", "icone": "History", "onglet": None},
+    "lire_trafic_par_appli": {"label": "Trafic par appli", "icone": "ArrowUpDown", "onglet": None},
+    "lire_fluidite_ecran": {"label": "Fluidité de l'écran", "icone": "Gauge", "onglet": None},
+    "lire_saturation_systeme": {"label": "Saturation CPU/RAM", "icone": "Cpu", "onglet": None},
+    "lire_reveils_planifies": {"label": "Réveils planifiés", "icone": "AlarmClock", "onglet": None},
+    "lire_journaux_systeme": {"label": "Journaux système", "icone": "FileText", "onglet": None},
+    "lire_carte_systeme": {"label": "Carte système", "icone": "Map", "onglet": None},
+    "lire_memoire_dans_le_temps": {"label": "RAM dans le temps", "icone": "MemoryStick", "onglet": None},
+    "lire_verrous_veille": {"label": "Verrous de veille", "icone": "Lock", "onglet": None},
     "tester_camera": {"label": "Test caméra", "icone": "Camera", "onglet": None},
     "tester_boutons": {"label": "Test boutons", "icone": "Power", "onglet": None},
     "analyser_memoire_vive": {"label": "Mémoire vive", "icone": "MemoryStick", "onglet": None},
@@ -1541,6 +1570,12 @@ CATEGORIES_OUTILS = {
         "tester_boutons", "analyser_memoire_vive", "analyser_cpu",
         "analyser_applications_gourmandes", "lister_permissions_risquees",
         "revoquer_permission", "verifier_securite", "verifier_mises_a_jour",
+        # 03/11/2026 : outils profonds sans root (lecture seule).
+        "lire_temperatures_internes", "lire_historique_batterie",
+        "lire_trafic_par_appli", "lire_fluidite_ecran",
+        "lire_saturation_systeme", "lire_reveils_planifies",
+        "lire_journaux_systeme", "lire_carte_systeme",
+        "lire_memoire_dans_le_temps", "lire_verrous_veille",
     ],
 }
 
@@ -1786,6 +1821,43 @@ GROUPES_OUTILS = {
     "telephone": ["gerer_dossier_telephone", "explorer_dossier", "gerer_session_concentration"],
     "skills": ["gerer_skill", "gerer_comportement_public"],
     "site": ["generer_site_zip", "deployer_site"],
+}
+
+# ---------------------------------------------------------------------------
+# Familles de categories qui se combinent (03/11/2026, demande Bourama).
+# Donnees pures, lues par core/consignes_outils.py. Quand demander_outils donne
+# des outils d'une categorie listee ici, la reponse ajoute la consigne de cette
+# categorie, et rappelle de demander aussi les categories "avec" que l'IA n'a
+# pas encore. Pas de prompt systeme, pas de fusion de categories : l'IA garde
+# des categories separees et sait seulement lesquelles vont ensemble.
+#
+# Une categorie peut avoir plusieurs partenaires dans "avec", et une meme
+# categorie peut figurer dans plusieurs familles (les consignes s'ajoutent).
+# Ajouter une famille = ajouter une ligne ici, aucun code a toucher.
+# Chaque nom de categorie doit exister dans CATEGORIES_OUTILS ou
+# CATEGORIES_OUTILS_PAR_PREFIXE (verifie par test_consignes_outils.py).
+# ---------------------------------------------------------------------------
+FAMILLES_OUTILS = {
+    "depots_et_code": {
+        "github": {
+            "avec": ["execution_code"],
+            "consigne": (
+                "Les outils GitHub servent à trouver et lister : les dépôts de l'utilisateur "
+                "(action mes_depots), la recherche d'un dépôt public (action chercher_depots), "
+                "les issues, les pull requests et les commits. Pour récupérer le code d'un dépôt "
+                "public, ou le modifier et le tester, combine-les avec l'exécution de code : "
+                "trouve le dépôt avec GitHub, puis clone-le avec git dans l'espace d'exécution de code."
+            ),
+        },
+        "execution_code": {
+            "avec": ["github"],
+            "consigne": (
+                "L'exécution de code lance du code et des commandes dans un espace de travail. "
+                "Pour cloner un dépôt public, trouve d'abord son adresse avec les outils GitHub "
+                "(recherche d'un dépôt, liste des dépôts de l'utilisateur), puis clone-le ici avec git."
+            ),
+        },
+    },
 }
 
 # DEPENDANCES_OUTILS : un outil qui exige qu'un autre soit appele AVANT lui
