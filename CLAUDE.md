@@ -29,3 +29,14 @@ Apply this rule without waiting for Bourama to repeat it. Whenever you create a 
 5. If data is intentionally retained (such as `journal_actions`, which is retained for security), disclose that in the Privacy Policy.
 
 No account-linked table may be delivered without passing these checks.
+
+## Documentation: always up to date, always organized, always translated
+
+Bourama's decision from 4 November 2026. This rule is mandatory: apply it every time, without asking and without waiting for him to repeat it.
+
+- **Always up to date.** Whenever code, behavior, configuration, or a decision changes, update the affected documentation in the same change.
+- **Never leave a mess.** Never drop a loose Markdown file at the repository root. Every new document goes in `docs/`, or in a themed subfolder (for example `docs/chantiers/`, `docs/specs/`) once a topic grows. Create a new document or a new folder whenever it keeps things clear; do not ask first.
+- **Always organized.** Every new document is added to the index in `docs/README.md` and `docs/README.fr.md` in the same change. When you edit an old document still at the root (see that index), move it into `docs/` and fix every reference to it, in code comments and in other documents.
+- **Always translated.** Every document exists in English (default, `.md`) and French (`.fr.md`), with the language switch line at the top of both. Update both versions together, never only one.
+- Only `README`, `CLAUDE`, and their `.fr.md` versions stay at the root.
+- Never write a secret, token, or password in documentation.
