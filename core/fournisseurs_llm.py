@@ -41,10 +41,10 @@ def get_secret(key):
 
 
 # Ordre = hierarchie cumulative descendante (voir docstring plus haut).
-ORDRE_DISTRIBUTEURS = ["claude", "gpt", "gemini", "deepseek", "grok", "meta"]
+ORDRE_DISTRIBUTEURS = ["claude", "gpt", "gemini", "deepseek", "grok", "meta", "zai", "alibaba", "nvidia"]
 
 # Ordre = hierarchie cumulative ascendante.
-ORDRE_PALIERS = ["essentiel", "avance", "pro", "specialise"]
+ORDRE_PALIERS = ["essentiel", "intermediaire", "avance", "pro", "specialise"]
 # "specialise" (16/10/2026) : niveau reserve aux modeles a usage precis qu'on
 # affiche sans les proposer en discussion normale (aujourd'hui seulement
 # grok-build-0.1, modele de code). Aucun agent n'a ce palier debloque, donc
@@ -119,9 +119,27 @@ HIERARCHIE_MODELES = {
         # UNIQUEMENT par Baseten ("baseten_seul"), ouvert à tout le monde (pas de Bientôt).
         # Identifiants standards seulement, jamais "-contributor" (les données des
         # élèves ne doivent pas entraîner les modèles Meta).
+        # 04/11/2026, demande de Bourama : Muse Glimmer 30B prend le niveau essentiel (Vultr
+        # seul, comme Muse Spark Open l'est pour Baseten) et Muse Spark Open passe au niveau
+        # intermediaire. Meme etat que la migration 2026_11_04_meta_glimmer.sql.
+        "essentiel": {"id": "muse-glimmer-30b", "label": "Muse Glimmer 30B", "vultr": "muse-glimmer-30b", "vultr_seul": True},
+        "intermediaire": {"id": "muse-spark-open", "label": "Muse Spark Open", "baseten": "meta-models/muse-spark-open-1026", "baseten_seul": True},
         "avance": {"id": "muse-spark-1.3", "label": "Muse Spark 1.3"},
         "pro": {"id": "muse-wonder-1.0", "label": "Muse Wonder"},
-        "essentiel": {"id": "muse-spark-open", "label": "Muse Spark Open", "baseten": "meta-models/muse-spark-open-1026", "baseten_seul": True},
+    },
+    # Z.ai, Alibaba et NVIDIA (04/11/2026, demande de Bourama) : servis par Vultr Serverless
+    # Inference, une seule cle (VULTR_INFERENCE_API_KEY), jamais en Bientot, palier pro vide.
+    # Meme etat que la migration 2026_11_04_fournisseurs_vultr.sql (qui prime sur ce repli).
+    "zai": {
+        "essentiel": {"id": "glm-5.3-flash", "label": "GLM 5.3 Flash", "vultr": "glm-5.3-flash", "vultr_seul": True},
+        "avance": {"id": "glm-5.3", "label": "GLM 5.3", "vultr": "glm-5.3", "vultr_seul": True},
+    },
+    "alibaba": {
+        "essentiel": {"id": "qwen3.8-flash-next", "label": "Qwen 3.8 Flash Next", "vultr": "qwen3.8-flash-next", "vultr_seul": True},
+        "avance": {"id": "qwen3.8-27b", "label": "Qwen 3.8 27B", "vultr": "qwen3.8-27b", "vultr_seul": True},
+    },
+    "nvidia": {
+        "essentiel": {"id": "nemotron-nano-omni-30b-a3b-reasoning", "label": "Nemotron Nano Omni 30B", "vultr": "nemotron-3-nano-omni-30b-a3b-reasoning", "vultr_seul": True},
     },
 }
 
@@ -135,6 +153,10 @@ VARIABLES_CLE_PAR_DISTRIBUTEUR = {
     "grok": "XAI_API_KEY",
     "deepseek": "DEEPSEEK_API_KEY",
     "meta": "MODEL_API_KEY",
+    # Z.ai, Alibaba et NVIDIA passent tous par Vultr : une seule cle pour les trois.
+    "zai": "VULTR_INFERENCE_API_KEY",
+    "alibaba": "VULTR_INFERENCE_API_KEY",
+    "nvidia": "VULTR_INFERENCE_API_KEY",
 }
 
 # Vultr Serverless Inference (04/11/2026, hackathon Vultr Agent Rush, demande Bourama) : API
@@ -248,6 +270,59 @@ def creer_client_deepseek(modele_id):
     )
 
 
+def info_vultr_seul(modele_id, config=None):
+    """
+    Identifiant Vultr d'un modele servi UNIQUEMENT par Vultr (colonne vultr_seul de modeles_llm :
+    Z.ai, Alibaba, NVIDIA et Muse Glimmer), None pour tout autre modele. Un tel modele est ouvert a
+    tout le monde (le Bientot de son fournisseur ne s'applique pas) et ne depend que de la cle
+    VULTR_INFERENCE_API_KEY.
+    """
+    config = config or _config_modeles()
+    for paliers in (config.get("modeles") or {}).values():
+        for info in paliers.values():
+            if info.get("id") == modele_id and info.get("vultr_seul") and info.get("vultr"):
+                return info["vultr"]
+    return None
+
+
+def cle_vultr_disponible():
+    """True si la cle Vultr Serverless Inference est posee sur le serveur."""
+    return bool(get_secret(VARIABLE_CLE_VULTR))
+
+
+def correspondance_vultr_seul(distributeur=None, config=None):
+    """{identifiant du selecteur: identifiant Vultr} des modeles "Vultr seul" (d'un fournisseur ou de tous)."""
+    config = config or _config_modeles()
+    correspondance = {}
+    for nom, paliers in (config.get("modeles") or {}).items():
+        if distributeur and nom != distributeur:
+            continue
+        for info in paliers.values():
+            if info.get("vultr_seul") and info.get("vultr"):
+                correspondance[info["id"]] = info["vultr"]
+    return correspondance
+
+
+def creer_client_vultr_generique(distributeur, modele_id):
+    """
+    Client pour un modele servi uniquement par Vultr (Z.ai, Alibaba, NVIDIA, Muse Glimmer) : meme
+    appel que le SDK OpenAI, l'identifiant du selecteur est traduit en identifiant Vultr (resolu
+    contre le vrai catalogue). Pas de route de repli : un refus de Vultr remonte comme erreur.
+    None si le modele n'est pas "Vultr seul" ou si la cle Vultr est absente (l'appelant retombe
+    alors sur son chemin habituel).
+    """
+    if not info_vultr_seul(modele_id):
+        return None
+    client_vultr = creer_client_vultr()
+    if client_vultr is None:
+        return None
+    try:
+        from adaptateur_vultr import ClientVultr
+    except ImportError:
+        from core.adaptateur_vultr import ClientVultr
+    return ClientVultr(correspondance_vultr_seul(distributeur), client_vultr)
+
+
 def info_baseten_seul(modele_id, config=None):
     """
     Slug Baseten d'un modele servi UNIQUEMENT par Baseten (colonne baseten_seul de
@@ -309,6 +384,7 @@ def _distributeur_disponible(distributeur, config=None):
 # encore). Depuis le 15/10/2026 le statut Bientôt se règle dans Supabase, colonne
 # bientot de la table fournisseurs_llm. Cette liste ne sert plus que si Supabase ne
 # répond pas ou si les tables sont vides.
+# Z.ai, Alibaba et NVIDIA (04/11/2026, demande de Bourama) ne sont volontairement PAS ici : jamais en Bientot.
 DISTRIBUTEURS_BIENTOT = ["claude", "gpt", "gemini", "grok", "meta"]
 
 # Mot affiché sur les modèles Bientôt, par langue. Valeur de repli : le texte se règle
@@ -468,6 +544,15 @@ def _lire_config_modeles_supabase():
     except Exception as e:
         logging.warning(f"Colonnes Vultr absentes ou illisibles (migration a appliquer) : {e}")
 
+    # Modeles servis UNIQUEMENT par Vultr (04/11/2026) : colonne lue a part, comme baseten_seul.
+    vultr_seul_par_modele = set()
+    try:
+        for ligne in client.table("modeles_llm").select("distributeur, palier, vultr_seul").execute().data or []:
+            if ligne.get("vultr_seul"):
+                vultr_seul_par_modele.add((ligne["distributeur"], ligne["palier"]))
+    except Exception as e:
+        logging.warning(f"Colonne vultr_seul absente ou illisible (migration a appliquer) : {e}")
+
     fournisseurs = {}
     for ligne in lignes_fournisseurs:
         fournisseurs[ligne["distributeur"]] = {
@@ -495,6 +580,8 @@ def _lire_config_modeles_supabase():
             entree_modele["vultr"] = identifiant_vultr
         if (ligne["distributeur"], ligne["palier"]) in baseten_seul_par_modele and slug_baseten:
             entree_modele["baseten_seul"] = True
+        if (ligne["distributeur"], ligne["palier"]) in vultr_seul_par_modele and identifiant_vultr:
+            entree_modele["vultr_seul"] = True
         modeles.setdefault(ligne["distributeur"], {})[ligne["palier"]] = entree_modele
         niveau = ligne["niveau"]
         niveaux[ligne["palier"]] = min(niveau, niveaux.get(ligne["palier"], niveau))
@@ -608,6 +695,11 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque, email
                 # tout le monde malgre le Bientot de Meta, mais seulement si la cle Baseten existe.
                 if not cle_baseten_disponible():
                     continue
+            elif info.get("vultr_seul"):
+                # Modele servi seulement par Vultr (Z.ai, Alibaba, NVIDIA, Muse Glimmer, 04/11/2026) :
+                # ouvert a tout le monde malgre un Bientot eventuel, mais seulement si la cle Vultr existe.
+                if not cle_vultr_disponible():
+                    continue
             elif not fournisseur_ouvert:
                 continue
             # Dedoublonnage par modele_id (cas DeepSeek, ou deux paliers
@@ -664,7 +756,7 @@ def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque, email=Non
         modeles_du_distributeur = []
         for palier in config["paliers"]:
             info = config["modeles"].get(distributeur, {}).get(palier)
-            if not info or info["id"] in ids_a_exclure or info.get("baseten_seul"):
+            if not info or info["id"] in ids_a_exclure or info.get("baseten_seul") or info.get("vultr_seul"):
                 continue
             ids_a_exclure.add(info["id"])
             modeles_du_distributeur.append({
@@ -861,6 +953,26 @@ def _stream_baseten_seul(modele_id, system_prompt, messages):
             yield delta.content
 
 
+def _stream_vultr(modele_id, system_prompt, messages, distributeur=None):
+    # Modele servi uniquement par Vultr Serverless Inference (Z.ai, Alibaba, NVIDIA, Muse Glimmer,
+    # 04/11/2026) : chemin texte seul, API compatible OpenAI. La reflexion du modele, si Vultr
+    # l'envoie, est remontee comme evenement et jamais ajoutee a la reponse.
+    client = creer_client_vultr_generique(distributeur or distributeur_pour_modele_id(modele_id), modele_id)
+    if client is None:
+        raise RuntimeError(f"{modele_id} : cle Vultr absente ou modele non servi par Vultr")
+    messages_openai = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + messages
+    flux = client.chat.completions.create(model=modele_id, messages=messages_openai, stream=True)
+    for morceau in flux:
+        if not morceau.choices:
+            continue
+        delta = morceau.choices[0].delta
+        reflexion = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
+        if reflexion:
+            yield {"type": "raisonnement", "texte": reflexion}
+        if delta.content:
+            yield delta.content
+
+
 def _stream_gemini(modele_id, system_prompt, messages):
     # Reutilise le client google-genai deja initialise ailleurs dans le
     # projet (voir core/main.py) -- instancie ici localement pour garder
@@ -889,6 +1001,10 @@ _STREAMERS_PAR_DISTRIBUTEUR = {
     "grok": _stream_grok,
     "meta": _stream_meta,
     "gemini": _stream_gemini,
+    # Z.ai, Alibaba et NVIDIA (04/11/2026) : le meme flux Vultr pour les trois.
+    "zai": _stream_vultr,
+    "alibaba": _stream_vultr,
+    "nvidia": _stream_vultr,
 }
 
 
@@ -913,6 +1029,9 @@ def generer_reponse_premium(modele_id, system_prompt, messages, effort=None):
         raise ValueError(f"modele_id inconnu : {modele_id}")
     if info_baseten_seul(modele_id):
         yield from _stream_baseten_seul(modele_id, system_prompt, messages)
+        return
+    if info_vultr_seul(modele_id):
+        yield from _stream_vultr(modele_id, system_prompt, messages, distributeur=distributeur)
         return
     streamer = _STREAMERS_PAR_DISTRIBUTEUR[distributeur]
     if distributeur == "deepseek":

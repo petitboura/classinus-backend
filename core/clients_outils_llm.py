@@ -1,5 +1,6 @@
 """
-Fabrique des clients avec outils pour les modèles Claude, GPT, Gemini, Grok et Meta (20/10/2026, Meta le 28/10/2026).
+Fabrique des clients avec outils pour les modèles Claude, GPT, Gemini, Grok et Meta (20/10/2026, Meta le 28/10/2026),
+plus Z.ai, Alibaba, NVIDIA et Muse Glimmer servis par Vultr (04/11/2026).
 
 Chaque client expose le même appel que le SDK OpenAI (client.chat.completions.create), ce qui
 permet à la boucle d'agent (core/boucle_agent.py:_agent_groq) de s'en servir sans rien changer :
@@ -28,6 +29,9 @@ def modele_a_des_outils(modele_id):
     # Modele servi uniquement par Baseten (Muse Spark Open, 30/10/2026) : sa seule cle est celle de Baseten.
     if fournisseurs_llm.info_baseten_seul(modele_id):
         return fournisseurs_llm.cle_baseten_disponible()
+    # Modele servi uniquement par Vultr (Z.ai, Alibaba, NVIDIA, Muse Glimmer, 04/11/2026) : sa seule cle est celle de Vultr.
+    if fournisseurs_llm.info_vultr_seul(modele_id):
+        return fournisseurs_llm.cle_vultr_disponible()
     distributeur = distributeur_du_modele(modele_id)
     if distributeur != "deepseek" and distributeur not in DISTRIBUTEURS_AVEC_ADAPTATEUR:
         return False
@@ -39,6 +43,9 @@ def client_avec_outils(modele_id):
     # Modele servi uniquement par Baseten (Muse Spark Open, 30/10/2026) : client Baseten, sans repli direct.
     if fournisseurs_llm.info_baseten_seul(modele_id):
         return fournisseurs_llm.creer_client_baseten_seul(modele_id)
+    # Modele servi uniquement par Vultr (04/11/2026) : client Vultr, sans route de repli.
+    if fournisseurs_llm.info_vultr_seul(modele_id):
+        return fournisseurs_llm.creer_client_vultr_generique(distributeur_du_modele(modele_id), modele_id)
     if distributeur_du_modele(modele_id) not in DISTRIBUTEURS_AVEC_ADAPTATEUR or not modele_a_des_outils(modele_id):
         return None
     distributeur = distributeur_du_modele(modele_id)

@@ -152,7 +152,9 @@ class ModelesGrok(unittest.TestCase):
 
     def test_ordre_finit_par_grok_puis_meta(self):
         from core.fournisseurs_llm import ORDRE_DISTRIBUTEURS
-        self.assertEqual(ORDRE_DISTRIBUTEURS, ["claude", "gpt", "gemini", "deepseek", "grok", "meta"])
+        # Z.ai, Alibaba et NVIDIA (04/11/2026) viennent apres Meta, dans cet ordre.
+        self.assertEqual(ORDRE_DISTRIBUTEURS[:6], ["claude", "gpt", "gemini", "deepseek", "grok", "meta"])
+        self.assertEqual(ORDRE_DISTRIBUTEURS[6:], ["zai", "alibaba", "nvidia"])
 
     def test_grok_deux_modeles_trois_niveaux_et_bientot(self):
         config = _config_modeles_de_repli()
@@ -236,11 +238,14 @@ class ModelesMeta(unittest.TestCase):
 
     def test_meta_deux_modeles_par_son_api_plus_muse_spark_open_par_baseten_et_bientot(self):
         config = _config_modeles_de_repli()
-        # Pas de modèle essentiel chez Meta par son API ; le niveau essentiel est Muse Spark Open
-        # (30/10/2026), servi seulement par Baseten et ouvert à tous (voir test_muse_spark_open.py).
+        # Pas de modèle essentiel chez Meta par son API ; depuis le 04/11/2026 le niveau essentiel est
+        # Muse Glimmer 30B (Vultr seul) et Muse Spark Open (Baseten seul) est au niveau intermediaire.
         essentiel = config["modeles"]["meta"]["essentiel"]
-        self.assertEqual(essentiel["id"], "muse-spark-open")
-        self.assertTrue(essentiel["baseten_seul"])
+        self.assertEqual(essentiel["id"], "muse-glimmer-30b")
+        self.assertTrue(essentiel["vultr_seul"])
+        intermediaire = config["modeles"]["meta"]["intermediaire"]
+        self.assertEqual(intermediaire["id"], "muse-spark-open")
+        self.assertTrue(intermediaire["baseten_seul"])
         self.assertEqual(config["modeles"]["meta"]["avance"]["id"], "muse-spark-1.3")
         self.assertEqual(config["modeles"]["meta"]["pro"]["id"], "muse-wonder-1.0")
         self.assertTrue(config["fournisseurs"]["meta"]["bientot"])
