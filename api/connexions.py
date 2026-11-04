@@ -48,6 +48,7 @@ import connexions.notion as notion
 import connexions.higgsfield_mcp as higgsfield_mcp
 import connexions.netlify_mcp as netlify_mcp
 import connexions.render_mcp as render_mcp
+import connexions.vercel_mcp as vercel_mcp
 import connexions.platform_mcp_oauth as platform_mcp_oauth
 import connexions.mcp_personnalises as mcp_personnalises
 
@@ -79,6 +80,9 @@ def deconnecter_plateforme_mcp(service: str, utilisateur=Depends(utilisateur_cou
 
 
 def _deconnecter(service: str, utilisateur):
+    if service == "vercel_mcp":
+        vercel_mcp.deconnecter(utilisateur.id)
+        return {"connecte": False}
     if service == "netlify_mcp":
         netlify_mcp.deconnecter(utilisateur.id)
         return {"connecte": False}
@@ -225,6 +229,31 @@ def _enregistrer_jeton_netlify(payload, utilisateur):
 
 class JetonRenderPayload(BaseModel):
     token: str
+
+
+class JetonVercelPayload(BaseModel):
+    token: str
+
+
+@router.post("/vercel_mcp/jeton")
+def enregistrer_jeton_vercel(payload: JetonVercelPayload, utilisateur=Depends(utilisateur_courant)):
+    try:
+        return _enregistrer_jeton_vercel(payload, utilisateur)
+    finally:
+        etat_connexions.invalider_etats(utilisateur.id)
+
+
+def _enregistrer_jeton_vercel(payload, utilisateur):
+    try:
+        vercel_mcp.enregistrer_token(utilisateur.id, payload.token)
+    except ValueError as exc:
+        raise erreur_api(400, "JETON_VERCEL_INVALIDE", message=str(exc))
+    except RuntimeError as exc:
+        raise erreur_api(502, "CONNEXION_VERCEL_INDISPONIBLE", message=str(exc))
+    except Exception:
+        logging.exception("Enregistrement du jeton Vercel échoué")
+        raise erreur_api(500, "ERREUR_CONNEXION_VERCEL", message="Classinus n'a pas pu enregistrer le jeton Vercel.")
+    return {"connecte": True}
 
 
 @router.post("/render_mcp/jeton")

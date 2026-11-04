@@ -195,7 +195,8 @@ def _url_vercel_mcp(get_secret, user_id, agent_id, conversation_id=None):
 
 
 def _headers_vercel_mcp(get_secret, user_id, agent_id):
-    token = obtenir_token_platform_mcp("vercel_mcp", user_id)
+    from connexions.vercel_mcp import obtenir_token_valide as obtenir_jeton_vercel
+    token = obtenir_jeton_vercel(user_id)
     return {"Authorization": f"Bearer {token}"} if token else None
 
 
