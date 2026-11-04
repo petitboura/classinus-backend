@@ -38,7 +38,7 @@ pip install -r requirements.txt
 
 The repository does not use one shared example file for every integration. Configure values in the local environment and never commit them.
 
-The core variables for starting the service are `SUPABASE_URL`, `SUPABASE_SECRET`, `GROQ_API_KEY`, and `GOOGLE_API_KEY`. Providers, OAuth connections, notifications, and media services require additional variables. See [`RAILWAY_DEPLOY.md`](../RAILWAY_DEPLOY.md) and the relevant module's code.
+The core variables for starting the service are `SUPABASE_URL`, `SUPABASE_SECRET`, `GROQ_API_KEY`, and `GOOGLE_API_KEY`. Providers, OAuth connections, notifications, and media services require additional variables. See [`RAILWAY_DEPLOY.md`](./deployment/RAILWAY_DEPLOY.md) and the relevant module's code.
 
 ## Start the API
 

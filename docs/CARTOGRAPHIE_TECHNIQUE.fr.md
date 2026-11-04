@@ -152,4 +152,4 @@ Lancer les tests liés à la fonctionnalité modifiée, puis les scénarios de n
 - [Données et sécurité](DONNEES_ET_SECURITE.md)
 - [Développement local](DEVELOPPEMENT.md)
 - [Déploiement](DEPLOIEMENT.md)
-- [Checklist Railway](../RAILWAY_DEPLOY.md)
+- [Checklist Railway](./deployment/RAILWAY_DEPLOY.md)

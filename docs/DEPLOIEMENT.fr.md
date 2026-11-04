@@ -11,7 +11,7 @@ La configuration de production documentée dans ce dépôt utilise Railway et Ra
 - `requirements.txt` contient les dépendances Python.
 - `api/main.py` est le point d’entrée FastAPI.
 
-La checklist opérationnelle et la liste des variables sont maintenues dans [`RAILWAY_DEPLOY.md`](../RAILWAY_DEPLOY.md). La consulter avant chaque changement de service ou de configuration, puis comparer avec le tableau de bord Railway : ce document décrit une configuration relevée à une date donnée, pas un accès live à l’infrastructure.
+La checklist opérationnelle et la liste des variables sont maintenues dans [`RAILWAY_DEPLOY.md`](./deployment/RAILWAY_DEPLOY.md). La consulter avant chaque changement de service ou de configuration, puis comparer avec le tableau de bord Railway : ce document décrit une configuration relevée à une date donnée, pas un accès live à l’infrastructure.
 
 ## Service de montage vidéo
 

@@ -2,7 +2,7 @@
 
 [English version] · [Français](HIGGSFIELD_TODO.fr.md)
 
-For frontend status, see the root-level `HIGGSFIELD_TODO.md` in `classinus-frontend`.
+For frontend status, see the `docs/status/HIGGSFIELD_TODO.md` in `classinus-frontend`.
 
 ## Already implemented
 

@@ -32,7 +32,7 @@ Le rôle serveur privilégié ne justifie pas de supprimer les contrôles d’ac
 
 ## Secrets et configuration
 
-Les secrets de fournisseurs IA, OAuth, push et stockage sont configurés dans l’environnement d’exécution backend. Les noms et usages recensés sont maintenus dans [RAILWAY_DEPLOY.md](../RAILWAY_DEPLOY.md).
+Les secrets de fournisseurs IA, OAuth, push et stockage sont configurés dans l’environnement d’exécution backend. Les noms et usages recensés sont maintenus dans [RAILWAY_DEPLOY.md](./deployment/RAILWAY_DEPLOY.md).
 
 Ne jamais committer des secrets réels, envoyer une clé privée dans une variable frontend `NEXT_PUBLIC_*`, retourner un jeton d’intégration au client après l’avoir stocké, accepter un `user_id` client comme preuve d’identité ou exposer des données d’un autre compte.
 
