@@ -2,26 +2,37 @@
 
 [English version] · [Français](README.fr.md)
 
-Entry point for all repository documentation. Every document exists in English (default, `.md`) and French (`.fr.md`). Add every new document here, in both languages.
+Central entry point for all Classinus backend documentation. English is the default language; each document has a matching French `.fr.md` version.
 
-## Reference documents (`docs/`)
+## API and technical reference
 
-- [Classinus API](./API.md) : `docs/API.md`
-- [Backend architecture](./ARCHITECTURE.md) : `docs/ARCHITECTURE.md`
-- [Backend technical code map](./CARTOGRAPHIE_TECHNIQUE.md) : `docs/CARTOGRAPHIE_TECHNIQUE.md`
-- [Backend deployment](./DEPLOIEMENT.md) : `docs/DEPLOIEMENT.md`
-- [Backend development](./DEVELOPPEMENT.md) : `docs/DEVELOPPEMENT.md`
-- [Data and security](./DONNEES_ET_SECURITE.md) : `docs/DONNEES_ET_SECURITE.md`
-- [AI providers and document retrieval](./IA_ET_RAG.md) : `docs/IA_ET_RAG.md`
-- [MCP and connectors](./MCP_ET_CONNECTEURS.md) : `docs/MCP_ET_CONNECTEURS.md`
+- [Classinus API](./API.md)
+- [Backend architecture](./ARCHITECTURE.md)
+- [Technical code map](./CARTOGRAPHIE_TECHNIQUE.md)
+- [Development guide](./DEVELOPPEMENT.md)
+- [Deployment overview](./DEPLOIEMENT.md)
+- [Data and security](./DONNEES_ET_SECURITE.md)
+- [AI providers and RAG](./IA_ET_RAG.md)
+- [MCP and connectors](./MCP_ET_CONNECTEURS.md)
 
-## Working documents still at the repository root
+## Operations and project status
 
-These files predate the `docs/` folder. When one of them is edited, move it into `docs/` (or a subfolder) and update every reference to it.
+- [Railway deployment checklist](./deployment/RAILWAY_DEPLOY.md)
+- [Higgsfield backend status](./status/HIGGSFIELD_TODO.md)
 
-- [Branch consolidation notes: 31 October 2026](../BRANCHES-CONSOLIDATION-2026-10-31.md) : `BRANCHES-CONSOLIDATION-2026-10-31.md`
-- [Pedagogical reporting system redesign: status as of 11 September 2026](../ETAT_SIGNALEMENTS_10-09.md) : `ETAT_SIGNALEMENTS_10-09.md`
-- [Higgsfield: backend status for branch `feature/higgsfield-catalogue-generation`](../HIGGSFIELD_TODO.md) : `HIGGSFIELD_TODO.md`
-- [The "Programme" feature is disabled: see `_desactive_programme/`](../PROGRAMME_DESACTIVE.md) : `PROGRAMME_DESACTIVE.md`
-- [Railway deployment checklist](../RAILWAY_DEPLOY.md) : `RAILWAY_DEPLOY.md`
-- [Project: new student product (Clovis)](../chantier-programme-etudiant.md) : `chantier-programme-etudiant.md`
+## Project history and archived work
+
+- [Branch consolidation, 31 October 2026](./project-history/BRANCHES-CONSOLIDATION-2026-10-31.md)
+- [Pedagogical reporting redesign status](./archive/reports/ETAT_SIGNALEMENTS_10-09.md)
+- [Programme feature deactivation](./archive/PROGRAMME_DESACTIVE.md)
+- [Student product project history](./archive/chantier-programme-etudiant.md)
+
+## Operational files intentionally kept beside their source
+
+These are not general project guides. Their locations are required by the skill synchronizer or keep warnings next to the disabled code they protect. Do not move them into this documentation folder.
+
+- [Excel document skill](../skills_plateforme/documents-excel/SKILL.md)
+- [PowerPoint document skill](../skills_plateforme/documents-powerpoint/SKILL.md)
+- [Word document skill](../skills_plateforme/documents-word/SKILL.md)
+- [Disabled Programme code warning](../_desactive_programme/LISEZ_MOI_NE_JAMAIS_REUTILISER.md)
+- [Disabled role hierarchy warning](../_desactive_roles_hierarchie/LISEZ_MOI_NE_JAMAIS_REUTILISER.md)

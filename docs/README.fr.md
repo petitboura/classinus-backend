@@ -2,26 +2,37 @@
 
 [English version](README.md) · **Version française**
 
-Point d'entrée de toute la documentation du dépôt. Chaque document existe en anglais (par défaut, `.md`) et en français (`.fr.md`). Ajouter chaque nouveau document ici, dans les deux langues.
+Point d'entrée central de toute la documentation du backend Classinus. L'anglais est la langue par défaut ; chaque document possède une version française correspondante en `.fr.md`.
 
-## Documents de référence (`docs/`)
+## API et références techniques
 
-- [API Classinus](./API.fr.md) : `docs/API.fr.md`
-- [Architecture du backend](./ARCHITECTURE.fr.md) : `docs/ARCHITECTURE.fr.md`
-- [Cartographie technique du backend](./CARTOGRAPHIE_TECHNIQUE.fr.md) : `docs/CARTOGRAPHIE_TECHNIQUE.fr.md`
-- [Déploiement du backend](./DEPLOIEMENT.fr.md) : `docs/DEPLOIEMENT.fr.md`
-- [Développement du backend](./DEVELOPPEMENT.fr.md) : `docs/DEVELOPPEMENT.fr.md`
-- [Données et sécurité](./DONNEES_ET_SECURITE.fr.md) : `docs/DONNEES_ET_SECURITE.fr.md`
-- [IA, fournisseurs et recherche documentaire](./IA_ET_RAG.fr.md) : `docs/IA_ET_RAG.fr.md`
-- [MCP et connecteurs](./MCP_ET_CONNECTEURS.fr.md) : `docs/MCP_ET_CONNECTEURS.fr.md`
+- [API Classinus](./API.fr.md)
+- [Architecture du backend](./ARCHITECTURE.fr.md)
+- [Cartographie technique](./CARTOGRAPHIE_TECHNIQUE.fr.md)
+- [Guide de développement](./DEVELOPPEMENT.fr.md)
+- [Vue d'ensemble du déploiement](./DEPLOIEMENT.fr.md)
+- [Données et sécurité](./DONNEES_ET_SECURITE.fr.md)
+- [Fournisseurs IA et RAG](./IA_ET_RAG.fr.md)
+- [MCP et connecteurs](./MCP_ET_CONNECTEURS.fr.md)
 
-## Documents de travail encore à la racine du dépôt
+## Exploitation et état du projet
 
-Ces fichiers sont antérieurs au dossier `docs/`. Quand l'un d'eux est modifié, le déplacer dans `docs/` (ou un sous-dossier) et mettre à jour toutes les références.
+- [Checklist de déploiement Railway](./deployment/RAILWAY_DEPLOY.fr.md)
+- [État backend Higgsfield](./status/HIGGSFIELD_TODO.fr.md)
 
-- [Consolidation des branches en doute — 31/10/2026](../BRANCHES-CONSOLIDATION-2026-10-31.fr.md) : `BRANCHES-CONSOLIDATION-2026-10-31.fr.md`
-- [Refonte du système de signalements pédagogiques — état au 11/09/2026](../ETAT_SIGNALEMENTS_10-09.fr.md) : `ETAT_SIGNALEMENTS_10-09.fr.md`
-- [Higgsfield — état backend branche `feature/higgsfield-catalogue-generation`](../HIGGSFIELD_TODO.fr.md) : `HIGGSFIELD_TODO.fr.md`
-- [⚠️ Fonctionnalité "Programme" désactivée — voir `_desactive_programme/`](../PROGRAMME_DESACTIVE.fr.md) : `PROGRAMME_DESACTIVE.fr.md`
-- [Déploiement Railway — checklist](../RAILWAY_DEPLOY.fr.md) : `RAILWAY_DEPLOY.fr.md`
-- [Chantier — Nouveau produit étudiant (Clovis)](../chantier-programme-etudiant.fr.md) : `chantier-programme-etudiant.fr.md`
+## Historique et travaux archivés
+
+- [Consolidation des branches, 31 octobre 2026](./project-history/BRANCHES-CONSOLIDATION-2026-10-31.fr.md)
+- [État de la refonte des signalements pédagogiques](./archive/reports/ETAT_SIGNALEMENTS_10-09.fr.md)
+- [Désactivation de la fonctionnalité Programme](./archive/PROGRAMME_DESACTIVE.fr.md)
+- [Historique du chantier produit étudiant](./archive/chantier-programme-etudiant.fr.md)
+
+## Fichiers opérationnels conservés près de leur source
+
+Ce ne sont pas des guides généraux. Leur emplacement est requis par le synchroniseur de compétences ou permet de conserver les avertissements près du code désactivé qu'ils protègent. Ne pas les déplacer dans ce dossier de documentation.
+
+- [Compétence Documents Excel](../skills_plateforme/documents-excel/SKILL.fr.md)
+- [Compétence Documents PowerPoint](../skills_plateforme/documents-powerpoint/SKILL.fr.md)
+- [Compétence Documents Word](../skills_plateforme/documents-word/SKILL.fr.md)
+- [Avertissement du code Programme désactivé](../_desactive_programme/LISEZ_MOI_NE_JAMAIS_REUTILISER.fr.md)
+- [Avertissement de la hiérarchie des rôles désactivée](../_desactive_roles_hierarchie/LISEZ_MOI_NE_JAMAIS_REUTILISER.fr.md)
