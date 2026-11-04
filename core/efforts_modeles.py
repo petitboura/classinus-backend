@@ -38,6 +38,11 @@ EFFORTS_PAR_FOURNISSEUR = {
     "gemini": ("low", "medium", "high"),
     "grok": ("low", "medium", "high"),
     "meta": ("minimal", "low", "medium", "high", "xhigh", "max"),
+    # Z.ai, Alibaba et NVIDIA par Vultr (04/11/2026) : aucun reglage d'effort verifie chez Vultr
+    # pour ces modeles, donc aucun n'est propose ni envoye.
+    "zai": (),
+    "alibaba": (),
+    "nvidia": (),
 }
 
 # Règles précises, par début d'identifiant de modèle. La première qui correspond gagne.
@@ -55,11 +60,13 @@ EFFORTS_PAR_PREFIXE_MODELE = (
     # Muse Spark Open (30/10/2026) : servi par Baseten, qui ne documente pas de reglage d'effort
     # pour ce modele (reflexion toujours active). Liste vide : aucun reglage, rien n'est envoye.
     ("muse-spark-open", ()),
+    # Muse Glimmer 30B (04/11/2026) : servi par Vultr, aucun reglage d'effort verifie.
+    ("muse-glimmer", ()),
 )
 
 # Fournisseurs dont les modèles passent par un adaptateur d'outils (voir
 # core/clients_outils_llm.py). DeepSeek garde son propre chemin.
-DISTRIBUTEURS_AVEC_ADAPTATEUR = ("claude", "gpt", "gemini", "grok", "meta")
+DISTRIBUTEURS_AVEC_ADAPTATEUR = ("claude", "gpt", "gemini", "grok", "meta", "zai", "alibaba", "nvidia")
 
 # Effort choisi quand rien de valide n'a été demandé : le plus rapide qui existe, comme le
 # défaut historique de DeepSeek (DEEPSEEK_REASONING_EFFORT = "low").

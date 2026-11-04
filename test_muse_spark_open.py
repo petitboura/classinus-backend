@@ -74,10 +74,15 @@ class BaseTest(unittest.TestCase):
 class DansLaListe(BaseTest):
     def test_open_disponible_a_tous_malgre_le_bientot_de_meta(self):
         self.env({**CLES_AUTRES, "BASETEN_API_KEY": "b"})
-        for distributeur, palier in (("claude", "pro"), ("deepseek", "essentiel"), ("grok", "avance")):
+        # Depuis le 04/11/2026 Muse Spark Open est au niveau intermediaire (le niveau essentiel
+        # est Muse Glimmer, qui demande la cle Vultr absente ici) : un agent debloque a
+        # essentiel ne le voit donc pas, un agent debloque a intermediaire ou plus le voit.
+        for distributeur, palier in (("claude", "pro"), ("deepseek", "intermediaire"), ("grok", "avance")):
             disponibles = fournisseurs_llm.modeles_disponibles_pour_agent(distributeur, palier)
             ids_meta = [m["modele_id"] for m in disponibles if m["distributeur"] == "meta"]
             self.assertEqual(ids_meta, [OPEN_ID], (distributeur, palier))
+        disponibles = fournisseurs_llm.modeles_disponibles_pour_agent("deepseek", "essentiel")
+        self.assertEqual([m["modele_id"] for m in disponibles if m["distributeur"] == "meta"], [])
 
     def test_spark_et_wonder_restent_bientot_et_open_n_y_est_pas(self):
         self.env({**CLES_AUTRES, "BASETEN_API_KEY": "b"})
