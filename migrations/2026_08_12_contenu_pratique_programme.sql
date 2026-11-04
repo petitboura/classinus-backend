@@ -2,7 +2,7 @@
 -- squelette classe->matière->chapitre (créé par le lot 1, tables
 -- `programmes`/`matieres`/`chapitres` -- NON recréées ici) + classement
 -- transversal (semestre/année/section libre) superposé à ce squelette.
--- Voir chantier-programme-etudiant.md (partie 1) pour le contexte complet.
+-- Voir docs/archive/chantier-programme-etudiant.md (partie 1) pour le contexte complet.
 
 -- Documents rattachés à un chapitre (cours, ressources).
 create table if not exists documents_programme (

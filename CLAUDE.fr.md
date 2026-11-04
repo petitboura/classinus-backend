@@ -61,3 +61,9 @@ Décision de Bourama du 4 novembre 2026. Cette règle est obligatoire : l'appliq
 - **Toujours traduite.** Chaque document existe en anglais (par défaut, `.md`) et en français (`.fr.md`), avec la ligne de choix de langue en tête des deux. Mettre à jour les deux versions ensemble, jamais une seule.
 - Seuls `README`, `CLAUDE` et leurs versions `.fr.md` restent à la racine.
 - Ne jamais écrire de secret, de jeton ou de mot de passe dans la documentation.
+
+
+### Documentation opérationnelle à conserver près de sa source
+
+- Ne pas déplacer `skills_plateforme/<slug>/SKILL.md` ni `SKILL.fr.md`. Le script `scripts/synchroniser_skills_plateforme.py` lit les compétences depuis cette structure exacte pour publier les instructions utilisées à l'exécution.
+- Ne pas déplacer `LISEZ_MOI_NE_JAMAIS_REUTILISER.md` ni son compagnon français hors de `_desactive_programme/` et `_desactive_roles_hierarchie/`. Ce sont des marqueurs de sécurité placés près du code désactivé ; ils doivent y rester.

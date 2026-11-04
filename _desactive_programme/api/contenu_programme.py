@@ -1,6 +1,6 @@
 """
 Contenu pratique du programme étudiant (lot 2/5 du chantier "nouveau
-produit étudiant" -- voir chantier-programme-etudiant.md, partie 1) :
+produit étudiant" -- voir docs/archive/chantier-programme-etudiant.md, partie 1) :
 documents/exercices rattachés à un seul chapitre, examens/devoirs/
 problèmes composites rattachés à plusieurs chapitres (many-to-many), et
 classement transversal (semestre/année/section libre) superposé au
