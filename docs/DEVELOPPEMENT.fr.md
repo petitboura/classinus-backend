@@ -36,7 +36,7 @@ pip install -r requirements.txt
 
 Le dépôt n’utilise pas un fichier d’exemple unique pour toutes les intégrations. Configurer les valeurs dans l’environnement local, sans les committer.
 
-Pour démarrer le service, les variables centrales sont `SUPABASE_URL`, `SUPABASE_SECRET`, `GROQ_API_KEY` et `GOOGLE_API_KEY`. Les fournisseurs, connexions OAuth, notifications et services multimédias ajoutent leurs propres variables. Consulter [RAILWAY_DEPLOY.md](../RAILWAY_DEPLOY.md) et le code du module concerné.
+Pour démarrer le service, les variables centrales sont `SUPABASE_URL`, `SUPABASE_SECRET`, `GROQ_API_KEY` et `GOOGLE_API_KEY`. Les fournisseurs, connexions OAuth, notifications et services multimédias ajoutent leurs propres variables. Consulter [RAILWAY_DEPLOY.md](./deployment/RAILWAY_DEPLOY.md) et le code du module concerné.
 
 ## Démarrer l’API
 

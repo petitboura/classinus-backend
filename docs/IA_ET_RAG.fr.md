@@ -19,7 +19,7 @@ Variables de base relevées dans le dépôt :
 - `GROQ_API_KEY`
 - `GOOGLE_API_KEY`
 
-Les fournisseurs supplémentaires utilisent leurs propres variables. Voir [RAILWAY_DEPLOY.md](../RAILWAY_DEPLOY.md) pour la liste opérationnelle recensée.
+Les fournisseurs supplémentaires utilisent leurs propres variables. Voir [RAILWAY_DEPLOY.md](./deployment/RAILWAY_DEPLOY.md) pour la liste opérationnelle recensée.
 
 ## Outils
 

@@ -69,9 +69,12 @@ Le fonctionnement de base dépend notamment de :
 | `GROQ_API_KEY` | fournisseur IA utilisé par le chemin principal du chat |
 | `GOOGLE_API_KEY` | Gemini et vectorisation des contenus |
 
-D’autres variables activent des fournisseurs, connecteurs, notifications et services spécialisés. La liste opérationnelle est tenue dans [RAILWAY_DEPLOY.md](RAILWAY_DEPLOY.md). Ne jamais publier de valeurs secrètes dans ce dépôt.
+D’autres variables activent des fournisseurs, connecteurs, notifications et services spécialisés. La liste opérationnelle est tenue dans [docs/deployment/RAILWAY_DEPLOY.md](docs/deployment/RAILWAY_DEPLOY.md). Ne jamais publier de valeurs secrètes dans ce dépôt.
 
 ## Documentation
+
+Index complet : [English](docs/README.md) · [Français](docs/README.fr.md).
+
 
 | Guide | Contenu |
 |---|---|

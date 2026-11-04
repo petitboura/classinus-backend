@@ -24,7 +24,7 @@ Verify paths, transports, and security settings in `api/main.py` and the `core/s
 
 The public `/mcp/public` and `/mcp/espace` servers rely on Supabase OAuth as described in `core/mcp_auth_public.py`. The token presented by an external client is verified before its calls are associated with an account.
 
-Public configuration uses, among other values, `URL_RESOURCE_SERVER_PUBLIC` and the OAuth callback URL. Enabling OAuth 2.1 / Dynamic Client Registration in Supabase is an operational prerequisite separate from the code. Check [`RAILWAY_DEPLOY.md`](../RAILWAY_DEPLOY.md) and the Supabase dashboard before activating a new instance.
+Public configuration uses, among other values, `URL_RESOURCE_SERVER_PUBLIC` and the OAuth callback URL. Enabling OAuth 2.1 / Dynamic Client Registration in Supabase is an operational prerequisite separate from the code. Check [`RAILWAY_DEPLOY.md`](./deployment/RAILWAY_DEPLOY.md) and the Supabase dashboard before activating a new instance.
 
 ## Account connectors
 

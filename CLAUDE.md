@@ -40,3 +40,9 @@ Bourama's decision from 4 November 2026. This rule is mandatory: apply it every 
 - **Always translated.** Every document exists in English (default, `.md`) and French (`.fr.md`), with the language switch line at the top of both. Update both versions together, never only one.
 - Only `README`, `CLAUDE`, and their `.fr.md` versions stay at the root.
 - Never write a secret, token, or password in documentation.
+
+
+### Operational documentation that must remain beside its source
+
+- Do not move `skills_plateforme/<slug>/SKILL.md` or `SKILL.fr.md`. The synchronization script `scripts/synchroniser_skills_plateforme.py` reads skills from that exact directory structure to publish runtime instructions.
+- Do not move `LISEZ_MOI_NE_JAMAIS_REUTILISER.md` or its French companion out of `_desactive_programme/` and `_desactive_roles_hierarchie/`. These are safety markers placed next to disabled code and must remain there.

@@ -154,4 +154,4 @@ Run the tests related to the changed feature, followed by the relevant regressio
 - [Data and security](DONNEES_ET_SECURITE.md)
 - [Local development](DEVELOPPEMENT.md)
 - [Deployment](DEPLOIEMENT.md)
-- [Railway checklist](../RAILWAY_DEPLOY.md)
+- [Railway checklist](./deployment/RAILWAY_DEPLOY.md)

@@ -13,7 +13,7 @@ The production configuration documented in this repository uses Railway and Rail
 - `requirements.txt` contains the Python dependencies.
 - `api/main.py` is the FastAPI entry point.
 
-The operational checklist and environment-variable list are maintained in [`RAILWAY_DEPLOY.md`](../RAILWAY_DEPLOY.md). Consult it before changing a service or its configuration, then compare it with the Railway dashboard. This file records configuration observed at a particular time; it is not live access to the infrastructure.
+The operational checklist and environment-variable list are maintained in [`RAILWAY_DEPLOY.md`](./deployment/RAILWAY_DEPLOY.md). Consult it before changing a service or its configuration, then compare it with the Railway dashboard. This file records configuration observed at a particular time; it is not live access to the infrastructure.
 
 ## Separate video montage service
 

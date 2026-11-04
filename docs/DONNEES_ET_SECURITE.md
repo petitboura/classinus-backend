@@ -32,7 +32,7 @@ The use of a privileged server role is not a reason to remove application-level 
 
 ## Secrets and configuration
 
-AI provider, OAuth, push-notification, and storage secrets are configured in the backend runtime environment. The names and uses found in the repository are tracked in [`RAILWAY_DEPLOY.md`](../RAILWAY_DEPLOY.md).
+AI provider, OAuth, push-notification, and storage secrets are configured in the backend runtime environment. The names and uses found in the repository are tracked in [`RAILWAY_DEPLOY.md`](./deployment/RAILWAY_DEPLOY.md).
 
 Never commit real secrets, put a private key in a frontend `NEXT_PUBLIC_*` variable, return a stored integration token to the client, accept a client-provided `user_id` as proof of identity, or expose data belonging to another account.
 

@@ -19,7 +19,7 @@ Core variables found in the repository:
 - `GROQ_API_KEY`
 - `GOOGLE_API_KEY`
 
-Additional providers use their own variables. See [`RAILWAY_DEPLOY.md`](../RAILWAY_DEPLOY.md) for the current operational list.
+Additional providers use their own variables. See [`RAILWAY_DEPLOY.md`](./deployment/RAILWAY_DEPLOY.md) for the current operational list.
 
 ## Tools
 

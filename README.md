@@ -71,9 +71,12 @@ The basic service relies in particular on:
 | `GROQ_API_KEY` | AI provider used by the main chat path |
 | `GOOGLE_API_KEY` | Gemini and content embeddings |
 
-Additional variables enable providers, connectors, notifications, and specialized services. The operational list is maintained in [RAILWAY_DEPLOY.md](RAILWAY_DEPLOY.md). Never publish secret values in this repository.
+Additional variables enable providers, connectors, notifications, and specialized services. The operational list is maintained in [docs/deployment/RAILWAY_DEPLOY.md](docs/deployment/RAILWAY_DEPLOY.md). Never publish secret values in this repository.
 
 ## Documentation
+
+Full documentation index: [English](docs/README.md) · [Français](docs/README.fr.md).
+
 
 | Guide | What it covers |
 |---|---|
@@ -85,7 +88,7 @@ Additional variables enable providers, connectors, notifications, and specialize
 | [Development](docs/DEVELOPPEMENT.md) · [Français](docs/DEVELOPPEMENT.fr.md) | Local environment, commands, and tests |
 | [Deployment](docs/DEPLOIEMENT.md) · [Français](docs/DEPLOIEMENT.fr.md) | Railpack, Railway, and related services |
 | [Technical code map](docs/CARTOGRAPHIE_TECHNIQUE.md) · [Français](docs/CARTOGRAPHIE_TECHNIQUE.fr.md) | Where to find code by feature |
-| [Railway deployment checklist](RAILWAY_DEPLOY.md) · [Français](RAILWAY_DEPLOY.fr.md) | Environment variables and operational setup |
+| [Railway deployment checklist](docs/deployment/RAILWAY_DEPLOY.md) · [Français](docs/deployment/RAILWAY_DEPLOY.fr.md) | Environment variables and operational setup |
 
 ## Related repositories
 

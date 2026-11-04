@@ -24,7 +24,7 @@ Les chemins, transports et paramètres de sécurité doivent être vérifiés da
 
 Les serveurs publics `/mcp/public` et `/mcp/espace` s’appuient sur le mécanisme OAuth de Supabase décrit dans `core/mcp_auth_public.py`. Le jeton présenté par le client externe est vérifié avant d’associer les appels à un compte.
 
-La configuration publique utilise notamment `URL_RESOURCE_SERVER_PUBLIC` et l’URL de retour OAuth. Les réglages OAuth 2.1 / Dynamic Client Registration dans Supabase sont des prérequis opérationnels distincts du code. Vérifier [RAILWAY_DEPLOY.md](../RAILWAY_DEPLOY.md) et le tableau de bord Supabase avant d’activer une nouvelle instance.
+La configuration publique utilise notamment `URL_RESOURCE_SERVER_PUBLIC` et l’URL de retour OAuth. Les réglages OAuth 2.1 / Dynamic Client Registration dans Supabase sont des prérequis opérationnels distincts du code. Vérifier [RAILWAY_DEPLOY.md](./deployment/RAILWAY_DEPLOY.md) et le tableau de bord Supabase avant d’activer une nouvelle instance.
 
 ## Connecteurs de comptes
 
