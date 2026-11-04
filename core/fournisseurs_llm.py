@@ -553,6 +553,17 @@ def _lire_config_modeles_supabase():
     except Exception as e:
         logging.warning(f"Colonne vultr_seul absente ou illisible (migration a appliquer) : {e}")
 
+    # Modeles Bientot un par un (04/11/2026, demande de Bourama) : DeepSeek Pro et Muse Spark Open
+    # restent Bientot meme si leur fournisseur est ouvert. Colonne lue a part, comme les autres :
+    # une migration pas encore appliquee ne casse rien (aucun modele Bientot un par un).
+    bientot_par_modele = set()
+    try:
+        for ligne in client.table("modeles_llm").select("distributeur, palier, bientot").execute().data or []:
+            if ligne.get("bientot"):
+                bientot_par_modele.add((ligne["distributeur"], ligne["palier"]))
+    except Exception as e:
+        logging.warning(f"Colonne bientot de modeles_llm absente ou illisible (migration a appliquer) : {e}")
+
     fournisseurs = {}
     for ligne in lignes_fournisseurs:
         fournisseurs[ligne["distributeur"]] = {
@@ -582,6 +593,8 @@ def _lire_config_modeles_supabase():
             entree_modele["baseten_seul"] = True
         if (ligne["distributeur"], ligne["palier"]) in vultr_seul_par_modele and identifiant_vultr:
             entree_modele["vultr_seul"] = True
+        if (ligne["distributeur"], ligne["palier"]) in bientot_par_modele:
+            entree_modele["bientot"] = True
         modeles.setdefault(ligne["distributeur"], {})[ligne["palier"]] = entree_modele
         niveau = ligne["niveau"]
         niveaux[ligne["palier"]] = min(niveau, niveaux.get(ligne["palier"], niveau))
@@ -690,6 +703,10 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque, email
             info = config["modeles"].get(distributeur, {}).get(palier)
             if not info:
                 continue
+            # Modele Bientot un par un (04/11/2026) : ferme a tout le monde, sauf aux adresses de
+            # la table acces_anticipe_modeles pour ce fournisseur (ceux qui voient tout).
+            if info.get("bientot") and not _a_acces_anticipe(config, distributeur, email):
+                continue
             if info.get("baseten_seul"):
                 # Modele servi seulement par Baseten (Muse Spark Open, 30/10/2026) : ouvert a
                 # tout le monde malgre le Bientot de Meta, mais seulement si la cle Baseten existe.
@@ -751,12 +768,15 @@ def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque, email=Non
     ids_a_exclure = {m["modele_id"] for m in disponibles}
     resultats = []
     for distributeur in config["distributeurs"]:
-        if not config["fournisseurs"][distributeur]["bientot"]:
-            continue
+        fournisseur_bientot = config["fournisseurs"][distributeur]["bientot"]
         modeles_du_distributeur = []
         for palier in config["paliers"]:
             info = config["modeles"].get(distributeur, {}).get(palier)
-            if not info or info["id"] in ids_a_exclure or info.get("baseten_seul") or info.get("vultr_seul"):
+            if not info or info["id"] in ids_a_exclure:
+                continue
+            # Bientot : un modele marque Bientot lui-meme (04/11/2026), ou tout modele d'un
+            # fournisseur Bientot sauf ceux servis seulement par Baseten ou Vultr (ouverts a tous).
+            if not (info.get("bientot") or (fournisseur_bientot and not info.get("baseten_seul") and not info.get("vultr_seul"))):
                 continue
             ids_a_exclure.add(info["id"])
             modeles_du_distributeur.append({
