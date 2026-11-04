@@ -1,88 +1,93 @@
-# Classinus — Backend
+# Classinus: Backend
 
-Le backend de **[Classinus](https://classinus.com)**. Ce dépôt expose l’API FastAPI utilisée par le frontend et héberge les moteurs IA, les outils, les traitements de documents et les services MCP de Classinus.
+[English version] · [Français](README.fr.md)
 
-Le frontend est maintenu séparément : [classinus-frontend](https://github.com/petitboura/classinus-frontend).
+The backend for **[Classinus](https://classinus.com)**. This repository exposes the FastAPI API used by the frontend and hosts Classinus AI engines, tools, document processing, and MCP services.
 
-## Responsabilités
+The frontend is maintained separately: [classinus-frontend](https://github.com/petitboura/classinus-frontend).
 
-- API et authentification pour l’application.
-- Conversations IA, sélection des fournisseurs et appels d’outils.
-- Recherche documentaire et RAG sur les contenus indexés et les bibliothèques.
-- Gestion des comptes, de l’historique, des fichiers, des notes, des comportements et des skills.
-- Connexions OAuth et intégrations de services externes.
-- Services MCP internes et serveurs MCP publics.
-- Fonctions multimédias, notifications, voix et canal en direct.
+[Français](README.fr.md)
 
-## Architecture technique
+## Responsibilities
 
-FastAPI · Python · Supabase (Auth, PostgreSQL et stockage) · MCP · fournisseurs IA · services de fichiers et de rendu.
+- Application API and authentication.
+- AI conversations, provider selection, and tool calls.
+- Document search and RAG over indexed content and libraries.
+- Account, history, file, notes, behavior, and skill management.
+- OAuth connections and integrations with external services.
+- Internal MCP services and public MCP servers.
+- Media features, notifications, voice, and the live channel.
 
-Le point d’entrée de l’API est `api/main.py`. Les routes HTTP sont organisées dans `api/`, tandis que la logique métier et les moteurs sont principalement dans `core/`.
+## Technical architecture
 
-## Démarrage local
+FastAPI · Python · Supabase (Auth, PostgreSQL, and storage) · MCP · AI providers · file and rendering services.
 
-Prérequis : Python, pip et un projet Supabase configuré pour l’environnement.
+The API entry point is `api/main.py`. HTTP routes are organized in `api/`, while business logic and engines are mainly in `core/`.
 
-Créer et activer un environnement virtuel :
+## Run locally
+
+Requirements: Python, pip, and a Supabase project configured for the target environment.
+
+Create and activate a virtual environment:
 
 ```bash
 python -m venv .venv
 ```
 
-Windows PowerShell :
+Windows PowerShell:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
-macOS / Linux :
+macOS / Linux:
 
 ```bash
 source .venv/bin/activate
 ```
 
-Installer les dépendances :
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Configurer les variables d’environnement nécessaires, puis démarrer l’API :
+Configure the required environment variables, then start the API:
 
 ```bash
 uvicorn api.main:app --reload --port 8000
 ```
 
-Contrôle de santé : [http://localhost:8000/health](http://localhost:8000/health).
+Health check: [http://localhost:8000/health](http://localhost:8000/health).
 
 ## Configuration
 
-Le fonctionnement de base dépend notamment de :
+The basic service relies in particular on:
 
-| Variable | Rôle |
+| Variable | Purpose |
 |---|---|
-| `SUPABASE_URL` | URL du projet Supabase |
-| `SUPABASE_SECRET` | secret serveur Supabase, à garder côté backend uniquement |
-| `GROQ_API_KEY` | fournisseur IA utilisé par le chemin principal du chat |
-| `GOOGLE_API_KEY` | Gemini et vectorisation des contenus |
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_SECRET` | Supabase server secret; keep it on the backend only |
+| `GROQ_API_KEY` | AI provider used by the main chat path |
+| `GOOGLE_API_KEY` | Gemini and content embeddings |
 
-D’autres variables activent des fournisseurs, connecteurs, notifications et services spécialisés. La liste opérationnelle est tenue dans [RAILWAY_DEPLOY.md](RAILWAY_DEPLOY.md). Ne jamais publier de valeurs secrètes dans ce dépôt.
+Additional variables enable providers, connectors, notifications, and specialized services. The operational list is maintained in [RAILWAY_DEPLOY.md](RAILWAY_DEPLOY.md). Never publish secret values in this repository.
 
 ## Documentation
 
-| Guide | Contenu |
+| Guide | What it covers |
 |---|---|
-| [Architecture](docs/ARCHITECTURE.md) | organisation de l’API, des moteurs et des services |
-| [API](docs/API.md) | domaines fonctionnels et routes |
-| [IA et RAG](docs/IA_ET_RAG.md) | fournisseurs, orchestration, embeddings et recherche documentaire |
-| [MCP et connecteurs](docs/MCP_ET_CONNECTEURS.md) | serveurs MCP, OAuth et intégrations |
-| [Données et sécurité](docs/DONNEES_ET_SECURITE.md) | Supabase, migrations, authentification et secrets |
-| [Développement](docs/DEVELOPPEMENT.md) | environnement local, commandes et tests |
-| [Déploiement](docs/DEPLOIEMENT.md) | Railpack, Railway et services associés |
-| [Cartographie technique](docs/CARTOGRAPHIE_TECHNIQUE.md) | inventaire transféré de l’ancien README, référence datée |
+| [Architecture](docs/ARCHITECTURE.md) · [Français](docs/ARCHITECTURE.fr.md) | API, engines, and service organization |
+| [API](docs/API.md) · [Français](docs/API.fr.md) | Functional domains and routes |
+| [AI and RAG](docs/IA_ET_RAG.md) · [Français](docs/IA_ET_RAG.fr.md) | Providers, orchestration, embeddings, and document search |
+| [MCP and connectors](docs/MCP_ET_CONNECTEURS.md) · [Français](docs/MCP_ET_CONNECTEURS.fr.md) | MCP servers, OAuth, and integrations |
+| [Data and security](docs/DONNEES_ET_SECURITE.md) · [Français](docs/DONNEES_ET_SECURITE.fr.md) | Supabase, migrations, authentication, and secrets |
+| [Development](docs/DEVELOPPEMENT.md) · [Français](docs/DEVELOPPEMENT.fr.md) | Local environment, commands, and tests |
+| [Deployment](docs/DEPLOIEMENT.md) · [Français](docs/DEPLOIEMENT.fr.md) | Railpack, Railway, and related services |
+| [Technical code map](docs/CARTOGRAPHIE_TECHNIQUE.md) · [Français](docs/CARTOGRAPHIE_TECHNIQUE.fr.md) | Where to find code by feature |
+| [Railway deployment checklist](RAILWAY_DEPLOY.md) · [Français](RAILWAY_DEPLOY.fr.md) | Environment variables and operational setup |
 
-## Dépôts liés
+## Related repositories
 
-- **Frontend :** [petitboura/classinus-frontend](https://github.com/petitboura/classinus-frontend)
-- **Backend — ce dépôt :** [petitboura/classinus-backend](https://github.com/petitboura/classinus-backend)
+- **Frontend:** [petitboura/classinus-frontend](https://github.com/petitboura/classinus-frontend)
+- **Backend, this repository:** [petitboura/classinus-backend](https://github.com/petitboura/classinus-backend)

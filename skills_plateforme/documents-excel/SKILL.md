@@ -1,44 +1,52 @@
 ---
-name: "Documents Excel"
-description: "Méthode officielle Classinus pour créer ou modifier un classeur Excel (.xlsx) : plusieurs feuilles, formules vivantes, formats de nombres et de dates, mise en forme, graphiques. À lire avant de produire un fichier .xlsx."
+name: "Excel Documents"
+description: "Official Classinus method for creating or editing an Excel workbook (.xlsx): multiple sheets, live formulas, number and date formats, formatting, and charts. Read before producing an .xlsx file."
 ---
 
-# Classeurs Excel (.xlsx)
+# Excel workbooks (.xlsx)
 
-À utiliser quand l'utilisateur veut un classeur Excel, à créer ou à modifier. Pour un petit tableau à lire dans le chat, ne fabrique pas de fichier.
+Use this skill when the user wants an Excel workbook created or modified. For a small table that can be read directly in chat, do not create a file.
 
-## 1. Préparer le bac à sable
+[English version] · [Français](SKILL.fr.md)
 
-Travaille avec l'outil gerer_execution_code.
+## 1. Prepare the sandbox
 
-1. Vérifie la bibliothèque : `python -c "import openpyxl; print(openpyxl.__version__)"`.
-2. Si elle manque : `pip install openpyxl`. Si l'installation échoue faute de réseau, appelle l'action network, puis demander_acces_reseau pour pypi.org si besoin. Si pip refuse à cause d'un environnement géré, crée un environnement virtuel : `python -m venv /home/user/venv` puis `/home/user/venv/bin/pip install openpyxl`.
-3. Si rien ne marche, dis-le et propose l'outil simple generer_document_excel (une seule feuille, sans formules).
+Use the `gerer_execution_code` tool.
 
-Limites : une commande dure 60 secondes au plus, run_command accepte 10000 caractères, un fichier ou un script ne dépasse pas 1 Mo. Pour beaucoup de lignes, écris les données dans un fichier (write_file) et garde un script court qui les lit.
+1. Check the library: `python -c "import openpyxl; print(openpyxl.__version__)"`.
+2. If it is missing: `pip install openpyxl`. If installation fails because there is no network, call the network action, then use `demander_acces_reseau` for `pypi.org` if needed. If pip refuses because the environment is managed, create a virtual environment: `python -m venv /home/user/venv`, then `/home/user/venv/bin/pip install openpyxl`.
+3. If nothing works, explain that and offer the simple `generer_document_excel` tool (one sheet, no formulas).
 
-## 2. Construire le classeur
+Limits: each command may run for at most 60 seconds; `run_command` accepts up to 10,000 characters; a file or script must not exceed 1 MB. For large datasets, write the data to a file with `write_file` and keep the script that reads it short.
 
-- Une feuille par sujet, avec un nom clair de 31 caractères au plus, sans les caractères interdits `\ / ? * [ ] :`, tous différents.
-- Les chiffres sont de vrais nombres et les dates de vraies dates, jamais du texte. Un calcul se fait avec une formule : écris la formule dans la cellule, par exemple `ws["D10"] = "=SUM(D2:D9)"`, au lieu d'y mettre le résultat calculé en Python. Ainsi le classeur reste vivant quand l'utilisateur change une valeur.
-- Les formules sont écrites en anglais (SUM, IF, VLOOKUP, SUMIF) avec la virgule comme séparateur, quelle que soit la langue de l'utilisateur. Excel les traduit à l'ouverture.
-- Formats : `cell.number_format = "#,##0.00"` pour les montants, `"0.0%"` pour les pourcentages, `"DD/MM/YYYY"` pour les dates.
-- En-têtes en gras avec un fond de couleur, ligne figée (`ws.freeze_panes = "A2"`), filtres (`ws.auto_filter.ref = ws.dimensions`), largeur de colonne adaptée au contenu le plus long (avec un minimum et un maximum).
-- Les valeurs de départ (taux, hypothèses) vont dans des cellules dédiées, étiquetées, et les formules y renvoient. Jamais un nombre magique répété dans dix formules.
-- Graphiques avec `openpyxl.chart` (BarChart, LineChart, PieChart) et `Reference` sur les cellules, avec un titre et des titres d'axes.
-- Mise en forme conditionnelle et listes déroulantes (`DataValidation`) seulement quand elles servent.
-- Très gros volume (plusieurs dizaines de milliers de lignes) : `Workbook(write_only=True)`.
+## 2. Build the workbook
 
-## 3. Modifier un classeur existant
+- Use one sheet per topic. Sheet names must be distinct, clear, at most 31 characters, and must not contain the forbidden characters `\ / ? * [ ] :`.
+- Store numbers as actual numbers and dates as actual dates, never as text. Use formulas for calculations. For example, write `ws["D10"] = "=SUM(D2:D9)"` rather than calculating the result in Python. This keeps the workbook live when the user changes a value.
+- Write formulas in English (`SUM`, `IF`, `VLOOKUP`, `SUMIF`) with commas as separators, regardless of the user's language. Excel translates them when the workbook opens.
+- Formats: `cell.number_format = "#,##0.00"` for amounts, `"0.0%"` for percentages, and `"DD/MM/YYYY"` for dates.
+- Use bold headers with a background color, freeze the header row (`ws.freeze_panes = "A2"`), enable filters (`ws.auto_filter.ref = ws.dimensions`), and size columns for their longest content within sensible minimum and maximum widths.
+- Put starting values (rates, assumptions) in dedicated, labelled cells and refer to those cells in formulas. Never repeat a magic number across ten formulas.
+- Create charts with `openpyxl.chart` (`BarChart`, `LineChart`, `PieChart`) and `Reference` objects pointing to worksheet cells. Include a chart title and axis titles.
+- Use conditional formatting and dropdown lists (`DataValidation`) only when they are useful.
+- For very large datasets (tens of thousands of rows), use `Workbook(write_only=True)`.
 
-1. Copie le fichier joint dans le bac à sable avec importer_fichier (url_fichier : le lien réel indiqué après le fichier, jamais inventé).
-2. Ouvre-le avec `load_workbook(chemin)` pour le modifier. Pour seulement lire les valeurs calculées, utilise `load_workbook(chemin, data_only=True)` et n'enregistre JAMAIS ce classeur : il aurait perdu toutes ses formules.
-3. Enregistre sous un nouveau nom. L'original reste intact.
+## 3. Modify an existing workbook
 
-## 4. Vérifier avant de livrer
+1. Copy the attached file into the sandbox with `importer_fichier` (use the real `url_fichier` link shown after the attachment; never invent one).
+2. Open it with `load_workbook(path)` to modify it. If you only need to read calculated values, use `load_workbook(path, data_only=True)` and NEVER save that workbook: doing so would remove its formulas.
+3. Save under a new name. Leave the original unchanged.
 
-openpyxl n'évalue pas les formules et il n'y a pas de tableur dans ce bac à sable : tu ne peux pas voir les résultats. Vérifie donc par la structure : rouvre le fichier, liste les feuilles, les dimensions, et contrôle que chaque formule pointe vers des plages qui existent et qui sont bien remplies. Évite les erreurs classiques : division par zéro non protégée (`=IF(B2=0,0,A2/B2)`), plage décalée, référence à une feuille renommée. Dis honnêtement à l'utilisateur que les valeurs se calculent à l'ouverture dans Excel.
+## 4. Verify before delivery
 
-## 5. Livrer
+openpyxl does not calculate formulas, and there is no spreadsheet application in this sandbox, so you cannot see the calculated results here.
 
-Utilise l'action download_files avec path vers ce seul fichier. Si le fichier dépasse la limite de taille de téléchargement, dis-le. Termine par une phrase : les feuilles, ce que contient chacune et les hypothèses que tu as posées.
+Verify the workbook structurally: reopen it, list the sheets and their dimensions, and check that each formula refers to existing, populated ranges. Avoid common errors such as unguarded division by zero (`=IF(B2=0,0,A2/B2)`), shifted ranges, or references to renamed sheets.
+
+Be transparent with the user: values will be calculated when the file is opened in Excel.
+
+## 5. Deliver
+
+Use the `download_files` action with the path to this file only. If the file exceeds the download size limit, say so.
+
+Finish with one sentence describing the sheets, what each contains, and the assumptions you made.

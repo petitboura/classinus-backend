@@ -1,49 +1,53 @@
-# Architecture du backend
+# Backend architecture
 
-## Rôle du service
+[English version] · [Français](ARCHITECTURE.fr.md)
 
-Le dépôt contient le backend de Classinus : une API FastAPI, les moteurs IA et les services applicatifs. Le frontend Web et les applications installées sont maintenus dans [classinus-frontend](https://github.com/petitboura/classinus-frontend).
+[English version] · [Français](ARCHITECTURE.fr.md)
 
-## Vue d’ensemble
+## Service role
+
+This repository contains the Classinus backend: a FastAPI API, AI engines, and application services. The web frontend and installed applications are maintained in [classinus-frontend](https://github.com/petitboura/classinus-frontend).
+
+## Overview
 
 ```mermaid
 flowchart TD
-    F[Frontend Web / mobile / Windows] -->|HTTPS, API et flux de conversation| A[FastAPI — api/main.py]
-    A --> AU[Authentification Supabase]
-    A --> C[Services core]
-    C --> L[Modèles et fournisseurs IA]
-    C --> R[Recherche documentaire / RAG]
-    C --> M[Outils et serveurs MCP]
-    C --> P[Traitements fichiers et multimédia]
+    F[Frontend: web / mobile / Windows] -->|HTTPS, API and conversation stream| A[FastAPI: api/main.py]
+    A --> AU[Supabase authentication]
+    A --> C[Core services]
+    C --> L[Models and AI providers]
+    C --> R[Document search / RAG]
+    C --> M[Tools and MCP servers]
+    C --> P[File and media processing]
     A --> DB[(Supabase)]
-    M --> X[Services externes]
+    M --> X[External services]
 ```
 
-## Organisation du dépôt
+## Repository structure
 
-| Chemin | Responsabilité |
+| Path | Responsibility |
 |---|---|
-| `api/` | routes HTTP, dépendances d’authentification et assemblage de l’application |
-| `core/` | orchestration du chat, logique métier, modèles, outils, RAG et services internes |
-| `connexions/` | intégrations et flux de connexion de services tiers |
-| `indexers/` | indexation de documents et de contenus |
-| `migrations/` | migrations SQL à appliquer à Supabase |
-| `scripts/` | tâches opératoires, synchronisations et vérifications |
-| `skills_plateforme/` | skills officiels fournis par Classinus |
-| `tests/` et `test_*.py` | tests unitaires, d’intégration et de non-régression |
+| `api/` | HTTP routes, authentication dependencies, and application assembly |
+| `core/` | chat orchestration, business logic, models, tools, RAG, and internal services |
+| `connexions/` | integrations and connection flows for third-party services |
+| `indexers/` | document and content indexing |
+| `migrations/` | SQL migrations to apply to Supabase |
+| `scripts/` | operational tasks, synchronization, and verification |
+| `skills_plateforme/` | official skills provided by Classinus |
+| `tests/` and `test_*.py` | unit, integration, and regression tests |
 
-## Cycle d’une requête de chat
+## Chat request lifecycle
 
-1. Le frontend envoie la requête à l’API.
-2. Les dépendances d’authentification valident l’utilisateur.
-3. La couche de chat prépare le contexte et le prompt.
-4. Le moteur choisit le chemin de génération et, selon le cas, les outils autorisés.
-5. Les résultats sont transmis au frontend et l’échange est persisté.
+1. The frontend sends the request to the API.
+2. Authentication dependencies validate the user.
+3. The chat layer prepares the context and prompt.
+4. The engine selects the generation path and, when applicable, the authorized tools.
+5. Results are sent to the frontend and the exchange is persisted.
 
-Le backend comporte aussi des tâches de fond et des services spécialisés qui ne sont pas exécutés directement dans chaque requête.
+The backend also runs background tasks and specialized services that are not executed directly within every request.
 
-## Données et services
+## Data and services
 
-Supabase fournit l’authentification, la base PostgreSQL et les espaces de stockage employés par le projet. Les opérations privilégiées utilisent les identifiants serveur du backend. Les moteurs de fichiers, de génération et les connecteurs s’appuient sur des fournisseurs externes configurés par variables d’environnement.
+Supabase provides authentication, the PostgreSQL database, and the storage services used by the project. Privileged operations use backend server credentials. File, generation, and connector engines rely on external providers configured through environment variables.
 
-Voir [Données et sécurité](DONNEES_ET_SECURITE.md), [IA et RAG](IA_ET_RAG.md) et [MCP et connecteurs](MCP_ET_CONNECTEURS.md) pour les détails.
+See [Data and security](DONNEES_ET_SECURITE.md), [AI and RAG](IA_ET_RAG.md), and [MCP and connectors](MCP_ET_CONNECTEURS.md) for details.

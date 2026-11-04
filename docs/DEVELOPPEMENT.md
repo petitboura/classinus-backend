@@ -1,61 +1,65 @@
-# Développement du backend
+# Backend development
 
-## Prérequis
+[English version] · [Français](DEVELOPPEMENT.fr.md)
 
-- Python et pip.
-- Un projet Supabase dédié à l’environnement de travail.
-- Les clés des services nécessaires à la fonctionnalité testée.
+[English version] · [Français](DEVELOPPEMENT.fr.md)
 
-## Installer les dépendances
+## Prerequisites
+
+- Python and pip.
+- A Supabase project dedicated to the development environment.
+- Credentials for the services required by the feature being tested.
+
+## Install dependencies
 
 ```bash
 python -m venv .venv
 ```
 
-Windows PowerShell :
+Windows PowerShell:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
-macOS / Linux :
+macOS / Linux:
 
 ```bash
 source .venv/bin/activate
 ```
 
-Installer les dépendances :
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Variables d’environnement
+## Environment variables
 
-Le dépôt n’utilise pas un fichier d’exemple unique pour toutes les intégrations. Configurer les valeurs dans l’environnement local, sans les committer.
+The repository does not use one shared example file for every integration. Configure values in the local environment and never commit them.
 
-Pour démarrer le service, les variables centrales sont `SUPABASE_URL`, `SUPABASE_SECRET`, `GROQ_API_KEY` et `GOOGLE_API_KEY`. Les fournisseurs, connexions OAuth, notifications et services multimédias ajoutent leurs propres variables. Consulter [RAILWAY_DEPLOY.md](../RAILWAY_DEPLOY.md) et le code du module concerné.
+The core variables for starting the service are `SUPABASE_URL`, `SUPABASE_SECRET`, `GROQ_API_KEY`, and `GOOGLE_API_KEY`. Providers, OAuth connections, notifications, and media services require additional variables. See [`RAILWAY_DEPLOY.md`](../RAILWAY_DEPLOY.md) and the relevant module's code.
 
-## Démarrer l’API
+## Start the API
 
 ```bash
 uvicorn api.main:app --reload --port 8000
 ```
 
-Vérifier [http://localhost:8000/health](http://localhost:8000/health).
+Check [http://localhost:8000/health](http://localhost:8000/health).
 
-## Tests et vérifications
+## Tests and checks
 
-Les tests sont répartis entre `tests/` et les fichiers `test_*.py` à la racine. Exécuter le test correspondant au domaine modifié, puis les tests de non-régression pertinents.
+Tests are split between `tests/` and root-level `test_*.py` files. Run the test for the changed domain, followed by relevant regression tests.
 
-La préparation avant déploiement dispose d’un script dédié :
+A dedicated pre-deployment script is available:
 
 ```bash
 python scripts/predeploiement.py
 ```
 
-Ce script effectue les opérations de pré-déploiement qui lui sont configurées, dont la synchronisation des skills officiels et une vérification Gemini Live. Il ne remplace pas les tests complets ni la validation des migrations.
+This script performs configured pre-deployment operations, including official-skill synchronization and a Gemini Live check. It does not replace the full test suite or migration validation.
 
-## Modifier le schéma
+## Change the schema
 
-Les changements PostgreSQL doivent être décrits dans un fichier SQL versionné sous `migrations/`. Appliquer la migration sur l’environnement ciblé, puis vérifier le comportement des routes et des règles RLS avant de déployer le code qui en dépend.
+PostgreSQL changes must be described in a versioned SQL file under `migrations/`. Apply the migration to the target environment, then verify route behavior and RLS policies before deploying code that depends on the change.

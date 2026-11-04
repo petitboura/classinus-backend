@@ -1,31 +1,35 @@
-# Déploiement du backend
+# Backend deployment
 
-## Déploiement de l’API
+[English version] · [Français](DEPLOIEMENT.fr.md)
 
-La configuration de production documentée dans ce dépôt utilise Railway et Railpack :
+[English version] · [Français](DEPLOIEMENT.fr.md)
 
-- `Procfile` définit la commande Uvicorn de l’API.
-- `railpack.json` décrit les paquets système nécessaires.
-- `requirements.txt` contient les dépendances Python.
-- `api/main.py` est le point d’entrée FastAPI.
+## API deployment
 
-La checklist opérationnelle et la liste des variables sont maintenues dans [`RAILWAY_DEPLOY.md`](../RAILWAY_DEPLOY.md). La consulter avant chaque changement de service ou de configuration, puis comparer avec le tableau de bord Railway : ce document décrit une configuration relevée à une date donnée, pas un accès live à l’infrastructure.
+The production configuration documented in this repository uses Railway and Railpack:
 
-## Service de montage vidéo
+- `Procfile` defines the Uvicorn command for the API.
+- `railpack.json` describes the required system packages.
+- `requirements.txt` contains the Python dependencies.
+- `api/main.py` is the FastAPI entry point.
 
-Le dépôt contient aussi `api/main_montage.py` et `Dockerfile.montage` pour le service de montage séparé. Le backend principal peut lui déléguer le montage lorsque `MONTAGE_VIDEO_URL` est configurée. Les paramètres dédiés et variables de ce service sont décrits dans `RAILWAY_DEPLOY.md`.
+The operational checklist and environment-variable list are maintained in [`RAILWAY_DEPLOY.md`](../RAILWAY_DEPLOY.md). Consult it before changing a service or its configuration, then compare it with the Railway dashboard. This file records configuration observed at a particular time; it is not live access to the infrastructure.
 
-## Docker et environnements de test
+## Separate video montage service
 
-Le `Dockerfile` racine décrit une construction Docker distincte de la construction Railpack. Ses commentaires indiquent notamment son emploi pour des builds Docker et des environnements de test. Ne pas supposer qu’un fichier Docker est utilisé par le déploiement Railway principal : vérifier le réglage de construction du service concerné.
+The repository also contains `api/main_montage.py` and `Dockerfile.montage` for the separate montage service. The main backend can delegate montage work to it when `MONTAGE_VIDEO_URL` is configured. The service-specific settings and variables are described in `RAILWAY_DEPLOY.md`.
 
-## Checklist avant déploiement
+## Docker and test environments
 
-1. Vérifier la branche et le commit à déployer.
-2. Vérifier les variables de l’environnement ciblé, sans recopier de secrets dans Git.
-3. Appliquer les migrations Supabase requises avant d’activer le code correspondant.
-4. Vérifier les services externes et les URLs OAuth de retour.
-5. Contrôler le build, les logs de démarrage et `/health`.
-6. Tester les fonctionnalités sensibles sur l’environnement de destination.
+The root `Dockerfile` describes a Docker build separate from the Railpack build. Its comments note its use for Docker builds and test environments. Do not assume that the main Railway production deployment uses this Dockerfile; verify the build configuration of the actual service.
 
-Un retour arrière du code ne restaure pas automatiquement la base de données. Vérifier séparément la compatibilité des migrations.
+## Pre-deployment checklist
+
+1. Verify the branch and commit to deploy.
+2. Verify the environment variables for the target environment. Do not copy secrets into Git.
+3. Apply the required Supabase migrations before enabling the related code.
+4. Verify external services and OAuth callback URLs.
+5. Check the build, startup logs, and `/health`.
+6. Test sensitive features in the destination environment.
+
+Rolling back the code does not automatically restore the database. Check migration compatibility separately.

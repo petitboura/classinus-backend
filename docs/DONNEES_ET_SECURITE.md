@@ -1,39 +1,41 @@
-# Données et sécurité
+# Data and security
+
+[English version] · [Français](DONNEES_ET_SECURITE.fr.md)
 
 ## Supabase
 
-Le backend utilise Supabase pour l’authentification, PostgreSQL et les stockages associés. Les variables serveur centrales sont `SUPABASE_URL` et `SUPABASE_SECRET`.
+The backend uses Supabase for authentication, PostgreSQL, and associated storage. The core server variables are `SUPABASE_URL` and `SUPABASE_SECRET`.
 
-`SUPABASE_SECRET` est une valeur privilégiée : elle ne doit jamais être exposée au navigateur, enregistrée dans le dépôt ou incluse dans une application mobile/desktop.
+`SUPABASE_SECRET` is a privileged credential. It must never be exposed to the browser, committed to the repository, or included in a mobile or desktop application.
 
-Le frontend utilise une clé publique anon séparée. Une clé publique n’est pas un substitut à l’authentification ni aux règles d’accès en base.
+The frontend uses a separate public anon key. A public key is not a replacement for authentication or database access policies.
 
-## Authentification
+## Authentication
 
-Les routes protégées utilisent les dépendances d’authentification du backend, notamment `api/auth.py`. L’identité d’un utilisateur doit être déduite du jeton validé, pas d’un identifiant libre fourni dans le corps de la requête.
+Protected routes use backend authentication dependencies, especially those in `api/auth.py`. A user's identity must be derived from the validated token, not from an arbitrary ID supplied in the request body.
 
-Les serveurs MCP publics ont leur propre vérification de jeton et leur configuration OAuth, décrites dans [MCP et connecteurs](MCP_ET_CONNECTEURS.md).
+Public MCP servers have their own token verification and OAuth configuration, documented in [MCP and connectors](MCP_ET_CONNECTEURS.md).
 
-## RLS et séparation des données
+## RLS and data isolation
 
-Les politiques Row Level Security (RLS), les contraintes et les fonctions SQL font partie intégrante de la sécurité des données. Elles sont définies ou modifiées par les fichiers de `migrations/`.
+Row Level Security (RLS) policies, constraints, and SQL functions are an integral part of data security. They are defined or modified by files in `migrations/`.
 
-Avant de modifier une table ou une fonction :
+Before changing a table or function:
 
-1. Lire les migrations existantes qui la concernent.
-2. Vérifier les politiques RLS, les clés étrangères, les contraintes et les fonctions RPC.
-3. Ajouter une migration versionnée et réexécutable lorsque c’est possible.
-4. Tester avec un utilisateur autorisé et un autre utilisateur qui ne doit pas accéder aux données.
-5. Appliquer la migration sur l’environnement correspondant avant le déploiement qui en dépend.
+1. Read the existing migrations related to it.
+2. Verify RLS policies, foreign keys, constraints, and RPC functions.
+3. Add a versioned, repeatable migration whenever possible.
+4. Test with an authorized user and with another user who must not have access.
+5. Apply the migration to the relevant environment before deploying code that depends on it.
 
-Le rôle serveur privilégié ne justifie pas de supprimer les contrôles d’accès applicatifs.
+The use of a privileged server role is not a reason to remove application-level access controls.
 
-## Secrets et configuration
+## Secrets and configuration
 
-Les secrets de fournisseurs IA, OAuth, push et stockage sont configurés dans l’environnement d’exécution backend. Les noms et usages recensés sont maintenus dans [RAILWAY_DEPLOY.md](../RAILWAY_DEPLOY.md).
+AI provider, OAuth, push-notification, and storage secrets are configured in the backend runtime environment. The names and uses found in the repository are tracked in [`RAILWAY_DEPLOY.md`](../RAILWAY_DEPLOY.md).
 
-Ne jamais committer des secrets réels, envoyer une clé privée dans une variable frontend `NEXT_PUBLIC_*`, retourner un jeton d’intégration au client après l’avoir stocké, accepter un `user_id` client comme preuve d’identité ou exposer des données d’un autre compte.
+Never commit real secrets, put a private key in a frontend `NEXT_PUBLIC_*` variable, return a stored integration token to the client, accept a client-provided `user_id` as proof of identity, or expose data belonging to another account.
 
-## Fichiers et stockage
+## Files and storage
 
-Les flux de fichiers utilisent plusieurs modules selon leur origine et leur destination, notamment les uploads, les bibliothèques, les fichiers R2 et les relais de fichiers externes. Vérifier les permissions de lecture/écriture et le propriétaire du fichier à chaque ajout de route ou d’outil.
+File flows use different modules depending on their source and destination, including uploads, libraries, R2 files, and external file relays. Verify read/write permissions and file ownership whenever adding a route or tool.

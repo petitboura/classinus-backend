@@ -1,153 +1,157 @@
-# Cartographie technique du backend
+# Backend technical code map
 
-Cette page est une carte de navigation du code. Elle regroupe les modules par responsabilité et indique où commencer selon le type de changement. Les listes exhaustives de fichiers et les notes chronologiques sont volontairement évitées.
+[English version] · [Français](CARTOGRAPHIE_TECHNIQUE.fr.md)
 
-## Trouver rapidement le bon endroit
+[English version] · [Français](CARTOGRAPHIE_TECHNIQUE.fr.md)
 
-| Besoin | Point de départ |
+This page is a navigation map of the codebase. It groups modules by responsibility and shows where to start for different kinds of changes. Exhaustive file lists and chronological notes are intentionally avoided.
+
+## Find the right place quickly
+
+| What you want to change | Start here |
 |---|---|
-| Route HTTP | **api/**, puis le routeur concerné |
-| Comportement du chat | **api/chat.py**, **core/main.py** |
-| Prompt et contexte | **core/construction_system_prompt.py**, **core/configuration.py** |
-| Fournisseur IA | **core/fournisseurs_llm.py**, **core/adaptateur_*.py** |
-| Outil disponible pour l’IA | **core/registre_outils.py**, **core/mcp_tools.py** |
-| Recherche documentaire | **core/embeddings.py**, **core/retriever.py**, **core/bibliotheque_rag.py** |
-| Fichiers et stockage | **api/uploads.py**, **core/bibliotheque_fichiers.py**, **core/stockage_r2.py** |
-| Connecteur OAuth ou MCP | **connexions/**, **core/serveur_mcp_*.py** |
-| Fonction mobile ou temps réel | **api/canal_*.py**, **core/canal_*.py** |
-| Traitement vidéo et multimédia | **api/main_montage.py**, **api/rendu_animation.py**, **core/generation_*** |
-| Schéma Supabase | **migrations/** |
-| Tâche de fond | **api/main.py**, puis le module de la tâche |
+| HTTP route | **api/**, then the relevant router |
+| Chat behavior | **api/chat.py**, **core/main.py** |
+| Prompt and context | **core/construction_system_prompt.py**, **core/configuration.py** |
+| AI provider | **core/fournisseurs_llm.py**, **core/adaptateur_*.py** |
+| Tool available to the AI | **core/registre_outils.py**, **core/mcp_tools.py** |
+| Document search | **core/embeddings.py**, **core/retriever.py**, **core/bibliotheque_rag.py** |
+| Files and storage | **api/uploads.py**, **core/bibliotheque_fichiers.py**, **core/stockage_r2.py** |
+| OAuth or MCP connector | **connexions/**, **core/serveur_mcp_*.py** |
+| Mobile or real-time feature | **api/canal_*.py**, **core/canal_*.py** |
+| Video and media processing | **api/main_montage.py**, **api/rendu_animation.py**, **core/generation_*** |
+| Supabase schema | **migrations/** |
+| Background task | **api/main.py**, then the task's module |
 
-## 1. Vue générale
+## 1. Overall architecture
 
-Le parcours type est :
+The typical request path is:
 
-**Frontend Classinus → API FastAPI → routeur du domaine → logique métier dans core/ → Supabase et services externes.**
+**Classinus frontend → FastAPI API → domain router → business logic in core/ → Supabase and external services.**
 
-Le point d’entrée est **api/main.py**. Il crée l’application FastAPI, configure les middlewares, démarre les tâches de cycle de vie et monte les routeurs HTTP ainsi que les transports MCP.
+The entry point is **api/main.py**. It creates the FastAPI application, configures middleware, starts lifecycle tasks, and mounts HTTP routers and MCP transports.
 
-## 2. Les grandes zones du dépôt
+## 2. Main repository areas
 
-| Dossier | Rôle |
+| Directory | Role |
 |---|---|
-| **api/** | points d’entrée HTTP et assemblage de l’application |
-| **core/** | logique métier, orchestration IA, outils, RAG, stockage et tâches |
-| **connexions/** | OAuth et connexions aux services externes |
-| **indexers/** | indexation des documents et contenus |
-| **migrations/** | évolutions SQL du schéma Supabase |
-| **scripts/** | opérations, synchronisations et contrôles |
-| **skills_plateforme/** | skills officiels Classinus |
-| **tests/** et fichiers **test_*.py** | tests unitaires et scénarios de non-régression |
+| **api/** | HTTP entry points and application assembly |
+| **core/** | business logic, AI orchestration, tools, RAG, storage, and tasks |
+| **connexions/** | OAuth and connections to external services |
+| **indexers/** | document and content indexing |
+| **migrations/** | Supabase schema changes |
+| **scripts/** | operations, synchronization, and checks |
+| **skills_plateforme/** | official Classinus skills |
+| **tests/** and **test_*.py** files | unit tests and regression scenarios |
 
-## 3. Cycle d’une conversation
+## 3. Conversation lifecycle
 
-1. **Entrée API** — **api/chat.py** reçoit la requête et gère le flux de réponse.
-2. **Moteur** — **core/main.py** orchestre le tour de conversation.
-3. **Contexte** — **core/construction_system_prompt.py**, **core/historique_conversation.py** et les modules de configuration préparent les informations utiles.
-4. **Modèle et outils** — **core/fournisseurs_llm.py**, les adaptateurs et les modules de routage choisissent la génération et les outils autorisés.
-5. **Persistance** — **core/persistance_echanges.py** et **core/persistance_tours.py** gèrent l’enregistrement et la continuité des échanges.
+1. **API entry:** **api/chat.py** receives the request and manages the response stream.
+2. **Engine:** **core/main.py** orchestrates the conversation turn.
+3. **Context:** **core/construction_system_prompt.py**, **core/historique_conversation.py**, and configuration modules prepare the required information.
+4. **Model and tools:** **core/fournisseurs_llm.py**, adapters, and routing modules select generation and authorized tools.
+5. **Persistence:** **core/persistance_echanges.py** and **core/persistance_tours.py** handle storage and continuity.
 
-Le traitement est découpé en modules. Modifier l’étape concernée dans son module dédié plutôt que de concentrer toute la logique dans le routeur HTTP ou le moteur principal.
+The processing is split across multiple modules. Change the dedicated module for the relevant step instead of concentrating all logic in the HTTP router or main engine.
 
-## 4. Domaines fonctionnels
+## 4. Functional domains
 
-### API et comptes
+### API and accounts
 
-Les routeurs sont dans **api/**. Ils couvrent notamment les profils, l’authentification, le chat, l’historique, les bibliothèques, les fichiers, les comportements, la mémoire, les connexions, les notifications et le temps réel.
+Routers live in **api/**. They cover profiles, authentication, chat, history, libraries, files, behaviors, memory, connections, notifications, and real-time features.
 
-Pour ajouter un endpoint, partir du routeur du domaine concerné et placer la logique réutilisable dans **core/**.
+To add an endpoint, start from the router for the relevant domain and place reusable logic in **core/**.
 
-### Moteur IA et adaptateurs
+### AI engine and adapters
 
-- **core/main.py** : orchestration du chat.
-- **core/boucle_agent.py** : boucle d’exécution de l’agent.
-- **core/construction_system_prompt.py** : préparation du prompt.
-- **core/fournisseurs_llm.py** : disponibilité et routage des fournisseurs.
-- **core/adaptateur_*.py**, **core/clients_outils_llm.py** : adaptation des API fournisseurs.
-- **core/efforts_modeles.py** : niveaux d’effort associés aux modèles.
+- **core/main.py:** chat orchestration.
+- **core/boucle_agent.py:** agent execution loop.
+- **core/construction_system_prompt.py:** prompt preparation.
+- **core/fournisseurs_llm.py:** provider availability and routing.
+- **core/adaptateur_*.py**, **core/clients_outils_llm.py:** provider API adapters.
+- **core/efforts_modeles.py:** model reasoning-effort levels.
 
-La disponibilité d’un fournisseur dépend de sa configuration, de ses identifiants et des règles d’accès. Le catalogue des modèles peut évoluer indépendamment du code.
+Provider availability depends on configuration, credentials, and access rules. The model catalogue can change independently of the code.
 
-### Outils et autorisations
+### Tools and permissions
 
-- **core/registre_outils.py** : catalogue des outils.
-- **core/mcp_tools.py** : découverte et appels des outils MCP externes.
-- **core/autorisations_outils.py**, **core/execution_outils.py** : autorisations et exécution.
-- **core/outils_*.py** : capacités par domaine.
+- **core/registre_outils.py:** tool catalogue.
+- **core/mcp_tools.py:** discovery and calls to external MCP tools.
+- **core/autorisations_outils.py**, **core/execution_outils.py:** permissions and execution.
+- **core/outils_*.py:** capabilities grouped by domain.
 
-Les opérations sensibles doivent conserver leurs contrôles de confirmation et leurs vérifications côté serveur.
+Sensitive operations must retain their confirmation controls and server-side checks.
 
-### Documents, bibliothèque et recherche
+### Documents, library, and search
 
-| Besoin | Modules |
+| Need | Modules |
 |---|---|
-| Embeddings et découpage | **core/embeddings.py** |
-| Recherche documentaire du moteur | **core/retriever.py** |
-| RAG de la bibliothèque personnelle | **core/bibliotheque_rag.py** |
-| RAG du catalogue public | **core/catalogue_public_rag.py** |
-| Fichiers et dossiers | **core/bibliotheque_fichiers.py**, **core/dossiers_bibliotheque.py** |
-| Indexation PDF et Notion | **indexers/index_documents.py**, **indexers/index_notion.py** |
-| Stockage objet | **core/stockage_r2.py** |
+| Embeddings and chunking | **core/embeddings.py** |
+| Engine document retrieval | **core/retriever.py** |
+| Personal-library RAG | **core/bibliotheque_rag.py** |
+| Public-catalogue RAG | **core/catalogue_public_rag.py** |
+| Files and folders | **core/bibliotheque_fichiers.py**, **core/dossiers_bibliotheque.py** |
+| PDF and Notion indexing | **indexers/index_documents.py**, **indexers/index_notion.py** |
+| Object storage | **core/stockage_r2.py** |
 
-Les circuits personnel, public et documentaire ne sont pas interchangeables. Vérifier le propriétaire, la portée, le stockage et la fonction de recherche avant de réutiliser un pipeline.
+Personal, public, and general document pipelines are not interchangeable. Check ownership, scope, storage, and search function before reusing a pipeline.
 
-### Connecteurs et serveurs MCP
+### Connectors and MCP servers
 
-Les flux OAuth sont principalement dans **connexions/**. Les serveurs MCP sont implémentés dans **core/serveur_mcp_*.py** et leurs points d’accès sont assemblés dans **api/main.py**.
+OAuth flows are mainly in **connexions/**. MCP servers are implemented in **core/serveur_mcp_*.py**, and their endpoints are assembled in **api/main.py**.
 
-| Chemin MCP | Service |
+| MCP path | Service |
 |---|---|
-| **/mcp/generation** | outils de génération |
-| **/mcp/execution-code** | exécution de code |
-| **/mcp/video** | outils vidéo |
-| **/mcp/github** | outils GitHub |
-| **/mcp/netlify** | outils Netlify |
-| **/mcp/public** | serveur MCP public documentaire |
-| **/mcp/espace** | serveur MCP public de l’espace utilisateur |
+| **/mcp/generation** | generation tools |
+| **/mcp/execution-code** | code execution |
+| **/mcp/video** | video tools |
+| **/mcp/github** | GitHub tools |
+| **/mcp/netlify** | Netlify tools |
+| **/mcp/public** | public document MCP server |
+| **/mcp/espace** | public user-space MCP server |
 
-Les serveurs publics utilisent une vérification de jeton OAuth dédiée. Ne pas confondre ces points d’accès publics avec les serveurs MCP internes utilisés par le moteur Classinus.
+Public servers use dedicated OAuth token verification. Do not confuse these public endpoints with internal MCP servers used by the Classinus engine.
 
-### Mobile, temps réel et PC
+### Mobile, real-time, and PC
 
-Les points de départ sont **api/appareils_mobiles.py**, **api/canal_temps_reel.py**, **api/canal_agent_applicatif.py** et les modules correspondants dans **core/**.
+Starting points include **api/appareils_mobiles.py**, **api/canal_temps_reel.py**, **api/canal_agent_applicatif.py**, and their corresponding modules in **core/**.
 
-Les actions mobiles différées, l’exploration de dossiers, la lecture d’écran PC et les actions contrôlées sur ordinateur ont des modules distincts. Identifier le canal utilisé avant d’étendre un comportement.
+Deferred mobile actions, folder exploration, PC screen reading, and controlled desktop actions use separate modules. Identify the channel involved before extending a behavior.
 
-### Multimédia et traitements lourds
+### Media and heavy processing
 
-La génération de fichiers est répartie dans les modules **core/generation_***. Les traitements vidéo ont aussi des points d’entrée dédiés, dont **api/main_montage.py** et **api/rendu_animation.py**. Le service de montage séparé et ses paramètres sont décrits dans [le guide de déploiement](DEPLOIEMENT.md).
+File generation is split across **core/generation_*** modules. Video processing also has dedicated entry points, including **api/main_montage.py** and **api/rendu_animation.py**. The separate montage service and its configuration are described in the [deployment guide](DEPLOIEMENT.md).
 
-## 5. Données et sécurité
+## 5. Data and security
 
-Supabase fournit l’authentification, PostgreSQL et les stockages utilisés par le backend.
+Supabase provides authentication, PostgreSQL, and the storage services used by the backend.
 
-- Variables serveur centrales : **SUPABASE_URL** et **SUPABASE_SECRET**.
-- Les migrations SQL sont conservées dans **migrations/**.
-- Les politiques RLS, contraintes, clés étrangères et fonctions RPC font partie du contrat de chaque fonctionnalité.
-- Les secrets des fournisseurs et des connexions OAuth restent dans l’environnement backend.
+- Core server variables: **SUPABASE_URL** and **SUPABASE_SECRET**.
+- SQL migrations are stored in **migrations/**.
+- RLS policies, constraints, foreign keys, and RPC functions are part of each feature's contract.
+- Provider and OAuth secrets must remain in the backend environment.
 
-Toute évolution de schéma doit être livrée avec sa migration, testée sur l’environnement adapté et appliquée avant d’activer le code qui en dépend.
+Every schema change must be delivered with its migration, tested in the appropriate environment, and applied before deploying code that depends on it.
 
-## 6. Tâches de fond
+## 6. Background tasks
 
-Le cycle de vie FastAPI est piloté depuis **api/main.py**. Des tâches de fond s’occupent notamment de traitements différés, de notifications, de rappels, d’indexation et de synchronisations.
+The FastAPI lifecycle is managed from **api/main.py**. Background tasks handle deferred processing, notifications, reminders, indexing, and synchronization.
 
-Pour modifier une tâche, localiser son module métier puis vérifier comment elle est démarrée et arrêtée. Éviter de lancer une seconde boucle concurrente sans vérifier le mécanisme existant.
+To modify a task, locate its business-logic module and verify how it is started and stopped. Do not launch a second concurrent loop without checking the existing mechanism.
 
 ## 7. Tests
 
-Les tests Python sont à la racine et dans **tests/**. Ils couvrent notamment les adaptateurs IA, les flux du chat, les outils et autorisations, les serveurs MCP, les bibliothèques, les documents, les fonctions mobiles et les traitements multimédias.
+Python tests are at the repository root and in **tests/**. They cover AI adapters, chat flows, tools and permissions, MCP servers, libraries, documents, mobile features, and media processing.
 
-Lancer les tests liés à la fonctionnalité modifiée, puis les scénarios de non-régression concernés. **python scripts/predeploiement.py** est un contrôle de pré-déploiement ; il ne remplace pas la suite de tests.
+Run the tests related to the changed feature, followed by the relevant regression scenarios. **python scripts/predeploiement.py** is a pre-deployment check; it does not replace the test suite.
 
-## Guides associés
+## Related guides
 
-- [Architecture générale](ARCHITECTURE.md)
-- [Domaines et routes API](API.md)
-- [Fournisseurs IA et RAG](IA_ET_RAG.md)
-- [MCP et connecteurs](MCP_ET_CONNECTEURS.md)
-- [Données et sécurité](DONNEES_ET_SECURITE.md)
-- [Développement local](DEVELOPPEMENT.md)
-- [Déploiement](DEPLOIEMENT.md)
-- [Checklist Railway](../RAILWAY_DEPLOY.md)
+- [Overall architecture](ARCHITECTURE.md)
+- [API domains and routes](API.md)
+- [AI providers and RAG](IA_ET_RAG.md)
+- [MCP and connectors](MCP_ET_CONNECTEURS.md)
+- [Data and security](DONNEES_ET_SECURITE.md)
+- [Local development](DEVELOPPEMENT.md)
+- [Deployment](DEPLOIEMENT.md)
+- [Railway checklist](../RAILWAY_DEPLOY.md)
