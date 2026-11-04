@@ -45,9 +45,14 @@ def lire(flux):
     return texte, [appels[i] for i in sorted(appels)]
 
 
+def reglage_effort(effort):
+    """Comme la boucle d'agent : pas d'effort, pas de paramètre (jamais reasoning_effort=null)."""
+    return {"reasoning_effort": effort} if effort else {}
+
+
 def controle_texte(client, modele, effort):
     flux = client.chat.completions.create(
-        model=modele, reasoning_effort=effort, tools=None,
+        model=modele, tools=None, stream=True, **reglage_effort(effort),
         messages=[{"role": "system", "content": "Réponds très brièvement."},
                   {"role": "user", "content": "Dis seulement le mot : bonjour"}],
     )
@@ -60,7 +65,7 @@ def controle_outil(client, modele, effort):
     messages = [{"role": "system", "content": "Tu utilises les outils quand c'est utile. Réponds brièvement."},
                 {"role": "user", "content": "Quel est le nombre secret ? Utilise l'outil."}]
     texte, appels = lire(client.chat.completions.create(
-        model=modele, reasoning_effort=effort, tools=OUTIL_TEST, messages=messages))
+        model=modele, tools=OUTIL_TEST, messages=messages, stream=True, **reglage_effort(effort)))
     assert appels and appels[0]["name"] == "donner_nombre", f"aucun appel d'outil (texte reçu : {texte[:60]!r})"
     assistant = {"role": "assistant", "content": None, "tool_calls": [
         {"id": a["id"], "type": "function", "function": {"name": a["name"], "arguments": a["arguments"]}} for a in appels]}
@@ -71,7 +76,7 @@ def controle_outil(client, modele, effort):
     for a in appels:
         messages.append({"role": "tool", "tool_call_id": a["id"], "content": "Le nombre secret est 4217."})
     texte, _ = lire(client.chat.completions.create(
-        model=modele, reasoning_effort=effort, tools=OUTIL_TEST, messages=messages))
+        model=modele, tools=OUTIL_TEST, messages=messages, stream=True, **reglage_effort(effort)))
     assert "4217" in texte, f"réponse finale sans le résultat de l'outil : {texte[:60]!r}"
     return "outil appelé, résultat repris"
 
