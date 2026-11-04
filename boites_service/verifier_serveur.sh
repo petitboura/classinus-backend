@@ -5,6 +5,9 @@ set -u
 H="Authorization: Bearer $BOITES_TOKEN"
 ID=$(curl -s -X POST "$BOITES_URL/boites" -H "$H" -H 'Content-Type: application/json' -d '{}' | sed 's/.*"id":"\([a-f0-9]*\)".*/\1/')
 echo "boîte : $ID"
+case "$ID" in
+  *[!a-f0-9]*|"") echo "ECHEC : la boîte n'a pas pu être créée, arrêt du test."; exit 1;;
+esac
 run() { curl -s -X POST "$BOITES_URL/boites/$ID/commande" -H "$H" -H 'Content-Type: application/json' -d "{\"commande\":\"$1\",\"timeout\":${2:-10}}"; echo; }
 echo "--- utilisateur (attendu : uid=1000)";            run "id"
 echo "--- aucun secret (attendu : seulement PROXY)";    run "env | grep -i -E 'key|token|secret|password' || echo aucun"
