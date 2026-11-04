@@ -325,8 +325,9 @@ def _commande_langage(language: str) -> tuple[str, str]:
 
 
 def _classe_sandbox():
-    from e2b import Sandbox
-    return Sandbox
+    """E2B ou boîtes Docker du serveur Vultr, selon EXECUTION_CODE_FOURNISSEUR (voir core/boites_isolees.py)."""
+    from core import boites_isolees
+    return boites_isolees.classe_sandbox()
 
 
 def _est_commande_en_echec(erreur) -> bool:
@@ -1252,7 +1253,7 @@ def gerer_execution_code(
         code_http = getattr(e, "status_code", None)
         if code_http in (429, 503) or "concurrent sandbox limit" in str(e).lower():
             resultat = (
-                "EXECUTION_CODE_PROVIDER_LIMIT: E2B refuse temporairement la création ou la reprise "
+                "EXECUTION_CODE_PROVIDER_LIMIT: le fournisseur de boîtes refuse temporairement la création ou la reprise "
                 "d'un sandbox (capacité, quota ou limitation fournisseur). Réessaie plus tard."
             )
         else:
@@ -1280,7 +1281,8 @@ def gerer_execution_code(
 
 def mettre_en_pause_sandboxes_inactifs() -> int:
     """Met en pause les sandboxes inactifs. Appelé périodiquement par FastAPI."""
-    if not os.environ.get("E2B_API_KEY"):
+    from core import boites_isolees
+    if not boites_isolees.configuree():
         return 0
     try:
         lignes = _rpc_objet("execution_code_lister_inactifs", {"p_limit": 100}).get("items", [])

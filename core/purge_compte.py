@@ -158,7 +158,8 @@ def _detacher_etablissements(supabase, user_id: str) -> None:
 
 def _purger_sandboxes_execution_code(supabase, user_id: str) -> None:
     """Arrête les sandboxes liées au compte avant de supprimer leur suivi."""
-    if not os.environ.get("E2B_API_KEY"):
+    from core import boites_isolees
+    if not boites_isolees.configuree():
         return
     try:
         result = (
@@ -178,9 +179,9 @@ def _purger_sandboxes_execution_code(supabase, user_id: str) -> None:
     if not sandbox_ids:
         return
     try:
-        from e2b import Sandbox
+        Sandbox = boites_isolees.classe_sandbox()
     except Exception as e:
-        logging.error("ERREUR purge compte (SDK E2B indisponible): %s", type(e).__name__)
+        logging.error("ERREUR purge compte (fournisseur de boîtes indisponible): %s", type(e).__name__)
         return
     for sandbox_id in sandbox_ids:
         try:
