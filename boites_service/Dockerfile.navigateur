@@ -1,0 +1,13 @@
+# Image des boîtes navigateur (étape 6) : Chromium piloté par Playwright. Aucun secret, aucun outil d'administration.
+FROM python:3.12-slim
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/pw PYTHONUNBUFFERED=1
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates \
+ && pip install --no-cache-dir playwright==1.58.0 \
+ && playwright install --with-deps chromium \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd -g 1000 user && useradd -u 1000 -g 1000 -m -d /home/user -s /bin/bash user
+COPY pilote.py /opt/navigateur/pilote.py
+USER 1000:1000
+WORKDIR /home/user
+CMD ["sleep", "infinity"]

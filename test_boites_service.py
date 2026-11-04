@@ -17,6 +17,7 @@ ID = "a" * 32
 class FauxDocker:
     def __init__(self):
         self.boites = {}
+        self.navigateurs = {}
         self.appels = []
 
     def lister(self):
@@ -28,8 +29,13 @@ class FauxDocker:
     def adresse(self, boite_id):
         return "172.20.0.5" if boite_id in self.boites else None
 
-    def creer(self, boite_id):
+    def creer(self, boite_id, navigateur=False, utilisateur=""):
         self.boites[boite_id] = "running"
+        if navigateur:
+            self.navigateurs[boite_id] = (utilisateur, 0)
+
+    def lister_navigateurs(self, utilisateur=""):
+        return [(i, c) for i, (u, c) in self.navigateurs.items() if not utilisateur or u == utilisateur]
 
     def demarrer(self, boite_id):
         self.boites[boite_id] = "running"
@@ -39,6 +45,7 @@ class FauxDocker:
 
     def supprimer(self, boite_id):
         self.boites.pop(boite_id, None)
+        self.navigateurs.pop(boite_id, None)
 
     def executer(self, boite_id, commande, delai):
         self.appels.append((commande, delai))

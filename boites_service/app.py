@@ -9,6 +9,7 @@ import asyncio
 import hmac
 import logging
 import os
+import time
 import uuid
 from contextlib import asynccontextmanager
 
@@ -35,10 +36,33 @@ async def _lifespan(app: FastAPI):
     port = docker.port_proxy
     serveur = await asyncio.start_server(proxy_mod.fabriquer_gestionnaire(registre), "0.0.0.0", port)
     logging.info("proxy de sortie filtrée sur le port %s", port)
+    balayage = asyncio.create_task(_balayer_navigateurs())
     try:
         yield
     finally:
+        balayage.cancel()
         serveur.close()
+
+
+def _fermer_navigateurs_perimes() -> int:
+    """Détruit les boîtes navigateur plus vieilles que BOITES_NAV_DUREE_MAX secondes (jamais une boîte oubliée)."""
+    limite = time.time() - int(os.environ.get("BOITES_NAV_DUREE_MAX", "900"))
+    detruites = 0
+    for boite_id, cree in docker.lister_navigateurs():
+        if cree < limite:
+            docker.supprimer(boite_id)
+            registre.oublier(boite_id)
+            detruites += 1
+    return detruites
+
+
+async def _balayer_navigateurs():
+    while True:
+        await asyncio.sleep(60)
+        try:
+            await asyncio.to_thread(_fermer_navigateurs_perimes)
+        except Exception as e:
+            logging.warning("balayage des boîtes navigateur : %s", type(e).__name__)
 
 
 app = FastAPI(title="Classinus boîtes", lifespan=_lifespan)
@@ -70,6 +94,11 @@ class Reseau(BaseModel):
     allow_out: list[str] = Field(default_factory=list, max_length=200)
 
 
+class OuvertureNavigateur(BaseModel):
+    cle: str = Field(min_length=16, max_length=32)
+    utilisateur: str = Field(min_length=16, max_length=32)
+
+
 def _existante(boite_id: str) -> str:
     etat = docker.etat(id_valide(boite_id))
     if etat is None:
@@ -97,6 +126,38 @@ def creer(_corps: CreationBoite):
     # Sans règle, la boîte n'a aucun accès au réseau : le proxy refuse toute adresse inconnue.
     registre.regler(boite_id, docker.adresse(boite_id), [])
     return {"id": boite_id}
+
+
+@app.post("/navigateurs", dependencies=[Depends(_authentifier)])
+def ouvrir_navigateur(corps: OuvertureNavigateur):
+    """Boîte navigateur d'une conversation : créée si elle n'existe pas, reprise si elle est arrêtée.
+    L'identifiant est calculé par le backend (empreinte de l'utilisateur et de la conversation) : aucune
+    base de données n'est nécessaire pour la retrouver."""
+    boite_id = id_valide(corps.cle)
+    utilisateur = id_valide(corps.utilisateur)
+    etat = docker.etat(boite_id)
+    if etat is None:
+        if len(docker.lister_navigateurs()) >= int(os.environ.get("BOITES_NAV_MAX", "3")):
+            raise HTTPException(status_code=429, detail="capacité atteinte")
+        if len(docker.lister()) >= int(os.environ.get("BOITES_MAX", "20")):
+            raise HTTPException(status_code=429, detail="capacité atteinte")
+        docker.creer(boite_id, navigateur=True, utilisateur=utilisateur)
+    elif etat != "running":
+        docker.demarrer(boite_id)
+    # Réseau fermé tant que le backend n'a pas envoyé ses domaines autorisés (PUT /boites/{id}/reseau).
+    registre.regler(boite_id, docker.adresse(boite_id), [])
+    return {"id": boite_id}
+
+
+@app.delete("/navigateurs", dependencies=[Depends(_authentifier)])
+def detruire_navigateurs_utilisateur(utilisateur: str = Query(...)):
+    """Détruit toutes les boîtes navigateur d'un utilisateur (suppression de compte)."""
+    detruites = 0
+    for boite_id, _cree in docker.lister_navigateurs(id_valide(utilisateur)):
+        docker.supprimer(boite_id)
+        registre.oublier(boite_id)
+        detruites += 1
+    return {"detruites": detruites}
 
 
 @app.post("/boites/{boite_id}/connexion", dependencies=[Depends(_authentifier)])

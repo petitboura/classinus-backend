@@ -13,6 +13,7 @@ from registre_outils import OUTILS_SENSIBLES, est_outil_sensible_serveur_personn
 from profils_agents import _nom_lisible_appel, _action_appel, _champs_domaines_appel
 from libelles_activite_ia import champs_timeline_appel
 from historique_outils import champs_historique_outil
+from core import captures_modele
 
 class _AttenteConfirmation(Exception):
     """
@@ -530,6 +531,7 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
         # fini. Le shutdown(wait=False) du finally laisse les fils déjà partis finir seuls,
         # sans que personne n'attende leur résultat.
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(appels_surs))
+        images_vision = []  # captures du navigateur à montrer au modèle, voir core/captures_modele.py
         try:
             futures = {
                 executor.submit(_executer_un_appel, appel, table_routage, arret): appel
@@ -593,8 +595,8 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                     "nom_lisible": nom_tl,
                     "action": _action_appel(appel),
                     **_champs_domaines_appel(appel),
-                    "resultat": _resultat_pour_affichage(resultat),
-                    **champs_historique_outil(appel["arguments"], resultat, _resultat_pour_affichage(resultat)),
+                    "resultat": _resultat_pour_affichage(captures_modele.sans_image(resultat)),
+                    **champs_historique_outil(appel["arguments"], captures_modele.sans_image(resultat), _resultat_pour_affichage(captures_modele.sans_image(resultat))),
                     "id_appel": appel["id"],
                 }
                 # Garanti indépendamment de ce que le modèle écrira ensuite
@@ -641,7 +643,8 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                         "nom_outil": appel["name"],
                         "fichiers": fichiers_generes,
                     }
-                contenu_pour_modele = resultat
+                contenu_pour_modele, captures_ce_appel = captures_modele.pour_le_modele(resultat)
+                images_vision.extend(captures_ce_appel)
                 if sources:
                     debut_numero = compteur_sources[0] + 1
                     compteur_sources[0] += len(sources)
@@ -697,6 +700,9 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                 })
         finally:
             executor.shutdown(wait=False, cancel_futures=True)
+
+        # Un seul message d'image après TOUS les résultats d'outils du lot (jamais entre deux).
+        captures_modele.ajouter_message_images(messages_agent, images_vision)
 
         # Arrêt demandé pendant le lot : les outils qui n'ont pas fini sont marqués annulés
         # (leur ligne ne doit pas rester « en cours »), et on s'arrête là.
