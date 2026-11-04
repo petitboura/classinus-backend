@@ -88,7 +88,7 @@ Full documentation index: [English](docs/README.md) · [Français](docs/README.f
 | [Development](docs/DEVELOPPEMENT.md) · [Français](docs/DEVELOPPEMENT.fr.md) | Local environment, commands, and tests |
 | [Deployment](docs/DEPLOIEMENT.md) · [Français](docs/DEPLOIEMENT.fr.md) | Railpack, Railway, and related services |
 | [Technical code map](docs/CARTOGRAPHIE_TECHNIQUE.md) · [Français](docs/CARTOGRAPHIE_TECHNIQUE.fr.md) | Where to find code by feature |
-| [Railway deployment checklist](docs/deployment/RAILWAY_DEPLOY.md) · [Français](RAILWAY_DEPLOY.fr.md) | Environment variables and operational setup |
+| [Railway deployment checklist](docs/deployment/RAILWAY_DEPLOY.md) · [Français](docs/deployment/RAILWAY_DEPLOY.fr.md) | Environment variables and operational setup |
 
 ## Related repositories
 
