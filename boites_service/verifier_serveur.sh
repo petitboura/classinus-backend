@@ -31,7 +31,7 @@ run "curl -sS -m 10 -o /dev/null -w '%{http_code}' http://169.254.169.254/ 2>&1;
 
 titre "8. bombe de processus, dans une boîte à part (attendu : nombre borné à 256 au plus)"
 ID2=$(curl -s -X POST "$BOITES_URL/boites" -H "$H" -H 'Content-Type: application/json' -d '{}' | sed 's/.*"id":"\([a-f0-9]*\)".*/\1/')
-curl -s -X POST "$BOITES_URL/boites/$ID2/commande" -H "$H" -H 'Content-Type: application/json' -d '{"commande":"i=0; while [ $i -lt 600 ]; do sleep 3 >/dev/null 2>&1 & i=$((i+1)); done 2>/dev/null; ls /proc | grep -c \"^[0-9]\"; echo processus-dans-la-boite","timeout":15}'; echo
+curl -s -X POST "$BOITES_URL/boites/$ID2/commande" -H "$H" -H 'Content-Type: application/json' -d '{"commande":"echo aW1wb3J0IHN1YnByb2Nlc3MgYXMgcwpwID0gW10KZm9yIGkgaW4gcmFuZ2UoNjAwKToKICAgIHRyeToKICAgICAgICBwLmFwcGVuZChzLlBvcGVuKFsic2xlZXAiLCAiMyJdKSkKICAgIGV4Y2VwdCBPU0Vycm9yOgogICAgICAgIGJyZWFrCnByaW50KCJwcm9jZXNzdXMgbGFuY2VzIGF2YW50IGxlIGJsb2NhZ2UgOiIsIGxlbihwKSkK | base64 -d | python","timeout":15}'; echo
 curl -s -X DELETE "$BOITES_URL/boites/$ID2" -H "$H" >/dev/null
 
 titre "destruction (la boîte ET son volume)"; curl -s -X DELETE "$BOITES_URL/boites/$ID" -H "$H"; echo
