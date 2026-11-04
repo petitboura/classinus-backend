@@ -17,7 +17,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
-      - "8080:8080"
+      - "${BOITES_PORT_HOTE:-8787}:8080"
     networks:
       - default
       - boites_internes

@@ -24,7 +24,8 @@ Un redémarrage du serveur efface les workspaces.
 1. Nouvelle ressource, Docker Compose, dépôt classinus-backend, fichier `boites_service/docker-compose.yml`.
 2. Variable obligatoire : `BOITES_TOKEN` (une longue chaîne aléatoire).
 3. Déployer. Le service `boite-image` construit l'image des boîtes puis s'arrête, c'est normal.
-4. Pare-feu Vultr : n'ouvrir 8080 qu'aux adresses du backend, ou mettre le service derrière HTTPS (domaine Coolify).
+4. Le service est publié sur le port 8787 du serveur (BOITES_PORT_HOTE pour en changer, le 8080 est pris par Coolify).
+   Pare-feu Vultr : n'ouvrir 8787 qu'aux adresses du backend, ou mettre le service derrière HTTPS (domaine Coolify).
    Ne pas ouvrir le port 3128 (proxy) : il n'est destiné qu'au réseau interne des boîtes.
 
 ## Brancher le backend Classinus
