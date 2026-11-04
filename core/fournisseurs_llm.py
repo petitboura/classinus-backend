@@ -699,7 +699,13 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque, email
             config["fournisseurs"][distributeur]["bientot"] and not _a_acces_anticipe(config, distributeur, email)
         ) and _distributeur_disponible(distributeur, config)
         modeles_du_distributeur = []
-        for palier in paliers_autorises:
+        # Palier specialise (Grok Build, 04/11/2026, demande de Bourama) : au-dessus de tous les
+        # paliers debloques par un agent, donc toujours Bientot, sauf pour les adresses de la table
+        # acces_anticipe_modeles pour ce fournisseur (ceux qui voient tout).
+        paliers_du_distributeur = list(paliers_autorises)
+        if "specialise" in ordre_paliers and "specialise" not in paliers_du_distributeur and _a_acces_anticipe(config, distributeur, email):
+            paliers_du_distributeur.append("specialise")
+        for palier in paliers_du_distributeur:
             info = config["modeles"].get(distributeur, {}).get(palier)
             if not info:
                 continue

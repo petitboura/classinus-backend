@@ -28,7 +28,8 @@ def config_de_test():
         "baseten_seul": True,
         "bientot": True,
     }
-    config["acces_anticipe"] = {"deepseek": {VOIT_TOUT}, "meta": {VOIT_TOUT}}
+    config["fournisseurs"]["grok"]["bientot"] = True
+    config["acces_anticipe"] = {"deepseek": {VOIT_TOUT}, "meta": {VOIT_TOUT}, "grok": {VOIT_TOUT}}
     return config
 
 
@@ -72,6 +73,16 @@ class BientotParModele(unittest.TestCase):
     def test_choix_refuse_pour_les_autres_accepte_pour_ceux_qui_voient_tout(self):
         self.assertFalse(fournisseurs_llm.modele_id_est_autorise("deepseek-v4-pro", "claude", "pro", "autre@example.com"))
         self.assertTrue(fournisseurs_llm.modele_id_est_autorise("deepseek-v4-pro", "claude", "pro", VOIT_TOUT))
+
+    def test_grok_build_ouvert_seulement_a_ceux_qui_voient_tout(self):
+        autres = fournisseurs_llm.modeles_disponibles_pour_agent("claude", "pro", "autre@example.com")
+        self.assertNotIn("grok-build-0.1", self.ids(autres))
+        self.assertIn("grok-build-0.1", self.ids(fournisseurs_llm.modeles_bientot_pour_agent("claude", "pro", "autre@example.com")))
+        eux = fournisseurs_llm.modeles_disponibles_pour_agent("claude", "pro", VOIT_TOUT)
+        self.assertIn("grok-build-0.1", self.ids(eux))
+        self.assertNotIn("grok-build-0.1", self.ids(fournisseurs_llm.modeles_bientot_pour_agent("claude", "pro", VOIT_TOUT)))
+        self.assertTrue(fournisseurs_llm.modele_id_est_autorise("grok-build-0.1", "claude", "pro", VOIT_TOUT))
+        self.assertFalse(fournisseurs_llm.modele_id_est_autorise("grok-build-0.1", "claude", "pro", "autre@example.com"))
 
 
 if __name__ == "__main__":
