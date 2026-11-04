@@ -1,9 +1,10 @@
 # À déployer sur le serveur Vultr (Coolify : nouvelle ressource, Docker Compose, ce fichier).
-# Contexte de construction : la racine du dépôt classinus-backend.
+# Les chemins de construction partent de la racine du dépôt classinus-backend
+# (Coolify : Base Directory = /, Docker Compose Location = /boites_service/docker-compose.yml).
 services:
   boites-service:
     build:
-      context: ..
+      context: .
       dockerfile: boites_service/Dockerfile
     container_name: boites-service
     restart: unless-stopped
@@ -23,7 +24,7 @@ services:
 
   boite-image:
     build:
-      context: .
+      context: ./boites_service
       dockerfile: Dockerfile.boite
     image: classinus-boite:latest
     command: ["true"]
