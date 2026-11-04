@@ -8,6 +8,7 @@ from google.genai import types
 from core.skills_catalogue import lister_catalogue_complet
 from core.lecture_media_conversation import media_joint_present
 from core.lecture_document_conversation import document_joint_present
+from core.ressources_ui import separer_ressources_ui, NOTE_POUR_LE_MODELE as NOTE_POUR_LE_MODELE_WIDGET
 from etat_connexions import bloc_prompt_pour_utilisateur as bloc_connexions_pour_utilisateur
 from comportements_etudiants import (
     lister_comportements as lister_comportements_etudiant,
@@ -219,6 +220,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     - {"type": "videos", "videos": [{"titre": "...", "url": "...", "miniature": "...", "chaine": "...", "duree": "..."}]}
       -> (06/10) resultats d'une recherche de video YouTube (rechercher_video), affiches en cartes
       cote frontend (GalerieImagesBulle.tsx) plutot qu'en simple lien texte.
+    - {"type": "ressources_ui", "id_appel": "...", "ressources": [{"uri", "mimeType", "genre", "contenu", "donnees"?}]}
+      -> (04/11) widget MCP-UI (ressource ui:// d'un outil MCP), affiche dans une iframe isolee cote
+      frontend (WidgetMcpUi.tsx). Le texte de repli reste dans outil_resultat. Voir core/ressources_ui.py.
     - {"type": "reponse", "texte": "..."}        -> morceau de la reponse finale (streaming)
     - {"type": "fichiers_generes", "nom_outil": "...", "fichiers": [{"url": "...", "nom": "..."}]}
       -> (28/07) emis des qu'un outil produit un fichier telechargeable (detecte par
@@ -614,6 +618,8 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     "content": resultat,
                 })
                 deja_ajoute_a_messages_agent = True
+            # Widgets MCP-UI (04/11/2026) : meme separation que dans _traiter_appels.
+            resultat, ressources_ui_approuve = separer_ressources_ui(resultat)
             if not deja_ajoute_a_messages_agent:
                 yield {"type": "statut_termine", "texte": f"{_nom_lisible_appel(appel)} effectuée", "id_appel": appel["id"]}
                 yield {
@@ -630,6 +636,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 galerie_capture = captures_modele.galerie(resultat)
                 if galerie_capture:
                     yield {"type": "images", "images": galerie_capture}
+                if ressources_ui_approuve:
+                    yield {"type": "ressources_ui", "id_appel": appel["id"], "ressources": ressources_ui_approuve}
+                    resultat = f"{resultat}\n\n{NOTE_POUR_LE_MODELE_WIDGET}"
         else:
             resultat = "Action annulée par l'utilisateur : cet outil n'a pas été exécuté."
             yield {"type": "statut_termine", "texte": f"{_nom_lisible_appel(appel)} annulée"}

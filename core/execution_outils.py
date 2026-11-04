@@ -14,6 +14,7 @@ from profils_agents import _nom_lisible_appel, _action_appel, _champs_domaines_a
 from libelles_activite_ia import champs_timeline_appel
 from historique_outils import champs_historique_outil
 from core import captures_modele
+from core.ressources_ui import separer_ressources_ui, NOTE_POUR_LE_MODELE
 
 class _AttenteConfirmation(Exception):
     """
@@ -583,6 +584,9 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                         "content": resultat,
                     })
                     continue
+                # Widgets MCP-UI (04/11/2026) : sortis du resultat AVANT la troncature d'affichage
+                # et l'envoi au modele, pour qu'un HTML de widget ne soit jamais coupe ni envoye au LLM.
+                resultat, ressources_ui = separer_ressources_ui(resultat)
                 nom_tl, _, texte_fini_tl, marque_tl = _champs_timeline(appel)
                 yield {"type": "statut_termine", "texte": texte_fini_tl, "id_appel": appel["id"], **marque_tl}
                 # Généralisé (26/07, demande Bourama) : pour N'IMPORTE QUEL
@@ -693,6 +697,9 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                         f"recopie AUCUN de ces liens dans ta réponse, présente-les "
                         f"juste brièvement en texte si besoin.]"
                     )
+                if ressources_ui:
+                    yield {"type": "ressources_ui", "id_appel": appel["id"], "ressources": ressources_ui}
+                    contenu_pour_modele = f"{contenu_pour_modele}\n\n{NOTE_POUR_LE_MODELE}"
                 messages_agent.append({
                     "role": "tool",
                     "tool_call_id": appel["id"],

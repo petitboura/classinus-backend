@@ -359,3 +359,18 @@ Les skills officiels (Word, Excel, PowerPoint) vivent dans `skills_plateforme/<n
 - À la main : `python -m scripts.synchroniser_skills_plateforme simuler`, puis `appliquer`.
 - `SKILLS_PLATEFORME_SYNCHRO=non` désactive la synchronisation au déploiement.
 - Migration à appliquer une fois par base : `migrations/2026_11_02_skills_plateforme.sql`.
+
+## Widgets MCP-UI (ressources `ui://`)
+
+Quand un outil MCP renvoie une ressource `ui://` (standard MCP-UI ou MCP Apps), le backend garde sa structure au lieu de l'aplatir en texte (`core/ressources_ui.py`). Le contenu HTML (ou l'adresse) part dans l'événement SSE `ressources_ui`, hors du texte du résultat, donc jamais tronqué ni envoyé au modèle. Le texte `[Ressource : ui://...]` reste le repli pour les clients sans widget. Une ressource qui ne contient que son adresse est lue par `resources/read` sur la même session. Les widgets sont gardés dans `meta.outils` (champ `ressourcesUi`, jsonb existant, aucune migration) pour être rejoués à la relecture.
+
+Variables d'environnement (toutes facultatives) :
+
+| Variable | Défaut | Rôle |
+| --- | --- | --- |
+| `CLASSINUS_MCP_UI_ACTIF` | `1` | `0` ou `false` coupe les widgets (retour au texte seul) |
+| `CLASSINUS_MCP_UI_HTML_MAX_OCTETS` | `500000` | taille maximale d'un widget, au-delà : repli texte |
+| `CLASSINUS_MCP_UI_MAX_PAR_RESULTAT` | `4` | nombre maximal de widgets par résultat d'outil |
+| `CLASSINUS_MCP_UI_DELAI_LECTURE_SECONDES` | `20` | délai de `resources/read` |
+
+Limite connue : les serveurs MCP personnalisés des utilisateurs ne renvoient pas de widget (leur chemin ne garde que le premier texte).
