@@ -50,3 +50,14 @@ donnée d'un utilisateur (colonne `user_id`, `owner_id`, `proprietaire_id`,
    pour la sécurité), le dire dans la politique de confidentialité.
 
 Aucune table liée à un compte ne doit être livrée sans passer par ces points.
+
+## Documentation : toujours à jour, toujours rangée, toujours traduite
+
+Décision de Bourama du 4 novembre 2026. Cette règle est obligatoire : l'appliquer à chaque fois, sans demander et sans attendre qu'il la répète.
+
+- **Toujours à jour.** Dès que le code, un comportement, une configuration ou une décision change, mettre à jour la documentation concernée dans la même modification.
+- **Jamais de bazar.** Ne jamais déposer un fichier Markdown en vrac à la racine du dépôt. Tout nouveau document va dans `docs/`, ou dans un sous-dossier thématique (par exemple `docs/chantiers/`, `docs/specs/`) quand un sujet grossit. Créer un nouveau document ou un nouveau dossier dès que cela rend les choses plus claires, sans demander.
+- **Toujours rangée.** Chaque nouveau document est ajouté à l'index de `docs/README.md` et `docs/README.fr.md` dans la même modification. Quand on modifie un ancien document encore à la racine (voir cet index), le déplacer dans `docs/` et corriger toutes ses références, dans les commentaires de code et dans les autres documents.
+- **Toujours traduite.** Chaque document existe en anglais (par défaut, `.md`) et en français (`.fr.md`), avec la ligne de choix de langue en tête des deux. Mettre à jour les deux versions ensemble, jamais une seule.
+- Seuls `README`, `CLAUDE` et leurs versions `.fr.md` restent à la racine.
+- Ne jamais écrire de secret, de jeton ou de mot de passe dans la documentation.
