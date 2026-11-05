@@ -975,7 +975,7 @@ def appeler_outil(nom_outil, arguments, table_routage, arret=None):
     elif nom_outil == "gerer_navigateur":
         # Adresses visitées, textes saisis et sélecteurs peuvent être personnels : jamais dans les journaux.
         arguments_journal = {"action": arguments.get("action")}
-        for champ in ("url", "selector", "text", "content", "key"):
+        for champ in ("url", "selector", "text", "content", "key", "domain"):
             valeur = arguments.get(champ)
             if isinstance(valeur, str) and valeur:
                 arguments_journal[f"{champ}_chars"] = len(valeur)

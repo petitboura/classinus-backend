@@ -98,10 +98,24 @@ def preparer(action: str, url: str, selector: str, text: str, content: str, x, y
     return None, "Action navigateur inconnue."
 
 
+_MOTIF_SITE_BLOQUE = re.compile(
+    r"ERR_TUNNEL_CONNECTION_FAILED|ERR_PROXY_CONNECTION_FAILED|ERR_NAME_NOT_RESOLVED|ERR_CONNECTION_REFUSED|"
+    r"ERR_ACCESS_DENIED|ERR_BLOCKED|403",
+    re.IGNORECASE,
+)
+
+
 def _texte_page(retour: dict) -> str:
     morceaux = []
     if retour.get("ok") is False:
-        morceaux.append(f"NAVIGATEUR_ERREUR: {retour.get('erreur', 'action impossible')}")
+        erreur = str(retour.get("erreur", "action impossible"))
+        morceaux.append(f"NAVIGATEUR_ERREUR: {erreur}")
+        if _MOTIF_SITE_BLOQUE.search(erreur):
+            morceaux.append(
+                "Ce site n'est probablement pas dans la liste des domaines autorisés. Utilise "
+                "demander_acces_reseau avec domain (le nom de domaine seul) : la personne confirme, "
+                "puis rouvre la page."
+            )
     if retour.get("url"):
         morceaux.append(f"Adresse : {retour['url']}")
     if retour.get("titre"):

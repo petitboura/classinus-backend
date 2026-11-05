@@ -154,7 +154,7 @@ def domaines_de_l_appel(nom_outil, arguments):
             return _domaines_outil_mcp_personnalise(nom_outil)
         if nom_outil == "rechercher_document_externe":
             return _domaines_recherche_document(arguments)[:MAX_DOMAINES]
-        if nom_outil == "gerer_execution_code" and arguments.get("action") == "demander_acces_reseau":
+        if nom_outil in ("gerer_execution_code", "gerer_navigateur") and arguments.get("action") == "demander_acces_reseau":
             domaine = _domaine_nom_seul(arguments.get("domain"))
             return [domaine] if domaine else []
         if nom_outil == "gerer_navigateur" and arguments.get("action") == "open":

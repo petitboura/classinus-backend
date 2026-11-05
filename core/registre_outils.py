@@ -715,6 +715,7 @@ OUTILS_SENSIBLES = {
     # 04/11/2026 (hackathon Vultr, étape 6) : l'action finale dans le navigateur (envoyer, payer,
     # supprimer, publier) n'est jamais automatique : la personne confirme après avoir vu la capture.
     "gerer_navigateur:submit",
+    "gerer_navigateur:demander_acces_reseau",
     # Actions GitHub ajoutées le 20/10/2026 qui écrivent ou agissent au nom
     # de la personne connectée : toutes interrompues pour confirmation.
     "gerer_depot_github:creer_issue",
@@ -797,6 +798,7 @@ OUTILS_SENSIBLES = {
 # est ignorée.
 AUTORISATION_PERMANENTE_INTERDITE = frozenset({
     "gerer_navigateur:submit",
+    "gerer_navigateur:demander_acces_reseau",
     "gerer_execution_code:demander_acces_reseau",
 })
 
@@ -871,6 +873,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "gerer_navigateur:type": {"label": "Saisie sur la page", "icone": "Keyboard", "onglet": None},
     "gerer_navigateur:screenshot": {"label": "Capture de la page", "icone": "Camera", "onglet": None},
     "gerer_navigateur:submit": {"label": "Action finale", "icone": "ShieldCheck", "onglet": None},
+    "gerer_navigateur:demander_acces_reseau": {"label": "Accès à un site", "icone": "Globe", "onglet": None},
     "gerer_navigateur:close": {"label": "Fermeture du site", "icone": "Power", "onglet": None},
     "gerer_execution_code:close": {"label": "Fin de l'espace", "icone": "Power", "onglet": None},
     "generer_site_zip": {"label": "Génération d'un site (zip)", "icone": "Package", "onglet": "generer"},

@@ -25,10 +25,14 @@ def _attente(appel):
 
 
 class AutorisationPermanenteInterditeTest(unittest.TestCase):
-    def test_les_deux_actions_sont_listees(self):
+    def test_les_trois_actions_sont_listees(self):
         self.assertEqual(
             AUTORISATION_PERMANENTE_INTERDITE,
-            {"gerer_navigateur:submit", "gerer_execution_code:demander_acces_reseau"},
+            {
+                "gerer_navigateur:submit",
+                "gerer_navigateur:demander_acces_reseau",
+                "gerer_execution_code:demander_acces_reseau",
+            },
         )
 
     def test_elles_restent_sensibles(self):

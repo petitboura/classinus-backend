@@ -560,5 +560,35 @@ class BoucleDOutils(unittest.TestCase):
         self.assertEqual([m["role"] for m in messages], ["tool"])
 
 
+class DemandeAccesReseauNavigateur(unittest.TestCase):
+    """05/11/2026 : le navigateur a sa propre action demander_acces_reseau, comme l'exécution de code."""
+
+    def _appel(self, **arguments):
+        return {"id": "n1", "name": "gerer_navigateur", "arguments": json.dumps({"action": "demander_acces_reseau", **arguments})}
+
+    def test_l_action_demande_toujours_la_confirmation_et_jamais_d_autorisation_permanente(self):
+        from core import registre_outils
+        self.assertTrue(_est_outil_sensible(self._appel(domain="gitlab.com")))
+        self.assertIn("gerer_navigateur:demander_acces_reseau", registre_outils.AUTORISATION_PERMANENTE_INTERDITE)
+
+    def test_la_carte_de_confirmation_affiche_le_site_demande(self):
+        self.assertEqual(_nom_lisible_appel(self._appel(domain="GitLab.com")), "Accès au site gitlab.com")
+
+    def test_l_action_enregistre_le_domaine_avec_les_memes_garde_fous_que_le_code(self):
+        from core import outils_navigateur as outil
+        with patch.object(outil, "_identite_interne", return_value=("u1", "c1", None)), \
+                patch.object(outil, "_autoriser_domaine", return_value="Accès autorisé") as autoriser, \
+                patch.object(navigateur_boite, "executer", side_effect=AssertionError("boîte ouverte")):
+            sortie = outil.gerer_navigateur(action="demander_acces_reseau", domain="gitlab.com", ctx=None)
+        self.assertEqual(sortie, "Accès autorisé")
+        autoriser.assert_called_once_with("u1", "c1", "gitlab.com")
+
+    def test_un_site_bloque_donne_la_marche_a_suivre_au_modele(self):
+        texte = navigateur_boite._texte_page({"ok": False, "erreur": "net::ERR_TUNNEL_CONNECTION_FAILED at https://x.org"})
+        self.assertIn("demander_acces_reseau", texte)
+        autre = navigateur_boite._texte_page({"ok": False, "erreur": "sélecteur introuvable"})
+        self.assertNotIn("demander_acces_reseau", autre)
+
+
 if __name__ == "__main__":
     unittest.main()

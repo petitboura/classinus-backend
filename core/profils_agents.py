@@ -117,7 +117,7 @@ def _champs_domaines_appel(appel):
 def _nom_lisible_appel(appel):
     """Raccourci : libellé lisible pour un appel complet (dict avec 'name' et 'arguments'), en tenant compte de son action le cas échéant."""
     action = _action_appel(appel)
-    if appel["name"] == "gerer_execution_code" and action == "demander_acces_reseau":
+    if appel["name"] in ("gerer_execution_code", "gerer_navigateur") and action == "demander_acces_reseau":
         # 25/10/2026 : la carte de confirmation n'affiche que ce libellé (détails repliés).
         # L'élève doit donc voir le domaine ici, pas seulement dans les détails.
         try:
