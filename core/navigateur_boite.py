@@ -1,12 +1,12 @@
 """
-Actions navigateur de l'outil gerer_execution_code (hackathon Vultr, étape 6).
+Logique de l'outil gerer_navigateur (hackathon Vultr, étape 6), outil et catégorie à part de l'exécution de code.
 
 Un navigateur Chromium tourne dans une boîte Docker à part de la conversation (jamais dans le
 backend, jamais avec un secret). Le backend ne fait que lancer le pilote de la boîte
 (boites_service/pilote.py), lire la capture d'écran qu'il a prise et la renvoyer.
 
-Approbation humaine : browser_submit (envoyer, payer, supprimer, publier...) est dans OUTILS_SENSIBLES
-(core/registre_outils.py), donc la personne confirme avant toute exécution. browser_click refuse de
+Approbation humaine : gerer_navigateur:submit (envoyer, payer, supprimer, publier...) est dans OUTILS_SENSIBLES
+(core/registre_outils.py), donc la personne confirme avant toute exécution. click refuse de
 lui-même un clic dont le texte ou le sélecteur ressemble à une action finale : le modèle ne peut pas
 contourner l'approbation en choisissant l'autre action.
 """
@@ -20,12 +20,12 @@ import shlex
 from core import boites_isolees, captures_modele
 
 ACTIONS = (
-    "browser_open", "browser_click", "browser_type", "browser_screenshot", "browser_submit", "browser_close",
+    "open", "click", "type", "screenshot", "submit", "close",
 )
 CHEMIN_PILOTE = "/opt/navigateur/pilote.py"
 _ACTION_PILOTE = {
-    "browser_open": "ouvrir", "browser_click": "cliquer", "browser_type": "saisir",
-    "browser_screenshot": "capture", "browser_submit": "soumettre",
+    "open": "ouvrir", "click": "cliquer", "type": "saisir",
+    "screenshot": "capture", "submit": "soumettre",
 }
 _TERMES_FINAUX = re.compile(
     r"valid|envoy|pay|achet|command|supprim|effac|confirm|publi|inscri|souscri|abonn|"
@@ -68,28 +68,28 @@ def _cible(selector: str, text: str, x, y) -> dict:
 
 def preparer(action: str, url: str, selector: str, text: str, content: str, x, y, key: str):
     """Paramètres du pilote, ou un message d'erreur clair pour le modèle (jamais d'exception)."""
-    if action == "browser_open":
+    if action == "open":
         if not (url or "").strip():
             return None, "Indique url : l'adresse http ou https à ouvrir."
         return {"url": url.strip()}, None
-    if action == "browser_screenshot":
+    if action == "screenshot":
         return {}, None
     cible = _cible(selector, text, x, y)
-    if action == "browser_type":
+    if action == "type":
         if not content:
             return None, "Indique content : le texte à saisir. N'y mets jamais de mot de passe ni de numéro de carte."
         return {**cible, "valeur": content}, None
-    if action == "browser_click":
+    if action == "click":
         if not cible:
             return None, "Indique selector, text (texte visible) ou x et y pour le clic."
         if _TERMES_FINAUX.search(cible.get("selecteur", "") + " " + cible.get("texte", "")):
             return None, (
                 "NAVIGATEUR_ACTION_FINALE: ce clic ressemble à une action finale (envoyer, payer, supprimer, "
-                "publier, valider...). Fais d'abord browser_screenshot, puis utilise browser_submit : "
+                "publier, valider...). Fais d'abord screenshot, puis utilise submit : "
                 "la personne devra le confirmer."
             )
         return cible, None
-    if action == "browser_submit":
+    if action == "submit":
         if (key or "").strip():
             return {"touche": key.strip()}, None
         if not cible:

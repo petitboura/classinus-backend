@@ -127,7 +127,7 @@ def _nom_lisible_appel(appel):
         domaines = domaines_de_l_appel(appel["name"], arguments)
         if domaines:
             return f"Accès au site {domaines[0]}"
-    if appel["name"] == "gerer_execution_code" and action == "browser_submit":
+    if appel["name"] == "gerer_navigateur" and action == "submit":
         # 04/11/2026 (hackathon Vultr) : la personne confirme une action finale dans un navigateur,
         # elle doit voir ce qui sera cliqué ou pressé, pas seulement « Action finale ».
         try:
