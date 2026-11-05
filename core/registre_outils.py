@@ -791,6 +791,15 @@ OUTILS_SENSIBLES = {
     "root_redemarrer",
 }
 
+# Actions sensibles qui ne peuvent JAMAIS devenir "Toujours autoriser" (05/11/2026, hackathon
+# Vultr) : la personne doit confirmer à chaque fois. Le bouton n'est pas proposé, aucune
+# autorisation permanente n'est enregistrée, et une autorisation déjà en base pour ces actions
+# est ignorée.
+AUTORISATION_PERMANENTE_INTERDITE = frozenset({
+    "gerer_navigateur:submit",
+    "gerer_execution_code:demander_acces_reseau",
+})
+
 
 # Registre d'affichage unique (2026-08-15, demande Bourama : "qu'à un
 # nouvel outil, on ne touche pas au frontend" + "beaucoup d'outils

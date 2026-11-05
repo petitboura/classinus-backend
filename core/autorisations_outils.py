@@ -15,7 +15,11 @@ La personne les retire depuis Applications connectées (api/autorisations_outils
 import logging
 
 from core.outils_generation_commun import _supabase_memoire
-from registre_outils import OUTILS_SENSIBLES, est_outil_sensible_serveur_personnel
+from registre_outils import (
+    AUTORISATION_PERMANENTE_INTERDITE,
+    OUTILS_SENSIBLES,
+    est_outil_sensible_serveur_personnel,
+)
 
 TABLE = "autorisations_outils_permanentes"
 LONGUEUR_MAX_CLE = 200
@@ -59,6 +63,8 @@ def cle_valide(cle):
     """True seulement pour une action qui demande normalement une confirmation."""
     if not isinstance(cle, str) or not cle or len(cle) > LONGUEUR_MAX_CLE:
         return False
+    if cle in AUTORISATION_PERMANENTE_INTERDITE:
+        return False
     return cle in OUTILS_SENSIBLES or est_outil_sensible_serveur_personnel(cle)
 
 
@@ -70,7 +76,11 @@ def charger_autorisations(user_id):
         lignes = (
             _supabase_memoire.table(TABLE).select("cle").eq("user_id", user_id).execute()
         ).data or []
-        return frozenset(ligne["cle"] for ligne in lignes)
+        # Une autorisation déjà en base pour une action qui exige toujours la confirmation est
+        # ignorée : la personne sera de nouveau interrogée à chaque fois.
+        return frozenset(
+            ligne["cle"] for ligne in lignes if ligne["cle"] not in AUTORISATION_PERMANENTE_INTERDITE
+        )
     except Exception as e:
         logging.error(f"ERREUR SUPABASE (lecture {TABLE} user={user_id}) : {e}")
         return frozenset()

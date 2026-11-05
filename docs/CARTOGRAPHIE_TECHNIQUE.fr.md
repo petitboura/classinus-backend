@@ -75,7 +75,7 @@ La disponibilité d’un fournisseur dépend de sa configuration, de ses identif
 
 - **core/registre_outils.py** : catalogue des outils.
 - **core/mcp_tools.py** : découverte et appels des outils MCP externes.
-- **core/autorisations_outils.py**, **core/execution_outils.py** : autorisations et exécution.
+- **core/autorisations_outils.py**, **core/execution_outils.py** : autorisations et exécution. Les actions listées dans `AUTORISATION_PERMANENTE_INTERDITE` (`core/registre_outils.py` : l'action finale du navigateur et l'accès réseau depuis la boîte de code) redemandent toujours confirmation : pas de bouton « Toujours autoriser », rien n'est enregistré, et toute autorisation déjà en base pour elles est ignorée.
 - **core/outils_*.py** : capacités par domaine.
 
 Les opérations sensibles doivent conserver leurs contrôles de confirmation et leurs vérifications côté serveur.

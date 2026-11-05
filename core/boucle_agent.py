@@ -32,7 +32,7 @@ from routage_outils import (
 from recherche_outils import rechercher_outils_pertinents
 from completion_outils import completer_outils_trouves, prerequis_parmi
 from consignes_outils import consignes_familles, nombre_outils_restants, texte_outils_restants
-from registre_outils import REGISTRE_AFFICHAGE_OUTILS, outils_de_la_categorie
+from registre_outils import AUTORISATION_PERMANENTE_INTERDITE, REGISTRE_AFFICHAGE_OUTILS, outils_de_la_categorie
 import etat_connexions
 
 # Libellés français (déjà maintenus pour l'affichage à l'écran) réutilisés
@@ -75,7 +75,10 @@ def _evenement_confirmation(attente, messages_agent, outils_mcp, table_routage, 
         # composer le sien à partir de nom_lisible s'il préfère.
         "message": f"{agent_nom or 'Cet agent'} veut faire ceci : {_nom_lisible_appel(appel)}.",
         # Clé envoyée au bouton "Toujours autoriser" (None : le bouton n'est pas proposé).
-        "cle_autorisation": cle_autorisation_appel(appel),
+        "cle_autorisation": (
+            None if cle_autorisation_appel(appel) in AUTORISATION_PERMANENTE_INTERDITE
+            else cle_autorisation_appel(appel)
+        ),
         "agent_nom": agent_nom,
         "arguments": arguments_dict,
         "etat_reprise": {

@@ -77,7 +77,7 @@ Provider availability depends on configuration, credentials, and access rules. T
 
 - **core/registre_outils.py:** tool catalogue.
 - **core/mcp_tools.py:** discovery and calls to external MCP tools.
-- **core/autorisations_outils.py**, **core/execution_outils.py:** permissions and execution.
+- **core/autorisations_outils.py**, **core/execution_outils.py:** permissions and execution. Actions listed in `AUTORISATION_PERMANENTE_INTERDITE` (`core/registre_outils.py`: the final browser action and network access from the code box) always ask for confirmation: no "Always allow" button, nothing saved, and any stored permission for them is ignored.
 - **core/outils_*.py:** capabilities grouped by domain.
 
 Sensitive operations must retain their confirmation controls and server-side checks.
