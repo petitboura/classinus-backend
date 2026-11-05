@@ -118,6 +118,16 @@ def _headers_execution_code(get_secret, user_id, agent_id):
     return {"X-Classinus-Internal": secret} if secret else None
 
 
+def _url_navigateur(get_secret, user_id, agent_id, conversation_id=None):
+    from urllib.parse import urlencode
+
+    port = os.environ.get("PORT", "8000")
+    params = {"user_id": user_id}
+    if conversation_id:
+        params["conversation_id"] = conversation_id
+    return f"http://localhost:{port}/mcp/navigateur?{urlencode(params)}"
+
+
 def _url_tavily(get_secret, user_id, agent_id, conversation_id=None):
     # 04/10/2026, demande Bourama : la cle n'est plus dans l'URL (elle
     # apparaissait en clair dans les logs Railway a chaque requete). Elle
@@ -331,6 +341,12 @@ SERVEURS_MCP = [
     {
         "nom": "execution_code",
         "url_builder": _url_execution_code,
+        "headers_builder": _headers_execution_code,
+        "necessite_utilisateur": True,
+    },
+    {
+        "nom": "navigateur",
+        "url_builder": _url_navigateur,
         "headers_builder": _headers_execution_code,
         "necessite_utilisateur": True,
     },
@@ -697,7 +713,7 @@ OUTILS_SENSIBLES = {
     "gerer_execution_code:demander_acces_reseau",
     # 04/11/2026 (hackathon Vultr, étape 6) : l'action finale dans le navigateur (envoyer, payer,
     # supprimer, publier) n'est jamais automatique : la personne confirme après avoir vu la capture.
-    "gerer_execution_code:browser_submit",
+    "gerer_navigateur:submit",
     # Actions GitHub ajoutées le 20/10/2026 qui écrivent ou agissent au nom
     # de la personne connectée : toutes interrompues pour confirmation.
     "gerer_depot_github:creer_issue",
@@ -817,6 +833,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "generer_document_latex": {"label": "Génération d'un document LaTeX", "icone": "FileDigit", "onglet": "generer"},
     "generer_code": {"label": "Génération de code", "icone": "Code", "onglet": "generer"},
     "gerer_execution_code": {"label": "Exécution de code", "icone": "Play", "onglet": "generer"},
+    "gerer_navigateur": {"label": "Navigateur", "icone": "Globe", "onglet": "utilitaires"},
     # Une icône et un libellé par action de l'outil (24/10/2026, demande de Bourama). Entrées
     # composites "outil:action", jamais cliquables dans le menu Outils (onglet None) : seul
     # l'affichage dans le chat change. Libellés de 18 caractères au plus (téléphone).
@@ -837,14 +854,14 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "gerer_execution_code:download_files": {"label": "Export de fichiers", "icone": "Download", "onglet": None},
     "gerer_execution_code:demander_acces_reseau": {"label": "Accès à un site", "icone": "Globe", "onglet": None},
     "gerer_execution_code:network": {"label": "Réseau autorisé", "icone": "Terminal", "onglet": None},
-    # Navigateur de la boîte Docker (04/11/2026, hackathon Vultr). Icônes lucide-react, résolues par
-    # nom côté frontend : aucune icône à ajouter dans l'interface.
-    "gerer_execution_code:browser_open": {"label": "Ouverture de site", "icone": "Globe", "onglet": None},
-    "gerer_execution_code:browser_click": {"label": "Clic sur la page", "icone": "MousePointerClick", "onglet": None},
-    "gerer_execution_code:browser_type": {"label": "Saisie sur la page", "icone": "Keyboard", "onglet": None},
-    "gerer_execution_code:browser_screenshot": {"label": "Capture de la page", "icone": "Camera", "onglet": None},
-    "gerer_execution_code:browser_submit": {"label": "Action finale", "icone": "ShieldCheck", "onglet": None},
-    "gerer_execution_code:browser_close": {"label": "Fermeture du site", "icone": "Power", "onglet": None},
+    # Navigateur isolé (04/11/2026, hackathon Vultr) : outil et catégorie à part de l'exécution de code.
+    # Icônes lucide-react, résolues par nom côté frontend : aucune icône à ajouter dans l'interface.
+    "gerer_navigateur:open": {"label": "Ouverture de site", "icone": "Globe", "onglet": None},
+    "gerer_navigateur:click": {"label": "Clic sur la page", "icone": "MousePointerClick", "onglet": None},
+    "gerer_navigateur:type": {"label": "Saisie sur la page", "icone": "Keyboard", "onglet": None},
+    "gerer_navigateur:screenshot": {"label": "Capture de la page", "icone": "Camera", "onglet": None},
+    "gerer_navigateur:submit": {"label": "Action finale", "icone": "ShieldCheck", "onglet": None},
+    "gerer_navigateur:close": {"label": "Fermeture du site", "icone": "Power", "onglet": None},
     "gerer_execution_code:close": {"label": "Fin de l'espace", "icone": "Power", "onglet": None},
     "generer_site_zip": {"label": "Génération d'un site (zip)", "icone": "Package", "onglet": "generer"},
     "generer_bundle": {"label": "Génération d'une archive", "icone": "Archive", "onglet": "generer"},
@@ -1479,6 +1496,9 @@ CATEGORIES_OUTILS = {
     # generer_code (qui écrit du code sans l'exécuter) reste dans
     # generation_documents.
     "execution_code": ["gerer_execution_code"],
+    # Navigateur (04/11/2026, demande Bourama) : catégorie à part. Ouvrir un site, le parcourir et le
+    # capturer n'a rien à voir avec lancer du code. Même boîte Docker que l'exécution de code, outil différent.
+    "navigateur": ["gerer_navigateur"],
     # Montage vidéo (24/10/2026, demande Bourama) : disponible sans vidéo jointe, via
     # demander_outils comme les autres catégories. Distinct de recherche_web
     # (rechercher_video, lire_video = vidéos du web) et de higgsfield (génération IA).
@@ -1756,6 +1776,8 @@ INDEX_CATEGORIES_OUTILS = (
     "par exemple Render ou un CRM ; le nom du serveur figure dans la description de chaque outil), "
     "generation_documents, "
     "execution_code (lancer du code et des commandes, gérer, modifier et chercher dans des fichiers dans un espace de travail, cloner un dépôt GitHub public avec git pour le lire), "
+    "navigateur (ouvrir un site web dans un vrai navigateur, le parcourir, cliquer, remplir un formulaire, "
+    "prendre une capture d'écran d'une page ; pas pour chercher une information sur le web), "
     "montage_video (créer ou modifier une vidéo : couper, assembler, sous-titrer, effets, animations ; "
     "pas pour chercher une vidéo sur le web), "
     "recherche_web (web, actualité, images et vidéos ; pas le premier réflexe "

@@ -239,33 +239,33 @@ class ActionsNavigateur(unittest.TestCase):
 
     def test_preparation_des_parametres(self):
         p = navigateur_boite.preparer
-        self.assertIn("url", p("browser_open", "", "", "", "", None, None, "")[1])
-        self.assertEqual(p("browser_open", " https://a.org ", "", "", "", None, None, "")[0], {"url": "https://a.org"})
-        self.assertEqual(p("browser_click", "", "#menu", "", "", None, None, "")[0], {"selecteur": "#menu"})
-        self.assertEqual(p("browser_click", "", "", "Suivant", "", None, None, "")[0], {"texte": "Suivant"})
-        self.assertEqual(p("browser_click", "", "", "", "", 10, 20, "")[0], {"x": 10, "y": 20})
-        self.assertIsNone(p("browser_click", "", "", "", "", None, None, "")[0])
-        self.assertEqual(p("browser_type", "", "#nom", "", "Awa", None, None, "")[0], {"selecteur": "#nom", "valeur": "Awa"})
-        self.assertIsNone(p("browser_type", "", "#nom", "", "", None, None, "")[0])
-        self.assertEqual(p("browser_submit", "", "", "", "", None, None, "Enter")[0], {"touche": "Enter"})
-        self.assertEqual(p("browser_screenshot", "", "", "", "", None, None, "")[0], {})
+        self.assertIn("url", p("open", "", "", "", "", None, None, "")[1])
+        self.assertEqual(p("open", " https://a.org ", "", "", "", None, None, "")[0], {"url": "https://a.org"})
+        self.assertEqual(p("click", "", "#menu", "", "", None, None, "")[0], {"selecteur": "#menu"})
+        self.assertEqual(p("click", "", "", "Suivant", "", None, None, "")[0], {"texte": "Suivant"})
+        self.assertEqual(p("click", "", "", "", "", 10, 20, "")[0], {"x": 10, "y": 20})
+        self.assertIsNone(p("click", "", "", "", "", None, None, "")[0])
+        self.assertEqual(p("type", "", "#nom", "", "Awa", None, None, "")[0], {"selecteur": "#nom", "valeur": "Awa"})
+        self.assertIsNone(p("type", "", "#nom", "", "", None, None, "")[0])
+        self.assertEqual(p("submit", "", "", "", "", None, None, "Enter")[0], {"touche": "Enter"})
+        self.assertEqual(p("screenshot", "", "", "", "", None, None, "")[0], {})
 
     def test_un_clic_qui_ressemble_a_une_action_finale_est_refuse_avec_la_marche_a_suivre(self):
         for texte in ("Envoyer", "Payer maintenant", "Supprimer le compte", "Confirmer", "Submit", "Buy now", "Publier"):
-            parametres, erreur = navigateur_boite.preparer("browser_click", "", "", texte, "", None, None, "")
+            parametres, erreur = navigateur_boite.preparer("click", "", "", texte, "", None, None, "")
             self.assertIsNone(parametres, texte)
-            self.assertIn("browser_submit", erreur)
-        parametres, erreur = navigateur_boite.preparer("browser_click", "", "button[type=submit]", "", "", None, None, "")
+            self.assertIn("submit", erreur)
+        parametres, erreur = navigateur_boite.preparer("click", "", "button[type=submit]", "", "", None, None, "")
         self.assertIsNone(parametres)
-        # La même cible passe par browser_submit : c'est lui qui demande la confirmation.
+        # La même cible passe par submit : c'est lui qui demande la confirmation.
         self.assertEqual(
-            navigateur_boite.preparer("browser_submit", "", "", "Envoyer", "", None, None, "")[0], {"texte": "Envoyer"}
+            navigateur_boite.preparer("submit", "", "", "Envoyer", "", None, None, "")[0], {"texte": "Envoyer"}
         )
 
     def test_enveloppe_avec_capture_texte_de_page_et_marque(self):
         boite = FausseBoite(json.dumps(RETOUR_OK) + "\n")
         with patch.object(boites_isolees, "ouvrir_navigateur", return_value=boite) as ouvrir:
-            sortie = navigateur_boite.executer("browser_open", "u1", "c1", {"allow_out": ["exemple.org"]}, {"url": "https://exemple.org/"})
+            sortie = navigateur_boite.executer("open", "u1", "c1", {"allow_out": ["exemple.org"]}, {"url": "https://exemple.org/"})
         donnees = json.loads(sortie)
         self.assertTrue(donnees[captures_modele.MARQUE])
         self.assertIn("Titre : Accueil", donnees["text"])
@@ -281,7 +281,7 @@ class ActionsNavigateur(unittest.TestCase):
         boite = FausseBoite(json.dumps(RETOUR_OK))
         piege = "x'; rm -rf / #"
         with patch.object(boites_isolees, "ouvrir_navigateur", return_value=boite):
-            navigateur_boite.executer("browser_type", "u1", "c1", {}, {"selecteur": "#a", "valeur": piege})
+            navigateur_boite.executer("type", "u1", "c1", {}, {"selecteur": "#a", "valeur": piege})
         import shlex
         argv = shlex.split(boite.commandes[0])
         self.assertEqual(json.loads(argv[-1])["valeur"], piege)
@@ -290,22 +290,22 @@ class ActionsNavigateur(unittest.TestCase):
     def test_erreur_de_page_est_visible_pour_le_modele(self):
         boite = FausseBoite(json.dumps({"ok": False, "erreur": "Timeout", "url": "https://a.org/", "titre": "A", "capture": "/c.jpg"}))
         with patch.object(boites_isolees, "ouvrir_navigateur", return_value=boite):
-            sortie = navigateur_boite.executer("browser_click", "u1", "c1", {}, {"texte": "Suivant"})
+            sortie = navigateur_boite.executer("click", "u1", "c1", {}, {"texte": "Suivant"})
         self.assertIn("NAVIGATEUR_ERREUR: Timeout", json.loads(sortie)["text"])
 
     def test_sans_capture_lisible_le_texte_seul_est_renvoye(self):
         boite = FausseBoite(json.dumps(RETOUR_OK), octets=None)
         with patch.object(boites_isolees, "ouvrir_navigateur", return_value=boite):
-            sortie = navigateur_boite.executer("browser_screenshot", "u1", "c1", {}, {})
+            sortie = navigateur_boite.executer("screenshot", "u1", "c1", {}, {})
         self.assertTrue(sortie.startswith("Adresse :"))
 
     def test_service_plein_et_service_injoignable_donnent_des_messages_clairs(self):
         with patch.object(boites_isolees, "ouvrir_navigateur", side_effect=boites_isolees.ErreurBoite("x", 429)):
-            self.assertIn("NAVIGATEUR_CAPACITE", navigateur_boite.executer("browser_open", "u", "c", {}, {"url": "https://a.org"}))
+            self.assertIn("NAVIGATEUR_CAPACITE", navigateur_boite.executer("open", "u", "c", {}, {"url": "https://a.org"}))
         with patch.object(boites_isolees, "ouvrir_navigateur", side_effect=boites_isolees.ErreurBoite("x", 503)):
-            self.assertIn("NAVIGATEUR_ERREUR", navigateur_boite.executer("browser_open", "u", "c", {}, {"url": "https://a.org"}))
+            self.assertIn("NAVIGATEUR_ERREUR", navigateur_boite.executer("open", "u", "c", {}, {"url": "https://a.org"}))
         with patch.object(boites_isolees, "ouvrir_navigateur", side_effect=ValueError("secret interne")):
-            sortie = navigateur_boite.executer("browser_open", "u", "c", {}, {"url": "https://a.org"})
+            sortie = navigateur_boite.executer("open", "u", "c", {}, {"url": "https://a.org"})
         self.assertNotIn("secret interne", sortie)
 
     def test_fermer_detruit_la_boite_de_la_conversation(self):
@@ -314,61 +314,137 @@ class ActionsNavigateur(unittest.TestCase):
         kill.assert_called_once_with(navigateur_boite.empreintes("u1", "c1")[0])
 
 
-class OutilExecutionCode(unittest.TestCase):
-    def test_les_actions_navigateur_sont_dans_l_outil_et_hors_reservation_de_quota(self):
-        from core import outils_execution_code as outil
-        with patch.object(navigateur_boite, "raison_indisponible", return_value=None), \
+class OutilNavigateur(unittest.TestCase):
+    """L'outil gerer_navigateur : identité, réseau partagé avec l'exécution de code, aucun quota de workspace."""
+
+    def _appeler(self, **kw):
+        from core import outils_navigateur as outil
+        with patch.object(outil, "_identite_interne", return_value=("u1", "c1", None)):
+            return outil, kw
+
+    def test_les_domaines_de_la_configuration_et_de_la_conversation_sont_transmis(self):
+        from core import outils_navigateur as outil
+        with patch.object(outil, "_identite_interne", return_value=("u1", "c1", None)), \
+                patch.object(navigateur_boite, "raison_indisponible", return_value=None), \
                 patch.object(outil, "_configuration_domaines", return_value={"allowed_domains": ["exemple.org"]}), \
                 patch.object(outil, "_domaines_conversation_ou_vide", return_value=["autre.org"]), \
-                patch.object(navigateur_boite, "executer", return_value="page") as executer, \
-                patch.object(outil, "_rpc_objet", side_effect=AssertionError("pas de réservation de quota")):
-            sortie = outil._action_navigateur("browser_open", "u1", "c1", "https://exemple.org", "", "", "", None, None, "")
+                patch.object(navigateur_boite, "executer", return_value="page") as executer:
+            sortie = outil.gerer_navigateur(action="open", url="https://exemple.org", ctx=None)
         self.assertEqual(sortie, "page")
-        options = executer.call_args.args[3]
-        self.assertEqual(sorted(options["allow_out"]), ["autre.org", "exemple.org"])
+        self.assertEqual(sorted(executer.call_args.args[3]["allow_out"]), ["autre.org", "exemple.org"])
 
     def test_clic_final_refuse_avant_toute_ouverture_de_boite(self):
-        from core import outils_execution_code as outil
-        with patch.object(navigateur_boite, "raison_indisponible", return_value=None), \
+        from core import outils_navigateur as outil
+        with patch.object(outil, "_identite_interne", return_value=("u1", "c1", None)), \
+                patch.object(navigateur_boite, "raison_indisponible", return_value=None), \
                 patch.object(boites_isolees, "ouvrir_navigateur", side_effect=AssertionError("boîte ouverte")):
-            sortie = outil._action_navigateur("browser_click", "u1", "c1", "", "", "Payer", "", None, None, "")
+            sortie = outil.gerer_navigateur(action="click", text="Payer", ctx=None)
         self.assertIn("NAVIGATEUR_ACTION_FINALE", sortie)
+
+    def test_identite_invalide_et_service_absent_donnent_un_message_sans_ouvrir_de_boite(self):
+        from core import outils_navigateur as outil
+        with patch.object(outil, "_identite_interne", return_value=(None, None, "Erreur : non autorisée")):
+            self.assertEqual(outil.gerer_navigateur(action="open", url="https://a.org", ctx=None), "Erreur : non autorisée")
+        with patch.object(outil, "_identite_interne", return_value=("u1", "c1", None)), \
+                patch.dict(os.environ, {"EXECUTION_CODE_FOURNISSEUR": "e2b"}):
+            self.assertIn("NAVIGATEUR_UNAVAILABLE", outil.gerer_navigateur(action="open", url="https://a.org", ctx=None))
+
+    def test_close_detruit_la_boite(self):
+        from core import outils_navigateur as outil
+        with patch.object(outil, "_identite_interne", return_value=("u1", "c1", None)), \
+                patch.object(navigateur_boite, "raison_indisponible", return_value=None), \
+                patch.object(navigateur_boite, "fermer", return_value="fermé") as fermer:
+            self.assertEqual(outil.gerer_navigateur(action="close", ctx=None), "fermé")
+        fermer.assert_called_once_with("u1", "c1")
+
+
+class ExecutionDeCodeInchangee(unittest.TestCase):
+    def test_le_navigateur_n_est_plus_dans_l_outil_d_execution_de_code(self):
+        import asyncio
+        from core.outils_execution_code import mcp_execution_code
+        vrai = next(o for o in asyncio.run(mcp_execution_code.list_tools()) if o.name == "gerer_execution_code")
+        texte = json.dumps(vrai.input_schema) + (vrai.description or "")
+        for mot in ("browser", "navigateur", "capture d'écran", "Chromium"):
+            self.assertNotIn(mot, texte)
 
     def test_mode_docker_n_exige_plus_la_cle_e2b(self):
         from core import outils_execution_code as outil
         env = {"EXECUTION_CODE_FOURNISSEUR": "docker", "BOITES_URL": "http://x", "BOITES_TOKEN": "t", "SUPABASE_SECRET": "s"}
         with patch.dict(os.environ, env, clear=True), \
                 patch.object(outil, "_identite_interne", return_value=("u1", "c1", None)), \
-                patch.object(outil, "_action_navigateur", return_value="ok-navigateur") as navigateur:
-            sortie = outil.gerer_execution_code(action="browser_screenshot", ctx=None)
-        self.assertEqual(sortie, "ok-navigateur")
-        navigateur.assert_called_once()
+                patch.object(outil, "_rpc_objet", side_effect=RuntimeError("base absente")):
+            sortie = outil.gerer_execution_code(action="list_files", ctx=None)
+        self.assertNotIn("EXECUTION_CODE_NOT_CONFIGURED", sortie)
+
+
+class Categorisation(unittest.TestCase):
+    """Le navigateur est un outil et une catégorie à part, branchés comme les autres."""
+
+    def test_categorie_a_part_et_serveur_enregistre(self):
+        from registre_outils import CATEGORIES_OUTILS, SERVEURS_MCP
+        self.assertEqual(CATEGORIES_OUTILS["navigateur"], ["gerer_navigateur"])
+        self.assertEqual(CATEGORIES_OUTILS["execution_code"], ["gerer_execution_code"])
+        serveur = next(s for s in SERVEURS_MCP if s["nom"] == "navigateur")
+        self.assertTrue(serveur["necessite_utilisateur"])
+        self.assertIn("/mcp/navigateur?user_id=u1&conversation_id=c1", serveur["url_builder"](lambda _: "s", "u1", None, "c1"))
+        self.assertEqual(serveur["headers_builder"](lambda _: "secret", "u1", None), {"X-Classinus-Internal": "secret"})
+
+    def test_la_categorie_est_decrite_au_modele_pour_demander_outils(self):
+        import registre_outils
+        textes = [v for v in vars(registre_outils).values() if isinstance(v, str) and "execution_code (lancer du code" in v]
+        self.assertTrue(textes)
+        self.assertIn("navigateur (ouvrir un site web", textes[0])
+
+    def test_masque_avec_e2b_propose_avec_docker(self):
+        import mcp_tools
+        with patch.dict(os.environ, {"EXECUTION_CODE_FOURNISSEUR": "e2b"}):
+            self.assertIn("NAVIGATEUR_UNAVAILABLE", mcp_tools._raison_navigateur_masque("c1"))
+        env = {"EXECUTION_CODE_FOURNISSEUR": "docker", "BOITES_URL": "http://x", "BOITES_TOKEN": "t"}
+        with patch.dict(os.environ, env):
+            self.assertIsNone(mcp_tools._raison_navigateur_masque("c1"))
+            self.assertIn("conversation", mcp_tools._raison_navigateur_masque(""))
+
+    def test_migration_declare_le_serveur_navigateur(self):
+        chemin = os.path.join(os.path.dirname(os.path.abspath(__file__)), "migrations", "2026_11_04_outil_navigateur.sql")
+        with open(chemin, encoding="utf-8") as fichier:
+            sql = fichier.read()
+        self.assertIn("'gerer_navigateur', 1, 'navigateur', true", sql)
+        self.assertIn("ON CONFLICT (nom_outil)", sql)
+
+    def test_les_journaux_ne_contiennent_ni_adresse_ni_texte_saisi(self):
+        import mcp_tools
+        with patch.object(mcp_tools, "logging") as journal:
+            mcp_tools.appeler_outil("gerer_navigateur", {"action": "type", "selector": "#iban", "content": "FR76 secret", "url": "https://banque.example/x"}, {})
+        messages = " ".join(str(c.args[0]) for c in journal.info.call_args_list)
+        for secret in ("FR76", "banque.example", "#iban"):
+            self.assertNotIn(secret, messages)
+        self.assertIn("content_chars", messages)
 
 
 class Approbation(unittest.TestCase):
     def test_action_finale_est_confirmee_les_autres_non(self):
         self.assertTrue(_est_outil_sensible({
-            "name": "gerer_execution_code", "arguments": json.dumps({"action": "browser_submit", "text": "Envoyer"}),
+            "name": "gerer_navigateur", "arguments": json.dumps({"action": "submit", "text": "Envoyer"}),
         }))
-        for action in ("browser_open", "browser_click", "browser_type", "browser_screenshot", "browser_close"):
+        for action in ("open", "click", "type", "screenshot", "close"):
             self.assertFalse(_est_outil_sensible({
-                "name": "gerer_execution_code", "arguments": json.dumps({"action": action}),
+                "name": "gerer_navigateur", "arguments": json.dumps({"action": action}),
             }), action)
 
     def test_libelles_et_icones_des_six_actions_avec_la_limite_de_18_caracteres(self):
         from registre_outils import REGISTRE_AFFICHAGE_OUTILS
         for action in navigateur_boite.ACTIONS:
-            entree = REGISTRE_AFFICHAGE_OUTILS[f"gerer_execution_code:{action}"]
+            entree = REGISTRE_AFFICHAGE_OUTILS[f"gerer_navigateur:{action}"]
             self.assertLessEqual(len(entree["label"]), 18, action)
             self.assertTrue(entree["icone"])
             self.assertNotIn("--", entree["label"])
 
     def test_la_carte_de_confirmation_montre_la_cible_de_l_action_finale(self):
-        appel = {"name": "gerer_execution_code", "arguments": json.dumps({"action": "browser_submit", "text": "Envoyer le formulaire"})}
+        appel = {"name": "gerer_navigateur", "arguments": json.dumps({"action": "submit", "text": "Envoyer le formulaire"})}
         self.assertEqual(_nom_lisible_appel(appel), "Action finale : Envoyer le formulaire")
-        appel["arguments"] = json.dumps({"action": "browser_submit", "key": "Enter"})
+        appel["arguments"] = json.dumps({"action": "submit", "key": "Enter"})
         self.assertEqual(_nom_lisible_appel(appel), "Action finale : touche Enter")
-        appel["arguments"] = json.dumps({"action": "browser_submit"})
+        appel["arguments"] = json.dumps({"action": "submit"})
         self.assertEqual(_nom_lisible_appel(appel), "Action finale")
 
 
@@ -378,30 +454,30 @@ class IntegrationAuxAutresOutils(unittest.TestCase):
     def test_le_site_ouvert_apparait_dans_la_frise_comme_pour_les_autres_outils(self):
         from core.domaines_affichage import domaines_de_l_appel
         self.assertEqual(
-            domaines_de_l_appel("gerer_execution_code", {"action": "browser_open", "url": "https://www.exemple.org/page"}),
+            domaines_de_l_appel("gerer_navigateur", {"action": "open", "url": "https://www.exemple.org/page"}),
             ["exemple.org"],
         )
-        for autre in ({"action": "browser_click", "text": "Suivant"}, {"action": "run_command", "command": "ls"}):
-            self.assertEqual(domaines_de_l_appel("gerer_execution_code", autre), [])
+        for autre in ({"action": "click", "text": "Suivant"}, {"action": "run_command", "command": "ls"}):
+            self.assertEqual(domaines_de_l_appel("gerer_navigateur", autre), [])
 
     def test_le_modele_trouve_l_outil_quand_il_demande_un_navigateur(self):
         import asyncio
-        from core.outils_execution_code import mcp_execution_code
+        from core.outils_navigateur import mcp_navigateur
         from recherche_outils import rechercher_outils_pertinents
-        vrai = next(o for o in asyncio.run(mcp_execution_code.list_tools()) if o.name == "gerer_execution_code")
+        vrai = next(o for o in asyncio.run(mcp_navigateur.list_tools()) if o.name == "gerer_navigateur")
         for action in navigateur_boite.ACTIONS:
             self.assertIn(action, json.dumps(vrai.input_schema))
 
         def fn(nom, desc):
             return {"type": "function", "function": {"name": nom, "description": desc, "parameters": {}}}
         candidats = [
-            fn("gerer_execution_code", vrai.description),
+            fn("gerer_navigateur", vrai.description),
             fn("tavily_search", "Search the web for current information and news."),
             fn("generer_document_excel", "Genere un fichier Excel a partir de donnees."),
             fn("ui_photo", "Prend une photo avec la camera du telephone."),
         ]
         trouves = rechercher_outils_pertinents("ouvrir un site web dans un navigateur et prendre une capture d'ecran", candidats)
-        self.assertEqual(trouves[0]["function"]["name"], "gerer_execution_code")
+        self.assertEqual(trouves[0]["function"]["name"], "gerer_navigateur")
 
 
 class CapturesModele(unittest.TestCase):
@@ -454,13 +530,13 @@ class BoucleDOutils(unittest.TestCase):
 
     def _lancer(self, vision):
         import execution_outils
-        appel = {"id": "call_1", "name": "gerer_execution_code", "arguments": json.dumps({"action": "browser_screenshot"})}
+        appel = {"id": "call_1", "name": "gerer_navigateur", "arguments": json.dumps({"action": "screenshot"})}
         messages = []
         with patch.dict(os.environ, {"NAVIGATEUR_VISION_MODELE": "1"} if vision else {}, clear=False), \
                 patch.object(execution_outils, "appeler_outil", return_value=CapturesModele.ENVELOPPE):
             if not vision:
                 os.environ.pop("NAVIGATEUR_VISION_MODELE", None)
-            evenements = list(execution_outils._traiter_appels([appel], messages, {"gerer_execution_code": {}}))
+            evenements = list(execution_outils._traiter_appels([appel], messages, {"gerer_navigateur": {}}))
         return evenements, messages
 
     def test_avec_vision_le_modele_recoit_le_texte_puis_la_capture_apres_les_resultats(self):
