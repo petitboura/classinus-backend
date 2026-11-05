@@ -125,6 +125,17 @@ def _texte_page(retour: dict) -> str:
     return "\n".join(morceaux) or "Page vide."
 
 
+def _capture_utile(retour: dict) -> bool:
+    """False quand la capture serait une image blanche ou trompeuse : action en échec, ou page sans titre
+    ni texte (page vide, about:blank, chargement raté). Le modèle garde le texte d'erreur, la personne
+    ne voit plus d'image inutile dans le chat (06/11/2026, demande de Bourama)."""
+    if retour.get("ok") is False:
+        return False
+    if not (retour.get("titre") or retour.get("texte")):
+        return False
+    return (retour.get("url") or "") not in ("", "about:blank")
+
+
 def _enveloppe(retour: dict, octets: bytes | None) -> str:
     texte = _texte_page(retour)
     if not octets:
@@ -172,7 +183,7 @@ def executer(action: str, user_id: str, conversation_id: str, options_reseau: di
         resultat = boite.commands.run(commande, timeout=_DELAI_COMMANDE, request_timeout=_DELAI_REQUETE)
         retour = _lire_retour(getattr(resultat, "stdout", ""))
         octets = None
-        if retour.get("capture"):
+        if retour.get("capture") and _capture_utile(retour):
             try:
                 octets = boite.files.read(retour["capture"], format="bytes")
             except Exception as e:

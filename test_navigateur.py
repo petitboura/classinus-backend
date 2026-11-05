@@ -291,7 +291,27 @@ class ActionsNavigateur(unittest.TestCase):
         boite = FausseBoite(json.dumps({"ok": False, "erreur": "Timeout", "url": "https://a.org/", "titre": "A", "capture": "/c.jpg"}))
         with patch.object(boites_isolees, "ouvrir_navigateur", return_value=boite):
             sortie = navigateur_boite.executer("click", "u1", "c1", {}, {"texte": "Suivant"})
-        self.assertIn("NAVIGATEUR_ERREUR: Timeout", json.loads(sortie)["text"])
+        # 06/11/2026 : une action en échec n'envoie plus de capture, le modèle garde le texte d'erreur.
+        self.assertTrue(sortie.startswith("NAVIGATEUR_ERREUR: Timeout"))
+        self.assertNotIn(captures_modele.MARQUE, sortie)
+
+    def test_page_vide_ou_chargement_rate_ne_renvoie_aucune_image_blanche(self):
+        for retour in (
+            {"ok": True, "url": "about:blank", "titre": "", "texte": "", "capture": "/c.jpg"},
+            {"ok": True, "url": "https://a.org/", "titre": "", "texte": "", "capture": "/c.jpg"},
+            {"ok": False, "erreur": "net::ERR_TUNNEL_CONNECTION_FAILED", "url": "about:blank", "capture": "/c.jpg"},
+        ):
+            with self.subTest(retour=retour):
+                boite = FausseBoite(json.dumps(retour))
+                with patch.object(boites_isolees, "ouvrir_navigateur", return_value=boite):
+                    sortie = navigateur_boite.executer("open", "u1", "c1", {}, {"url": "https://a.org/"})
+                self.assertNotIn(captures_modele.MARQUE, sortie)
+
+    def test_page_normale_garde_sa_capture(self):
+        boite = FausseBoite(json.dumps(RETOUR_OK))
+        with patch.object(boites_isolees, "ouvrir_navigateur", return_value=boite):
+            sortie = navigateur_boite.executer("screenshot", "u1", "c1", {}, {})
+        self.assertTrue(json.loads(sortie)[captures_modele.MARQUE])
 
     def test_sans_capture_lisible_le_texte_seul_est_renvoye(self):
         boite = FausseBoite(json.dumps(RETOUR_OK), octets=None)
