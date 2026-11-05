@@ -308,7 +308,7 @@ def traiter_minuteurs_a_notifier() -> int:
     donc jamais deux notifications pour le meme, meme si le planificateur
     tourne sur plusieurs instances. Renvoie le nombre de notifications
     traitees."""
-    from core.notifications_push import envoyer_notification_push
+    from core.notifications_push import ROUTE_CHAT_APPLI, envoyer_notification_push
 
     seuil = _maintenant() - timedelta(seconds=DELAI_AVANT_NOTIFICATION_SECONDES)
     try:
@@ -338,7 +338,7 @@ def traiter_minuteurs_a_notifier() -> int:
             if not reservation.data:
                 continue  # pris par une autre instance, ou termine entretemps
             corps = ligne.get("titre") or "Ton minuteur est terminé."
-            envoyer_notification_push(ligne["user_id"], "Minuteur terminé", corps, "/chat")
+            envoyer_notification_push(ligne["user_id"], "Minuteur terminé", corps, ROUTE_CHAT_APPLI)
             traites += 1
         except Exception as e:
             logging.error(f"ERREUR notification minuteur id={ligne['id']} : {e}")
