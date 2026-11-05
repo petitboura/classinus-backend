@@ -228,7 +228,9 @@ def client(action: str, parametres: dict) -> dict:
         _demarrer_demon()
     corps = json.dumps({**parametres, "action": action}).encode()
     requete = urllib.request.Request(f"http://{HOTE}:{PORT}/", data=corps, method="POST")
-    with urllib.request.urlopen(requete, timeout=60) as reponse:
+    # Le serveur interne est local : on ne passe jamais par le proxy de la boîte (qui refuserait 127.0.0.1).
+    ouvreur = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    with ouvreur.open(requete, timeout=60) as reponse:
         return json.loads(reponse.read())
 
 
