@@ -87,3 +87,12 @@ TAILLE_PAQUET_TOUR = _entier_positif_env("CLASSINUS_TOUR_PAQUET_LIGNES", 50)
 DELAI_ECRITURE_TOUR_SECONDES = _entier_positif_env("CLASSINUS_TOUR_ECRITURE_SECONDES", 2)
 AGE_TOUR_SANS_SIGNE_VIE = timedelta(minutes=_entier_positif_env("CLASSINUS_TOUR_ORPHELIN_MINUTES", 5))
 CONSERVATION_TOURS_PERSISTES = timedelta(days=_entier_positif_env("CLASSINUS_TOURS_PERSISTES_JOURS", 7))
+
+
+# Widgets MCP-UI (ressources ui:// renvoyees par un outil MCP, affichees dans une iframe isolee
+# cote frontend, voir core/ressources_ui.py). Le contenu d'un widget ne passe jamais par le
+# champ texte du resultat : il est porte a part et seul son poids est borne ici, pour proteger
+# le serveur et la base (le widget est garde dans meta.outils pour etre rejoue a la relecture).
+PLAFOND_WIDGET_UI_OCTETS = _entier_positif_env("CLASSINUS_MCP_UI_HTML_MAX_OCTETS", 500000)
+PLAFOND_WIDGETS_UI_PAR_RESULTAT = _entier_positif_env("CLASSINUS_MCP_UI_MAX_PAR_RESULTAT", 4)
+DELAI_LECTURE_RESSOURCE_UI_SECONDES = _entier_positif_env("CLASSINUS_MCP_UI_DELAI_LECTURE_SECONDES", 20)

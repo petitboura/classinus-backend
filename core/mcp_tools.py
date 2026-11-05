@@ -48,6 +48,7 @@ from supabase import create_client, ClientOptions
 from client_http_supabase import nouveau_client_http_supabase
 
 from registre_outils import SERVEURS_MCP
+from core.ressources_ui import collecter_ressources_ui, joindre_ressources_ui
 from libelles_activite_ia import PARAMETRE_LIBELLE_OUTIL, schema_avec_libelle
 
 
@@ -559,7 +560,11 @@ async def _appeler_outil_async(url, nom_outil, arguments, headers=None):
                 await session.initialize()
                 resultat = await session.call_tool(nom_outil, arguments=arguments)
                 texte = _texte_depuis_blocs_mcp(getattr(resultat, "content", None))
-                return _enveloppe_medias_higgsfield(nom_outil, texte)
+                texte = _enveloppe_medias_higgsfield(nom_outil, texte)
+                # 04/11/2026 : les widgets MCP-UI (ressources ui://) voyagent a part du texte, qui
+                # reste le repli. Aucun widget = texte strictement inchange (voir ressources_ui.py).
+                widgets = await collecter_ressources_ui(session, resultat, texte)
+                return joindre_ressources_ui(texte, widgets)
 
 
     return ""

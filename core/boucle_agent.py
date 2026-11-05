@@ -1180,6 +1180,13 @@ def _capturer_reponse(generateur, accumulateur, meta=None, fichiers_generes_accu
             meta["outils"][-1]["videos"] = event["videos"]
             if meta.get("segments") and meta["segments"][-1]["type"] == "outil":
                 meta["segments"][-1]["videos"] = event["videos"]
+        elif meta is not None and event["type"] == "ressources_ui" and meta.get("outils"):
+            # Widgets MCP-UI (04/11/2026) : meme principe que "images" juste au-dessus, pour que
+            # le widget soit rejoue a la reouverture d'une conversation (meta est un jsonb, pas de
+            # nouvelle colonne). Leur poids est deja borne a la source (core/ressources_ui.py).
+            meta["outils"][-1]["ressourcesUi"] = event["ressources"]
+            if meta.get("segments") and meta["segments"][-1]["type"] == "outil":
+                meta["segments"][-1]["ressourcesUi"] = event["ressources"]
         if fichiers_generes_accumules is not None and event["type"] == "fichiers_generes":
             fichiers_generes_accumules.extend(event["fichiers"])
         yield event
