@@ -157,6 +157,10 @@ def domaines_de_l_appel(nom_outil, arguments):
         if nom_outil == "gerer_execution_code" and arguments.get("action") == "demander_acces_reseau":
             domaine = _domaine_nom_seul(arguments.get("domain"))
             return [domaine] if domaine else []
+        if nom_outil == "gerer_navigateur" and arguments.get("action") == "open":
+            # 04/11/2026 : le site ouvert dans le navigateur de la boîte apparaît dans la frise du chat,
+            # comme pour lire_document_externe.
+            return _domaines_de_adresses(arguments.get("url"))[:MAX_DOMAINES]
         if nom_outil == "lire_document_externe":
             return _domaines_de_adresses(arguments.get("url"))[:MAX_DOMAINES]
         if nom_outil in PARAMETRES_ADRESSE_TAVILY:

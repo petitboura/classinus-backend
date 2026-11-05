@@ -77,6 +77,7 @@ from historique_conversation import (
 )
 from historique_reponses_qcm import reponses_qcm_a_injecter
 from execution_outils import _resultat_pour_affichage, cle_autorisation_appel
+from core import captures_modele
 from autorisations_outils import enregistrer_autorisation
 from boucle_agent import _agent_groq, _capturer_reponse, _ajouter_segment_texte, retirer_consigne_de_fin, consigne_de_reprise
 from erreur_tour import evenement_echec
@@ -621,21 +622,27 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     "nom_lisible": _nom_lisible_appel(appel),
                     "action": _action_appel(appel),
                     **_champs_domaines_appel(appel),
-                    "resultat": _resultat_pour_affichage(resultat),
-                    **champs_historique_outil(arguments, resultat, _resultat_pour_affichage(resultat)),
+                    "resultat": _resultat_pour_affichage(captures_modele.sans_image(resultat)),
+                    **champs_historique_outil(arguments, captures_modele.sans_image(resultat), _resultat_pour_affichage(captures_modele.sans_image(resultat))),
                     "id_appel": appel["id"],
                 }
+                # Capture d'écran d'une action de navigateur confirmée : la personne la voit dans la galerie.
+                galerie_capture = captures_modele.galerie(resultat)
+                if galerie_capture:
+                    yield {"type": "images", "images": galerie_capture}
         else:
             resultat = "Action annulée par l'utilisateur : cet outil n'a pas été exécuté."
             yield {"type": "statut_termine", "texte": f"{_nom_lisible_appel(appel)} annulée"}
             deja_ajoute_a_messages_agent = False
 
         if not deja_ajoute_a_messages_agent:
+            contenu_modele, captures_reprise = captures_modele.pour_le_modele(resultat)
             messages_agent.append({
                 "role": "tool",
                 "tool_call_id": appel["id"],
-                "content": resultat,
+                "content": contenu_modele,
             })
+            captures_modele.ajouter_message_images(messages_agent, captures_reprise)
 
         try:
             yield from _agent_groq(

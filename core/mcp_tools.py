@@ -565,10 +565,20 @@ async def _appeler_outil_async(url, nom_outil, arguments, headers=None):
     return ""
 
 
+def _raison_navigateur_masque(conversation_id):
+    """Pourquoi le navigateur n'est pas proposé (None s'il l'est) : il demande les boîtes Docker."""
+    from core import navigateur_boite
+    if not conversation_id:
+        return "aucune conversation identifiée pour cette demande"
+    return navigateur_boite.raison_indisponible()
+
+
 def _raison_execution_code_masque(conversation_id):
     """Pourquoi le serveur d'exécution de code n'est pas proposé (None s'il l'est)."""
-    if not os.environ.get("E2B_API_KEY"):
-        return "la variable E2B_API_KEY est absente du serveur"
+    from core import boites_isolees
+    raison_fournisseur = boites_isolees.raison_non_configuree()
+    if raison_fournisseur:
+        return raison_fournisseur
     if not conversation_id:
         return "aucune conversation identifiée pour cette demande"
     return None
@@ -629,6 +639,14 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
         if raison_masquage:
             logging.warning(f"Outil d'exécution de code non proposé : {raison_masquage}.")
             serveurs_actifs = [s for s in serveurs_actifs if s["nom"] != "execution_code"]
+
+    # Le navigateur n'est proposé que si les boîtes Docker sont configurées : avec E2B, le modèle ne le voit
+    # pas du tout, au lieu de l'essayer et d'échouer.
+    if "navigateur" in noms_serveurs_actifs:
+        raison_masquage = _raison_navigateur_masque(conversation_id)
+        if raison_masquage:
+            logging.warning(f"Outil navigateur non proposé : {raison_masquage}")
+            serveurs_actifs = [s for s in serveurs_actifs if s["nom"] != "navigateur"]
 
     # Montage vidéo sans vidéo jointe : le serveur rejoint le catalogue comme les autres
     # (le modèle le réclame via demander_outils, catégorie montage_video). Il a besoin
@@ -695,8 +713,8 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
                         # que soit l'outil selectionne via le bouton Outils.
                         "parameters": schema_avec_libelle(_schema_avec_delai(
                             outil.input_schema,
-                            delai_defaut=180 if nom == "execution_code" else None,
-                            delai_max=180 if nom == "execution_code" else None,
+                            delai_defaut=180 if nom in ("execution_code", "navigateur") else None,
+                            delai_max=180 if nom in ("execution_code", "navigateur") else None,
                         )),
                     },
                 })
@@ -932,8 +950,8 @@ def appeler_outil(nom_outil, arguments, table_routage, arret=None):
     delai_demande = arguments.pop(PARAMETRE_DELAI_OUTIL, None)
     # Phrase de la timeline (23/10/2026) : réservée à l'affichage, jamais transmise à l'outil.
     arguments.pop(PARAMETRE_LIBELLE_OUTIL, None)
-    if nom_outil == "gerer_execution_code":
-        # La création ou la reprise d'un sandbox peut dépasser 60 secondes.
+    if nom_outil in ("gerer_execution_code", "gerer_navigateur"):
+        # La création ou la reprise d'un sandbox (ou le démarrage du navigateur) peut dépasser 60 secondes.
         # Ce délai transporte l'appel MCP, sans élargir la durée d'une commande.
         delai = 180
     else:
@@ -948,6 +966,13 @@ def appeler_outil(nom_outil, arguments, table_routage, arret=None):
         for champ in ("code", "command", "content"):
             valeur = arguments.get(champ)
             if isinstance(valeur, str):
+                arguments_journal[f"{champ}_chars"] = len(valeur)
+    elif nom_outil == "gerer_navigateur":
+        # Adresses visitées, textes saisis et sélecteurs peuvent être personnels : jamais dans les journaux.
+        arguments_journal = {"action": arguments.get("action")}
+        for champ in ("url", "selector", "text", "content", "key"):
+            valeur = arguments.get(champ)
+            if isinstance(valeur, str) and valeur:
                 arguments_journal[f"{champ}_chars"] = len(valeur)
     else:
         arguments_journal = arguments
@@ -1005,15 +1030,15 @@ def appeler_outil(nom_outil, arguments, table_routage, arret=None):
             else:
                 yield exc
         detail = "; ".join(f"{type(sub).__name__}: {sub}" for sub in _aplatir(eg))
-        if nom_outil == "gerer_execution_code":
-            # Les exceptions de commande peuvent contenir des fragments de code ou de sortie.
+        if nom_outil in ("gerer_execution_code", "gerer_navigateur"):
+            # Les exceptions de commande peuvent contenir des fragments de code, de page ou de sortie.
             logging.error("ERREUR MCP exécution de code (TaskGroup) : %s", type(eg).__name__)
         else:
             logging.error(f"ERREUR MCP appel a {nom_outil} (TaskGroup) : {detail}", exc_info=True)
         return _message_erreur_technique_outil(nom_outil)
     except Exception as e:
-        if nom_outil == "gerer_execution_code":
-            logging.error("ERREUR MCP exécution de code : %s", type(e).__name__)
+        if nom_outil in ("gerer_execution_code", "gerer_navigateur"):
+            logging.error("ERREUR MCP exécution de code ou navigateur : %s", type(e).__name__)
         else:
             logging.error(f"ERREUR MCP appel a {nom_outil}: {e}", exc_info=True)
         return _message_erreur_technique_outil(nom_outil)

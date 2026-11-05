@@ -1,0 +1,49 @@
+# À déployer sur le serveur Vultr (Coolify : nouvelle ressource, Docker Compose, ce fichier).
+# Les chemins de construction partent de la racine du dépôt classinus-backend
+# (Coolify : Base Directory = /, Docker Compose Location = /boites_service/docker-compose.yml).
+services:
+  boites-service:
+    build:
+      context: .
+      dockerfile: boites_service/Dockerfile
+    container_name: boites-service
+    restart: unless-stopped
+    environment:
+      BOITES_TOKEN: ${BOITES_TOKEN:?définir BOITES_TOKEN}
+      BOITES_MAX: ${BOITES_MAX:-20}
+      BOITES_MEMOIRE: ${BOITES_MEMOIRE:-512m}
+      BOITES_CPUS: ${BOITES_CPUS:-1}
+      BOITES_DISQUE: ${BOITES_DISQUE:-256m}
+      BOITES_NAV_MEMOIRE: ${BOITES_NAV_MEMOIRE:-1536m}
+      BOITES_NAV_CPUS: ${BOITES_NAV_CPUS:-1}
+      BOITES_NAV_DISQUE: ${BOITES_NAV_DISQUE:-512m}
+      BOITES_NAV_MAX: ${BOITES_NAV_MAX:-3}
+      BOITES_NAV_DUREE_MAX: ${BOITES_NAV_DUREE_MAX:-900}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "${BOITES_PORT_HOTE:-8787}:8080"
+    networks:
+      - default
+      - boites_internes
+
+  boite-image:
+    build:
+      context: ./boites_service
+      dockerfile: Dockerfile.boite
+    image: classinus-boite:latest
+    command: ["true"]
+    restart: "no"
+
+  boite-navigateur-image:
+    build:
+      context: ./boites_service
+      dockerfile: Dockerfile.navigateur
+    image: classinus-navigateur:latest
+    command: ["true"]
+    restart: "no"
+
+networks:
+  boites_internes:
+    name: boites_internes
+    internal: true
