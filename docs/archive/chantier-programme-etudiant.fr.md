@@ -1,3 +1,5 @@
+> [English version](./chantier-programme-etudiant.md) · **Version française**
+
 # Chantier — Nouveau produit étudiant (Clovis)
 
 ---

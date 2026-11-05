@@ -24,11 +24,6 @@ CACHE_TTL = 120
 DUREE_VIE_ETAT = timedelta(minutes=15)
 
 FOURNISSEURS = {
-    "vercel_mcp": {
-        "resource_url": "https://mcp.vercel.com/",
-        "mcp_url": "https://mcp.vercel.com",
-        "scopes": ["openid", "offline_access"],
-    },
     "railway_mcp": {
         "resource_url": "https://mcp.railway.com/",
         "mcp_url": "https://mcp.railway.com",

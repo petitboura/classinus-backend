@@ -1,3 +1,5 @@
+> [English version](./PROGRAMME_DESACTIVE.md) · **Version française**
+
 # ⚠️ Fonctionnalité "Programme" désactivée — voir `_desactive_programme/`
 
 La structure classe/matière/chapitre (documents, exercices, examens,

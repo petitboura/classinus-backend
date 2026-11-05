@@ -1,3 +1,5 @@
+> [English version](./BRANCHES-CONSOLIDATION-2026-10-31.md) · **Version française**
+
 # Consolidation des branches en doute — 31/10/2026
 
 Note pour les créateurs des branches concernées (décision Bourama, analyse Git : ancêtres, `git cherry`, diffs d'arbres vs `staging`).

@@ -52,6 +52,7 @@ def etat_service(service, user_id):
     import connexions.higgsfield_mcp as higgsfield_mcp
     import connexions.netlify_mcp as netlify_mcp
     import connexions.render_mcp as render_mcp
+    import connexions.vercel_mcp as vercel_mcp
     import connexions.platform_mcp_oauth as platform_mcp_oauth
     from connexions.oauth_generique import (
         SERVICES,
@@ -64,6 +65,8 @@ def etat_service(service, user_id):
         return {"connecte": netlify_mcp.est_connecte(user_id)}
     if service == "render_mcp":
         return {"connecte": render_mcp.est_connecte(user_id)}
+    if service == "vercel_mcp":
+        return {"connecte": vercel_mcp.est_connecte(user_id)}
     if service == "higgsfield_mcp":
         connecte = higgsfield_mcp.est_connecte(user_id)
         return {"connecte": connecte, "a_reconnecter": (not connecte) and higgsfield_mcp.a_reconnecter(user_id)}

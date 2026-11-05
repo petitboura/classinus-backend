@@ -1,50 +1,48 @@
-# Instructions permanentes pour Claude sur ce dépôt
+# Permanent instructions for Claude in this repository
 
-## Jamais de tirets doubles ("--") dans un texte AFFICHÉ
+[English version] · [Français](CLAUDE.fr.md)
 
-Bourama déteste totalement les "--" (substitut d'em-dash) dans tout texte
-qu'un utilisateur ou lui-même voit à l'écran. Concrètement, jamais dans :
-- les messages d'erreur renvoyés par l'API (`erreur_api`, exceptions, etc.)
-- le texte que les outils MCP renvoient à l'IA pour être relayé en chat
-  (core/serveur_mcp_espace.py, core/serveur_mcp_generation.py)
-- tout label, nom, description généré dynamiquement et stocké en base
-  pour être affiché (skills, comportements, plugins...)
+## Never use double hyphens ("--") in user-visible text
 
-Ça reste totalement acceptable dans :
-- le code lui-même (commentaires, docstrings) -- jamais vu par l'utilisateur
-- les séparateurs markdown intentionnels type `"\n\n---\n\n"` (ligne
-  horizontale), ce n'est pas un em-dash, c'est un délimiteur de section
+Bourama strongly dislikes double hyphens used as a substitute for an em dash in any text shown to a user. In practice, never use them in:
+- Error messages returned by the API (`erreur_api`, exceptions, etc.).
+- Text returned by MCP tools to the AI for delivery in chat (`core/serveur_mcp_espace.py`, `core/serveur_mcp_generation.py`).
+- Any dynamic label, name, or description stored in the database for display (skills, behaviors, plugins, etc.).
 
-À la place d'un em-dash dans un texte affiché : une virgule, un point, une
-parenthèse, ou reformuler la phrase. Exemple concret corrigé le 20/08/2026 :
+They are acceptable in code itself (comments and docstrings), which users do not see. Intentional Markdown separators such as `"\n\n---\n\n"` are also acceptable: they are horizontal rules, not em dashes.
+
+When an em dash would otherwise appear in visible text, use a comma, period, parentheses, or rewrite the sentence. Example fixed on 20 August 2026:
 `f"(Source : {nom} -- {url})"` → `f"(Source : {nom}, {url})"`.
 
-Cette règle est un standing instruction : la vérifier avant de livrer tout
-texte destiné à être affiché, sans que Bourama ait à la répéter.
+This is a standing instruction. Check all user-visible text before delivery without waiting for Bourama to repeat the rule.
 
-## Toute nouvelle donnée liée à un utilisateur doit être purgée à la suppression du compte
+## Every new piece of user data must be deleted when the account is deleted
 
-Erreur constatée le 12/10/2026 : la suppression de compte
-(`api/profiles.py`, fonction `supprimer_mon_compte`) ne supprimait qu'une
-petite partie des données. Presque aucune table n'a de clé étrangère avec
-suppression en cascade vers le compte, donc tout ce qui n'était pas listé à
-la main restait en base : bibliothèque et fichiers, jetons Notion et Google,
-temps d'écran, rappels, réponses aux QCM, etc. Google Play et la loi
-tunisienne 2004-63 exigent de supprimer les données liées au compte.
+An issue was identified on 12 October 2026: account deletion (`api/profiles.py`, function `supprimer_mon_compte`) removed only a small subset of user data. Almost no tables had foreign keys with cascading deletion to the account, so anything not listed manually remained in the database: library and files, Notion and Google tokens, screen-time data, reminders, QCM answers, and more. Google Play and Tunisian law 2004-63 require the deletion of data associated with an account.
 
-Règle, à appliquer sans que Bourama ait à la répéter : chaque fois qu'on
-crée une table, une colonne ou un fichier de stockage qui contient une
-donnée d'un utilisateur (colonne `user_id`, `owner_id`, `proprietaire_id`,
-`etudiant_id`, `auteur_id`, etc.), dans la même livraison :
-1. l'ajouter à `core/purge_compte.py` (liste `_TABLES_SIMPLES`, ou une étape
-   dédiée si des fichiers ou des liens sans cascade sont en jeu) ;
-2. l'ajouter à l'export `exporter_mes_donnees` dans `api/profiles.py` ;
-3. préférer `ON DELETE CASCADE` vers `auth.users` dans la migration, et ne
-   jamais créer de clé étrangère sans cascade vers un compte : elle bloque la
-   suppression (erreur `PROFIL_FERMETURE_PARTIELLE`) ;
-4. vérifier le schéma réel de la base (clés étrangères et colonnes), pas
-   seulement le code : le code ne montre pas les colonnes de façon fiable ;
-5. si la donnée est volontairement gardée (comme `journal_actions`, gardé
-   pour la sécurité), le dire dans la politique de confidentialité.
+Apply this rule without waiting for Bourama to repeat it. Whenever you create a table, column, or storage file containing user data (columns such as `user_id`, `owner_id`, `proprietaire_id`, `etudiant_id`, `auteur_id`, etc.), include all of the following in the same delivery:
 
-Aucune table liée à un compte ne doit être livrée sans passer par ces points.
+1. Add it to `core/purge_compte.py` (the `_TABLES_SIMPLES` list, or a dedicated step if files or non-cascading links are involved).
+2. Add it to the `exporter_mes_donnees` export in `api/profiles.py`.
+3. Prefer `ON DELETE CASCADE` to `auth.users` in the migration. Never create a foreign key to an account without cascading deletion; it blocks account deletion and can cause `PROFIL_FERMETURE_PARTIELLE`.
+4. Verify the actual database schema (foreign keys and columns), not just the code. Code does not reliably reveal every column.
+5. If data is intentionally retained (such as `journal_actions`, which is retained for security), disclose that in the Privacy Policy.
+
+No account-linked table may be delivered without passing these checks.
+
+## Documentation: always up to date, always organized, always translated
+
+Bourama's decision from 4 November 2026. This rule is mandatory: apply it every time, without asking and without waiting for him to repeat it.
+
+- **Always up to date.** Whenever code, behavior, configuration, or a decision changes, update the affected documentation in the same change.
+- **Never leave a mess.** Never drop a loose Markdown file at the repository root. Every new document goes in `docs/`, or in a themed subfolder (for example `docs/chantiers/`, `docs/specs/`) once a topic grows. Create a new document or a new folder whenever it keeps things clear; do not ask first.
+- **Always organized.** Every new document is added to the index in `docs/README.md` and `docs/README.fr.md` in the same change. When you edit an old document still at the root (see that index), move it into `docs/` and fix every reference to it, in code comments and in other documents.
+- **Always translated.** Every document exists in English (default, `.md`) and French (`.fr.md`), with the language switch line at the top of both. Update both versions together, never only one.
+- Only `README`, `CLAUDE`, and their `.fr.md` versions stay at the root.
+- Never write a secret, token, or password in documentation.
+
+
+### Operational documentation that must remain beside its source
+
+- Do not move `skills_plateforme/<slug>/SKILL.md` or `SKILL.fr.md`. The synchronization script `scripts/synchroniser_skills_plateforme.py` reads skills from that exact directory structure to publish runtime instructions.
+- Do not move `LISEZ_MOI_NE_JAMAIS_REUTILISER.md` or its French companion out of `_desactive_programme/` and `_desactive_roles_hierarchie/`. These are safety markers placed next to disabled code and must remain there.

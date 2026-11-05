@@ -1,6 +1,8 @@
+> [English version](./HIGGSFIELD_TODO.md) · **Version française**
+
 # Higgsfield — état backend branche `feature/higgsfield-catalogue-generation`
 
-Front : voir `HIGGSFIELD_TODO.md` à la racine de `classinus-frontend`.
+Front : voir `HIGGSFIELD_TODO.md` dans `docs/status/` de `classinus-frontend`.
 
 ## Déjà en place
 - `api/higgsfield.py` branché dans `api/main.py` (router `/api/higgsfield`).

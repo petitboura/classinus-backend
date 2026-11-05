@@ -549,9 +549,9 @@ def _notifier_fin_tour(tour) -> None:
     (31/10/2026) : l'utilisateur parti faire autre chose est prevenu, celui qui regarde
     encore son ecran ne recoit rien. Echec silencieux : jamais bloquant pour le chat."""
     try:
-        from core.notifications_push import envoyer_notification_push
+        from core.notifications_push import ROUTE_CHAT_APPLI, envoyer_notification_push
 
-        envoyer_notification_push(tour.user_id, "Classinus", "La réponse est terminée.", "/chat")
+        envoyer_notification_push(tour.user_id, "Classinus", "La réponse est terminée.", ROUTE_CHAT_APPLI)
     except Exception as e:
         logging.error("ERREUR notification fin de tour %s : %s", tour.id, e)
 

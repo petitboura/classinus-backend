@@ -1,3 +1,5 @@
+> [English version](./ETAT_SIGNALEMENTS_10-09.md) · **Version française**
+
 # Refonte du système de signalements pédagogiques — état au 11/09/2026
 
 Ce document est sur la branche `refonte-signalements-10-09` (backend **et**

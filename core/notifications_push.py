@@ -78,6 +78,11 @@ VAPID_CLAIMS_SUB = "mailto:contact@maame.africa"  # à changer par une vraie adr
 FCM_SCOPES = ["https://www.googleapis.com/auth/firebase.messaging"]
 APNS_BUNDLE_ID = "com.classinus.app"  # voir ios/README.md dans clovis-mobile, à réaligner si Bourama change l'id
 
+# Page du chat dans l'appli. Le chat est à la racine "/" depuis le 30/09/2026 (voir lib/routesApp.ts
+# dans classinus-frontend, ROUTES_APP.chat) : "/chat" n'existe plus que comme redirection du site web,
+# absente de l'appli Android. Source unique pour les notifications qui renvoient vers le chat.
+ROUTE_CHAT_APPLI = "/"
+
 
 def _get_secret(cle):
     return os.environ.get(cle)
@@ -222,7 +227,7 @@ def _access_token_fcm() -> str:
     return creds.token
 
 
-def _envoyer_fcm(token: str, titre: str, corps: str, prioritaire: bool = False) -> bool:
+def _envoyer_fcm(token: str, titre: str, corps: str, prioritaire: bool = False, url: str | None = None) -> bool:
     """
     Renvoie False (jamais d'exception) si l'échec signifie "token mort"
     (UNREGISTERED/NOT_FOUND) -- l'appelant nettoie alors la table. Toute
@@ -235,13 +240,19 @@ def _envoyer_fcm(token: str, titre: str, corps: str, prioritaire: bool = False) 
     app -- ce qui empêcherait le repli plein-écran/heads-up géré côté
     client (voir ClovisFirebaseMessagingService.kt dans clovis-mobile).
     Avec `data` seul, onMessageReceived est toujours appelé.
+
+    `url` : page de l'appli à ouvrir au clic sur la notification (chemin interne, ex. "/"). Les valeurs
+    de `data` FCM doivent être des chaînes : la clé est donc absente quand il n'y a pas d'url.
     """
     projet = _get_secret("FCM_PROJECT_ID")
-    url = f"https://fcm.googleapis.com/v1/projects/{projet}/messages:send"
+    adresse_fcm = f"https://fcm.googleapis.com/v1/projects/{projet}/messages:send"
+    donnees = {"title": titre, "body": corps, "prioritaire": "true" if prioritaire else "false"}
+    if url:
+        donnees["url"] = url
     corps_requete = {
         "message": {
             "token": token,
-            "data": {"title": titre, "body": corps, "prioritaire": "true" if prioritaire else "false"},
+            "data": donnees,
             # Priorité haute : nécessaire pour un rappel qui doit
             # arriver à l'heure même écran éteint (voir doctrine Android
             # Doze/App Standby). Ne garantit PAS l'alerte plein écran --
@@ -253,7 +264,7 @@ def _envoyer_fcm(token: str, titre: str, corps: str, prioritaire: bool = False) 
     }
     try:
         reponse = httpx.post(
-            url,
+            adresse_fcm,
             headers={"Authorization": f"Bearer {_access_token_fcm()}"},
             json=corps_requete,
             timeout=10,
@@ -279,19 +290,22 @@ def _jeton_apns() -> str:
     )
 
 
-def _envoyer_apns(token: str, titre: str, corps: str) -> bool:
+def _envoyer_apns(token: str, titre: str, corps: str, url: str | None = None) -> bool:
     """
     Même contrat de retour que _envoyer_fcm. Serveur de prod Apple par
     défaut (api.push.apple.com) -- pas de bascule sandbox/prod
     automatique ici, à gérer si besoin le jour où un environnement de
     test iOS existe réellement (voir ios/README.md, pas encore le cas).
     """
-    url = f"https://api.push.apple.com/3/device/{token}"
+    adresse_apns = f"https://api.push.apple.com/3/device/{token}"
     corps_requete = {"aps": {"alert": {"title": titre, "body": corps}, "sound": "default"}}
+    if url:
+        # Clé hors de "aps", lue côté iOS au clic (la gestion du clic iOS reste à écrire).
+        corps_requete["url"] = url
     try:
         with httpx.Client(http2=True) as client:
             reponse = client.post(
-                url,
+                adresse_apns,
                 headers={
                     "authorization": f"bearer {_jeton_apns()}",
                     "apns-topic": APNS_BUNDLE_ID,
@@ -512,9 +526,9 @@ def envoyer_notification_push(user_id: str, titre: str, corps: str, url: str = N
                 plateforme, token = appareil["plateforme"], appareil["token"]
                 ok = False
                 if plateforme == "android" and _fcm_disponible():
-                    ok = _envoyer_fcm(token, titre, corps)
+                    ok = _envoyer_fcm(token, titre, corps, url=url)
                 elif plateforme == "ios" and _apns_disponible():
-                    ok = _envoyer_apns(token, titre, corps)
+                    ok = _envoyer_apns(token, titre, corps, url=url)
                 else:
                     continue  # canal de cette plateforme pas configuré, on ignore ce token
 

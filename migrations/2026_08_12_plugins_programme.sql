@@ -1,5 +1,5 @@
 -- Système de plugins (export/import de programme), lot 3/5 (12/08/2026).
--- Voir chantier-programme-etudiant.md, partie 1, "Système de plugins", et
+-- Voir docs/archive/chantier-programme-etudiant.md, partie 1, "Système de plugins", et
 -- api/plugins_programme.py pour la logique. Dépend de `programmes`
 -- (lot 1), déjà présente en base au moment de cette migration -- pas
 -- recréée ici, uniquement référencée en foreign key.

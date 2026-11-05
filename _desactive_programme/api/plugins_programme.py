@@ -1,6 +1,6 @@
 """
 Système de "plugins" pour le programme étudiant (lot 3/5, 2026-08-12).
-Voir chantier-programme-etudiant.md, partie 1, section "Système de
+Voir docs/archive/chantier-programme-etudiant.md, partie 1, section "Système de
 plugins" : un plugin = l'export en bloc d'un programme complet (matières,
 chapitres, documents, exercices), recherchable par niveau ou par nom de
 créateur, téléchargeable par un autre utilisateur qui obtient sa propre

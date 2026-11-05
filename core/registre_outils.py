@@ -205,7 +205,8 @@ def _url_vercel_mcp(get_secret, user_id, agent_id, conversation_id=None):
 
 
 def _headers_vercel_mcp(get_secret, user_id, agent_id):
-    token = obtenir_token_platform_mcp("vercel_mcp", user_id)
+    from connexions.vercel_mcp import obtenir_token_valide as obtenir_jeton_vercel
+    token = obtenir_jeton_vercel(user_id)
     return {"Authorization": f"Bearer {token}"} if token else None
 
 
@@ -789,6 +790,15 @@ OUTILS_SENSIBLES = {
     "root_forcer_trim",
     "root_redemarrer",
 }
+
+# Actions sensibles qui ne peuvent JAMAIS devenir "Toujours autoriser" (05/11/2026, hackathon
+# Vultr) : la personne doit confirmer à chaque fois. Le bouton n'est pas proposé, aucune
+# autorisation permanente n'est enregistrée, et une autorisation déjà en base pour ces actions
+# est ignorée.
+AUTORISATION_PERMANENTE_INTERDITE = frozenset({
+    "gerer_navigateur:submit",
+    "gerer_execution_code:demander_acces_reseau",
+})
 
 
 # Registre d'affichage unique (2026-08-15, demande Bourama : "qu'à un

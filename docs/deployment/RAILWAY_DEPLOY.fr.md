@@ -1,3 +1,5 @@
+> [English version](./RAILWAY_DEPLOY.md) · **Version française**
+
 # Déploiement Railway — checklist
 
 Établie en lisant le code réel (grep de `get_secret("...")` sur tout le

@@ -22,15 +22,22 @@ import re
 PARAMETRE_LIBELLE_OUTIL = "libelle_activite"
 LONGUEUR_MAX_LIBELLE = 90
 
+# Description écrite en anglais exprès (05/11/2026, demande de Bourama) : les modèles lisaient la
+# version française et écrivaient le libellé en français même quand l'utilisateur écrivait en
+# anglais. La règle de langue est maintenant la langue du DERNIER message de l'utilisateur.
 _DESCRIPTION_PARAMETRE = (
-    "Optionnel mais à toujours remplir. Un court libellé (moins de 8 mots) qui dit à "
-    "l'utilisateur ce que tu fais en ce moment, avec son sujet réel, écrit dans la langue "
-    "dans laquelle il t'écrit. Il doit être un groupe nominal : un nom d'action suivi de son "
-    "sujet, jamais une phrase avec un verbe conjugué, jamais à la première personne, jamais "
-    "au présent (pas de « Je cherche », « Je lis », « I'm looking for »). "
-    "Sans nom d'outil, sans nom de fichier, sans jargon technique, sans point final. "
-    "Exemples : « Recherche de vidéos sur les dérivées », « Lecture de ton cours de chimie », "
-    "« Video search on derivatives », « Chemistry course reading »."
+    "Optional but always fill it in. A short label (under 8 words) telling the user what you are "
+    "doing right now, with its real subject. LANGUAGE RULE: write the label in the language of the "
+    "user's most recent message. If the user writes English, the label is in English. If the user "
+    "writes French, it is in French. The same goes for any other language. Never write it in French "
+    "by default just because this description, the system prompt or the tool names are in French or "
+    "contain French. If the last message is too short to tell the language (for example \"ok\" or a "
+    "single word), use the language of the user's earlier messages. It must be a noun phrase: an "
+    "action noun followed by its subject, never a sentence with a conjugated verb, never first person, "
+    "never present tense (no « Je cherche », « Je lis », \"I'm looking for\"). No tool name, no file "
+    "name, no technical jargon, no final period. "
+    "Examples: user writes English, label \"Video search on derivatives\" or \"Chemistry course reading\"; "
+    "user writes French, label « Recherche de vidéos sur les dérivées » or « Lecture de ton cours de chimie »."
 )
 
 
