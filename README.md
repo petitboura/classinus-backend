@@ -8,6 +8,68 @@ The frontend is maintained separately: [classinus-frontend](https://github.com/p
 
 [Français](README.fr.md)
 
+## Hackathon: Vultr Agent Rush ("Blast Radius Zero")
+
+Classinus agents can run code and drive a real web browser. To keep the blast radius at zero, every one of those actions happens inside a sealed box on a **Vultr server**: whatever the model does, or whatever a malicious page tries, it cannot reach a real secret, the internal network, or any site the person did not approve.
+
+### Vultr services used
+
+| Vultr service | What it does here |
+|---|---|
+| **Cloud Compute** (instance `classinus-vultr`, Frankfurt, 4 vCPU / 8 GB, Ubuntu 24.04) | Control center. Runs the sealed-box service ([`boites_service`](boites_service/README.md)) and the Classinus backend, deployed with **Coolify** (Vultr marketplace app). |
+| **Serverless Inference** (OpenAI-compatible API) | The agent's LLM calls: DeepSeek, GLM, Qwen, Nemotron and Muse models, selected in the chat model picker. |
+| **Firewall group** | Attached to the server to restrict who can reach the sandbox service port. |
+
+### How a request flows
+
+```
+Person -> Classinus chat -> backend API -> Vultr Serverless Inference (model decides which tool to call)
+                                   |
+                                   v
+                    sandbox service on the Vultr server
+                      |                          |
+              code box (Docker)        browser box (Docker + Chromium/Playwright)
+                      \__________________________/
+                         egress proxy (allow-list, ports 80/443 only)
+```
+
+### Containment (what is enforced on every box)
+
+- One Docker container per conversation, non-root user, all Linux capabilities dropped, `no-new-privileges`, read-only filesystem.
+- Memory, swap, CPU, process count and disk limits; every command is killed after its time limit.
+- **No secret inside the box**: no Classinus key, no Vultr key. The box only knows its proxy address.
+- The box network is internal: no route to the Internet. The only way out is the proxy, domain by domain, ports 80 and 443, public addresses only (no internal network, no link-local range).
+- Destroying a box deletes its container and its volume; idle boxes are paused automatically.
+
+Details and the full table: [`boites_service/README.md`](boites_service/README.md).
+
+### Human approval and the allow-list
+
+- The agent is told which sites are reachable (the list is part of the tool description) and asks for access **before** trying any other site.
+- A request for a new site shows a confirmation card ("Access to site ..."). The person must confirm; there is no "always allow" for it. Dangerous or malformed domains are refused, and the number of extra domains per conversation is capped.
+- In the browser, the final action (sending a form, paying, deleting, publishing) also needs the person's approval before it runs.
+- The browser returns screenshots to the vision model so it can check what it sees; failed or empty pages send no image.
+
+### Try it (demo scenario)
+
+1. Ask the agent: "Open wikipedia.org in the browser." Wikipedia is not on the allow-list, so the agent asks for access and you see the confirmation card.
+2. Approve: the page opens and the agent describes the screenshot.
+3. Ask it to fill and send a form: the agent fills it, then waits for your approval before the final submit. Refuse, and nothing is sent.
+
+### Configuration
+
+| Variable | Purpose |
+|---|---|
+| `VULTR_INFERENCE_API_KEY` | Vultr Serverless Inference key |
+| `VULTR_INFERENCE_BASE_URL` | Optional override of the inference address |
+| `EXECUTION_CODE_FOURNISSEUR=docker` | Use the Vultr sandboxes instead of the previous provider |
+| `BOITES_URL`, `BOITES_TOKEN` | Address and token of the sandbox service on the Vultr server |
+
+### Known limits
+
+- Files in a box live in memory (tmpfs): restarting the Vultr server erases workspaces.
+- The previous sandbox provider (E2B) stays available through configuration so production never depends on a single switch; if Vultr inference refuses a call (credit, quota, key), the call falls back to the usual route for 10 minutes.
+
 ## Responsibilities
 
 - Application API and authentication.
