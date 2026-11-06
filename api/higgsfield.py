@@ -138,7 +138,7 @@ def statut(request_id: str, utilisateur=Depends(utilisateur_courant)):
         if ligne["etat"] == "en_cours":
             higgsfield_suivi.traiter_une_generation(utilisateur.id, request_id)
             ligne = higgsfield_suivi.obtenir(utilisateur.id, request_id) or ligne
-        return {"etat": ligne["etat"], "url": ligne["url"], "erreur": ligne["erreur"]}
+        return {"etat": ligne["etat"], "etape": ligne.get("etape", "creation"), "url": ligne["url"], "erreur": ligne["erreur"]}
     except HTTPException:
         raise
     except Exception as e:
