@@ -312,6 +312,24 @@ def _message_reseau(domaines: list[str], domaines_conversation=()) -> str:
     return texte + "La liste du serveur ne peut pas être modifiée depuis le workspace. " + invitation
 
 
+def complement_description_domaines(user_id, conversation_id) -> str:
+    """Texte ajouté à la description des outils réseau (exécution de code et navigateur) : la liste des sites
+    déjà joignables. Le modèle la lit avant d'agir et demande l'accès au lieu d'essayer puis d'échouer
+    (06/11/2026, demande de Bourama). Renvoie "" si la lecture échoue : la description reste alors celle d'origine."""
+    try:
+        serveur = _domaines_reseau_configures()
+        conversation = _domaines_conversation_ou_vide(user_id, conversation_id) if user_id and conversation_id else []
+    except Exception as e:
+        logging.warning("ERREUR liste des domaines pour la description des outils: %s", type(e).__name__)
+        return ""
+    tous = list(dict.fromkeys([*serveur, *conversation]))
+    return (
+        "\n\nSITES DÉJÀ AUTORISÉS (les seuls joignables) : " + (", ".join(tous) if tous else "aucun") + ". "
+        "Pour tout autre site, appelle d'abord demander_acces_reseau avec domain : n'essaie jamais d'y accéder "
+        "avant, ça échouerait."
+    )
+
+
 def _commande_langage(language: str) -> tuple[str, str]:
     commandes = {
         "python": ("main.py", "python /home/user/main.py"),

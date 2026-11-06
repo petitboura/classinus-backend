@@ -647,16 +647,20 @@ class SitesAutorisesNavigateur(unittest.TestCase):
         self.assertEqual(sortie, "PAGE")
         executer.assert_called_once()
 
-    def test_domaines_autorises_liste_les_sites_sans_ouvrir_de_boite(self):
-        from core import outils_navigateur as outil
-        with patch.object(outil, "_identite_interne", return_value=("u1", "c1", None)), \
-                patch.object(outil, "_domaines_reseau_configures", return_value=["github.com", "pypi.org"]), \
-                patch.object(outil, "_domaines_conversation_ou_vide", return_value=["wikipedia.org"]), \
-                patch.object(navigateur_boite, "executer", side_effect=AssertionError("boîte ouverte")):
-            sortie = outil.gerer_navigateur(action="domaines_autorises", ctx=None)
+    def test_la_description_des_outils_reseau_donne_la_liste_des_sites_autorises(self):
+        from core import outils_execution_code as code
+        with patch.object(code, "_domaines_reseau_configures", return_value=["github.com", "pypi.org"]), \
+                patch.object(code, "_domaines_conversation_ou_vide", return_value=["wikipedia.org", "github.com"]):
+            texte = code.complement_description_domaines("u1", "c1")
         for domaine in ("github.com", "pypi.org", "wikipedia.org"):
-            self.assertIn(domaine, sortie)
-        self.assertFalse(_est_outil_sensible({"id": "n", "name": "gerer_navigateur", "arguments": json.dumps({"action": "domaines_autorises"})}))
+            self.assertIn(domaine, texte)
+        self.assertEqual(texte.count("github.com"), 1)
+        self.assertIn("demander_acces_reseau", texte)
+
+    def test_si_la_lecture_echoue_la_description_reste_inchangee(self):
+        from core import outils_execution_code as code
+        with patch.object(code, "_domaines_reseau_configures", side_effect=RuntimeError("base")):
+            self.assertEqual(code.complement_description_domaines("u1", "c1"), "")
 
 
 if __name__ == "__main__":

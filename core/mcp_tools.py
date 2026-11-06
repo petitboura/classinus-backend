@@ -628,6 +628,7 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
     au lieu d'un appel reseau a chaque message.
     """
     outils_pour_llm = []
+    complement_domaines = None  # calculé une seule fois par tour, si un outil réseau est présent
     table_routage = {}
 
     noms_serveurs_actifs = _serveurs_disponibles()
@@ -704,11 +705,17 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
             noms_outils = [o.name for o in outils]
             logging.info(f"MCP '{nom}' -> {len(outils)} outil(s) listé(s) : {noms_outils}")
             for outil in outils:
+                description_outil = outil.description or ""
+                if outil.name in ("gerer_execution_code", "gerer_navigateur"):
+                    if complement_domaines is None:
+                        from core.outils_execution_code import complement_description_domaines
+                        complement_domaines = complement_description_domaines(user_id, conversation_id)
+                    description_outil += complement_domaines
                 outils_pour_llm.append({
                     "type": "function",
                     "function": {
                         "name": f"{prefixe}{outil.name}",
-                        "description": outil.description or "",
+                        "description": description_outil,
                         # CORRECTION (29/07) : mcp 2.0.0 a renomme inputSchema en
                         # input_schema sur l'objet Tool retourne par list_tools() --
                         # meme famille de bug que streamable_http_client (voir plus

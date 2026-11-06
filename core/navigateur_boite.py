@@ -153,7 +153,6 @@ def site_non_autorise(url: str, autorises: list[str]) -> str | None:
     return (
         f"NAVIGATEUR_ERREUR: le site {hote} n'est pas dans les domaines autorisés, rien n'a été ouvert. "
         f"Utilise demander_acces_reseau avec domain={hote} : la personne confirme, puis rouvre la page. "
-        "Utilise domaines_autorises pour voir la liste complète."
     )
 
 
