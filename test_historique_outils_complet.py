@@ -46,8 +46,8 @@ class ChampsHistoriqueOutil(unittest.TestCase):
         self.assertLess(len(champs["resultat_complet"]), len(enorme) + 100)
 
 
-class ReinjectionDansLHistorique(unittest.TestCase):
-    def test_le_modele_revoit_les_arguments_et_le_resultat_complet(self):
+class JournalDesOutilsDansLHistorique(unittest.TestCase):
+    def test_le_journal_contient_les_arguments_et_le_resultat_complet(self):
         complet = "ligne\n" * 1500
         historique = [
             {"role": "user", "content": "lis le fichier"},
@@ -58,27 +58,69 @@ class ReinjectionDansLHistorique(unittest.TestCase):
                 "arguments": '{"action": "lire", "chemin": "core/main.py"}',
             }]),
         ]
-        contenu = h.enrichir_historique_avec_outils(historique)[1]["content"]
-        self.assertIn('Appel : {"action": "lire", "chemin": "core/main.py"}', contenu)
-        self.assertIn(complet, contenu)
-        self.assertNotIn("(tronque)", contenu)
+        journal = h.journal_outils_historique(historique)
+        self.assertIn('Appel : {"action": "lire", "chemin": "core/main.py"}', journal)
+        self.assertIn(complet, journal)
+        self.assertNotIn("(tronque)", journal)
+
+    def test_les_messages_assistant_restent_du_texte_seul(self):
+        historique = [
+            {"role": "user", "content": "lis le fichier"},
+            _message([{"nomOutil": "x", "nomLisible": "X", "resultat": "abc"}], contenu="Voici le fichier."),
+            {"role": "user", "content": "merci"},
+        ]
+        sortie = h.historique_texte_seul(historique)
+        self.assertEqual(sortie, [
+            {"role": "user", "content": "lis le fichier"},
+            {"role": "assistant", "content": "Voici le fichier."},
+            {"role": "user", "content": "merci"},
+        ])
+
+    def test_aucun_ancien_marqueur_nulle_part(self):
+        historique = [_message([{"nomOutil": "x", "nomLisible": "X", "resultat": "abc"}], contenu="Fait.")]
+        journal = h.journal_outils_historique(historique)
+        texte_seul = h.historique_texte_seul(historique)[0]["content"]
+        for texte in (journal, texte_seul):
+            self.assertNotIn("[Résultat de l'outil", texte)
+            self.assertNotIn("Réponse donnée à ce moment", texte)
+        self.assertNotIn("abc", texte_seul)
 
     def test_ancien_format_sans_nouveaux_champs_inchange(self):
         historique = [_message([{"nomOutil": "x", "nomLisible": "X", "resultat": "abc"}])]
-        contenu = h.enrichir_historique_avec_outils(historique)[0]["content"]
-        self.assertTrue(contenu.startswith("[Résultat de l'outil déjà exécuté -- X]\nabc"))
-        self.assertNotIn("Appel :", contenu)
+        journal = h.journal_outils_historique(historique)
+        self.assertIn("Outil : X\nRésultat :\nabc", journal)
+        self.assertNotIn("Appel :", journal)
+
+    def test_journal_vide_sans_outils(self):
+        historique = [{"role": "user", "content": "salut"}, {"role": "assistant", "content": "Bonjour"}]
+        self.assertEqual(h.journal_outils_historique(historique), "")
+        self.assertEqual(h.journal_outils_historique([]), "")
+        self.assertEqual(h.journal_outils_historique(None), "")
+
+    def test_le_journal_rattache_les_outils_a_la_bonne_reponse(self):
+        historique = [
+            {"role": "user", "content": "a"},
+            {"role": "assistant", "content": "Premiere reponse sans outil"},
+            {"role": "user", "content": "b"},
+            _message([{"nomOutil": "x", "nomLisible": "X", "resultat": "abc"}], contenu="Deuxieme reponse"),
+        ]
+        journal = h.journal_outils_historique(historique)
+        self.assertIn("ta réponse n°2", journal)
+        self.assertIn("Deuxieme reponse", journal)
+        self.assertNotIn("n°1", journal)
 
     def test_le_dernier_message_avec_outils_reste_entier_meme_au_dessus_du_seuil(self):
         gros = "z" * (h.SEUIL_CARACTERES_OUTILS_HISTORIQUE + 5000)
+        ancien = "a" * 6000
         historique = [
-            _message([{"nomOutil": "a", "nomLisible": "Ancien", "resultat": "a" * 6000}]),
+            _message([{"nomOutil": "a", "nomLisible": "Ancien", "resultat": ancien}]),
             {"role": "user", "content": "suite"},
             _message([{"nomOutil": "b", "nomLisible": "Recent", "resultat": gros}]),
         ]
-        sortie = h.enrichir_historique_avec_outils(historique)
-        self.assertIn(gros, sortie[2]["content"])
-        self.assertIn("déjà exécuté plus tôt", sortie[0]["content"])
+        journal = h.journal_outils_historique(historique)
+        self.assertIn(gros, journal)
+        self.assertNotIn(ancien, journal)
+        self.assertIn("déjà exécuté plus tôt", journal)
 
 
 if __name__ == "__main__":
