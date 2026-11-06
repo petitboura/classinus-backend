@@ -16,6 +16,9 @@ from core.higgsfield_requetes import ErreurHiggsfield
 BASE_URL = "https://api.higgsfield.ai"
 DELAI_SECONDES = 30
 
+# Statuts de Higgsfield qui veulent dire "la demande attend encore son tour" (pas démarrée).
+_STATUTS_ATTENTE = {"queued", "pending"}
+
 # Statuts renvoyés par Higgsfield, ramenés à cinq états simples pour l'IA.
 _ETATS = {
     "queued": "en_cours",
@@ -147,7 +150,7 @@ def _extraire_url(donnees):
 
 
 def statut_generation(request_id: str) -> dict:
-    """Renvoie {"etat": en_cours|terminee|echec|bloquee|annulee, "url": ..., "erreur": ...}."""
+    """Renvoie {"etat": en_cours|terminee|echec|bloquee|annulee, "etape": attente|creation, "url": ..., "erreur": ...}."""
     identifiant = _identifiant_valide(request_id)
     reponse = requests.get(f"{BASE_URL}/requests/{identifiant}/status", headers=_entetes(), timeout=DELAI_SECONDES)
     _verifier(reponse, "suivi")
@@ -160,7 +163,8 @@ def statut_generation(request_id: str) -> dict:
         _verifier(detail, "suivi détaillé")
         url = _extraire_url(detail.json())
     erreur = donnees.get("error") if isinstance(donnees.get("error"), str) else None
-    return {"etat": etat, "url": url, "erreur": erreur}
+    etape = "attente" if brut in _STATUTS_ATTENTE else "creation"
+    return {"etat": etat, "etape": etape, "url": url, "erreur": erreur}
 
 
 def annuler_generation(request_id: str) -> bool:
