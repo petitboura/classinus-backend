@@ -69,7 +69,7 @@ def gerer_configuration(
       appeler ensuite "consulter", "modifier" ou "supprimer".
     - "consulter" : lit le contenu complet d'un élément. Paramètre : `comportement_id`.
       Si tu as déjà consulté ce même id plus tôt dans cette conversation (résultat
-      toujours visible, marqué "[Résultat de l'outil déjà exécuté]"), ne le rappelle pas.
+      toujours visible dans ta mémoire de travail de la conversation), ne le rappelle pas.
     - "ajouter" : enregistre un NOUVEL élément, SEULEMENT quand l'utilisateur exprime
       CLAIREMENT et EXPLICITEMENT ce qu'il veut retenir (ex : "ajoute une règle : tu me
       tutoies toujours", "retiens ce style : phrases courtes", "crée une procédure pour
@@ -242,8 +242,8 @@ def gerer_base_connaissance(
       raccourcis pas. Si `nom` est inconnu, utilise d'abord "chercher"
       pour identifier le bon nom, ou "lister_articles" pour voir les
       noms disponibles. Si ce même article a déjà été lu plus tôt dans
-      cette conversation (résultat toujours visible, marqué "[Résultat
-      de l'outil déjà exécuté]"), ne le relis pas -- son contenu n'a pas
+      cette conversation (résultat toujours visible dans ta mémoire de
+      travail de la conversation), ne le relis pas, son contenu n'a pas
       changé entre deux messages. Paramètre : `nom`.
     """
     requete = ctx.request_context.request

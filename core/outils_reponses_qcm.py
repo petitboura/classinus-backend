@@ -12,7 +12,7 @@ fenêtre, ou si l'injection automatique semble incomplète/absente.
 
 Une fois lu, le résultat reste visible dans l'historique de la
 conversation comme n'importe quel outil (voir core/historique_outils.py,
-marqué "[Résultat de l'outil déjà exécuté]") -- pas besoin de rappeler
+dans la mémoire de travail du modèle), pas besoin de rappeler
 cet outil tant que rien de nouveau n'a été répondu.
 """
 import logging
@@ -35,8 +35,8 @@ def lire_reponses_qcm(ctx: Context) -> str:
     conversation (l'étudiant y revient plus tard), ou si tu penses que
     l'injection automatique est vide ou incomplète alors qu'un QCM a
     manifestement eu lieu. Si ce même historique a déjà été lu plus tôt
-    dans cette conversation (résultat toujours visible, marqué "[Résultat
-    de l'outil déjà exécuté]") et qu'aucun nouveau QCM n'a été répondu
+    dans cette conversation (résultat toujours visible dans ta mémoire de
+    travail de la conversation) et qu'aucun nouveau QCM n'a été répondu
     depuis, ne le relis pas -- réponds directement à partir de ce
     résultat. Aucun paramètre.
     """

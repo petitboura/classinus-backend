@@ -26,6 +26,14 @@ _pointeur_outil), gratuit et deterministe. Rien n'est perdu : le contenu
 complet reste recuperable via l'outil rappeler_resultat_outil (voir
 core/outils_rappel_resultats.py) si le modele en a reellement besoin. Les
 resultats RECENTS restent intacts.
+
+Changement du 06/11/2026 (demande Bourama) : les resultats d'outils ne sont plus
+ecrits dans le contenu des messages assistant. Ce format, repete a chaque tour, etait
+imite par certains modeles (GLM notamment) qui recopiaient les blocs dans leur reponse
+visible. Les messages assistant redeviennent du texte seul (historique_texte_seul), ce
+qui garde l'alternance user/assistant, et les resultats sont rassembles dans un journal
+(journal_outils_historique) ajoute au message systeme. Meme budget, meme allegement,
+memes pointeurs de rappel : seul l'endroit et la presentation changent.
 """
 
 import json
@@ -47,10 +55,11 @@ def _bloc_outil(o):
     # l'ecran : le modele doit revoir le premier, jamais la version coupee.
     resultat = o.get("resultatComplet") or o.get("resultat") or ""
     arguments = (o.get("arguments") or "").strip()
-    entete = f"[Résultat de l'outil déjà exécuté -- {nom}]"
+    lignes = [f"Outil : {nom}"]
     if arguments:
-        return f"{entete}\nAppel : {arguments}\n{resultat}"
-    return f"{entete}\n{resultat}"
+        lignes.append(f"Appel : {arguments}")
+    lignes.append(f"Résultat :\n{resultat}")
+    return "\n".join(lignes)
 
 
 def _couper(texte, plafond):
@@ -95,15 +104,15 @@ def _pointeur_outil(o, mentionner_outil_rappel=True):
     nom = o.get("nomLisible") or o.get("nomOutil") or "Outil"
     if mentionner_outil_rappel:
         return (
-            f"[Outil déjà exécuté plus tôt dans cette conversation : {nom}. "
+            f"Outil déjà exécuté plus tôt dans cette conversation : {nom}. "
             f"Résultat non affiché ici pour ne pas surcharger le contexte. "
             f"Si l'outil rappeler_resultat_outil est disponible et que ce "
             f"résultat redevient utile, utilise-le plutôt que de réexécuter "
-            f"cet outil. Sinon, continue normalement sans ce détail.]"
+            f"cet outil. Sinon, continue normalement sans ce détail."
         )
     return (
-        f"[Outil déjà exécuté plus tôt dans cette conversation : {nom}. "
-        f"Résultat non affiché ici pour ne pas surcharger le contexte.]"
+        f"Outil déjà exécuté plus tôt dans cette conversation : {nom}. "
+        f"Résultat non affiché ici pour ne pas surcharger le contexte."
     )
 
 
@@ -120,27 +129,19 @@ def _blocs_outils(historique):
 
 def a_des_outils_allegers(historique):
     """Vrai si le volume total de resultats d'outils depasse le seuil, donc
-    si enrichir_historique_avec_outils va remplacer les plus anciens par un
+    si journal_outils_historique va remplacer les plus anciens par un
     rappel. Utilise par core/main.py pour proposer rappeler_resultat_outil
     au modele seulement quand il peut en avoir besoin."""
     return sum(len(t) for _, _, t in _blocs_outils(historique)) > SEUIL_CARACTERES_OUTILS_HISTORIQUE
 
 
-def enrichir_historique_avec_outils(historique, mentionner_outil_rappel=True):
-    """
-    `historique` : liste de dicts {role, content, outils?} tels qu'envoyes
-    par le frontend (voir api/chat.py:MessageHistorique). `outils` provient
-    de meta.outils, deja sauvegarde pour l'affichage (voir
-    core/persistance_echanges.py). Renvoie une NOUVELLE liste (n'altere
-    jamais l'original), meme longueur, memes roles. Seul le `content` des
-    messages assistant concernes est enrichi.
-
-    Renvoie l'historique tel quel si aucun message n'a d'outils.
-    """
+def _blocs_a_envoyer(historique, mentionner_outil_rappel=True):
+    """[(index_message, texte)] des resultats d'outils a montrer au modele, dans l'ordre
+    chronologique, apres allegement des plus anciens au-dela du budget."""
     blocs = _blocs_outils(historique)
 
     if not blocs:
-        return historique
+        return []
 
     taille_totale = sum(len(t) for _, _, t in blocs)
 
@@ -173,16 +174,58 @@ def enrichir_historique_avec_outils(historique, mentionner_outil_rappel=True):
                 allege.append((idx, o, texte))
         blocs = allege + recents
 
+    return [(idx, texte) for idx, _o, texte in blocs]
+
+
+_ENTETE_JOURNAL = (
+    "MÉMOIRE DE TRAVAIL (interne). Voici les résultats des outils que tu as déjà utilisés plus tôt "
+    "dans cette conversation. Ce sont des informations de contexte, pas des messages : appuie-toi "
+    "dessus pour répondre, mais ne les recopie jamais et ne reproduis jamais cette présentation "
+    "dans ta réponse."
+)
+
+# Nombre de caracteres du debut d'une reponse repris pour situer ses outils dans le journal.
+_LONGUEUR_REPERE = 80
+
+
+def journal_outils_historique(historique, mentionner_outil_rappel=True):
+    """
+    `historique` : liste de dicts {role, content, outils?} tels qu'envoyes par le frontend
+    (voir api/chat.py:MessageHistorique). Renvoie le texte du journal des outils deja utilises
+    dans cette conversation, a ajouter au message systeme, ou une chaine vide si aucun message
+    n'a d'outils. Chaque groupe d'outils est rattache a la reponse assistant qui l'a produit
+    (son numero d'ordre et le debut de son texte), pour que le modele retrouve a quoi il a servi.
+    N'altere jamais l'original.
+    """
+    blocs = _blocs_a_envoyer(historique, mentionner_outil_rappel)
+    if not blocs:
+        return ""
+
     par_index = {}
-    for idx, _o, texte in blocs:
+    for idx, texte in blocs:
         par_index.setdefault(idx, []).append(texte)
 
-    resultat = []
-    for i, m in enumerate(historique):
-        if i in par_index:
-            contexte = "\n\n".join(par_index[i])
-            contenu = f"{contexte}\n\n[Réponse donnée à ce moment-là]\n{m['content']}"
-            resultat.append({"role": m["role"], "content": contenu})
-        else:
-            resultat.append({"role": m["role"], "content": m["content"]})
-    return resultat
+    numeros = {}
+    n = 0
+    for i, m in enumerate(historique or []):
+        if m.get("role") == "assistant":
+            n += 1
+            numeros[i] = n
+
+    parties = [_ENTETE_JOURNAL]
+    for idx in sorted(par_index):
+        debut = " ".join((historique[idx].get("content") or "").split())[:_LONGUEUR_REPERE]
+        repere = f"Outils utilisés pendant ta réponse n°{numeros[idx]}"
+        if debut:
+            repere += f" (elle commençait par : {debut})"
+        parties.append(repere + "\n\n" + "\n\n".join(par_index[idx]))
+    return "\n\n".join(parties)
+
+
+def historique_texte_seul(historique):
+    """
+    Historique tel qu'envoye au modele : meme longueur, memes roles, uniquement role et
+    content. Les resultats d'outils n'y figurent plus (voir journal_outils_historique), donc un
+    message assistant ne contient que ce que l'assistant a reellement dit.
+    """
+    return [{"role": m["role"], "content": m["content"]} for m in (historique or [])]
