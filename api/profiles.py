@@ -751,6 +751,13 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
     except Exception as e:
         logging.error(f"ERREUR SUPABASE (export higgsfield_usage pour {user_id}) : {e}")
         export["generations_higgsfield"] = {"erreur": "recuperation impossible, reessayer plus tard"}
+
+    try:
+        res = supabase.table("higgsfield_generations").select("titre,genre,etat,cree_a,termine_a").eq("user_id", user_id).execute()
+        export["suivi_generations_higgsfield"] = res.data or []
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (export higgsfield_generations pour {user_id}) : {e}")
+        export["suivi_generations_higgsfield"] = {"erreur": "recuperation impossible, reessayer plus tard"}
     # Vidéos du montage : noms, tailles, durées et nombre de fichiers produits
     # (pas le contenu des vidéos), voir core/video_workspaces.py.
     try:

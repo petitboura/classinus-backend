@@ -7,21 +7,17 @@ Limite journalière identique (higgsfield_usage).
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from api.auth import utilisateur_courant
 from core.erreurs import erreur_api
 from core.higgsfield_limites import reserver_generation
 from core.higgsfield_requetes import ErreurHiggsfield, construire_requete_genjutsu, construire_requete_image, construire_requete_video
-from core.generation_video_higgsfield import annuler_generation, estimer_cout, higgsfield_api_disponible, lancer_generation, statut_generation
+from core.generation_video_higgsfield import annuler_generation, estimer_cout, higgsfield_api_disponible, lancer_generation
 from core.limitation_debit import limiteur
-from core.outils_generation_commun import _supabase_memoire, _sauvegarder_generation_bibliotheque
-
-# Contexte minimal pour _sauvegarder_generation_bibliotheque (qui lit user_id dans ctx)
-class _CtxMemoire:
-    def __init__(self, user_id: str):
-        self.request_context = type("obj", (), {"request": type("obj", (), {"query_params": {"user_id": user_id}})})()
+from core import higgsfield_suivi
+from core.outils_generation_commun import _supabase_memoire
 
 router = APIRouter(prefix="/api/higgsfield", tags=["higgsfield"])
 
@@ -88,6 +84,7 @@ def lancer_video(request: Request, demande: DemandeVideo, utilisateur=Depends(ut
         )
         reserver_generation(_supabase_memoire, utilisateur.id, "video")
         resultat = lancer_generation(adresse, corps)
+        higgsfield_suivi.enregistrer(utilisateur.id, resultat["request_id"], demande.titre, "video")
         return {"request_id": resultat["request_id"], "titre": demande.titre}
     except ErreurHiggsfield as e:
         raise erreur_api(400, "HIGGSFIELD_REQUETE_INVALIDE", message=str(e))
@@ -104,6 +101,7 @@ def lancer_image(request: Request, demande: DemandeImage, utilisateur=Depends(ut
         adresse, corps = construire_requete_image(demande.modele, demande.prompt, demande.format_image, demande.qualite, demande.images_reference)
         reserver_generation(_supabase_memoire, utilisateur.id, "image")
         resultat = lancer_generation(adresse, corps)
+        higgsfield_suivi.enregistrer(utilisateur.id, resultat["request_id"], demande.titre, "image")
         return {"request_id": resultat["request_id"], "titre": demande.titre}
     except ErreurHiggsfield as e:
         raise erreur_api(400, "HIGGSFIELD_REQUETE_INVALIDE", message=str(e))
@@ -120,6 +118,7 @@ def lancer_genjutsu(request: Request, demande: DemandeGenjutsu, utilisateur=Depe
         adresse, corps = construire_requete_genjutsu(demande.modele, demande.video_url, demande.images_reference, demande.prompt, demande.resolution, demande.preset_id)
         reserver_generation(_supabase_memoire, utilisateur.id, "video")
         resultat = lancer_generation(adresse, corps)
+        higgsfield_suivi.enregistrer(utilisateur.id, resultat["request_id"], demande.titre, "video")
         return {"request_id": resultat["request_id"], "titre": demande.titre}
     except ErreurHiggsfield as e:
         raise erreur_api(400, "HIGGSFIELD_REQUETE_INVALIDE", message=str(e))
@@ -129,28 +128,31 @@ def lancer_genjutsu(request: Request, demande: DemandeGenjutsu, utilisateur=Depe
 
 
 @router.get("/statut/{request_id}")
-def statut(request_id: str, titre: str = "", utilisateur=Depends(utilisateur_courant)):
-    _verifier_disponible()
+def statut(request_id: str, utilisateur=Depends(utilisateur_courant)):
+    """État d'une génération de l'utilisateur, lu en base. Le suivi et la sauvegarde sont faits
+    par le serveur (boucle de fond) : cet appel ne fait que rafraîchir plus vite si besoin."""
     try:
-        resultat = statut_generation(request_id)
-        if resultat["etat"] == "terminee" and resultat.get("url") and titre:
-            try:
-                ctx = _CtxMemoire(utilisateur.id)
-                nom = (titre.strip() or f"Higgsfield_{request_id}")
-                url = resultat["url"]
-                if url.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
-                    ext = url.split("?")[0].rsplit(".", 1)[-1].lower()
-                    mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp"}.get(ext, "image/png")
-                    _sauvegarder_generation_bibliotheque(ctx, url, f"{nom}.{ext}", mime)
-                else:
-                    _sauvegarder_generation_bibliotheque(ctx, url, f"{nom}.mp4", "video/mp4")
-            except Exception as e:
-                logging.warning(f"Sauvegarde bibliotheque Higgsfield echouee {request_id}: {e}")
-        return resultat
-    except ErreurHiggsfield as e:
-        raise erreur_api(400, "HIGGSFIELD_ID_INVALIDE", message=str(e))
+        ligne = higgsfield_suivi.obtenir(utilisateur.id, request_id)
+        if ligne is None:
+            raise erreur_api(404, "GENERATION_HIGGSFIELD_INTROUVABLE")
+        if ligne["etat"] == "en_cours":
+            higgsfield_suivi.traiter_une_generation(utilisateur.id, request_id)
+            ligne = higgsfield_suivi.obtenir(utilisateur.id, request_id) or ligne
+        return {"etat": ligne["etat"], "url": ligne["url"], "erreur": ligne["erreur"]}
+    except HTTPException:
+        raise
     except Exception as e:
         logging.error(f"ERREUR Higgsfield statut {request_id}: {e}")
+        raise erreur_api(500, "IMPOSSIBLE_STATUT_HIGGSFIELD")
+
+
+@router.get("/generations")
+def generations(limite: int = 20, utilisateur=Depends(utilisateur_courant)):
+    """Générations récentes de l'utilisateur (en cours et terminées), pour retrouver ce qui a tourné app fermée."""
+    try:
+        return {"generations": higgsfield_suivi.lister(utilisateur.id, limite)}
+    except Exception as e:
+        logging.error(f"ERREUR Higgsfield liste generations user {utilisateur.id}: {e}")
         raise erreur_api(500, "IMPOSSIBLE_STATUT_HIGGSFIELD")
 
 
@@ -158,8 +160,14 @@ def statut(request_id: str, titre: str = "", utilisateur=Depends(utilisateur_cou
 def annuler(request_id: str, utilisateur=Depends(utilisateur_courant)):
     _verifier_disponible()
     try:
+        if higgsfield_suivi.obtenir(utilisateur.id, request_id) is None:
+            raise erreur_api(404, "GENERATION_HIGGSFIELD_INTROUVABLE")
         ok = annuler_generation(request_id)
+        if ok:
+            higgsfield_suivi.marquer_annulee(utilisateur.id, request_id)
         return {"annulee": ok}
+    except HTTPException:
+        raise
     except ErreurHiggsfield as e:
         raise erreur_api(400, "HIGGSFIELD_ID_INVALIDE", message=str(e))
     except Exception as e:
