@@ -214,3 +214,22 @@ def diagnostic_presets_marketing_studio():
     except Exception as e:
         logging.error(f"ERREUR controle presets Marketing Studio: {e}")
         raise erreur_api(500, "HIGGSFIELD_CONTROLE_PRESETS_ECHEC", message="Controle impossible pour le moment.")
+
+
+@router.get("/diagnostic/outils-marketing-studio")
+def diagnostic_outils_marketing_studio():
+    """Lecture seule, sans credit depense : renvoie les schemas reels des outils MCP Marketing Studio
+    du compte partage (champs attendus par marketing_studio_v2_create, etc.).
+    Ne renvoie jamais de jeton (meme principe que /diagnostic/presets-marketing-studio)."""
+    from core.higgsfield_mcp_partage import lister_outils_partages
+    try:
+        outils = [
+            o for o in lister_outils_partages()
+            if "marketing_studio" in (o.get("nom") or "")
+        ]
+    except ErreurHiggsfield as e:
+        raise erreur_api(502, "HIGGSFIELD_MCP_DIAGNOSTIC_ECHEC", message=str(e))
+    except Exception as e:
+        logging.error(f"ERREUR diagnostic outils Marketing Studio: {e}")
+        raise erreur_api(500, "HIGGSFIELD_MCP_DIAGNOSTIC_ECHEC", message="Diagnostic impossible pour le moment.")
+    return {"outils_trouves": len(outils), "outils": outils}
