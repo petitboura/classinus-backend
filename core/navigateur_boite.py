@@ -125,6 +125,38 @@ def _texte_page(retour: dict) -> str:
     return "\n".join(morceaux) or "Page vide."
 
 
+def hote_autorise(hote: str, autorises: list[str]) -> bool:
+    """Même règle que le proxy des boîtes : nom exact, ou *.exemple.org pour les sous-domaines.
+    Sert à refuser tout de suite un site absent de la liste, sans ouvrir de navigateur pour rien."""
+    hote = (hote or "").strip().lower().rstrip(".")
+    if not hote:
+        return False
+    for regle in autorises or ():
+        regle = str(regle).strip().lower().rstrip(".")
+        if regle.startswith("*."):
+            if hote.endswith(regle[1:]) and len(hote) > len(regle) - 1:
+                return True
+        elif hote == regle:
+            return True
+    return False
+
+
+def site_non_autorise(url: str, autorises: list[str]) -> str | None:
+    """Message prêt à renvoyer au modèle si le site de l'URL n'est pas autorisé, sinon None."""
+    from urllib.parse import urlparse
+    try:
+        hote = (urlparse(url or "").hostname or "").lower()
+    except ValueError:
+        return None
+    if not hote or hote_autorise(hote, autorises):
+        return None
+    return (
+        f"NAVIGATEUR_ERREUR: le site {hote} n'est pas dans les domaines autorisés, rien n'a été ouvert. "
+        f"Utilise demander_acces_reseau avec domain={hote} : la personne confirme, puis rouvre la page. "
+        "Utilise domaines_autorises pour voir la liste complète."
+    )
+
+
 def _capture_utile(retour: dict) -> bool:
     """False quand la capture serait une image blanche ou trompeuse : action en échec, ou page sans titre
     ni texte (page vide, about:blank, chargement raté). Le modèle garde le texte d'erreur, la personne

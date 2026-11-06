@@ -610,5 +610,54 @@ class DemandeAccesReseauNavigateur(unittest.TestCase):
         self.assertNotIn("demander_acces_reseau", autre)
 
 
+class SitesAutorisesNavigateur(unittest.TestCase):
+    """06/11/2026 : le modèle connaît les sites autorisés et un site hors liste est refusé sans navigateur."""
+
+    def test_regle_identique_a_celle_du_proxy(self):
+        liste = ["github.com", "*.exemple.org"]
+        self.assertTrue(navigateur_boite.hote_autorise("github.com", liste))
+        self.assertTrue(navigateur_boite.hote_autorise("a.exemple.org", liste))
+        self.assertFalse(navigateur_boite.hote_autorise("exemple.org", liste))
+        self.assertFalse(navigateur_boite.hote_autorise("gitlab.com", liste))
+        self.assertFalse(navigateur_boite.hote_autorise("", liste))
+
+    def test_site_hors_liste_donne_la_marche_a_suivre_et_site_autorise_passe(self):
+        refus = navigateur_boite.site_non_autorise("https://wikipedia.org/x", ["github.com"])
+        self.assertIn("domain=wikipedia.org", refus)
+        self.assertIsNone(navigateur_boite.site_non_autorise("https://github.com/x", ["github.com"]))
+
+    def test_open_hors_liste_n_ouvre_aucune_boite(self):
+        from core import outils_navigateur as outil
+        with patch.object(outil, "_identite_interne", return_value=("u1", "c1", None)), \
+                patch.object(navigateur_boite, "raison_indisponible", return_value=None), \
+                patch.object(outil, "_configuration_domaines", return_value={"allowed_domains": ["github.com"]}), \
+                patch.object(outil, "_domaines_conversation_ou_vide", return_value=[]), \
+                patch.object(navigateur_boite, "executer", side_effect=AssertionError("boîte ouverte")):
+            sortie = outil.gerer_navigateur(action="open", url="https://wikipedia.org", ctx=None)
+        self.assertIn("rien n'a été ouvert", sortie)
+
+    def test_open_autorise_par_la_conversation_continue_normalement(self):
+        from core import outils_navigateur as outil
+        with patch.object(outil, "_identite_interne", return_value=("u1", "c1", None)), \
+                patch.object(navigateur_boite, "raison_indisponible", return_value=None), \
+                patch.object(outil, "_configuration_domaines", return_value={"allowed_domains": ["github.com"]}), \
+                patch.object(outil, "_domaines_conversation_ou_vide", return_value=["wikipedia.org"]), \
+                patch.object(navigateur_boite, "executer", return_value="PAGE") as executer:
+            sortie = outil.gerer_navigateur(action="open", url="https://wikipedia.org", ctx=None)
+        self.assertEqual(sortie, "PAGE")
+        executer.assert_called_once()
+
+    def test_domaines_autorises_liste_les_sites_sans_ouvrir_de_boite(self):
+        from core import outils_navigateur as outil
+        with patch.object(outil, "_identite_interne", return_value=("u1", "c1", None)), \
+                patch.object(outil, "_domaines_reseau_configures", return_value=["github.com", "pypi.org"]), \
+                patch.object(outil, "_domaines_conversation_ou_vide", return_value=["wikipedia.org"]), \
+                patch.object(navigateur_boite, "executer", side_effect=AssertionError("boîte ouverte")):
+            sortie = outil.gerer_navigateur(action="domaines_autorises", ctx=None)
+        for domaine in ("github.com", "pypi.org", "wikipedia.org"):
+            self.assertIn(domaine, sortie)
+        self.assertFalse(_est_outil_sensible({"id": "n", "name": "gerer_navigateur", "arguments": json.dumps({"action": "domaines_autorises"})}))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -873,6 +873,7 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "gerer_navigateur:type": {"label": "Saisie sur la page", "icone": "Keyboard", "onglet": None},
     "gerer_navigateur:screenshot": {"label": "Capture de la page", "icone": "Camera", "onglet": None},
     "gerer_navigateur:submit": {"label": "Action finale", "icone": "ShieldCheck", "onglet": None},
+    "gerer_navigateur:domaines_autorises": {"label": "Sites autorisés", "icone": "Globe", "onglet": None},
     "gerer_navigateur:demander_acces_reseau": {"label": "Accès à un site", "icone": "Globe", "onglet": None},
     "gerer_navigateur:close": {"label": "Fermeture du site", "icone": "Power", "onglet": None},
     "gerer_execution_code:close": {"label": "Fin de l'espace", "icone": "Power", "onglet": None},
