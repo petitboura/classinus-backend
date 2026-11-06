@@ -17,6 +17,7 @@ from core.higgsfield_requetes import ErreurHiggsfield, construire_requete_genjut
 from core.generation_video_higgsfield import annuler_generation, estimer_cout, higgsfield_api_disponible, lancer_generation
 from core.limitation_debit import limiteur
 from core import higgsfield_suivi
+from core.higgsfield_presets_controle import controler_presets
 from core.outils_generation_commun import _supabase_memoire
 
 router = APIRouter(prefix="/api/higgsfield", tags=["higgsfield"])
@@ -199,3 +200,17 @@ def estimation(demande: DemandeEstimation, utilisateur=Depends(utilisateur_coura
 @router.get("/disponible")
 def disponible(utilisateur=Depends(utilisateur_courant)):
     return {"disponible": higgsfield_api_disponible()}
+
+
+@router.get("/diagnostic/presets-marketing-studio")
+def diagnostic_presets_marketing_studio():
+    """Lecture seule, sans credit depense : compare nos presets Marketing Studio a ceux de l'API Higgsfield.
+    Ne renvoie jamais la cle (meme principe que /api/connexions/diagnostic)."""
+    _verifier_disponible()
+    try:
+        return controler_presets()
+    except ErreurHiggsfield as e:
+        raise erreur_api(502, "HIGGSFIELD_CONTROLE_PRESETS_ECHEC", message=str(e))
+    except Exception as e:
+        logging.error(f"ERREUR controle presets Marketing Studio: {e}")
+        raise erreur_api(500, "HIGGSFIELD_CONTROLE_PRESETS_ECHEC", message="Controle impossible pour le moment.")
