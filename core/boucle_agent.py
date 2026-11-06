@@ -271,7 +271,8 @@ def _lire_raisonnement(delta):
     return getattr(delta, "reasoning", None) or getattr(delta, "reasoning_content", None)
 
 
-def _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, kwargs_reasoning, timeout):
+def _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, kwargs_reasoning, timeout,
+                               erreur_si_vide=False):
     """
     Force une reponse texte finale a partir de messages_agent tel quel
     (utilise pour les deux fins de boucle de _agent_groq : plafond_absolu
@@ -279,6 +280,11 @@ def _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, 
     ajoute a messages_agent par l'appelant AVANT ce generateur, voir plus
     bas). Factorise ce qui etait duplique dans l'ancien bloc "MAX_ETAPES_
     OUTILS epuise".
+
+    `erreur_si_vide` (06/11/2026) : si vrai et que le modele ne renvoie aucun texte (par exemple
+    il redemande un outil au lieu de conclure), leve ReponseVideErreur au lieu de laisser le chat
+    s'arreter sans rien afficher. Meme principe que dans _agent_groq : l'erreur typee "vide" part
+    avec l'etat de reprise, et le bouton Continuer garde les resultats des outils deja obtenus.
     """
     completion = client_groq.chat.completions.create(
         model=modele,
@@ -291,6 +297,7 @@ def _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, 
     )
     etat_filtre = _nouvel_etat_filtre_texte()
     etat_raisonnement = _nouvel_etat_filtre_raisonnement()
+    texte_recu = False
     for chunk in completion:
         if not chunk.choices:
             continue
@@ -301,6 +308,7 @@ def _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, 
                 yield evenement
         token = delta.content or ""
         if token:
+            texte_recu = True
             # Le texte de reponse demarre : le segment de raisonnement en
             # cours (s'il y en a un) est termine, voir filtre_texte_streaming.py.
             for evenement in _finaliser_fragment_raisonnement(etat_raisonnement):
@@ -318,6 +326,9 @@ def _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, 
             "type": "reponse",
             "texte": "Désolé, je n'ai pas réussi à exécuter l'action demandée. Peux-tu réessayer ou reformuler ta demande ?",
         }
+    elif erreur_si_vide and not texte_recu:
+        logging.error(f"Conclusion forcée sans aucun texte sur {modele} : erreur typée envoyée au chat.")
+        raise ReponseVideErreur(f"{modele} : conclusion forcée sans texte")
 
 
 class ReponseVideErreur(Exception):
@@ -723,7 +734,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     "Ne retente pas cette même action telle quelle."
                 ),
             })
-            for event in _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, kwargs_reasoning, DELAI_MAX_PAR_APPEL):
+            for event in _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, kwargs_reasoning, DELAI_MAX_PAR_APPEL, erreur_si_vide=erreur_si_vide):
                 yield event
             yield _evenement_reprise_agent("repetition_detectee", messages_agent, outils_mcp, table_routage, modele, reasoning_effort, agent_nom)
             return
@@ -1059,7 +1070,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
             "poursuivre le travail."
         ),
     })
-    for event in _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, kwargs_reasoning, DELAI_MAX_PAR_APPEL):
+    for event in _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, kwargs_reasoning, DELAI_MAX_PAR_APPEL, erreur_si_vide=erreur_si_vide):
         yield event
     yield _evenement_reprise_agent("limite_outils_atteinte", messages_agent, outils_mcp, table_routage, modele, reasoning_effort, agent_nom)
     logging.info(f"Réponse via GROQ (avec outil, plafond_absolu={plafond_absolu} atteint): {modele}")

@@ -68,6 +68,66 @@ class ReponseVide(unittest.TestCase):
         self.assertEqual(texte, "Voilà.")
 
 
+class ConclusionForcee(unittest.TestCase):
+    """Correction du 06/11/2026 : la conclusion forcee ne laisse plus le chat s'arreter sans rien."""
+
+    def _messages(self):
+        return [{"role": "system", "content": "S"}, {"role": "user", "content": "Question"}]
+
+    def _conclure(self, morceaux, **options):
+        client = FauxClient(morceaux)
+        return list(boucle_agent._generer_conclusion_forcee(
+            client, self._messages(), None, "glm-5.3", {}, 10, **options))
+
+    def test_sans_option_une_conclusion_vide_reste_silencieuse_comme_avant(self):
+        evenements = self._conclure([_morceau(raisonnement="Je réfléchis."), _morceau(fin="stop")])
+        self.assertFalse([e for e in evenements if e.get("type") == "reponse"])
+
+    def test_avec_l_option_une_conclusion_vide_leve_l_erreur(self):
+        with self.assertRaises(boucle_agent.ReponseVideErreur):
+            self._conclure([_morceau(raisonnement="Je réfléchis."), _morceau(fin="stop")], erreur_si_vide=True)
+
+    def test_avec_l_option_une_conclusion_avec_texte_ne_leve_rien(self):
+        evenements = self._conclure([_morceau(contenu="Voici où j'en suis.", fin="stop")], erreur_si_vide=True)
+        texte = "".join(e.get("texte", "") for e in evenements if e.get("type") == "reponse")
+        self.assertEqual(texte, "Voici où j'en suis.")
+
+    def test_boucle_repetee_puis_conclusion_vide_donne_l_erreur_typee(self):
+        # Le modele refait trois fois le meme appel, le garde-fou coupe, puis la conclusion
+        # forcee revient vide : le chat doit recevoir l'erreur "vide", pas un silence.
+        appel = NS(index=0, id="c1", function=NS(name="outil", arguments="{}"))
+        tour_outil = [NS(choices=[NS(delta=NS(content=None, tool_calls=[appel], reasoning=None,
+                                              reasoning_content=None), finish_reason="tool_calls")], usage=None)]
+        conclusion_vide = [_morceau(raisonnement="Je réfléchis."), _morceau(fin="stop")]
+        flux = [tour_outil, tour_outil, tour_outil, conclusion_vide]
+
+        class Client:
+            def __init__(self):
+                self.chat = NS(completions=NS(create=self._creer))
+
+            def _creer(self, **arguments):
+                return iter(flux.pop(0))
+
+        def faux_traiter_appels(appels, messages_agent, *args, **kwargs):
+            for a in appels:
+                messages_agent.append({"role": "tool", "tool_call_id": a["id"], "content": "ok"})
+            return iter(())
+
+        messages = self._messages()
+        with patch.object(boucle_agent, "parametres_outils", return_value=PARAMS), \
+                patch.object(boucle_agent, "retirer_messages_etudiant", return_value=[]), \
+                patch.object(boucle_agent, "plafond_tour", return_value=None), \
+                patch.object(boucle_agent, "_traiter_appels", faux_traiter_appels):
+            with self.assertRaises(boucle_agent.ReponseVideErreur):
+                list(boucle_agent._agent_groq(Client(), messages, None, {}, modele="glm-5.3", erreur_si_vide=True))
+        evenement = erreur_tour.evenement_echec(
+            boucle_agent.ReponseVideErreur("x"), "fr", True,
+            messages_agent=messages, nb_messages_depart=2, outils_mcp=[], table_routage={}, modele="glm-5.3",
+        )
+        self.assertEqual(evenement["code"], "vide")
+        self.assertIsNotNone(evenement["etat_reprise"])
+
+
 class ErreurTypeeVide(unittest.TestCase):
     def test_code_vide(self):
         self.assertEqual(erreur_tour.classer_erreur(boucle_agent.ReponseVideErreur("x")), "vide")

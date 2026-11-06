@@ -89,7 +89,11 @@ class ClientVultr(ClientCompatible):
         # Pas de reglage d'effort : jamais verifie chez Vultr pour ces modeles.
         arguments_vultr.pop("reasoning_effort", None)
         # Pas de modele de secours : meme patience que les autres fournisseurs sans repli.
-        arguments_vultr.setdefault("timeout", DELAI_APPEL_FOURNISSEUR_SECONDES)
+        # Affectation directe et non setdefault (06/11/2026) : la boucle d'agent envoie toujours
+        # le delai court de la cascade (10 s), donc setdefault ne s'appliquait jamais et un modele
+        # qui reflechit plus de 10 s avant son premier mot (glm-5.3) tombait en timeout.
+        # Meme correction que pour Baseten et Vultr DeepSeek.
+        arguments_vultr["timeout"] = DELAI_APPEL_FOURNISSEUR_SECONDES
         reponse = self._client_vultr.chat.completions.create(**arguments_vultr)
         logging.warning(f"[ROUTE VULTR] Vultr a repondu ({modele_id}, identifiant {identifiant})")
         return reponse
