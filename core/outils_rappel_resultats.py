@@ -71,7 +71,7 @@ def rappeler_resultat_outil(requete: str, ctx: Context) -> str:
     même conversation, sans le réexécuter.
 
     À utiliser quand l'historique indique qu'un outil a déjà été exécuté sur
-    un sujet ("[Outil déjà exécuté plus tôt dans cette conversation : ...]")
+    un sujet (mention "Outil déjà exécuté plus tôt dans cette conversation" dans ta mémoire de travail)
     et que tu as maintenant besoin de son contenu complet pour répondre.
 
     RÈGLE IMPORTANTE : si un résultat pertinent existe déjà plus tôt dans la

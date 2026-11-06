@@ -67,7 +67,7 @@ from routage_outils import (
 )
 from construction_system_prompt import _construire_system_prompt, _est_timeout, _repli_si_reponse_partielle
 from persistance_echanges import _sauvegarder_echange, _finaliser_memoire_en_arriere_plan
-from historique_outils import enrichir_historique_avec_outils, a_des_outils_allegers, champs_historique_outil
+from historique_outils import historique_texte_seul, journal_outils_historique, a_des_outils_allegers, champs_historique_outil
 from historique_conversation import (
     alleger_historique_ancien,
     note_avancement_historique,
@@ -1382,8 +1382,15 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     else:
         historique_pour_modele = historique_allege
     note_historique = note_avancement_historique(historique_pour_modele) if "marquer_sujet_clos" in noms_outils_tour else ""
-    messages_base = [{"role": "system", "content": system_final + (("\n\n" + note_historique) if note_historique else "")}]
-    messages_base += enrichir_historique_avec_outils(historique_pour_modele, "rappeler_resultat_outil" in noms_outils_tour)
+    # 06/11/2026 : les resultats d'outils des tours precedents ne sont plus ecrits dans les
+    # messages assistant (des modeles comme GLM recopiaient ce format dans leur reponse). Ils
+    # forment un journal ajoute au message systeme, et les messages assistant restent du texte
+    # seul. system_modele est ce que le modele recoit comme consigne systeme sur tous les
+    # chemins ; system_final reste inchange pour les appels qui n'ont pas besoin du journal.
+    journal_outils = journal_outils_historique(historique_pour_modele, "rappeler_resultat_outil" in noms_outils_tour)
+    system_modele = system_final + (("\n\n" + journal_outils) if journal_outils else "")
+    messages_base = [{"role": "system", "content": system_modele + (("\n\n" + note_historique) if note_historique else "")}]
+    messages_base += historique_texte_seul(historique_pour_modele)
     messages_base.append({"role": "user", "content": message_pour_modele})
 
     # ETAPE 5 (11/09/2026) : meta_utilisateur (piece jointe pour affichage
@@ -1722,7 +1729,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         ]
         reponse_accumulee = []
         try:
-            for morceau in generer_reponse_premium(modele_force, systeme_avec_identite(system_final, modele_force), messages_premium, effort=effort_reflexion):
+            for morceau in generer_reponse_premium(modele_force, systeme_avec_identite(system_modele, modele_force), messages_premium, effort=effort_reflexion):
                 if isinstance(morceau, dict):
                     # Reflexion du modele (DeepSeek) : affichee a l'ecran
                     # mais jamais sauvegardee comme partie de la reponse.
@@ -1972,7 +1979,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # systeme.
             if outil_deja_execute:
                 system_gemini_sans_outils = (
-                    systeme_avec_identite(system_final, GOOGLE_MODEL)
+                    systeme_avec_identite(system_modele, GOOGLE_MODEL)
                     + "\n\nIMPORTANT : un outil a DÉJÀ été exécuté plus tôt dans cet échange et son "
                     "résultat est présent ci-dessus, marqué \"[Résultat de l'outil déjà exécuté]\" -- "
                     "base ta réponse DESSUS. Ne dis JAMAIS que tu ne peux pas faire de recherche ou "
@@ -1983,7 +1990,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 )
             else:
                 system_gemini_sans_outils = (
-                    systeme_avec_identite(system_final, GOOGLE_MODEL)
+                    systeme_avec_identite(system_modele, GOOGLE_MODEL)
                     + "\n\nIMPORTANT : tu n'as accès à AUCUN outil réel dans cette réponse précise "
                     "(pas de recherche web, pas d'API externe, pas de Notion, rien). Si la question "
                     "porte sur une information qui change (prix, taux de change, actualité, données "

@@ -88,6 +88,14 @@ class Client(Base):
         self.assertNotIn("reasoning_effort", envoye)
         self.assertGreater(envoye["timeout"], 10)
 
+    def test_le_delai_court_de_la_cascade_est_remplace(self):
+        # La boucle d'agent envoie toujours timeout=10 (DELAI_MAX_PAR_APPEL) : sans modele de
+        # repli, ce delai ne doit jamais atteindre Vultr (bug du 06/11/2026 sur glm-5.3).
+        faux = FauxClientVultr(["glm-5.3"])
+        client = adaptateur_vultr.ClientVultr({"glm-5.3": "glm-5.3"}, faux)
+        client.chat.completions.create(model="glm-5.3", messages=[], timeout=10)
+        self.assertEqual(faux.appels[0]["timeout"], adaptateur_vultr.DELAI_APPEL_FOURNISSEUR_SECONDES)
+
 
 class Disponibilite(Base):
     def ids(self, distributeur, palier, env):

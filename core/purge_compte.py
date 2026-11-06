@@ -41,6 +41,7 @@ _TABLES_SIMPLES = (
     ("oauth_temp", "user_id"),
     ("higgsfield_oauth_connections", "user_id"),
     ("higgsfield_usage", "user_id"),
+    ("higgsfield_generations", "user_id"),
     ("higgsfield_oauth_temp", "user_id"),
     ("platform_mcp_oauth_connections", "user_id"),
     ("platform_mcp_oauth_temp", "user_id"),

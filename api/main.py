@@ -32,6 +32,7 @@ from api.generation import router as generation_router
 from api.memoire_eleve import router as memoire_eleve_router
 from api.autorisations_outils import router as autorisations_outils_router
 from api.higgsfield import router as higgsfield_router
+from core import higgsfield_suivi
 from api.bibliotheque_utilisateur import router as bibliotheque_utilisateur_router
 from api.dossiers_bibliotheque import router as dossiers_bibliotheque_router
 from api.contenu_dynamique_matiere import router_enseignant as contenu_matiere_enseignant_router
@@ -154,6 +155,18 @@ async def _boucle_planificateur_rappels():
         except Exception as e:
             logging.error(f"ERREUR boucle planificateur rappels : {e}")
         await asyncio.sleep(60)
+
+
+async def _boucle_suivi_higgsfield():
+    # Suivi des générations Higgsfield (page /higgsfield) : sauvegarde en bibliothèque et
+    # notification faites ici, app fermée ou non. L'état vit en base (higgsfield_generations),
+    # donc un redémarrage reprend simplement les générations encore "en_cours".
+    while True:
+        try:
+            await asyncio.to_thread(higgsfield_suivi.traiter_en_cours)
+        except Exception as e:
+            logging.error(f"ERREUR boucle suivi Higgsfield : {e}")
+        await asyncio.sleep(5)
 
 
 async def _boucle_planificateur_minuteurs():
@@ -465,7 +478,9 @@ async def _lifespan(app: FastAPI):
         tache_audit_corrections = asyncio.create_task(_boucle_planificateur_audit_corrections())
         tache_vectorisation_documents_agent = asyncio.create_task(_boucle_vectorisation_documents_agent())
         tache_pause_sandboxes_execution_code = asyncio.create_task(_boucle_pause_sandboxes_execution_code())
+        tache_suivi_higgsfield = asyncio.create_task(_boucle_suivi_higgsfield())
         yield
+        tache_suivi_higgsfield.cancel()
         if tache_planificateur:
             tache_planificateur.cancel()
         if tache_proactivite:
