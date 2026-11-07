@@ -261,6 +261,50 @@ def preparer_appel_personnalise(route: dict) -> tuple[str, dict]:
     return valider_url_mcp(serveur["url"]), headers
 
 
+_LIBELLES_PAR_OUTIL: dict[str, str] = {}
+
+_VERBES_LECTURE_ONGLET = {
+    "get", "list", "search", "fetch", "read", "describe", "query", "find", "show", "view",
+    "lookup", "count", "check", "lister", "consulter", "rechercher", "lire", "obtenir",
+}
+
+
+def _libelle_lisible(nom_reel: str) -> str:
+    """Nom réel de l'outil en texte lisible : "list_projects" devient "List projects"."""
+    texte = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", nom_reel or "")
+    mots = [m for m in re.split(r"[^a-zA-Z0-9\u00C0-\u024F]+", texte) if m]
+    if not mots:
+        return "Outil"
+    phrase = " ".join(mots).lower()
+    return phrase[0].upper() + phrase[1:]
+
+
+def _lecture_seule_declaree(outil) -> bool | None:
+    """Indication du serveur lui-même (readOnlyHint) : True, False, ou None si elle n'est pas donnée."""
+    annotations = getattr(outil, "annotations", None)
+    if annotations is None:
+        return None
+    for cle in ("readOnlyHint", "read_only_hint"):
+        valeur = annotations.get(cle) if isinstance(annotations, dict) else getattr(annotations, cle, None)
+        if isinstance(valeur, bool):
+            return valeur
+    return None
+
+
+def _onglet_pour_outil(outil, nom_reel: str) -> str:
+    """Catégorie d'affichage : lecture (rechercher) ou action, d'après le serveur puis d'après le nom."""
+    declare = _lecture_seule_declaree(outil)
+    if declare is not None:
+        return "rechercher" if declare else "action_app"
+    premier = re.split(r"[^a-zA-Z]+", re.sub(r"([a-z])([A-Z])", r"\1_\2", nom_reel or ""))[0].lower()
+    return "rechercher" if premier in _VERBES_LECTURE_ONGLET else "action_app"
+
+
+def libelle_pour_outil(nom_outil: str) -> str | None:
+    """Libellé lisible d'un outil de serveur personnalisé, sans code interne (None si inconnu)."""
+    return _LIBELLES_PAR_OUTIL.get(nom_outil)
+
+
 def _nom_outil_expose(serveur_id: str, nom_reel: str) -> str:
     """Nom unique entre serveurs et inférieur à la limite de 64 caractères."""
     origine = re.sub(r"[^a-zA-Z0-9_-]", "_", nom_reel).strip("_").lower() or "outil"
@@ -309,13 +353,19 @@ def _construire_outils(serveur: dict, outils_reseau: list) -> list[dict]:
         if not isinstance(schema, dict):
             schema = {"type": "object", "properties": {}}
         description = str(getattr(outil, "description", "") or "")
+        libelle = _libelle_lisible(nom_reel)
+        _LIBELLES_PAR_OUTIL[nom_expose] = libelle
         resultat.append({
             "nom": nom_expose,
             "nom_reel": nom_reel,
-            "label": f"{serveur['nom']} · {nom_reel}"[:120],
-            "description": f"Outil d’un serveur MCP personnalisé ({serveur['nom']}). {description}"[:4000],
+            "label": f"{serveur['nom']} · {libelle}"[:120],
+            "description": (
+                f"Outil « {libelle} » du serveur MCP personnalisé « {serveur['nom']} ». "
+                "Le nom technique de cet outil est interne : ne le montre jamais à l'utilisateur, "
+                f"parle de « {libelle} » ou de ce que l'outil fait. {description}"
+            )[:4000],
             "icone": "Server",
-            "onglet": "action_app",
+            "onglet": _onglet_pour_outil(outil, nom_reel),
             "parameters": schema,
             "url": serveur["url"],
         })
