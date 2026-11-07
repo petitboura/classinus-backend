@@ -271,3 +271,67 @@ def diagnostic_mcp_marketing_studio_complet():
             logging.error(f"ERREUR diagnostic MCP presets ({categorie}): {e}")
             rapport[categorie] = {"erreur": str(e)[:300]}
     return rapport
+
+
+@router.get("/diagnostic/mcp-marketing-studio-contrats")
+def diagnostic_mcp_marketing_studio_contrats():
+    """Lecture seule, sans credit depense : (1) schemas de marketing_studio_v2_costs et des outils voisins,
+    (2) tout le flux de presets parcouru page par page, resume par type : nombre, format_slugs,
+    required_inputs distincts, cles presentes. Ne renvoie jamais de jeton."""
+    import json as _json
+    from core.higgsfield_mcp_partage import lister_tous_outils_diagnostic, appeler_outil_brut_diagnostic
+    rapport = {}
+    noms = {"marketing_studio_v2_costs", "marketing_list_avatars", "get_preset_instructions",
+            "marketing_studio_v2_avatars"}
+    try:
+        rapport["schemas"] = [o for o in lister_tous_outils_diagnostic() if o["nom"] in noms]
+    except Exception as e:
+        logging.error(f"ERREUR diagnostic contrats (schemas): {e}")
+        rapport["erreur_schemas"] = str(e)[:300]
+    par_type = {}
+    pages = 0
+    cursor = None
+    deja = set()
+    try:
+        while pages < 15:
+            args = {"category": "all", "size": 100}
+            if cursor is not None:
+                args["cursor"] = cursor
+            brut = appeler_outil_brut_diagnostic("marketing_studio_v2_presets", args)
+            bloc = ((brut.get("structuredContent") or {}).get("presets")) or {}
+            items = bloc.get("items") or []
+            if not items:
+                break
+            pages += 1
+            for it in items:
+                if it.get("id") in deja:
+                    continue
+                deja.add(it.get("id"))
+                t = str(it.get("type"))
+                r = par_type.setdefault(t, {"nombre": 0, "format_slugs": set(), "required_inputs": set(),
+                                            "cles": set(), "exemple_id": it.get("id")})
+                r["nombre"] += 1
+                r["format_slugs"].update(it.get("format_slugs") or [])
+                r["cles"].update(it.keys())
+                if "required_inputs" in it:
+                    r["required_inputs"].add(_json.dumps(it["required_inputs"], sort_keys=True))
+            nouveau = bloc.get("cursor")
+            if nouveau is None or nouveau == cursor:
+                break
+            cursor = nouveau
+        rapport["pages_lues"] = pages
+        rapport["total_presets_vus"] = len(deja)
+        rapport["par_type"] = {
+            t: {
+                "nombre": r["nombre"],
+                "format_slugs": sorted(r["format_slugs"]),
+                "required_inputs_distincts": sorted(r["required_inputs"])[:6],
+                "cles_presentes": sorted(r["cles"]),
+                "exemple_id": r["exemple_id"],
+            }
+            for t, r in par_type.items()
+        }
+    except Exception as e:
+        logging.error(f"ERREUR diagnostic contrats (flux): {e}")
+        rapport["erreur_flux"] = str(e)[:300]
+    return rapport
