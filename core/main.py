@@ -65,7 +65,7 @@ from routage_outils import (
     _ecrire_outils_retenus, _lire_outils_retenus, _outil_garder_outils, _router_outils,
     _preparer_demander_outils, _catalogue_pour_demander_outils, _outils_memoire_toujours_disponibles,
 )
-from construction_system_prompt import _construire_system_prompt, _est_timeout, _repli_si_reponse_partielle
+from construction_system_prompt import _construire_system_prompt, _est_timeout, _repli_si_reponse_partielle, separer_partie_variable, MARQUEUR_PARTIE_VARIABLE
 from persistance_echanges import _sauvegarder_echange, _finaliser_memoire_en_arriere_plan
 from historique_outils import historique_texte_seul, journal_outils_historique, a_des_outils_allegers, champs_historique_outil
 from historique_conversation import (
@@ -1391,9 +1391,21 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # seul. system_modele est ce que le modele recoit comme consigne systeme sur tous les
     # chemins ; system_final reste inchange pour les appels qui n'ont pas besoin du journal.
     journal_outils = journal_outils_historique(historique_pour_modele, "rappeler_resultat_outil" in noms_outils_tour)
-    system_modele = system_final + (("\n\n" + journal_outils) if journal_outils else "")
-    messages_base = [{"role": "system", "content": system_modele + (("\n\n" + note_historique) if note_historique else "")}]
+    # Cache de prompt (07/11/2026, demande Bourama) : le premier message systeme ne garde que la partie
+    # STABLE du prompt. Ce qui change a chaque message (voir MARQUEUR_PARTIE_VARIABLE, dans
+    # core/construction_system_prompt.py), le journal des outils et la note d'avancement forment un
+    # second message systeme place APRES l'historique : l'historique, lui, reste identique d'un tour
+    # a l'autre et les fournisseurs le relisent depuis leur cache au lieu de le refacturer. Memes
+    # textes, memes ordres ; seul l'endroit change. Sans marqueur, comportement d'avant.
+    # system_modele : le meme prompt en UN seul texte (marqueur retire), pour les chemins qui n'ont qu'un
+    # champ systeme unique (modeles premium, Google) -- inchange par rapport a avant.
+    system_modele = system_final.replace(MARQUEUR_PARTIE_VARIABLE, "\n\n") + (("\n\n" + journal_outils) if journal_outils else "")
+    tete_systeme, queue_systeme = separer_partie_variable(system_final)
+    queue_systeme = "\n\n".join(partie for partie in (queue_systeme.strip(), journal_outils, note_historique) if partie)
+    messages_base = [{"role": "system", "content": tete_systeme}]
     messages_base += historique_texte_seul(historique_pour_modele)
+    if queue_systeme:
+        messages_base.append({"role": "system", "content": queue_systeme})
     messages_base.append({"role": "user", "content": message_pour_modele})
 
     # ETAPE 5 (11/09/2026) : meta_utilisateur (piece jointe pour affichage

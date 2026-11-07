@@ -17,6 +17,7 @@ except ImportError:
     from core.reserve_tokens_sortie import reserve_tokens_sortie
 from efforts_modeles import effort_valide_pour_modele, est_modele_avec_adaptateur
 from adaptateur_commun import CLE_ETAT_FOURNISSEUR
+from usage_llm import empreintes_de_la_requete, journaliser_usage
 from fournisseurs_llm import CONSIGNE_LANGUE_REFLEXION, DEEPSEEK_REASONING_EFFORT, ajouter_consigne_langue_reflexion, normaliser_effort_reflexion
 from execution_outils import _AttenteConfirmation, _traiter_appels, cle_autorisation_appel
 from autorisations_outils import charger_autorisations
@@ -584,6 +585,11 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                 dernier_finish_reason = chunk.choices[0].finish_reason
             if getattr(chunk, "x_groq", None) and getattr(chunk.x_groq, "usage", None):
                 dernier_usage = chunk.x_groq.usage
+            # Usage du flux (07/11/2026) : les fournisseurs compatibles OpenAI l'envoient dans un
+            # dernier morceau SANS choix, les adaptateurs Claude, GPT, Grok, Meta et Gemini dans leur
+            # morceau final. Lu ici AVANT le saut des morceaux sans choix juste en dessous.
+            if getattr(chunk, "usage", None):
+                dernier_usage = chunk.usage
 
             # Certains fournisseurs (Baseten) envoient des morceaux sans
             # aucun choix (ex. le dernier, qui porte seulement l'usage) :
@@ -619,6 +625,14 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                             etat["name"] += fragment.function.name
                         if fragment.function.arguments:
                             etat["arguments"] += fragment.function.arguments
+
+        # Une ligne [USAGE] par appel au modele : c'est elle qui dit d'ou vient la facture d'entree
+        # (voir core/usage_llm.py). messages et outils donnent la taille de ce qui a ete renvoye.
+        journaliser_usage(
+            modele, dernier_usage,
+            messages=len(messages_agent), outils=len(outils_mcp or []), conversation=conversation_id,
+            **empreintes_de_la_requete(messages_agent, outils_mcp),
+        )
 
         if dernier_finish_reason == "length":
             logging.error(

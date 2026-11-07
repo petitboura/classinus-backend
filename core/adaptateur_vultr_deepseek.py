@@ -28,6 +28,10 @@ try:
     from adaptateur_commun import ClientCompatible, DELAI_APPEL_FOURNISSEUR_SECONDES
 except ImportError:
     from core.adaptateur_commun import ClientCompatible, DELAI_APPEL_FOURNISSEUR_SECONDES
+try:
+    from usage_llm import ouvrir_flux_avec_usage
+except ImportError:
+    from core.usage_llm import ouvrir_flux_avec_usage
 
 # Delai de mise a l'ecart de Vultr apres un refus de credit, quota, cle ou modele.
 DELAI_REESSAI_VULTR_SECONDES = 10 * 60
@@ -120,7 +124,7 @@ class ClientVultrDeepseek(ClientCompatible):
             if self._client_habituel is None:
                 arguments_vultr["timeout"] = DELAI_APPEL_FOURNISSEUR_SECONDES
             try:
-                reponse = self._client_vultr.chat.completions.create(**arguments_vultr)
+                reponse = ouvrir_flux_avec_usage(self._client_vultr.chat.completions.create, arguments_vultr)
                 # En warning car le niveau info n'apparait pas dans les logs de Railway.
                 logging.warning(f"[ROUTE DEEPSEEK] Vultr a repondu ({modele_id}, identifiant {identifiant})")
                 return reponse
@@ -138,4 +142,4 @@ class ClientVultrDeepseek(ClientCompatible):
         else:
             motif = "modele sans identifiant Vultr"
         logging.warning(f"[ROUTE DEEPSEEK] route habituelle a repondu ({modele_id}), motif : {motif}")
-        return self._client_habituel.chat.completions.create(**arguments)
+        return ouvrir_flux_avec_usage(self._client_habituel.chat.completions.create, arguments)

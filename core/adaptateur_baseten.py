@@ -32,6 +32,10 @@ try:
     from adaptateur_commun import ClientCompatible, DELAI_APPEL_FOURNISSEUR_SECONDES
 except ImportError:
     from core.adaptateur_commun import ClientCompatible, DELAI_APPEL_FOURNISSEUR_SECONDES
+try:
+    from usage_llm import ouvrir_flux_avec_usage
+except ImportError:
+    from core.usage_llm import ouvrir_flux_avec_usage
 
 BASE_URL_BASETEN = "https://inference.baseten.co/v1"
 BASE_URL_DEEPSEEK_DIRECT = "https://api.deepseek.com"
@@ -122,7 +126,7 @@ class ClientBaseten(ClientCompatible):
             if self._client_direct is None:
                 arguments["timeout"] = DELAI_APPEL_FOURNISSEUR_SECONDES
             try:
-                reponse = self._client_baseten.chat.completions.create(**arguments)
+                reponse = ouvrir_flux_avec_usage(self._client_baseten.chat.completions.create, arguments)
                 # Log temporaire (staging) : quelle route a repondu. En
                 # warning car le niveau info n'apparait pas dans les logs.
                 logging.warning(f"[ROUTE DEEPSEEK] Baseten a repondu ({modele_id}, slug {slug})")
@@ -134,7 +138,7 @@ class ClientBaseten(ClientCompatible):
                 logging.warning(f"Baseten refuse DeepSeek ({modele_id}), repli direct : {erreur}")
         if self._client_direct is None:
             raise RuntimeError(f"{modele_id} : ni Baseten ni le direct ne sont disponibles")
-        reponse = self._client_direct.chat.completions.create(**arguments)
+        reponse = ouvrir_flux_avec_usage(self._client_direct.chat.completions.create, arguments)
         if slug is not None:
             motif = "repli apres refus Baseten"
         elif self._client_baseten is None:

@@ -212,12 +212,37 @@ def _texte_editeur(etat):
         "- Les boutons de l'éditeur (Exécuter, Ouvrir, Enregistrer, Vers le chat, plein écran) sont dans la liste des éléments à l'écran.\n"
     )
 
+# Separation du prompt en deux parties (07/11/2026, demande Bourama : l'entree coutait beaucoup
+# trop cher). Les fournisseurs ne relisent depuis leur cache que le DEBUT IDENTIQUE d'une requete :
+# le premier octet qui change fait refacturer tout ce qui suit. Or tout le prompt systeme etait le
+# tout premier message, AVANT l'historique, et il se terminait par des blocs qui changent a chaque
+# message (heure a la minute pres, notions et signalements pertinents, etat de l'editeur, consigne
+# de longueur...). A chaque nouveau message de l'utilisateur, tout l'historique etait donc
+# refacture au prix plein.
+#
+# Desormais ce qui est stable (plateforme, page de l'agent, catalogue de skills, connexions,
+# configuration, memoire, modes) reste en tete, et ce qui depend DU MESSAGE EN COURS vient apres un
+# marqueur. core/main.py coupe au marqueur : la tete reste le premier message systeme, la queue
+# devient un message systeme place APRES l'historique, juste avant la question. Rien n'est perdu ni
+# reformule : memes textes, meme ordre, seulement a un autre endroit.
+MARQUEUR_PARTIE_VARIABLE = "\n\n<!--classinus:partie-variable-->\n\n"
+
+
+def separer_partie_variable(system_prompt):
+    """(tete stable, queue variable) du prompt. Sans marqueur : (prompt entier, \"\")."""
+    tete, marqueur, queue = (system_prompt or "").partition(MARQUEUR_PARTIE_VARIABLE)
+    if not marqueur:
+        return system_prompt or "", ""
+    return tete, queue
+
+
 def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longueur_reponse="moyenne", fuseau_horaire=None, recherche_forcee=False, outil_force=None, sans_enseignant=False, mes_programmes=None, notions_pertinentes=None, signalements_pertinents=None, code_actif=False, persona_pedagogique=None, guide_actif=None, mode_source=None, actions_ecran=None, reponses_qcm_recentes=None, etat_editeur=None, configuration_etudiant=None, sommaire_memoire=None, client=None, libelles_client=None, origine=None, langue_interface="fr", skills_catalogue=None, bloc_connexions=None):
     # Restauré le 14/08 (voir commentaire des constantes plus haut) : la
     # page Notion de l'agent (get_system_prompt) ne doit plus contenir QUE
     # la personnalité/le comportement propre à l'agent -- les 3 blocs fixes
     # de plateforme sont préfixés ici, dans l'ordre stable -> volatil
-    # (maximise le cache Groq, voir doc "Mon véritable système prompt").
+    # (maximise le cache Groq, voir doc "Mon véritable système prompt"). Mise a jour du 07/11/2026 : la
+    # coupure stable/variable est maintenant reelle, voir MARQUEUR_PARTIE_VARIABLE plus haut.
     #
     # Éléments ajoutés ici, PAR NATURE impossibles à figer dans un texte
     # unique partagé par tout le monde :
@@ -434,6 +459,9 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # conversation, ce sont trois reglages separes qui cohabitent.
     if mode_source and mode_source in MODES_SOURCE:
         system_final += MODES_SOURCE[mode_source]
+
+    # A partir d'ici, tout depend du message ou de l'ecran du moment : voir MARQUEUR_PARTIE_VARIABLE.
+    system_final += MARQUEUR_PARTIE_VARIABLE
 
     # Chantier "agent applicatif continu" (19/09/2026, decision Bourama :
     # retrait de l'outil lister_actions_disponibles, plus jamais demande

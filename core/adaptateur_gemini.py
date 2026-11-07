@@ -138,10 +138,13 @@ class ClientGemini(ClientCompatible):
         nombre_appels = 0
         a_repondu = False
         fin = "stop"
+        usage = None
         flux_api = self._client.models.generate_content_stream(
             model=modele, contents=contenus, config=configuration
         )
         for reponse in flux_api:
+            # Les tokens sont cumules sur chaque morceau : le dernier vu est le total (voir core/usage_llm.py).
+            usage = getattr(reponse, "usage_metadata", None) or usage
             candidats = reponse.candidates or []
             if not candidats:
                 raison = getattr(getattr(reponse, "prompt_feedback", None), "block_reason", None)
@@ -177,4 +180,4 @@ class ClientGemini(ClientCompatible):
             self._etat_dernier_tour = {
                 "parties": [p.model_dump(mode="json", exclude_none=True) for p in parties_du_tour],
             }
-        yield morceau(fin=fin)
+        yield morceau(fin=fin, usage=usage)

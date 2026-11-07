@@ -260,13 +260,15 @@ class Claude(unittest.TestCase):
         self.assertEqual(appels, [{"id": "toolu_1", "name": "chercher", "arguments": '{"q":"x"}'}])
         self.assertEqual(captured["thinking"], {"type": "adaptive", "display": "summarized"})
         self.assertEqual(captured["extra_body"], {"output_config": {"effort": "xhigh"}})
-        self.assertEqual(captured["system"], "S")
+        # Cache de prompt (07/11/2026) : le systeme part en bloc avec un marqueur de cache.
+        self.assertEqual(captured["system"][0]["text"], "S")
+        self.assertEqual(captured["system"][0]["cache_control"]["type"], "ephemeral")
         self.assertGreater(captured["max_tokens"], 4096)
         self.assertEqual(captured["tools"][0]["input_schema"]["type"], "object")
         etat = client.etat_dernier_tour()
         self.assertEqual(etat["blocs"][0]["signature"], "sig123")
 
-        systeme, converti = claude_messages(messages_apres_outil(appels[0], etat))
+        systeme, converti, _ = claude_messages(messages_apres_outil(appels[0], etat))
         self.assertEqual(systeme, "Consigne de base")
         self.assertEqual([m["role"] for m in converti], ["user", "assistant", "user"])
         self.assertEqual(converti[1]["content"][0]["type"], "thinking")
@@ -276,13 +278,13 @@ class Claude(unittest.TestCase):
     def test_consigne_systeme_en_cours_de_route_apres_les_resultats(self):
         messages = messages_apres_outil({"id": "t1", "name": "chercher", "arguments": "{}"}, None)
         messages.append({"role": "system", "content": "Tu as répété"})
-        _, converti = claude_messages(messages)
+        _, converti, _ = claude_messages(messages)
         dernier = converti[-1]["content"]
         self.assertEqual([b["type"] for b in dernier], ["tool_result", "text"])
         self.assertIn("Tu as répété", dernier[1]["text"])
 
     def test_sans_etat_les_appels_sont_reconstruits(self):
-        _, converti = claude_messages(messages_apres_outil({"id": "t1", "name": "chercher", "arguments": '{"q":"z"}'}, None))
+        _, converti, _ = claude_messages(messages_apres_outil({"id": "t1", "name": "chercher", "arguments": '{"q":"z"}'}, None))
         self.assertEqual(converti[1]["content"], [{"type": "tool_use", "id": "t1", "name": "chercher", "input": {"q": "z"}}])
 
 
