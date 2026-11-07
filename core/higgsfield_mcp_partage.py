@@ -220,3 +220,25 @@ def appeler_outil_brut_diagnostic(nom_outil, arguments):
     token = _token_ou_erreur()
     with _SessionMCP(token) as session:
         return session.appeler("tools/call", {"name": nom, "arguments": arguments})
+
+
+# Outils appeles par le serveur lui-meme pour Marketing Studio (jamais exposes au LLM du chat).
+OUTILS_MARKETING_INTERNES = frozenset({
+    "media_import_url", "marketing_studio_v2_create", "marketing_studio_v2_status",
+})
+
+
+def appeler_outil_marketing_interne(nom_outil, arguments):
+    """Appel d'un des 3 outils internes Marketing Studio. Renvoie la reponse MCP COMPLETE
+    (content + structuredContent). Leve ErreurHiggsfield si l'outil echoue."""
+    nom = (nom_outil or "").strip()
+    if nom not in OUTILS_MARKETING_INTERNES:
+        raise ErreurHiggsfield(f"Outil MCP \"{nom}\" non autorise pour Marketing Studio.")
+    token = _token_ou_erreur()
+    with _SessionMCP(token) as session:
+        resultat = session.appeler("tools/call", {"name": nom, "arguments": arguments})
+    if resultat.get("isError"):
+        raise ErreurHiggsfield(
+            "Higgsfield a refuse la demande : " + _texte_resultat(resultat)[:300]
+        )
+    return resultat

@@ -13,6 +13,7 @@ import requests
 from api.auth import supabase
 from core.bibliotheque_fichiers import enregistrer_fichier
 from core.generation_video_higgsfield import statut_generation
+from core.higgsfield_marketing_studio import PREFIXE_SUIVI, lire_statut as lire_statut_marketing
 from core.notifications import creer_notification
 from core.notifications_push import envoyer_notification_push
 
@@ -138,7 +139,11 @@ def _traiter_une(ligne: dict) -> None:
         _notifier(ligne, "echec")
         return
     try:
-        resultat = statut_generation(request_id)
+        if request_id.startswith(PREFIXE_SUIVI):
+            # Generation Marketing Studio lancee par le compte partage (MCP), pas par l'API.
+            resultat = lire_statut_marketing(request_id[len(PREFIXE_SUIVI):])
+        else:
+            resultat = statut_generation(request_id)
     except Exception as e:
         # Panne passagère de Higgsfield : on réessaie au prochain tour.
         logging.warning(f"Suivi Higgsfield {request_id} : statut indisponible ({e})")
