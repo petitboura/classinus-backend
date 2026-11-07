@@ -238,7 +238,8 @@ def appeler_outil_marketing_interne(nom_outil, arguments):
     with _SessionMCP(token) as session:
         resultat = session.appeler("tools/call", {"name": nom, "arguments": arguments})
     if resultat.get("isError"):
-        raise ErreurHiggsfield(
-            "Higgsfield a refuse la demande : " + _texte_resultat(resultat)[:300]
-        )
+        detail = _texte_resultat(resultat)[:300]
+        erreur = ErreurHiggsfield("Higgsfield a refuse la demande : " + detail)
+        erreur.detail_refus = detail  # texte de Higgsfield, tel quel, pour l'affichage traduit
+        raise erreur
     return resultat

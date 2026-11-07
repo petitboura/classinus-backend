@@ -161,13 +161,24 @@ def lancer_marketing_studio(request: Request, demande: DemandeMarketingStudio, u
             demande.preset_id, demande.preset_type, demande.preset_nom, media_produit, media_avatar,
             demande.url_marque, demande.prompt, demande.format_image,
         )
-        reserver_generation(_supabase_memoire, utilisateur.id, "mcp")
+        try:
+            reserver_generation(_supabase_memoire, utilisateur.id, "mcp")
+        except ErreurHiggsfield as e:
+            if "Limite du jour" in str(e):
+                from core.higgsfield_limites import limite_du_jour
+                raise marketing_studio.ErreurMarketingStudio("MARKETING_LIMITE_JOUR", limite=limite_du_jour("mcp")) from e
+            raise marketing_studio.ErreurMarketingStudio("MARKETING_LIMITE_INDISPONIBLE") from e
         job_id = marketing_studio.creer(arguments)
         request_id = marketing_studio.PREFIXE_SUIVI + job_id
         higgsfield_suivi.enregistrer(utilisateur.id, request_id, demande.titre, "video")
         return {"request_id": request_id, "titre": demande.titre}
+    except marketing_studio.ErreurMarketingStudio as e:
+        raise erreur_api(400, e.code, **e.params)
     except ErreurHiggsfield as e:
-        raise erreur_api(400, "HIGGSFIELD_REQUETE_INVALIDE", message=str(e))
+        logging.error(f"ERREUR Higgsfield marketing studio user {utilisateur.id}: {e}")
+        raise erreur_api(400, "MARKETING_INDISPONIBLE")
+    except HTTPException:
+        raise
     except Exception as e:
         logging.error(f"ERREUR Higgsfield marketing studio user {utilisateur.id}: {e}")
         raise erreur_api(500, "ECHEC_LANCEMENT_HIGGSFIELD")

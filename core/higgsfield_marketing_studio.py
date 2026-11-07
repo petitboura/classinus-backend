@@ -18,6 +18,16 @@ from core.higgsfield_requetes import ErreurHiggsfield
 
 PREFIXE_SUIVI = "mcp:"
 
+
+class ErreurMarketingStudio(ErreurHiggsfield):
+    """Erreur destinee a l'utilisateur : un code stable (traduit en francais et en anglais dans
+    core/erreurs.py et lib/erreurs.ts) et ses parametres, jamais un texte francais ecrit en dur."""
+
+    def __init__(self, code: str, **params):
+        super().__init__(code)
+        self.code = code
+        self.params = params
+
 # Un seul format_slug par type dans le flux reel. "avatar" : photo de personne (People seulement).
 # "url_marque" : adresse du site (SaaS seulement).
 TYPES_MARKETING = {
@@ -77,12 +87,12 @@ def construire_creation(preset_id, preset_type, preset_nom, media_produit, media
     """Arguments de marketing_studio_v2_create. Leve ErreurHiggsfield si la demande est incoherente."""
     contrat = TYPES_MARKETING.get((preset_type or "").strip())
     if contrat is None:
-        raise ErreurHiggsfield(f"Type de preset non pris en charge : {preset_type}.")
+        raise ErreurMarketingStudio("MARKETING_TYPE_NON_PRIS_EN_CHARGE")
     if not est_uuid(preset_id):
-        raise ErreurHiggsfield("Identifiant de preset invalide.")
+        raise ErreurMarketingStudio("MARKETING_PRESET_INVALIDE")
     if not media_produit and not (contrat["url_marque"] and url_marque):
-        raise ErreurHiggsfield(
-            "Ajoute l'image de ton produit" + (" ou l'adresse de ton site." if contrat["url_marque"] else ".")
+        raise ErreurMarketingStudio(
+            "MARKETING_IMAGE_OU_SITE_REQUIS" if contrat["url_marque"] else "MARKETING_IMAGE_REQUISE"
         )
     arguments = {
         "preset_id": preset_id,
@@ -94,55 +104,67 @@ def construire_creation(preset_id, preset_type, preset_nom, media_produit, media
         arguments["preset_name"] = str(preset_nom)[:200]
     if media_produit:
         if not est_uuid(media_produit):
-            raise ErreurHiggsfield("Identifiant de l'image du produit invalide.")
+            raise ErreurMarketingStudio("MARKETING_IMAGE_INVALIDE")
         arguments["product_media_id"] = media_produit
     if media_avatar:
         if not contrat["avatar"]:
-            raise ErreurHiggsfield("Ce type de preset n'utilise pas de photo de personne.")
+            raise ErreurMarketingStudio("MARKETING_PERSONNE_NON_ACCEPTEE")
         if not est_uuid(media_avatar):
-            raise ErreurHiggsfield("Identifiant de la photo de personne invalide.")
+            raise ErreurMarketingStudio("MARKETING_PERSONNE_INVALIDE")
         arguments["avatar_media_id"] = media_avatar
     if url_marque:
         if not contrat["url_marque"]:
-            raise ErreurHiggsfield("Ce type de preset n'utilise pas d'adresse de site.")
+            raise ErreurMarketingStudio("MARKETING_SITE_NON_ACCEPTE")
         if not str(url_marque).lower().startswith("https://") or len(url_marque) > 4096:
-            raise ErreurHiggsfield("L'adresse du site doit commencer par https://.")
+            raise ErreurMarketingStudio("MARKETING_SITE_HTTPS")
         arguments["brand_url"] = url_marque
     texte = (prompt or "").strip()
     if texte:
         if len(texte) > 5000:
-            raise ErreurHiggsfield("La précision est trop longue (5000 caractères au maximum).")
+            raise ErreurMarketingStudio("MARKETING_PRECISION_TROP_LONGUE")
         arguments["prompt"] = texte
     if format_image:
         if not _FORMAT_IMAGE.match(format_image):
-            raise ErreurHiggsfield("Format invalide (exemple attendu : 9:16).")
+            raise ErreurMarketingStudio("MARKETING_FORMAT_INVALIDE")
         arguments["aspect_ratio"] = format_image
     return arguments
+
+
+def _appeler(nom_outil: str, arguments: dict):
+    """Appel MCP dont les echecs deviennent des erreurs a code stable (traduites en francais et en anglais)."""
+    try:
+        return appeler_outil_marketing_interne(nom_outil, arguments)
+    except ErreurMarketingStudio:
+        raise
+    except ErreurHiggsfield as e:
+        detail = getattr(e, "detail_refus", None)
+        if detail:
+            raise ErreurMarketingStudio("MARKETING_REFUS_HIGGSFIELD", detail=detail) from e
+        logging.error("Marketing Studio : MCP indisponible (%s) : %s", nom_outil, e)
+        raise ErreurMarketingStudio("MARKETING_INDISPONIBLE") from e
 
 
 def importer_image(url_https: str) -> str:
     """Envoie une image deja hebergee (adresse https) a Higgsfield, renvoie son media_id confirme."""
     if not isinstance(url_https, str) or not url_https.lower().startswith("https://"):
-        raise ErreurHiggsfield("L'image doit avoir une adresse https.")
-    resultat = appeler_outil_marketing_interne("media_import_url", {"url": url_https, "type": "image"})
+        raise ErreurMarketingStudio("MARKETING_IMAGE_HTTPS")
+    resultat = _appeler("media_import_url", {"url": url_https, "type": "image"})
     media_id = trouver_uuid(_structure(resultat) or resultat, ("media", "id"))
     if not media_id:
         logging.error("Marketing Studio : media_import_url sans identifiant lisible : %s", _extrait_journal(resultat))
-        raise ErreurHiggsfield("Higgsfield n'a pas confirmé l'image, réessaie avec une autre image.")
+        raise ErreurMarketingStudio("MARKETING_IMAGE_NON_CONFIRMEE")
     return media_id
 
 
 def creer(arguments: dict) -> str:
     """Lance la generation. Renvoie l'identifiant du job (sans prefixe)."""
-    resultat = appeler_outil_marketing_interne("marketing_studio_v2_create", arguments)
+    resultat = _appeler("marketing_studio_v2_create", arguments)
     # Le format exact de la reponse n'est pas documente : on cherche le job, et on journalise la
     # reponse brute (sans jeton) pour pouvoir l'ajuster si besoin.
     job_id = trouver_uuid(_structure(resultat) or resultat, ("job",))
     logging.info("Marketing Studio create : %s", _extrait_journal(resultat))
     if not job_id:
-        raise ErreurHiggsfield(
-            "Higgsfield a répondu sans identifiant de génération. Rien n'a été enregistré, réessaie."
-        )
+        raise ErreurMarketingStudio("MARKETING_JOB_SANS_ID")
     return job_id
 
 
@@ -193,6 +215,6 @@ def interpreter_statut(resultat, job_id) -> dict:
 
 def lire_statut(job_id: str) -> dict:
     if not est_uuid(job_id):
-        raise ErreurHiggsfield("Identifiant de génération invalide.")
-    resultat = appeler_outil_marketing_interne("marketing_studio_v2_status", {"job_ids": [job_id]})
+        raise ErreurMarketingStudio("MARKETING_PRESET_INVALIDE")
+    resultat = _appeler("marketing_studio_v2_status", {"job_ids": [job_id]})
     return interpreter_statut(resultat, job_id)

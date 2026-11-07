@@ -116,11 +116,17 @@ def _notifier(ligne: dict, etat: str) -> None:
         return
     if etat == "terminee":
         titre, corps = "Ta génération est prête", f"« {ligne['titre']} » est enregistrée dans ta bibliothèque."
+        titre_en, corps_en = "Your generation is ready", f"“{ligne['titre']}” is saved in your library."
     else:
         titre, corps = "Ta génération n'a pas abouti", f"« {ligne['titre']} » n'a pas pu être terminée."
+        titre_en, corps_en = "Your generation did not complete", f"“{ligne['titre']}” could not be completed."
     try:
+        # Dans l'appli, le texte français est traduit par le dictionnaire de l'interface (lib/i18n/interface.ts).
         creer_notification(ligne["user_id"], "action_ia_terminee", titre, corps, "/higgsfield")
-        envoyer_notification_push(ligne["user_id"], titre, corps, "/higgsfield")
+        # Sur l'appareil, la langue de l'utilisateur n'est pas connue du serveur : les deux langues sont envoyees.
+        envoyer_notification_push(
+            ligne["user_id"], f"{titre} · {titre_en}", f"{corps}\n{corps_en}", "/higgsfield"
+        )
     except Exception as e:
         logging.error(f"ERREUR notification Higgsfield {ligne['request_id']} : {e}")
 

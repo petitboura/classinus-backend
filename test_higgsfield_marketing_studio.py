@@ -71,6 +71,56 @@ class TestCreation(unittest.TestCase):
             ms.construire_creation(PRESET, "product_shots", "", MEDIA, "", "", "x" * 5001, "")
 
 
+class TestCodesErreurs(unittest.TestCase):
+    """Chaque erreur montree a l'utilisateur est un code stable, traduit en francais et en anglais."""
+
+    def _code(self, *args):
+        with self.assertRaises(ms.ErreurMarketingStudio) as ctx:
+            ms.construire_creation(*args)
+        return ctx.exception.code
+
+    def test_codes_attendus(self):
+        self.assertEqual(self._code(PRESET, "ugc", "", MEDIA, "", "", "", ""), "MARKETING_TYPE_NON_PRIS_EN_CHARGE")
+        self.assertEqual(self._code("x", "product_shots", "", MEDIA, "", "", "", ""), "MARKETING_PRESET_INVALIDE")
+        self.assertEqual(self._code(PRESET, "product_shots", "", "", "", "", "", ""), "MARKETING_IMAGE_REQUISE")
+        self.assertEqual(self._code(PRESET, "saas_motion", "", "", "", "", "", ""), "MARKETING_IMAGE_OU_SITE_REQUIS")
+        self.assertEqual(self._code(PRESET, "hypermotion", "", MEDIA, AVATAR, "", "", ""), "MARKETING_PERSONNE_NON_ACCEPTEE")
+        self.assertEqual(self._code(PRESET, "saas_motion", "", MEDIA, "", "http://a.fr", "", ""), "MARKETING_SITE_HTTPS")
+        self.assertEqual(self._code(PRESET, "product_shots", "", MEDIA, "", "", "x" * 5001, ""), "MARKETING_PRECISION_TROP_LONGUE")
+        self.assertEqual(self._code(PRESET, "product_shots", "", MEDIA, "", "", "", "carre"), "MARKETING_FORMAT_INVALIDE")
+
+    def test_tous_les_codes_existent_en_francais_et_en_anglais(self):
+        import re
+        from core.erreurs import MESSAGES_EN, MESSAGES_FR
+        source = open("core/higgsfield_marketing_studio.py", encoding="utf-8").read()
+        source += open("api/higgsfield.py", encoding="utf-8").read()
+        codes = set(re.findall(r'"(MARKETING_[A-Z_]+)"', source))
+        self.assertTrue(codes)
+        for code in codes:
+            self.assertIn(code, MESSAGES_FR, code)
+            self.assertIn(code, MESSAGES_EN, code)
+
+    def test_refus_de_higgsfield_garde_son_texte(self):
+        class Faux(ms.ErreurHiggsfield):
+            pass
+
+        avant = ms.appeler_outil_marketing_interne
+
+        def refus(nom, args):
+            e = ms.ErreurHiggsfield("x")
+            e.detail_refus = "invalid preset"
+            raise e
+
+        ms.appeler_outil_marketing_interne = refus
+        try:
+            with self.assertRaises(ms.ErreurMarketingStudio) as ctx:
+                ms.importer_image("https://exemple.com/a.png")
+            self.assertEqual(ctx.exception.code, "MARKETING_REFUS_HIGGSFIELD")
+            self.assertEqual(ctx.exception.params, {"detail": "invalid preset"})
+        finally:
+            ms.appeler_outil_marketing_interne = avant
+
+
 class TestStatut(unittest.TestCase):
     def _res(self, statut, **autres):
         return {"structuredContent": {"jobs": [{"id": JOB, "status": statut, **autres}]}}
