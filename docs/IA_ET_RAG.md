@@ -21,6 +21,31 @@ Core variables found in the repository:
 
 Additional providers use their own variables. See [`RAILWAY_DEPLOY.md`](./deployment/RAILWAY_DEPLOY.md) for the current operational list.
 
+## Prompt caching and token metering
+
+Every tool step resends the whole context (system prompt, tools, history, tool results) to the model, so input is the dominant cost. Providers only reuse from their cache the **identical beginning** of a request, billed much lower. The first byte that changes makes everything after it billable again.
+
+**Prompt layout** (`core/construction_system_prompt.py`, assembled in `core/main.py`):
+
+1. first system message: the **stable** part (platform, agent page, skills, connections, configuration, memory, modes);
+2. the conversation history;
+3. second system message: the **variable** part (blocks that depend on the message or the screen, date and time, tool journal, progress note);
+4. the current question.
+
+Any new prompt block that changes from one message to the next goes **after** `MARQUEUR_PARTIE_VARIABLE`, never before.
+
+**Per-provider cache**:
+
+| Provider | Mechanism |
+|---|---|
+| Claude | `cache_control` markers set by `core/adaptateur_claude.py` (last tool, system, end of history, last message). `CLAUDE_CACHE_PROMPT=0` turns it off, `CLAUDE_CACHE_TTL=1h` extends the lifetime (default 5 min) |
+| GPT, Grok | automatic cache; a stable `prompt_cache_key` is sent by `core/adaptateur_responses.py`. `CACHE_PROMPT_CLE=0` turns it off |
+| Meta, Gemini, DeepSeek, GLM, Qwen, NVIDIA | provider-side automatic cache, nothing to send: only a stable beginning matters |
+
+**Metering** (`core/usage_llm.py`): one `[USAGE]` line per call in the Railway logs: `entree` (input), `cache_lu` (cache read), `cache_ecrit` (cache written), `sortie` (output), `part_cache`, message and tool counts, and three fingerprints (`empreinte_outils`, `empreinte_tete`, `empreinte_debut_historique`). If the fingerprints stay the same between calls but `cache_lu` stays at 0, the cause is on the provider side; if they change, the beginning of our request is moving. Forced-conclusion and re-read calls are not metered yet.
+
+Known limit: `demander_outils` adds tools mid-turn, which changes the beginning of the request and forces a cache rewrite on each addition.
+
 ## Tools
 
 Tools are registered and filtered by registry and permission modules, especially `core/registre_outils.py`, `core/mcp_tools.py`, and specialized execution modules. Some calls require explicit approval and server-side safeguards.

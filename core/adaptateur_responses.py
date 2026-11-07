@@ -16,8 +16,10 @@ fournisseur_etat, voir core/adaptateur_commun.py). OpenAI et Meta sont appelés 
 les échanges des élèves ne restent pas chez le fournisseur.
 """
 
+import hashlib
 import json
 import logging
+import os
 import time
 
 from openai import BadRequestError, NotFoundError, OpenAI
@@ -139,10 +141,30 @@ class ClientResponses(ClientCompatible):
             api_key=cle_api, base_url=adresse, timeout=DELAI_APPEL_FOURNISSEUR_SECONDES, max_retries=1,
         )
 
+    def _cle_cache(self, modele, instructions):
+        """
+        Cle de routage du cache (prompt_cache_key). OpenAI et xAI relisent le debut identique d'une
+        requete a l'autre, mais seulement sur le serveur qui l'a deja traite : une cle stable envoie
+        les requetes qui partagent le meme prompt systeme au meme serveur (doc xAI, "Maximizing Cache
+        Hits" ; meme parametre chez OpenAI). Derivee du modele et du prompt systeme, donc sans rien a
+        transporter jusqu'ici : la meme personne, avec les memes reglages, retombe sur la meme cle.
+        Meta : non envoyee, le parametre n'est pas documente chez eux (a verifier avec les lignes
+        [USAGE]). CACHE_PROMPT_CLE=0 la coupe pour tous.
+        """
+        if self.fournisseur not in ("openai", "xai") or not instructions:
+            return None
+        if os.getenv("CACHE_PROMPT_CLE", "1").strip() == "0":
+            return None
+        empreinte = hashlib.sha256(f"{modele}\n{instructions}".encode("utf-8")).hexdigest()
+        return f"classinus-{empreinte[:32]}"
+
     def _arguments_requete(self, modele, instructions, entree, outils, effort, avec_resume):
         arguments = {"model": modele, "input": entree, "stream": True}
         if instructions:
             arguments["instructions"] = instructions
+        cle_cache = self._cle_cache(modele, instructions)
+        if cle_cache:
+            arguments["extra_body"] = {"prompt_cache_key": cle_cache}
         if outils:
             arguments["tools"] = outils
         raisonnement = {}
@@ -210,9 +232,12 @@ class ClientResponses(ClientCompatible):
         nombre_appels = 0
         fin = "stop"
         a_repondu = False
+        usage = None
         try:
             for evenement in flux_api:
                 type_evenement = getattr(evenement, "type", "")
+                if type_evenement in ("response.completed", "response.incomplete"):
+                    usage = getattr(getattr(evenement, "response", None), "usage", None) or usage
                 if type_evenement == "response.output_text.delta":
                     if evenement.delta:
                         a_repondu = True
@@ -255,7 +280,7 @@ class ClientResponses(ClientCompatible):
         if nombre_appels:
             fin = "tool_calls"
             self._etat_dernier_tour = {"elements": elements}
-        yield morceau(fin=fin)
+        yield morceau(fin=fin, usage=usage)
 
 
 def _message_erreur(evenement):

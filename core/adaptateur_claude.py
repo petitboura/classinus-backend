@@ -11,6 +11,8 @@ Les blocs de réflexion renvoyés par Claude sont signés et doivent revenir à 
 les résultats d'outils : ils sont rangés dans fournisseur_etat (voir core/adaptateur_commun.py).
 """
 
+import os
+
 from anthropic import Anthropic
 
 try:
@@ -50,8 +52,14 @@ def _convertir_messages(messages):
     Anthropic n'a pas de rôle système dans les messages : le premier message système devient le
     paramètre system, les consignes ajoutées en cours de route deviennent du texte côté
     utilisateur. Les résultats d'outils reviennent dans un message utilisateur, avant tout texte.
+
+    Renvoie aussi l'indice du dernier message de l'HISTORIQUE (juste avant la première consigne
+    système ajoutée en cours de route, voir core/main.py : la partie variable du prompt vient
+    après l'historique), ou None. C'est là que le cache se pose pour que l'historique soit relu
+    d'un message à l'autre au lieu d'être refacturé.
     """
     systeme = None
+    fin_historique = None
     converti = []
     resultats_en_attente = []
     textes_en_attente = []
@@ -70,6 +78,8 @@ def _convertir_messages(messages):
             if systeme is None and not converti and not textes_en_attente:
                 systeme = texte
             elif texte:
+                if fin_historique is None and converti:
+                    fin_historique = len(converti) - 1
                 textes_en_attente.append({"type": "text", "text": f"[Consigne du système] {texte}"})
         elif role == "user":
             texte = texte_du_contenu(message.get("content"))
@@ -102,7 +112,70 @@ def _convertir_messages(messages):
             if blocs:
                 converti.append({"role": "assistant", "content": blocs})
     vider()
-    return systeme, converti
+    return systeme, converti, fin_historique
+
+
+# Cache de prompt (07/11/2026, demande Bourama : l'entrée coûtait beaucoup trop cher).
+# Chez Anthropic le cache couvre tout ce qui précède un marqueur, dans l'ordre outils, puis
+# système, puis messages. Relu, ce début est facturé environ 10 % du prix normal ; l'écrire coûte
+# un peu plus que le prix normal, une fois.
+#   CLAUDE_CACHE_PROMPT : "0" coupe tout le cache (par défaut actif).
+#   CLAUDE_CACHE_TTL    : "5m" (défaut) ou "1h" (écriture plus chère, utile si les tours sont espacés).
+TYPES_BLOCS_AVEC_CACHE = {"text", "tool_use", "tool_result"}
+
+
+def _cache_actif():
+    return os.getenv("CLAUDE_CACHE_PROMPT", "1").strip() != "0"
+
+
+def _controle_cache():
+    controle = {"type": "ephemeral"}
+    if os.getenv("CLAUDE_CACHE_TTL", "5m").strip() == "1h":
+        controle["ttl"] = "1h"
+    return controle
+
+
+def _marquer_dernier_bloc(message):
+    """
+    Pose le marqueur de cache sur le dernier bloc du message, dans une COPIE du bloc : ces blocs
+    viennent de fournisseur_etat, qui voyage avec messages_agent et ne doit jamais être modifié.
+    Sans effet si le dernier bloc n'accepte pas de marqueur (blocs de réflexion).
+    """
+    contenu = message.get("content")
+    if not isinstance(contenu, list) or not contenu:
+        return
+    dernier = contenu[-1]
+    if not isinstance(dernier, dict) or dernier.get("type") not in TYPES_BLOCS_AVEC_CACHE:
+        return
+    contenu[-1] = {**dernier, "cache_control": _controle_cache()}
+
+
+def poser_points_de_cache(arguments, fin_historique):
+    """
+    Pose au plus 4 marqueurs (le maximum d'Anthropic) sur la requête :
+    1. le dernier outil : le cache des outils survit à un changement du prompt système ;
+    2. le prompt système, qui couvre aussi les outils ;
+    3. la fin de l'historique : la conversation passée est relue au tour suivant ;
+    4. le dernier message : chaque étape d'outil relit tout ce qui précède et n'ajoute que le nouveau.
+    """
+    if not _cache_actif():
+        return arguments
+    outils = arguments.get("tools")
+    if outils:
+        outils[-1] = {**outils[-1], "cache_control": _controle_cache()}
+    systeme = arguments.get("system")
+    if isinstance(systeme, str) and systeme:
+        arguments["system"] = [{"type": "text", "text": systeme, "cache_control": _controle_cache()}]
+    messages = arguments.get("messages") or []
+    if fin_historique is not None and 0 <= fin_historique < len(messages) - 1:
+        # Copie du message : le contenu converti est reconstruit à chaque appel, mais on évite de
+        # partager la liste avec une autre structure.
+        messages[fin_historique] = {**messages[fin_historique], "content": list(messages[fin_historique].get("content") or [])}
+        _marquer_dernier_bloc(messages[fin_historique])
+    if messages:
+        messages[-1] = {**messages[-1], "content": list(messages[-1].get("content") or [])}
+        _marquer_dernier_bloc(messages[-1])
+    return arguments
 
 
 class ClientClaude(ClientCompatible):
@@ -111,7 +184,7 @@ class ClientClaude(ClientCompatible):
         self._client = Anthropic(api_key=cle_api, timeout=DELAI_APPEL_FOURNISSEUR_SECONDES, max_retries=1)
 
     def create(self, *, model, messages, tools=None, reasoning_effort=None, **_ignores):
-        systeme, converti = _convertir_messages(messages)
+        systeme, converti, fin_historique = _convertir_messages(messages)
         arguments = {
             "model": model,
             "max_tokens": MAX_TOKENS_SORTIE_CLAUDE,
@@ -127,6 +200,7 @@ class ClientClaude(ClientCompatible):
         if reasoning_effort:
             # Par extra_body : fonctionne quelle que soit la version du SDK installée.
             arguments["extra_body"] = {"output_config": {"effort": reasoning_effort}}
+        poser_points_de_cache(arguments, fin_historique)
         self._etat_dernier_tour = None
         return Flux(self._lire(arguments))
 
@@ -162,4 +236,4 @@ class ClientClaude(ClientCompatible):
             self._etat_dernier_tour = {
                 "blocs": [bloc.model_dump(exclude_none=True) for bloc in final.content],
             }
-        yield morceau(fin=FINS_CLAUDE.get(final.stop_reason, final.stop_reason or "stop"))
+        yield morceau(fin=FINS_CLAUDE.get(final.stop_reason, final.stop_reason or "stop"), usage=getattr(final, "usage", None))

@@ -33,7 +33,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from groq import Groq
 
 from api.auth import supabase
-from core.main import get_secret, GROQ_PRIMARY, _construire_system_prompt, _ressemble_a_du_json_casse
+from core.main import get_secret, GROQ_PRIMARY, _construire_system_prompt, _ressemble_a_du_json_casse, MARQUEUR_PARTIE_VARIABLE
 from core.notifications_push import envoyer_notification_push, un_canal_push_disponible
 
 COOLDOWN_VERIFICATION = timedelta(hours=6)  # ne re-vérifie pas une paire (agent, utilisateur) plus souvent que ça
@@ -152,7 +152,7 @@ def _decider_relance(
         # on garde quand même persona + mémoire + profil (voir
         # _construire_system_prompt dans core/main.py, réutilisée telle
         # quelle pour rester cohérent avec le vrai chat).
-        system_final = _construire_system_prompt("", agent_id, user_id, longueur_reponse="courte")
+        system_final = _construire_system_prompt("", agent_id, user_id, longueur_reponse="courte").replace(MARQUEUR_PARTIE_VARIABLE, "\n\n")
     except Exception as e:
         logging.error(f"ERREUR construction prompt (décision relance, agent={agent_id}) : {e}")
         if propager_erreurs:
