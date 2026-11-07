@@ -72,5 +72,48 @@ class TestRequeteImage(unittest.TestCase):
             construire_requete_image(None, "a", "", "", ["https://x.com/a.png"] * 11)
 
 
+class TestRequeteSoul(unittest.TestCase):
+    STYLE_Y2K = "7ee16ff3-c0b0-4f5f-a0e1-e7fc46144230"
+
+    def test_soul_envoie_le_texte_le_style_le_format_et_la_qualite(self):
+        adresse, corps = construire_requete_image("soul", "un portrait", "9:16", "1080p", None, self.STYLE_Y2K)
+        self.assertEqual(adresse, "higgsfield-ai/soul/v2/standard")
+        self.assertEqual(corps["prompt"], "un portrait")
+        self.assertEqual(corps["style_id"], self.STYLE_Y2K)
+        self.assertEqual(corps["aspect_ratio"], "9:16")
+        self.assertEqual(corps["resolution"], "1080p")
+        self.assertNotIn("image_urls", corps)
+
+    def test_soul_sans_reglage_laisse_les_valeurs_par_defaut_de_higgsfield(self):
+        adresse, corps = construire_requete_image("soul", "un portrait")
+        self.assertEqual(corps, {"prompt": "un portrait"})
+        # Le format par défaut (1:1) n'est pas renvoyé, comme pour grok avec auto.
+        _, corps = construire_requete_image("soul", "un portrait", "1:1", "720p")
+        self.assertNotIn("aspect_ratio", corps)
+
+    def test_identifiant_de_style_en_majuscules_accepte(self):
+        _, corps = construire_requete_image("soul", "a", "", "", None, self.STYLE_Y2K.upper())
+        self.assertEqual(corps["style_id"], self.STYLE_Y2K)
+
+    def test_soul_refuse_ce_qu_il_ne_sait_pas_faire(self):
+        with self.assertRaises(ErreurHiggsfield):
+            construire_requete_image("soul", "a", "", "", ["https://x.com/a.png"])
+        with self.assertRaises(ErreurHiggsfield):
+            construire_requete_image("soul", "a", "auto")
+        with self.assertRaises(ErreurHiggsfield):
+            construire_requete_image("soul", "a", "", "1k")
+        with self.assertRaises(ErreurHiggsfield):
+            construire_requete_image("soul", "a", "", "", None, "pas-un-uuid")
+
+    def test_style_refuse_pour_grok(self):
+        with self.assertRaises(ErreurHiggsfield):
+            construire_requete_image("grok", "a", "", "", None, self.STYLE_Y2K)
+
+    def test_grok_inchange(self):
+        adresse, corps = construire_requete_image("grok", "un vase", "auto", "1k")
+        self.assertEqual(adresse, "xai/grok-imagine-image-2.0")
+        self.assertEqual(corps, {"prompt": "un vase", "resolution": "1k"})
+
+
 if __name__ == "__main__":
     unittest.main()
