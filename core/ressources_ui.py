@@ -13,6 +13,13 @@ Maintenant, a cote du texte (qui reste le repli, inchange), on garde la structur
 Quand le serveur ne renvoie que l'adresse `ui://` sans contenu (cas des MCP Apps), le contenu est
 lu au meme moment par `resources/read` sur la meme session.
 
+Autre cas des MCP Apps (07/11/2026, Higgsfield `get_presets`) : le lien vers le widget est declare
+sur la DEFINITION de l'outil (`_meta.ui.resourceUri`, renvoyee par tools/list) et le resultat ne
+contient aucun bloc `ui://`. `adresse_widget_declaree` lit cette adresse sur l'outil, la route de
+l'outil la garde (core/mcp_tools.py) et `collecter_ressources_ui` en lit le contenu par
+`resources/read`. Un bloc `ui://` present dans le resultat reste prioritaire, et un resultat en
+erreur n'affiche jamais le widget declare.
+
 Le widget voyage dans une enveloppe JSON a cle unique, separee du texte AVANT toute troncature
 (`_resultat_pour_affichage` coupe a 3000 caracteres) et avant l'envoi au modele :
 `joindre_ressources_ui` cote outil MCP, `separer_ressources_ui` cote execution des outils.
@@ -117,13 +124,46 @@ def _donnees_outil(resultat, texte):
     return donnees
 
 
-async def collecter_ressources_ui(session, resultat, texte):
-    """Widgets d'un resultat d'outil MCP, prets pour l'affichage. Liste vide si aucun, jamais d'exception."""
+def adresse_widget_declaree(outil):
+    """Adresse ui:// declaree par la DEFINITION d'un outil MCP (MCP Apps), sinon None. Ne leve jamais.
+
+    Forme de la spec : `_meta.ui.resourceUri`, exposee par le SDK sous `outil.meta`. La cle plate
+    `ui/resourceUri` est aussi acceptee. Toute valeur qui ne commence pas par ui:// est ignoree.
+    """
+    try:
+        meta = getattr(outil, "meta", None)
+        if not isinstance(meta, dict):
+            return None
+        ui = meta.get("ui")
+        adresse = ui.get("resourceUri") if isinstance(ui, dict) else None
+        if not adresse:
+            adresse = meta.get("ui/resourceUri")
+        if isinstance(adresse, str) and adresse.startswith(_SCHEMA_UI):
+            return adresse
+    except Exception:
+        pass
+    return None
+
+
+async def collecter_ressources_ui(session, resultat, texte, adresse_declaree=None):
+    """Widgets d'un resultat d'outil MCP, prets pour l'affichage. Liste vide si aucun, jamais d'exception.
+
+    `adresse_declaree` : adresse ui:// lue sur la definition de l'outil (adresse_widget_declaree).
+    Elle sert seulement quand le resultat n'a aucun bloc ui:// et n'est pas une erreur.
+    """
     try:
         if not ressources_ui_actives():
             return []
         blocs = getattr(resultat, "content", None)
         candidats = _candidats(blocs)[:PLAFOND_WIDGETS_UI_PAR_RESULTAT]
+        if (
+            not candidats
+            and isinstance(adresse_declaree, str)
+            and adresse_declaree.startswith(_SCHEMA_UI)
+            and not getattr(resultat, "is_error", False)
+        ):
+            logging.info("Widget MCP-UI %s : adresse declaree par la definition de l'outil.", adresse_declaree)
+            candidats = [{"uri": adresse_declaree, "mimeType": "", "contenu": None}]
         for c in candidats:
             if not c["contenu"]:
                 await _lire_contenu_manquant(session, c)
