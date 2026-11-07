@@ -324,6 +324,22 @@ def categorie_du_serveur(nom_serveur: str) -> str:
     return f"mcp_{slug or 'serveur'}"
 
 
+_MOTIF_NOM_EXPOSE = re.compile(r"^custommcp_[a-z]{0,8}_[0-9a-f]{6}_(.+)_[0-9a-f]{4}$")
+
+
+def libelle_depuis_cle_outil(cle: str) -> str | None:
+    """Nom lisible d'un outil à partir de son nom interne, même quand le catalogue n'est pas chargé.
+
+    Sert à l'écran des actions toujours autorisées : les anciennes lignes portaient toutes le même texte.
+    Renvoie None si la clé n'a pas la forme d'un nom d'outil personnalisé.
+    """
+    connu = _LIBELLES_PAR_OUTIL.get(cle)
+    if connu:
+        return connu
+    trouve = _MOTIF_NOM_EXPOSE.match(cle or "")
+    return _libelle_lisible(trouve.group(1)) if trouve else None
+
+
 def nom_reel_pour_outil(nom_outil: str) -> str | None:
     """Nom de l'outil tel que le serveur le donne, sans préfixe ni code interne (None si inconnu)."""
     return _NOMS_REELS_PAR_OUTIL.get(nom_outil)

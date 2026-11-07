@@ -43,7 +43,15 @@ _DESCRIPTION_PARAMETRE = (
 
 def schema_avec_libelle(schema):
     """Ajoute le paramètre de libellé, en premier, au schéma d'un outil (sans toucher à l'original)."""
-    if not isinstance(schema, dict) or schema.get("type") != "object":
+    if schema is None or schema == {}:
+        # Outil sans aucun champ déclaré : il reçoit quand même le champ de libellé.
+        schema = {"type": "object", "properties": {}}
+    if not isinstance(schema, dict):
+        return schema
+    if schema.get("type") is None and isinstance(schema.get("properties"), dict):
+        # Schéma d'un serveur qui oublie de dire "object" : ses champs en font bien un objet.
+        schema = {**schema, "type": "object"}
+    if schema.get("type") != "object":
         return schema
     proprietes = schema.get("properties") or {}
     if not isinstance(proprietes, dict) or PARAMETRE_LIBELLE_OUTIL in proprietes:
@@ -55,6 +63,27 @@ def schema_avec_libelle(schema):
             **proprietes,
         },
     }
+
+
+# Outils internes dont l'appel n'est jamais montré dans la timeline : pas de champ de libellé.
+_OUTILS_SANS_LIBELLE = {"garder_outils"}
+
+
+def outils_avec_libelle(outils):
+    """
+    Liste d'outils prête à être envoyée à l'IA, avec le champ de libellé sur CHACUN (sans
+    toucher à la liste d'origine). Appliqué au moment de l'envoi : quelle que soit la source
+    d'un outil (service intégré, serveur personnalisé, outil futur), il reçoit le champ.
+    Sans effet si le champ y est déjà.
+    """
+    resultat = []
+    for outil in outils or []:
+        fonction = outil.get("function") if isinstance(outil, dict) else None
+        if not isinstance(fonction, dict) or fonction.get("name") in _OUTILS_SANS_LIBELLE:
+            resultat.append(outil)
+            continue
+        resultat.append({**outil, "function": {**fonction, "parameters": schema_avec_libelle(fonction.get("parameters"))}})
+    return resultat
 
 
 def nettoyer_libelle(valeur):

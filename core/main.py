@@ -77,7 +77,7 @@ from historique_conversation import (
     forcer_cloture_sujets_en_arriere_plan,
 )
 from historique_reponses_qcm import reponses_qcm_a_injecter
-from execution_outils import _resultat_pour_affichage, cle_autorisation_appel
+from execution_outils import _resultat_pour_affichage, cle_autorisation_appel, _champs_timeline
 from core import captures_modele
 from autorisations_outils import enregistrer_autorisation
 from boucle_agent import _agent_groq, _capturer_reponse, _ajouter_segment_texte, retirer_consigne_de_fin, consigne_de_reprise
@@ -576,12 +576,14 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # frontend le traitait comme un statut flottant sans ligne
             # dans la chronologie, jamais recollé à son résultat, donc
             # resté affiché en cours.
+            nom_tl, texte_cours_tl, texte_fini_tl, marque_tl = _champs_timeline(appel)
             yield {
                 "type": "statut",
-                "texte": f"{_nom_lisible_appel(appel)}...",
+                "texte": texte_cours_tl,
                 "id_appel": appel["id"],
                 "nom_outil": appel["name"],
-                "nom_lisible": _nom_lisible_appel(appel),
+                **marque_tl,
+                "nom_lisible": nom_tl,
                 "action": _action_appel(appel),
                 **_champs_domaines_appel(appel),
             }
@@ -621,11 +623,12 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # Widgets MCP-UI (04/11/2026) : meme separation que dans _traiter_appels.
             resultat, ressources_ui_approuve = separer_ressources_ui(resultat)
             if not deja_ajoute_a_messages_agent:
-                yield {"type": "statut_termine", "texte": f"{_nom_lisible_appel(appel)} effectuée", "id_appel": appel["id"]}
+                yield {"type": "statut_termine", "texte": texte_fini_tl, "id_appel": appel["id"], **marque_tl}
                 yield {
                     "type": "outil_resultat",
                     "nom_outil": appel["name"],
-                    "nom_lisible": _nom_lisible_appel(appel),
+                    **marque_tl,
+                    "nom_lisible": nom_tl,
                     "action": _action_appel(appel),
                     **_champs_domaines_appel(appel),
                     "resultat": _resultat_pour_affichage(captures_modele.sans_image(resultat)),

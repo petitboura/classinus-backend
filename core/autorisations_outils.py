@@ -95,7 +95,19 @@ def lister_autorisations(user_id):
         .order("created_at", desc=True)
         .execute()
     ).data or []
-    return [{**ligne, "appli": appli_de_cle(ligne["cle"])} for ligne in lignes]
+    return [{**ligne, "nom_lisible": _nom_lisible_a_afficher(ligne), "appli": appli_de_cle(ligne["cle"])} for ligne in lignes]
+
+
+def _nom_lisible_a_afficher(ligne):
+    """Texte montré dans la liste. Un outil de serveur personnalisé garde son vrai nom : les lignes anciennes disaient toutes « Action sur <serveur> »."""
+    cle = ligne["cle"]
+    if cle.startswith("custommcp_"):
+        try:
+            from connexions.mcp_personnalises import libelle_depuis_cle_outil
+            return libelle_depuis_cle_outil(cle) or ligne.get("nom_lisible")
+        except Exception:
+            pass
+    return ligne.get("nom_lisible")
 
 
 def enregistrer_autorisation(user_id, cle, nom_lisible):

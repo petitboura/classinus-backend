@@ -6,7 +6,7 @@
 import json
 import logging
 from core.mcp_tools import parametres_outils, PARAMETRE_DELAI_OUTIL
-from libelles_activite_ia import PARAMETRE_LIBELLE_OUTIL, arguments_sans_libelle
+from libelles_activite_ia import PARAMETRE_LIBELLE_OUTIL, arguments_sans_libelle, outils_avec_libelle
 # Meme chemin d'import que api/ et core/outils_action_agent.py : un seul module, donc un seul etat partage.
 from core.canal_agent_applicatif import retirer_messages_etudiant
 from core.plafond_outils_tour import plafond_tour
@@ -303,7 +303,7 @@ def _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, 
         model=modele,
         messages=_messages_pour_api(messages_agent, modele),
         max_completion_tokens=None,
-        tools=outils_mcp if outils_mcp else None,
+        tools=outils_avec_libelle(outils_mcp) if outils_mcp else None,
         stream=True,
         timeout=timeout,
         **kwargs_reasoning,
@@ -534,7 +534,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
             model=modele,
             messages=_messages_pour_api(messages_agent, modele),
             max_completion_tokens=reserve_tokens,
-            tools=outils_mcp if outils_mcp else None,
+            tools=outils_avec_libelle(outils_mcp) if outils_mcp else None,
             stream=True,
             timeout=DELAI_MAX_PAR_APPEL,
             **kwargs_reasoning,
