@@ -194,3 +194,52 @@ def appeler_outil_partage(nom_outil, arguments):
             "L'outil MCP Higgsfield a echoue : " + _texte_resultat(resultat)[:300]
         )
     return _texte_resultat(resultat)
+
+
+def lister_tous_outils_diagnostic():
+    """Diagnostic lecture seule : tous les outils du serveur (non filtres), avec leur schema."""
+    token = _token_ou_erreur()
+    with _SessionMCP(token) as session:
+        resultat = session.appeler("tools/list", {})
+    return [
+        {
+            "nom": o.get("name"),
+            "description": str(o.get("description") or "")[:200],
+            "schema": o.get("inputSchema") or {},
+        }
+        for o in (resultat.get("tools") or [])
+    ]
+
+
+def appeler_outil_brut_diagnostic(nom_outil, arguments):
+    """Diagnostic lecture seule : renvoie la reponse MCP COMPLETE (content, structuredContent, _meta),
+    pas seulement le texte. Limite aux outils allowlistes."""
+    nom = (nom_outil or "").strip()
+    if nom not in OUTILS_MCP_AUTORISES:
+        raise ErreurHiggsfield(f"Outil MCP \"{nom}\" non autorise sur le compte partage Classinus.")
+    token = _token_ou_erreur()
+    with _SessionMCP(token) as session:
+        return session.appeler("tools/call", {"name": nom, "arguments": arguments})
+
+
+# Outils appeles par le serveur lui-meme pour Marketing Studio (jamais exposes au LLM du chat).
+OUTILS_MARKETING_INTERNES = frozenset({
+    "media_import_url", "marketing_studio_v2_create", "marketing_studio_v2_status",
+})
+
+
+def appeler_outil_marketing_interne(nom_outil, arguments):
+    """Appel d'un des 3 outils internes Marketing Studio. Renvoie la reponse MCP COMPLETE
+    (content + structuredContent). Leve ErreurHiggsfield si l'outil echoue."""
+    nom = (nom_outil or "").strip()
+    if nom not in OUTILS_MARKETING_INTERNES:
+        raise ErreurHiggsfield(f"Outil MCP \"{nom}\" non autorise pour Marketing Studio.")
+    token = _token_ou_erreur()
+    with _SessionMCP(token) as session:
+        resultat = session.appeler("tools/call", {"name": nom, "arguments": arguments})
+    if resultat.get("isError"):
+        detail = _texte_resultat(resultat)[:300]
+        erreur = ErreurHiggsfield("Higgsfield a refuse la demande : " + detail)
+        erreur.detail_refus = detail  # texte de Higgsfield, tel quel, pour l'affichage traduit
+        raise erreur
+    return resultat

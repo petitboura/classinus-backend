@@ -25,10 +25,10 @@ CAPACITES = [
     },
     {
         "id": "image",
-        "label": "Image (generation et edition par references)",
+        "label": "Image (generation, edition par references, portraits Soul)",
         "famille": "generation",
         "voie": "api",
-        "modeles_api": ["grok"],
+        "modeles_api": ["grok", "soul"],
         "outils_mcp": [],
         "medias_requis": [],
     },

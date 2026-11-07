@@ -13,6 +13,7 @@ import requests
 from api.auth import supabase
 from core.bibliotheque_fichiers import enregistrer_fichier
 from core.generation_video_higgsfield import statut_generation
+from core.higgsfield_marketing_studio import PREFIXE_SUIVI, lire_statut as lire_statut_marketing
 from core.notifications import creer_notification
 from core.notifications_push import envoyer_notification_push
 
@@ -115,11 +116,17 @@ def _notifier(ligne: dict, etat: str) -> None:
         return
     if etat == "terminee":
         titre, corps = "Ta génération est prête", f"« {ligne['titre']} » est enregistrée dans ta bibliothèque."
+        titre_en, corps_en = "Your generation is ready", f"“{ligne['titre']}” is saved in your library."
     else:
         titre, corps = "Ta génération n'a pas abouti", f"« {ligne['titre']} » n'a pas pu être terminée."
+        titre_en, corps_en = "Your generation did not complete", f"“{ligne['titre']}” could not be completed."
     try:
+        # Dans l'appli, le texte français est traduit par le dictionnaire de l'interface (lib/i18n/interface.ts).
         creer_notification(ligne["user_id"], "action_ia_terminee", titre, corps, "/higgsfield")
-        envoyer_notification_push(ligne["user_id"], titre, corps, "/higgsfield")
+        # Sur l'appareil, la langue de l'utilisateur n'est pas connue du serveur : les deux langues sont envoyees.
+        envoyer_notification_push(
+            ligne["user_id"], f"{titre} · {titre_en}", f"{corps}\n{corps_en}", "/higgsfield"
+        )
     except Exception as e:
         logging.error(f"ERREUR notification Higgsfield {ligne['request_id']} : {e}")
 
@@ -138,7 +145,11 @@ def _traiter_une(ligne: dict) -> None:
         _notifier(ligne, "echec")
         return
     try:
-        resultat = statut_generation(request_id)
+        if request_id.startswith(PREFIXE_SUIVI):
+            # Generation Marketing Studio lancee par le compte partage (MCP), pas par l'API.
+            resultat = lire_statut_marketing(request_id[len(PREFIXE_SUIVI):])
+        else:
+            resultat = statut_generation(request_id)
     except Exception as e:
         # Panne passagère de Higgsfield : on réessaie au prochain tour.
         logging.warning(f"Suivi Higgsfield {request_id} : statut indisponible ({e})")

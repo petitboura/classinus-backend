@@ -170,29 +170,38 @@ if higgsfield_api_disponible():
         prompt: str,
         titre: str,
         modele: str = "grok",
-        format_image: str = "auto",
-        qualite: str = "1k",
+        format_image: str = "",
+        qualite: str = "",
         images_reference: Optional[List[str]] = None,
+        style_id: str = "",
         ctx: Context = None,
     ) -> str:
         """
         Lance une image Higgsfield : depuis une description, ou en modifiant des
         images existantes si `images_reference` est donné (adresses publiques https,
-        10 maximum). Renvoie un identifiant à donner à consulter_image_higgsfield
-        dans quelques secondes.
+        10 maximum, grok seulement). Renvoie un identifiant à donner à
+        consulter_image_higgsfield dans quelques secondes.
 
         `titre` (obligatoire) : nom court et clair de l'image, sans extension.
         Redonne EXACTEMENT le même titre à consulter_image_higgsfield.
 
-        `format_image` : "auto", "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3",
-        "2:1" ou "1:2". `qualite` : "1k" ou "2k". Génération payante, avec un
-        nombre limité par jour et par utilisateur. Pour garder le même personnage
-        d'une image à l'autre, redonne la même image de référence.
-        Si l'utilisateur a joint une image dans cette conversation, son
-        lien réel (visible dans le message) peut servir de référence.
+        `modele` : "grok" (par défaut, images et retouches par références) ou
+        "soul" (Soul 2.0, portraits et mode, sans image de référence).
+        `style_id` (soul seulement) : identifiant UUID du style Soul ; laisse vide
+        pour le style général.
+
+        Laisse `format_image` et `qualite` vides sauf demande : le réglage par
+        défaut du modèle s'applique. Pour grok, `format_image` : "auto", "1:1",
+        "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "2:1" ou "1:2", et `qualite` :
+        "1k" ou "2k". Pour soul, `format_image` : "1:1", "9:16", "16:9", "4:3",
+        "3:4", "2:3" ou "3:2", et `qualite` : "720p" ou "1080p". Génération
+        payante, avec un nombre limité par jour et par utilisateur. Pour garder
+        le même personnage d'une image à l'autre avec grok, redonne la même image
+        de référence. Si l'utilisateur a joint une image dans cette conversation,
+        son lien réel (visible dans le message) peut servir de référence.
         """
         try:
-            adresse, corps = construire_requete_image(modele, prompt, format_image, qualite, images_reference)
+            adresse, corps = construire_requete_image(modele, prompt, format_image, qualite, images_reference, style_id)
             reserver_generation(_supabase_memoire, _id_utilisateur(ctx), "image")
             resultat = lancer_generation(adresse, corps)
             return (
@@ -225,7 +234,7 @@ if higgsfield_api_disponible():
         """
         Donne le prix d'une génération Higgsfield AVANT de la lancer (rien n'est
         consommé). `genre` : "video" ou "image". Mêmes réglages que
-        lancer_video_higgsfield (modèles vidéo : seedance, kling ; image : grok).
+        lancer_video_higgsfield (modèles vidéo : seedance, kling ; image : grok, soul).
         À utiliser pour comparer deux réglages ou avant une vidéo longue ou en
         haute qualité. Si le coût paraît élevé, propose un réglage moins cher.
         Mêmes liens de fichiers joints acceptés que lancer_video_higgsfield.
