@@ -91,6 +91,7 @@ _CHARGEMENTS_EN_COURS: dict[tuple, object] = {}
 _NOMS_SERVEURS_PAR_OUTIL: dict[str, str] = {}
 _URLS_SERVEURS_PAR_OUTIL: dict[str, str] = {}
 _CATEGORIES_PAR_OUTIL: dict[str, str] = {}
+_NOMS_REELS_PAR_OUTIL: dict[str, str] = {}
 _VERROU_CATALOGUE = threading.Lock()
 _POOL_DECOUVERTE = ThreadPoolExecutor(max_workers=int(_nombre_env("MCP_PERSO_TACHES_DECOUVERTE", 8)), thread_name_prefix="mcp-perso")
 
@@ -323,6 +324,11 @@ def categorie_du_serveur(nom_serveur: str) -> str:
     return f"mcp_{slug or 'serveur'}"
 
 
+def nom_reel_pour_outil(nom_outil: str) -> str | None:
+    """Nom de l'outil tel que le serveur le donne, sans préfixe ni code interne (None si inconnu)."""
+    return _NOMS_REELS_PAR_OUTIL.get(nom_outil)
+
+
 def categorie_pour_outil(nom_outil: str) -> str | None:
     """Catégorie du serveur qui propose cet outil (None si inconnu)."""
     return _CATEGORIES_PAR_OUTIL.get(nom_outil)
@@ -482,6 +488,7 @@ def _avec_routes(serveur: dict, user_id: str, outils: list[dict]) -> list[dict]:
         _NOMS_SERVEURS_PAR_OUTIL[outil["nom"]] = serveur["nom"]
         _URLS_SERVEURS_PAR_OUTIL[outil["nom"]] = serveur["url"]
         _CATEGORIES_PAR_OUTIL[outil["nom"]] = categorie_du_serveur(serveur["nom"])
+        _NOMS_REELS_PAR_OUTIL[outil["nom"]] = outil["nom_reel"]
         resultat.append({
             **outil,
             "route": {

@@ -54,6 +54,17 @@ from filtre_texte_streaming import (
 )
 from profils_agents import _nom_lisible_appel, _nom_lisible
 
+def _nom_affiche(nom_outil):
+    """Nom montré à l'utilisateur : le vrai nom de l'outil d'un serveur personnalisé, sans préfixe ni code interne."""
+    if isinstance(nom_outil, str) and nom_outil.startswith("custommcp_"):
+        try:
+            from connexions.mcp_personnalises import nom_reel_pour_outil
+            return nom_reel_pour_outil(nom_outil) or nom_outil
+        except Exception:
+            return nom_outil
+    return nom_outil
+
+
 def _evenement_confirmation(attente, messages_agent, outils_mcp, table_routage, modele=GROQ_PRIMARY, reasoning_effort=None, agent_nom=None):
     appel = attente.appel
     try:
@@ -67,6 +78,8 @@ def _evenement_confirmation(attente, messages_agent, outils_mcp, table_routage, 
     return {
         "type": "confirmation_requise",
         "nom_outil": appel["name"],
+        # Nom montré dans les détails de la carte : le vrai nom de l'outil, jamais le nom interne.
+        "nom_outil_affiche": _nom_affiche(appel["name"]),
         "nom_lisible": _nom_lisible_appel(appel),
         # Message centré sur l'AGENT (2026-07-23) : "Nucleos va faire X",
         # pas une description technique de l'outil -- valable pour
@@ -921,8 +934,8 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     if trouves:
                         lignes_detail.append(
                             f"- \"{recherche['besoin']}\"{etiquette_categorie} -> "
-                            + ", ".join(o["function"]["name"] for o in trouves)
-                            + (f" (avec : {', '.join(l['outil']['function']['name'] for l in liens)})" if liens else "")
+                            + ", ".join(_nom_affiche(o["function"]["name"]) for o in trouves)
+                            + (f" (avec : {', '.join(_nom_affiche(l['outil']['function']['name']) for l in liens)})" if liens else "")
                         )
                     else:
                         lignes_detail.append(f"- \"{recherche['besoin']}\"{etiquette_categorie} -> rien trouvé")
