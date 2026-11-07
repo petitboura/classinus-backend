@@ -4,6 +4,8 @@ Aucun appel réseau ici : on transforme les choix de l'IA en une demande valide
 selon le catalogue (core/higgsfield_catalogue.py). Toute erreur est une
 ErreurHiggsfield avec un message lisible, que l'IA peut relayer telle quelle.
 """
+import re
+
 from core.higgsfield_catalogue import (
     MODELE_GENJUTSU_DEFAUT,
     MODELES_GENJUTSU,
@@ -15,6 +17,10 @@ from core.higgsfield_catalogue import (
     noms_modeles_image,
     noms_modeles_video,
 )
+
+
+# Un style Higgsfield est désigné par un UUID (lettres minuscules, chiffres et tirets).
+_IDENTIFIANT_STYLE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 
 
 class ErreurHiggsfield(RuntimeError):
@@ -134,7 +140,7 @@ def construire_requete_video(
     return adresse, corps
 
 
-def construire_requete_image(modele, prompt, format_image="", qualite="", images_reference=None):
+def construire_requete_image(modele, prompt, format_image="", qualite="", images_reference=None, style_id=""):
     """Renvoie (adresse_du_modele, corps_de_la_demande) pour une image."""
     cle = (modele or MODELE_IMAGE_DEFAUT).strip().lower()
     spec = MODELES_IMAGE.get(cle)
@@ -158,10 +164,20 @@ def construire_requete_image(modele, prompt, format_image="", qualite="", images
         propre = _adresse_publique(adresse, "Une image de référence")
         if propre:
             references.append(propre)
+    if references and spec["max_references"] == 0:
+        raise ErreurHiggsfield(f"Le modèle {cle} ne gère pas les images de référence. Utilise grok.")
     if len(references) > spec["max_references"]:
         raise ErreurHiggsfield(f"Maximum {spec['max_references']} images de référence.")
     if references:
         corps["image_urls"] = references
+
+    style = (style_id or "").strip().lower()
+    if style:
+        if not spec.get("style"):
+            raise ErreurHiggsfield(f"Le modèle {cle} n'accepte pas de style. Utilise soul pour choisir un style.")
+        if not _IDENTIFIANT_STYLE.fullmatch(style):
+            raise ErreurHiggsfield("L'identifiant du style n'est pas valide : il doit s'écrire comme un UUID.")
+        corps["style_id"] = style
     return spec["endpoint"], corps
 
 

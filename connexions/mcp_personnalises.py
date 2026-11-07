@@ -15,6 +15,7 @@ import re
 import secrets
 import threading
 import time
+import unicodedata
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
@@ -89,6 +90,8 @@ _CACHE_ECHECS: dict[tuple, float] = {}
 _CHARGEMENTS_EN_COURS: dict[tuple, object] = {}
 _NOMS_SERVEURS_PAR_OUTIL: dict[str, str] = {}
 _URLS_SERVEURS_PAR_OUTIL: dict[str, str] = {}
+_CATEGORIES_PAR_OUTIL: dict[str, str] = {}
+_NOMS_REELS_PAR_OUTIL: dict[str, str] = {}
 _VERROU_CATALOGUE = threading.Lock()
 _POOL_DECOUVERTE = ThreadPoolExecutor(max_workers=int(_nombre_env("MCP_PERSO_TACHES_DECOUVERTE", 8)), thread_name_prefix="mcp-perso")
 
@@ -261,6 +264,50 @@ def preparer_appel_personnalise(route: dict) -> tuple[str, dict]:
     return valider_url_mcp(serveur["url"]), headers
 
 
+_LIBELLES_PAR_OUTIL: dict[str, str] = {}
+
+_VERBES_LECTURE_ONGLET = {
+    "get", "list", "search", "fetch", "read", "describe", "query", "find", "show", "view",
+    "lookup", "count", "check", "lister", "consulter", "rechercher", "lire", "obtenir",
+}
+
+
+def _libelle_lisible(nom_reel: str) -> str:
+    """Nom réel de l'outil en texte lisible : "list_projects" devient "List projects"."""
+    texte = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", nom_reel or "")
+    mots = [m for m in re.split(r"[^a-zA-Z0-9\u00C0-\u024F]+", texte) if m]
+    if not mots:
+        return "Outil"
+    phrase = " ".join(mots).lower()
+    return phrase[0].upper() + phrase[1:]
+
+
+def _lecture_seule_declaree(outil) -> bool | None:
+    """Indication du serveur lui-même (readOnlyHint) : True, False, ou None si elle n'est pas donnée."""
+    annotations = getattr(outil, "annotations", None)
+    if annotations is None:
+        return None
+    for cle in ("readOnlyHint", "read_only_hint"):
+        valeur = annotations.get(cle) if isinstance(annotations, dict) else getattr(annotations, cle, None)
+        if isinstance(valeur, bool):
+            return valeur
+    return None
+
+
+def _onglet_pour_outil(outil, nom_reel: str) -> str:
+    """Catégorie d'affichage : lecture (rechercher) ou action, d'après le serveur puis d'après le nom."""
+    declare = _lecture_seule_declaree(outil)
+    if declare is not None:
+        return "rechercher" if declare else "action_app"
+    premier = re.split(r"[^a-zA-Z]+", re.sub(r"([a-z])([A-Z])", r"\1_\2", nom_reel or ""))[0].lower()
+    return "rechercher" if premier in _VERBES_LECTURE_ONGLET else "action_app"
+
+
+def libelle_pour_outil(nom_outil: str) -> str | None:
+    """Libellé lisible d'un outil de serveur personnalisé, sans code interne (None si inconnu)."""
+    return _LIBELLES_PAR_OUTIL.get(nom_outil)
+
+
 def _nom_outil_expose(serveur_id: str, nom_reel: str) -> str:
     """Nom unique entre serveurs et inférieur à la limite de 64 caractères."""
     origine = re.sub(r"[^a-zA-Z0-9_-]", "_", nom_reel).strip("_").lower() or "outil"
@@ -268,6 +315,58 @@ def _nom_outil_expose(serveur_id: str, nom_reel: str) -> str:
     verbe = (trouve.group(0) if trouve else "outil")[:8]
     empreinte = hashlib.sha256(nom_reel.encode("utf-8")).hexdigest()[:4]
     return f"{_PREFIXE_OUTILS}{verbe}_{serveur_id.replace('-', '')[:6]}_{origine[:28]}_{empreinte}"[:64]
+
+
+def categorie_du_serveur(nom_serveur: str) -> str:
+    """Catégorie propre à un serveur ajouté par l'utilisateur : "mcp_" puis son nom en minuscules."""
+    base = unicodedata.normalize("NFKD", nom_serveur or "").encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-z0-9]+", "_", base.lower()).strip("_")[:24]
+    return f"mcp_{slug or 'serveur'}"
+
+
+_MOTIF_NOM_EXPOSE = re.compile(r"^custommcp_[a-z]{0,8}_[0-9a-f]{6}_(.+)_[0-9a-f]{4}$")
+
+
+def libelle_depuis_cle_outil(cle: str) -> str | None:
+    """Nom lisible d'un outil à partir de son nom interne, même quand le catalogue n'est pas chargé.
+
+    Sert à l'écran des actions toujours autorisées : les anciennes lignes portaient toutes le même texte.
+    Renvoie None si la clé n'a pas la forme d'un nom d'outil personnalisé.
+    """
+    connu = _LIBELLES_PAR_OUTIL.get(cle)
+    if connu:
+        return connu
+    trouve = _MOTIF_NOM_EXPOSE.match(cle or "")
+    return _libelle_lisible(trouve.group(1)) if trouve else None
+
+
+def nom_reel_pour_outil(nom_outil: str) -> str | None:
+    """Nom de l'outil tel que le serveur le donne, sans préfixe ni code interne (None si inconnu)."""
+    return _NOMS_REELS_PAR_OUTIL.get(nom_outil)
+
+
+def categorie_pour_outil(nom_outil: str) -> str | None:
+    """Catégorie du serveur qui propose cet outil (None si inconnu)."""
+    return _CATEGORIES_PAR_OUTIL.get(nom_outil)
+
+
+def categories_pour_utilisateur(user_id: str) -> list[dict]:
+    """Une catégorie par serveur actif de l'utilisateur, pour que l'IA puisse demander ses outils. Ne lève jamais d'exception."""
+    if not user_id:
+        return []
+    try:
+        lignes = (
+            _SUPABASE.table("mcp_personnalises").select("nom,actif")
+            .eq("user_id", user_id).eq("actif", True).order("created_at", desc=False).execute().data or []
+        )
+    except Exception as exc:
+        logging.warning("Catégories des MCP personnels illisibles pour l'assistant (%s).", type(exc).__name__)
+        return []
+    vues = {}
+    for ligne in lignes[:NOMBRE_MAX_SERVEURS_PAR_COMPTE]:
+        categorie = categorie_du_serveur(ligne.get("nom"))
+        vues.setdefault(categorie, {"categorie": categorie, "nom": ligne.get("nom") or "serveur"})
+    return list(vues.values())
 
 
 def nom_serveur_pour_outil(nom_outil: str) -> str | None:
@@ -309,13 +408,19 @@ def _construire_outils(serveur: dict, outils_reseau: list) -> list[dict]:
         if not isinstance(schema, dict):
             schema = {"type": "object", "properties": {}}
         description = str(getattr(outil, "description", "") or "")
+        libelle = _libelle_lisible(nom_reel)
+        _LIBELLES_PAR_OUTIL[nom_expose] = libelle
         resultat.append({
             "nom": nom_expose,
             "nom_reel": nom_reel,
-            "label": f"{serveur['nom']} · {nom_reel}"[:120],
-            "description": f"Outil d’un serveur MCP personnalisé ({serveur['nom']}). {description}"[:4000],
+            "label": f"{serveur['nom']} · {libelle}"[:120],
+            "description": (
+                f"Outil « {libelle} » du serveur MCP personnalisé « {serveur['nom']} ». "
+                "Le nom technique de cet outil est interne : ne le montre jamais à l'utilisateur, "
+                f"parle de « {libelle} » ou de ce que l'outil fait. {description}"
+            )[:4000],
             "icone": "Server",
-            "onglet": "action_app",
+            "onglet": _onglet_pour_outil(outil, nom_reel),
             "parameters": schema,
             "url": serveur["url"],
         })
@@ -398,6 +503,8 @@ def _avec_routes(serveur: dict, user_id: str, outils: list[dict]) -> list[dict]:
     for outil in outils:
         _NOMS_SERVEURS_PAR_OUTIL[outil["nom"]] = serveur["nom"]
         _URLS_SERVEURS_PAR_OUTIL[outil["nom"]] = serveur["url"]
+        _CATEGORIES_PAR_OUTIL[outil["nom"]] = categorie_du_serveur(serveur["nom"])
+        _NOMS_REELS_PAR_OUTIL[outil["nom"]] = outil["nom_reel"]
         resultat.append({
             **outil,
             "route": {

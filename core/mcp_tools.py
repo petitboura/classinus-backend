@@ -765,7 +765,7 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
                     "function": {
                         "name": nom_expose,
                         "description": outil["description"],
-                        "parameters": _schema_avec_delai(outil["parameters"]),
+                        "parameters": schema_avec_libelle(_schema_avec_delai(outil["parameters"])),
                     },
                 })
                 table_routage[nom_expose] = outil["route"]

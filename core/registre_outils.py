@@ -1814,6 +1814,13 @@ def outils_de_la_categorie(nom_categorie, outils_candidats):
     toute la liste, un nom de categorie invalide doit rester sans
     resultat plutot que de chercher partout sans que personne ne le sache.
     """
+    if isinstance(nom_categorie, str) and nom_categorie.startswith("mcp_"):
+        # Catégorie propre à un serveur ajouté par l'utilisateur (une par serveur).
+        try:
+            from connexions.mcp_personnalises import categorie_pour_outil
+        except Exception:
+            return []
+        return [o for o in outils_candidats if categorie_pour_outil(o["function"]["name"]) == nom_categorie]
     noms_fixes = set(CATEGORIES_OUTILS.get(nom_categorie, []))
     prefixe = CATEGORIES_OUTILS_PAR_PREFIXE.get(nom_categorie)
     return [

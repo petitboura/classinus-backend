@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from api.auth import utilisateur_courant
 from core.erreurs import erreur_api
 from core.higgsfield_limites import reserver_generation
+from core.higgsfield_messages_en import message_en
 from core.higgsfield_requetes import ErreurHiggsfield, construire_requete_genjutsu, construire_requete_image, construire_requete_video
 from core.generation_video_higgsfield import annuler_generation, estimer_cout, higgsfield_api_disponible, lancer_generation
 from core.limitation_debit import limiteur
@@ -48,9 +49,11 @@ class DemandeImage(BaseModel):
     prompt: str = Field(..., min_length=1)
     titre: str = Field(..., min_length=1, max_length=120)
     modele: str = "grok"
-    format_image: str = "auto"
-    qualite: str = "1k"
+    # Vide : Higgsfield applique le réglage par défaut du modèle (grok ou soul n'ont pas les mêmes valeurs).
+    format_image: str = ""
+    qualite: str = ""
     images_reference: Optional[List[str]] = None
+    style_id: str = ""
 
 
 class DemandeGenjutsu(BaseModel):
@@ -73,6 +76,7 @@ class DemandeEstimation(BaseModel):
     son: bool = True
     image_url: str = ""
     images_reference: Optional[List[str]] = None
+    style_id: str = ""
 
 
 @router.post("/video")
@@ -89,7 +93,7 @@ def lancer_video(request: Request, demande: DemandeVideo, utilisateur=Depends(ut
         higgsfield_suivi.enregistrer(utilisateur.id, resultat["request_id"], demande.titre, "video")
         return {"request_id": resultat["request_id"], "titre": demande.titre}
     except ErreurHiggsfield as e:
-        raise erreur_api(400, "HIGGSFIELD_REQUETE_INVALIDE", message=str(e))
+        raise erreur_api(400, "HIGGSFIELD_REQUETE_INVALIDE", detail=str(e), detail_en=message_en(str(e)))
     except Exception as e:
         logging.error(f"ERREUR Higgsfield video user {utilisateur.id}: {e}")
         raise erreur_api(500, "ECHEC_LANCEMENT_HIGGSFIELD")
@@ -100,13 +104,13 @@ def lancer_video(request: Request, demande: DemandeVideo, utilisateur=Depends(ut
 def lancer_image(request: Request, demande: DemandeImage, utilisateur=Depends(utilisateur_courant)):
     _verifier_disponible()
     try:
-        adresse, corps = construire_requete_image(demande.modele, demande.prompt, demande.format_image, demande.qualite, demande.images_reference)
+        adresse, corps = construire_requete_image(demande.modele, demande.prompt, demande.format_image, demande.qualite, demande.images_reference, demande.style_id)
         reserver_generation(_supabase_memoire, utilisateur.id, "image")
         resultat = lancer_generation(adresse, corps)
         higgsfield_suivi.enregistrer(utilisateur.id, resultat["request_id"], demande.titre, "image")
         return {"request_id": resultat["request_id"], "titre": demande.titre}
     except ErreurHiggsfield as e:
-        raise erreur_api(400, "HIGGSFIELD_REQUETE_INVALIDE", message=str(e))
+        raise erreur_api(400, "HIGGSFIELD_REQUETE_INVALIDE", detail=str(e), detail_en=message_en(str(e)))
     except Exception as e:
         logging.error(f"ERREUR Higgsfield image user {utilisateur.id}: {e}")
         raise erreur_api(500, "ECHEC_LANCEMENT_HIGGSFIELD")
@@ -123,7 +127,7 @@ def lancer_genjutsu(request: Request, demande: DemandeGenjutsu, utilisateur=Depe
         higgsfield_suivi.enregistrer(utilisateur.id, resultat["request_id"], demande.titre, "video")
         return {"request_id": resultat["request_id"], "titre": demande.titre}
     except ErreurHiggsfield as e:
-        raise erreur_api(400, "HIGGSFIELD_REQUETE_INVALIDE", message=str(e))
+        raise erreur_api(400, "HIGGSFIELD_REQUETE_INVALIDE", detail=str(e), detail_en=message_en(str(e)))
     except Exception as e:
         logging.error(f"ERREUR Higgsfield genjutsu user {utilisateur.id}: {e}")
         raise erreur_api(500, "ECHEC_LANCEMENT_HIGGSFIELD")
@@ -195,7 +199,7 @@ def statut(request_id: str, utilisateur=Depends(utilisateur_courant)):
         if ligne["etat"] == "en_cours":
             higgsfield_suivi.traiter_une_generation(utilisateur.id, request_id)
             ligne = higgsfield_suivi.obtenir(utilisateur.id, request_id) or ligne
-        return {"etat": ligne["etat"], "url": ligne["url"], "erreur": ligne["erreur"]}
+        return {"etat": ligne["etat"], "etape": ligne.get("etape", "creation"), "url": ligne["url"], "erreur": ligne["erreur"]}
     except HTTPException:
         raise
     except Exception as e:
@@ -229,7 +233,7 @@ def annuler(request_id: str, utilisateur=Depends(utilisateur_courant)):
     except HTTPException:
         raise
     except ErreurHiggsfield as e:
-        raise erreur_api(400, "HIGGSFIELD_ID_INVALIDE", message=str(e))
+        raise erreur_api(400, "HIGGSFIELD_ID_INVALIDE", detail=str(e), detail_en=message_en(str(e)))
     except Exception as e:
         logging.error(f"ERREUR Higgsfield annuler {request_id}: {e}")
         raise erreur_api(500, "IMPOSSIBLE_ANNULER_HIGGSFIELD")
@@ -241,7 +245,7 @@ def estimation(demande: DemandeEstimation, utilisateur=Depends(utilisateur_coura
     try:
         g = (demande.genre or "").strip().lower()
         if g == "image":
-            adresse, corps = construire_requete_image(demande.modele, demande.prompt, demande.format_video, demande.qualite, demande.images_reference)
+            adresse, corps = construire_requete_image(demande.modele, demande.prompt, demande.format_video, demande.qualite, demande.images_reference, demande.style_id)
         elif g == "genjutsu":
             refs = demande.images_reference if demande.images_reference else ["https://example.com/ref.jpg"]
             adresse, corps = construire_requete_genjutsu(demande.modele or "genjutsu-motion", demande.image_url or "https://example.com/video.mp4", refs, demande.prompt, demande.qualite or "", "")
@@ -250,7 +254,7 @@ def estimation(demande: DemandeEstimation, utilisateur=Depends(utilisateur_coura
         prix = estimer_cout(adresse, corps)
         return {"credits": prix.get("credits")}
     except ErreurHiggsfield as e:
-        raise erreur_api(400, "HIGGSFIELD_REQUETE_INVALIDE", message=str(e))
+        raise erreur_api(400, "HIGGSFIELD_REQUETE_INVALIDE", detail=str(e), detail_en=message_en(str(e)))
     except Exception as e:
         logging.error(f"ERREUR Higgsfield estimation: {e}")
         raise erreur_api(500, "IMPOSSIBLE_ESTIMER_HIGGSFIELD")

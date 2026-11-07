@@ -57,6 +57,22 @@ MODELES_IMAGE = {
         "qualites": ["1k", "2k"],
         "qualite_defaut": "1k",
         "max_references": 10,
+        "style": False,
+    },
+    # Soul 2.0 : portraits et mode. Schéma lu sur docs.higgsfield.ai le 07/11/2026.
+    # Le style se choisit par un identifiant (style_id). Sans identifiant, Higgsfield
+    # applique le style général, dont voici l'identifiant officiel. La documentation
+    # ne prévoit pas d'image de référence envoyée : max_references vaut 0.
+    "soul": {
+        "label": "Soul 2.0",
+        "endpoint": "higgsfield-ai/soul/v2/standard",
+        "formats": ["1:1", "9:16", "16:9", "4:3", "3:4", "2:3", "3:2"],
+        "format_defaut": "1:1",
+        "qualites": ["720p", "1080p"],
+        "qualite_defaut": "720p",
+        "max_references": 0,
+        "style": True,
+        "style_defaut": "3db34ab5-3439-4317-9e03-08dc30852e69",
     },
 }
 

@@ -59,8 +59,13 @@ def _nom_lisible(nom_outil, action=None):
         if plateforme and nom_outil.startswith("custommcp_"):
             # Avec plusieurs serveurs, l'utilisateur doit savoir lequel il autorise.
             try:
-                from connexions.mcp_personnalises import nom_serveur_pour_outil
-                plateforme = nom_serveur_pour_outil(nom_outil) or plateforme
+                from connexions.mcp_personnalises import nom_serveur_pour_outil, libelle_pour_outil
+                serveur_nom = nom_serveur_pour_outil(nom_outil)
+                plateforme = serveur_nom or plateforme
+                libelle_reel = libelle_pour_outil(nom_outil)
+                if libelle_reel and serveur_nom:
+                    # Texte tiré du vrai nom de l'outil, avec le serveur pour les distinguer.
+                    return f"{libelle_reel} ({serveur_nom})"
             except Exception:
                 pass
         if plateforme:

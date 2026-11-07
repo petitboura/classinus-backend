@@ -6,7 +6,7 @@
 import json
 import logging
 from core.mcp_tools import parametres_outils, PARAMETRE_DELAI_OUTIL
-from libelles_activite_ia import PARAMETRE_LIBELLE_OUTIL, arguments_sans_libelle
+from libelles_activite_ia import PARAMETRE_LIBELLE_OUTIL, arguments_sans_libelle, outils_avec_libelle
 # Meme chemin d'import que api/ et core/outils_action_agent.py : un seul module, donc un seul etat partage.
 from core.canal_agent_applicatif import retirer_messages_etudiant
 from core.plafond_outils_tour import plafond_tour
@@ -54,6 +54,17 @@ from filtre_texte_streaming import (
 )
 from profils_agents import _nom_lisible_appel, _nom_lisible
 
+def _nom_affiche(nom_outil):
+    """Nom montré à l'utilisateur : le vrai nom de l'outil d'un serveur personnalisé, sans préfixe ni code interne."""
+    if isinstance(nom_outil, str) and nom_outil.startswith("custommcp_"):
+        try:
+            from connexions.mcp_personnalises import nom_reel_pour_outil
+            return nom_reel_pour_outil(nom_outil) or nom_outil
+        except Exception:
+            return nom_outil
+    return nom_outil
+
+
 def _evenement_confirmation(attente, messages_agent, outils_mcp, table_routage, modele=GROQ_PRIMARY, reasoning_effort=None, agent_nom=None):
     appel = attente.appel
     try:
@@ -67,6 +78,8 @@ def _evenement_confirmation(attente, messages_agent, outils_mcp, table_routage, 
     return {
         "type": "confirmation_requise",
         "nom_outil": appel["name"],
+        # Nom montré dans les détails de la carte : le vrai nom de l'outil, jamais le nom interne.
+        "nom_outil_affiche": _nom_affiche(appel["name"]),
         "nom_lisible": _nom_lisible_appel(appel),
         # Message centré sur l'AGENT (2026-07-23) : "Nucleos va faire X",
         # pas une description technique de l'outil -- valable pour
@@ -290,7 +303,7 @@ def _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, 
         model=modele,
         messages=_messages_pour_api(messages_agent, modele),
         max_completion_tokens=None,
-        tools=outils_mcp if outils_mcp else None,
+        tools=outils_avec_libelle(outils_mcp) if outils_mcp else None,
         stream=True,
         timeout=timeout,
         **kwargs_reasoning,
@@ -521,7 +534,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
             model=modele,
             messages=_messages_pour_api(messages_agent, modele),
             max_completion_tokens=reserve_tokens,
-            tools=outils_mcp if outils_mcp else None,
+            tools=outils_avec_libelle(outils_mcp) if outils_mcp else None,
             stream=True,
             timeout=DELAI_MAX_PAR_APPEL,
             **kwargs_reasoning,
@@ -921,8 +934,8 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     if trouves:
                         lignes_detail.append(
                             f"- \"{recherche['besoin']}\"{etiquette_categorie} -> "
-                            + ", ".join(o["function"]["name"] for o in trouves)
-                            + (f" (avec : {', '.join(l['outil']['function']['name'] for l in liens)})" if liens else "")
+                            + ", ".join(_nom_affiche(o["function"]["name"]) for o in trouves)
+                            + (f" (avec : {', '.join(_nom_affiche(l['outil']['function']['name']) for l in liens)})" if liens else "")
                         )
                     else:
                         lignes_detail.append(f"- \"{recherche['besoin']}\"{etiquette_categorie} -> rien trouvé")

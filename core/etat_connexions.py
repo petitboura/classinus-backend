@@ -298,7 +298,7 @@ def texte_prompt_connexions(etats, serveurs_perso):
     if serveurs_perso:
         noms_etats = {"actif": "actif", "desactive": "désactivé par l'utilisateur", "injoignable": "injoignable pour l'instant (panne ou connexion à refaire)"}
         detail = "; ".join(f"{s['nom']} ({noms_etats.get(s['etat'], s['etat'])})" for s in serveurs_perso)
-        lignes.append("4. Les serveurs MCP ajoutés par l'utilisateur lui-même : " + detail + ". Leurs outils sont dans la catégorie serveurs_personnalises ; ceux désactivés ou injoignables ne sont pas utilisables.")
+        lignes.append("4. Les serveurs MCP ajoutés par l'utilisateur lui-même : " + detail + ". Chaque serveur a sa propre catégorie, mcp_ suivi de son nom en minuscules (par exemple mcp_linear), comme Notion ou GitHub ; ceux désactivés ou injoignables ne sont pas utilisables.")
     else:
         lignes.append("4. Les serveurs MCP ajoutés par l'utilisateur lui-même : aucun pour l'instant.")
     lignes.append(
