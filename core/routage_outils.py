@@ -162,7 +162,15 @@ def _separer_appels_garder_outils(appels):
 NOM_OUTIL_DEMANDER_OUTILS = "demander_outils"
 
 
-def _outil_demander_outils():
+def _texte_categories_perso(categories_perso):
+    """Une catégorie par serveur MCP ajouté par l'utilisateur, dite à l'IA comme les catégories de Notion ou GitHub."""
+    if not categories_perso:
+        return ""
+    listes = ", ".join(f"{c['categorie']} (serveur « {c['nom']} » de l'utilisateur)" for c in categories_perso)
+    return f"Serveurs MCP ajoutés par l'utilisateur, une catégorie chacun : {listes}. "
+
+
+def _outil_demander_outils(categories_perso=None):
     """
     Outil interne (chantier "demander_outils", 05/09/2026, demande
     Bourama) : comme _outil_garder_outils juste au-dessus, jamais un vrai
@@ -222,6 +230,7 @@ def _outil_demander_outils():
                 "es reellement bloque par l'absence d'un outil, pas "
                 "systematiquement au debut de chaque tache. "
                 f"{INDEX_CATEGORIES_OUTILS} "
+                f"{_texte_categories_perso(categories_perso)}"
                 "REFLEXE LIVRES ET PDF (10/10/2026, demande Bourama) : des "
                 "que l'utilisateur parle de trouver un livre, un manuel, un "
                 "PDF, une these ou un article, demande d'abord la categorie "
@@ -264,7 +273,7 @@ def _outil_demander_outils():
                                 },
                                 "categorie": {
                                     "type": "string",
-                                    "enum": NOMS_CATEGORIES_PROPOSEES_A_L_IA,
+                                    "enum": NOMS_CATEGORIES_PROPOSEES_A_L_IA + [c["categorie"] for c in (categories_perso or [])],
                                     "description": (
                                         "Facultatif. Categorie dans "
                                         "laquelle chercher CE besoin "
@@ -398,7 +407,7 @@ def _outils_deja_en_main(outils_mcp):
     return {o["function"]["name"] for o in (outils_mcp or [])}
 
 
-def _preparer_demander_outils(outils_mcp, catalogue_complet, table_routage_complet):
+def _preparer_demander_outils(outils_mcp, catalogue_complet, table_routage_complet, user_id=None):
     """
     A appeler UNE SEULE FOIS dans main.py, au meme point de convergence
     que _outil_garder_outils (une fois outils_mcp definitivement etabli
@@ -421,7 +430,14 @@ def _preparer_demander_outils(outils_mcp, catalogue_complet, table_routage_compl
 
     Renvoie outils_mcp, avec demander_outils toujours ajoute.
     """
-    return (outils_mcp or []) + [_outil_demander_outils()]
+    categories_perso = []
+    if user_id:
+        try:
+            from connexions.mcp_personnalises import categories_pour_utilisateur
+            categories_perso = categories_pour_utilisateur(user_id)
+        except Exception:
+            categories_perso = []
+    return (outils_mcp or []) + [_outil_demander_outils(categories_perso)]
 
 
 NOMS_OUTILS_MEMOIRE_TOUJOURS_DISPONIBLES = OUTILS_TOUJOURS_PRESENTS

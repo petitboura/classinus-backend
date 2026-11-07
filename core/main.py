@@ -1314,7 +1314,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # demander_outils alors qu'il ne lui etait pas fourni : il ecrivait l'appel
     # en texte brut dans sa reponse.
     if catalogue_complet is not None:
-        outils_mcp = _preparer_demander_outils(outils_mcp, catalogue_complet, table_routage_complet)
+        outils_mcp = _preparer_demander_outils(outils_mcp, catalogue_complet, table_routage_complet, user_id=user_id)
         # Memoire eleve (27/09/2026) : seulement pour un utilisateur connecte,
         # un visiteur sans compte n'a pas de memoire a lire ni a ecrire.
         if user_id:

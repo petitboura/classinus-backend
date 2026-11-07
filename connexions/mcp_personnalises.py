@@ -15,6 +15,7 @@ import re
 import secrets
 import threading
 import time
+import unicodedata
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
@@ -89,6 +90,7 @@ _CACHE_ECHECS: dict[tuple, float] = {}
 _CHARGEMENTS_EN_COURS: dict[tuple, object] = {}
 _NOMS_SERVEURS_PAR_OUTIL: dict[str, str] = {}
 _URLS_SERVEURS_PAR_OUTIL: dict[str, str] = {}
+_CATEGORIES_PAR_OUTIL: dict[str, str] = {}
 _VERROU_CATALOGUE = threading.Lock()
 _POOL_DECOUVERTE = ThreadPoolExecutor(max_workers=int(_nombre_env("MCP_PERSO_TACHES_DECOUVERTE", 8)), thread_name_prefix="mcp-perso")
 
@@ -314,6 +316,37 @@ def _nom_outil_expose(serveur_id: str, nom_reel: str) -> str:
     return f"{_PREFIXE_OUTILS}{verbe}_{serveur_id.replace('-', '')[:6]}_{origine[:28]}_{empreinte}"[:64]
 
 
+def categorie_du_serveur(nom_serveur: str) -> str:
+    """Catégorie propre à un serveur ajouté par l'utilisateur : "mcp_" puis son nom en minuscules."""
+    base = unicodedata.normalize("NFKD", nom_serveur or "").encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-z0-9]+", "_", base.lower()).strip("_")[:24]
+    return f"mcp_{slug or 'serveur'}"
+
+
+def categorie_pour_outil(nom_outil: str) -> str | None:
+    """Catégorie du serveur qui propose cet outil (None si inconnu)."""
+    return _CATEGORIES_PAR_OUTIL.get(nom_outil)
+
+
+def categories_pour_utilisateur(user_id: str) -> list[dict]:
+    """Une catégorie par serveur actif de l'utilisateur, pour que l'IA puisse demander ses outils. Ne lève jamais d'exception."""
+    if not user_id:
+        return []
+    try:
+        lignes = (
+            _SUPABASE.table("mcp_personnalises").select("nom,actif")
+            .eq("user_id", user_id).eq("actif", True).order("created_at", desc=False).execute().data or []
+        )
+    except Exception as exc:
+        logging.warning("Catégories des MCP personnels illisibles pour l'assistant (%s).", type(exc).__name__)
+        return []
+    vues = {}
+    for ligne in lignes[:NOMBRE_MAX_SERVEURS_PAR_COMPTE]:
+        categorie = categorie_du_serveur(ligne.get("nom"))
+        vues.setdefault(categorie, {"categorie": categorie, "nom": ligne.get("nom") or "serveur"})
+    return list(vues.values())
+
+
 def nom_serveur_pour_outil(nom_outil: str) -> str | None:
     """Nom du serveur qui propose cet outil, pour les cartes de confirmation (None si inconnu)."""
     return _NOMS_SERVEURS_PAR_OUTIL.get(nom_outil)
@@ -448,6 +481,7 @@ def _avec_routes(serveur: dict, user_id: str, outils: list[dict]) -> list[dict]:
     for outil in outils:
         _NOMS_SERVEURS_PAR_OUTIL[outil["nom"]] = serveur["nom"]
         _URLS_SERVEURS_PAR_OUTIL[outil["nom"]] = serveur["url"]
+        _CATEGORIES_PAR_OUTIL[outil["nom"]] = categorie_du_serveur(serveur["nom"])
         resultat.append({
             **outil,
             "route": {
