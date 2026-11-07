@@ -30,3 +30,9 @@ Front : voir `HIGGSFIELD_TODO.md` dans `docs/status/` de `classinus-frontend`.
 - `core/outils_higgsfield.py` : l'outil du chat `generer_image_higgsfield` connaît `soul` et `style_id`, avec les mêmes valeurs par défaut vides.
 - Tests : `test_higgsfield_requetes.py`, classe `TestRequeteSoul`.
 - Non vérifié : la liste des styles Soul (`GET /v1/text2image/soul-styles/v2`) n'a pas été appelée. Seul l'identifiant du style général est confirmé par la documentation ; les deux autres (Warm ambient et Y2K studio) viennent du catalogue MCP de Higgsfield.
+
+## Messages d'erreur en anglais (7 novembre 2026)
+
+- `core/higgsfield_messages_en.py` traduit chaque message de `ErreurHiggsfield`. `api/higgsfield.py` envoie le texte français dans `detail` et l'anglais dans `detail_en`, sous le code stable `HIGGSFIELD_REQUETE_INVALIDE` (ou `HIGGSFIELD_ID_INVALIDE`) ; les autres codes Higgsfield ont un message français et anglais dans `core/erreurs.py` et dans `lib/erreurs.ts` côté frontend.
+- L'outil du chat garde les messages français : l'IA les relaie dans la langue de la conversation.
+- Test : `test_higgsfield_messages_en.py` déclenche chaque erreur et vérifie que la version anglaise existe.

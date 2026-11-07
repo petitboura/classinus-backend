@@ -46,3 +46,12 @@ Bourama's decision from 4 November 2026. This rule is mandatory: apply it every 
 
 - Do not move `skills_plateforme/<slug>/SKILL.md` or `SKILL.fr.md`. The synchronization script `scripts/synchroniser_skills_plateforme.py` reads skills from that exact directory structure to publish runtime instructions.
 - Do not move `LISEZ_MOI_NE_JAMAIS_REUTILISER.md` or its French companion out of `_desactive_programme/` and `_desactive_roles_hierarchie/`. These are safety markers placed next to disabled code and must remain there.
+
+## Everything user-visible must exist in English, or the work is not finished
+
+Bourama's order from 7 November 2026. It is a rule, not a question: never ask whether to translate.
+
+- Every text a person can read must exist in English as well as French: interface labels, catalogue data (names, descriptions, effect texts), texts prefilled in a field and sent to a model, error messages, and documentation.
+- Catalogue and data texts carry their English version next to the French one (for example `descriptionEn`), and the screen picks one from the language chosen in Settings. Backend errors go through a stable code with a French and an English message (`core/erreurs.py` and `lib/erreurs.ts`).
+- If a text lives in Supabase, add its English version there too.
+- A task that adds or changes visible text without its English version is not finished.

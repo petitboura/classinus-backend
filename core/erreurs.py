@@ -196,6 +196,15 @@ MESSAGES_FR: dict[str, str] = {
     "REQUETE_INVALIDE": "La requête envoyée est invalide.",
     "REQUETE_TROP_VOLUMINEUSE": "Ton message et ses pièces jointes dépassent la taille maximale acceptée ({taille_max} Mo). Retire une pièce jointe ou raccourcis le texte, puis réessaie.",
     "ERREUR_INCONNUE": "Une erreur est survenue, réessaie dans un instant.",
+    # Higgsfield (07/11/2026) : codes gardés synchronisés avec lib/erreurs.ts côté frontend.
+    "HIGGSFIELD_NON_CONFIGURE": "Higgsfield n'est pas disponible pour le moment. Réessaie plus tard.",
+    "HIGGSFIELD_REQUETE_INVALIDE": "{detail}",
+    "HIGGSFIELD_ID_INVALIDE": "{detail}",
+    "ECHEC_LANCEMENT_HIGGSFIELD": "Échec du lancement de la génération Higgsfield. Réessaie dans un instant.",
+    "GENERATION_HIGGSFIELD_INTROUVABLE": "Cette génération Higgsfield est introuvable.",
+    "IMPOSSIBLE_STATUT_HIGGSFIELD": "Impossible de lire l'état de cette génération pour le moment.",
+    "IMPOSSIBLE_ANNULER_HIGGSFIELD": "Impossible d'annuler cette génération pour le moment.",
+    "IMPOSSIBLE_ESTIMER_HIGGSFIELD": "Impossible d'estimer le coût de cette génération pour le moment.",
     # 07/10/2026, vidéo d'une animation du chat (core/rendu_animation_travaux.py).
     # Codes à garder synchronisés avec lib/erreurs.ts côté frontend.
     "RENDU_VIDEO_FORMAT_INVALIDE": "Ce format de vidéo n'existe pas.",
@@ -391,6 +400,15 @@ MESSAGES_EN: dict[str, str] = {
     "ECHEC_DE_L_UPLOAD_REESSAIE": "Upload failed, try again.",
     "ECHEC_DU_DESABONNEMENT": "Failed to unsubscribe.",
     "ERREUR_INCONNUE": "Something went wrong, try again in a moment.",
+    # Higgsfield (07/11/2026) : codes gardés synchronisés avec lib/erreurs.ts côté frontend.
+    "HIGGSFIELD_NON_CONFIGURE": "Higgsfield is not available right now. Try again later.",
+    "HIGGSFIELD_REQUETE_INVALIDE": "{detail_en}",
+    "HIGGSFIELD_ID_INVALIDE": "{detail_en}",
+    "ECHEC_LANCEMENT_HIGGSFIELD": "Failed to start the Higgsfield generation. Try again in a moment.",
+    "GENERATION_HIGGSFIELD_INTROUVABLE": "This Higgsfield generation was not found.",
+    "IMPOSSIBLE_STATUT_HIGGSFIELD": "Unable to read the status of this generation right now.",
+    "IMPOSSIBLE_ANNULER_HIGGSFIELD": "Unable to cancel this generation right now.",
+    "IMPOSSIBLE_ESTIMER_HIGGSFIELD": "Unable to estimate the cost of this generation right now.",
     "NOM_DEJA_UTILISE_BIBLIOTHEQUE_PERSO": "You already have a file named \"{nom}\" in your library. Rename it or replace the existing one.",
     "NOM_DEJA_UTILISE_BIBLIOTHEQUE_PUBLIQUE": "A document named \"{nom}\" already exists in the public library. Choose a different name.",
     "FICHIER_AUDIO_VIDE": "Empty audio file.",
