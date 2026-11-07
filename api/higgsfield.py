@@ -233,3 +233,70 @@ def diagnostic_outils_marketing_studio():
         logging.error(f"ERREUR diagnostic outils Marketing Studio: {e}")
         raise erreur_api(500, "HIGGSFIELD_MCP_DIAGNOSTIC_ECHEC", message="Diagnostic impossible pour le moment.")
     return {"outils_trouves": len(outils), "outils": outils}
+
+
+def _trouver_liste_presets(donnees):
+    """Cherche dans une reponse JSON la liste d'objets qui ressemblent a des presets (cle id)."""
+    if isinstance(donnees, list):
+        if donnees and all(isinstance(x, dict) and "id" in x for x in donnees):
+            return donnees
+        for x in donnees:
+            trouve = _trouver_liste_presets(x)
+            if trouve:
+                return trouve
+    elif isinstance(donnees, dict):
+        for v in donnees.values():
+            trouve = _trouver_liste_presets(v)
+            if trouve:
+                return trouve
+    return []
+
+
+@router.get("/diagnostic/mcp-marketing-studio-complet")
+def diagnostic_mcp_marketing_studio_complet():
+    """Lecture seule, sans credit depense : (1) tous les outils du MCP partage (pour trouver l'envoi
+    d'image qui donne un media id), (2) quelques presets complets par type (metadata, required_inputs).
+    Ne renvoie jamais de jeton."""
+    import json as _json
+    from core.higgsfield_mcp_partage import lister_tous_outils_diagnostic, appeler_outil_partage
+    rapport = {}
+    try:
+        tous = lister_tous_outils_diagnostic()
+        rapport["noms_outils"] = [o["nom"] for o in tous]
+        mots = ("media", "upload", "asset", "file", "input", "image")
+        rapport["outils_medias"] = [
+            o for o in tous if any(m in (o["nom"] or "").lower() for m in mots)
+        ]
+    except Exception as e:
+        logging.error(f"ERREUR diagnostic MCP (outils): {e}")
+        rapport["erreur_outils"] = str(e)[:300]
+    exemples = {}
+    brut = {}
+    for categorie in ("all", "product-shot", "motion"):
+        try:
+            texte = appeler_outil_partage(
+                "marketing_studio_v2_presets", {"category": categorie, "size": 100}
+            )
+        except Exception as e:
+            exemples[categorie] = {"erreur": str(e)[:300]}
+            continue
+        try:
+            liste = _trouver_liste_presets(_json.loads(texte))
+        except ValueError:
+            liste = []
+        if not liste:
+            brut[categorie] = texte[:3000]
+            continue
+        par_type = {}
+        for preset in liste:
+            t = str(preset.get("type") or preset.get("preset_type") or "?")
+            if len(par_type.setdefault(t, [])) < 2:
+                par_type[t].append({
+                    k: v for k, v in preset.items()
+                    if k not in ("preview_url", "thumbnail_url", "preview", "poster")
+                })
+        exemples[categorie] = par_type
+    rapport["presets_exemples"] = exemples
+    if brut:
+        rapport["reponses_brutes_non_analysees"] = brut
+    return rapport

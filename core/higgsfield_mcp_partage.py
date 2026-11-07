@@ -194,3 +194,18 @@ def appeler_outil_partage(nom_outil, arguments):
             "L'outil MCP Higgsfield a echoue : " + _texte_resultat(resultat)[:300]
         )
     return _texte_resultat(resultat)
+
+
+def lister_tous_outils_diagnostic():
+    """Diagnostic lecture seule : tous les outils du serveur (non filtres), avec leur schema."""
+    token = _token_ou_erreur()
+    with _SessionMCP(token) as session:
+        resultat = session.appeler("tools/list", {})
+    return [
+        {
+            "nom": o.get("name"),
+            "description": str(o.get("description") or "")[:200],
+            "schema": o.get("inputSchema") or {},
+        }
+        for o in (resultat.get("tools") or [])
+    ]
