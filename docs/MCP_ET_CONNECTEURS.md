@@ -32,6 +32,25 @@ Connection routes are organized in `connexions/` and `api/connexions*`. The back
 
 Providers referenced by the code and migrations include Notion, GitHub, Higgsfield, Vercel, Railway, and Supabase. Availability depends on OAuth configuration and applied migrations.
 
+## Interactive widgets (MCP-UI and MCP Apps)
+
+An MCP tool can come with an interactive widget (Higgsfield, for example). The backend reads it in `core/ressources_ui.py` and sends it to the frontend as a `ressources_ui` event, separately from the text result, which stays as the fallback. The frontend shows it in an isolated iframe.
+
+A server can announce a widget in two ways, and both are handled:
+
+1. **In the tool result.** A content block whose URI starts with `ui://`. If the block has no content, the backend reads it with `resources/read` on the same session.
+2. **On the tool definition (MCP Apps).** The field `_meta.ui.resourceUri`, returned by `tools/list`, with no `ui://` block in the result. The backend keeps this address in the tool's route (`widget_ui_uri`), built from the cached catalogue, so there is no extra network call per tool. After the call, it reads the content with `resources/read`. A `ui://` block present in the result takes priority, and an error result never shows the declared widget.
+
+Rules that apply to both:
+
+- Rendered types: `text/html` (including `text/html;profile=mcp-app`) and `text/uri-list`. Other types are ignored and the text remains.
+- Size and count are capped (`CLASSINUS_MCP_UI_HTML_MAX_OCTETS`, `CLASSINUS_MCP_UI_MAX_PAR_RESULTAT`) and the content read has a timeout (`CLASSINUS_MCP_UI_DELAI_LECTURE_SECONDES`).
+- The feature can be turned off with `CLASSINUS_MCP_UI_ACTIF=0`. Without a widget, a tool result is never modified.
+- Servers added by the user (`connexions/mcp_personnalises.py`) do not display widgets yet.
+- The frontend only lets a widget open a link or change its height. Calls to tools from inside a widget are refused.
+
+Tests: `test_ressources_ui.py`.
+
 ## Add an integration
 
 1. Review the OAuth or MCP protocol documented by the provider.

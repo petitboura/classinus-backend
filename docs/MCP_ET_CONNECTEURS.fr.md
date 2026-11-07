@@ -32,6 +32,25 @@ Les routes de connexion sont organisées dans `connexions/` et `api/connexions*`
 
 Les fournisseurs référencés dans le code et les migrations comprennent notamment Notion, GitHub, Higgsfield, Vercel, Railway et Supabase. Leur disponibilité dépend de la configuration OAuth et des migrations appliquées.
 
+## Widgets interactifs (MCP-UI et MCP Apps)
+
+Un outil MCP peut venir avec un widget interactif (Higgsfield, par exemple). Le backend le lit dans `core/ressources_ui.py` et l’envoie au frontend par un événement `ressources_ui`, séparément du résultat texte, qui reste le repli. Le frontend l’affiche dans une iframe isolée.
+
+Un serveur peut annoncer un widget de deux façons, et les deux sont gérées :
+
+1. **Dans le résultat de l’outil.** Un bloc de contenu dont l’adresse commence par `ui://`. Si le bloc n’a pas de contenu, le backend le lit avec `resources/read` sur la même session.
+2. **Sur la définition de l’outil (MCP Apps).** Le champ `_meta.ui.resourceUri`, renvoyé par `tools/list`, sans bloc `ui://` dans le résultat. Le backend garde cette adresse dans la route de l’outil (`widget_ui_uri`), construite depuis le catalogue en cache, donc sans appel réseau de plus par outil. Après l’appel, il lit le contenu avec `resources/read`. Un bloc `ui://` présent dans le résultat reste prioritaire, et un résultat en erreur n’affiche jamais le widget déclaré.
+
+Règles communes aux deux cas :
+
+- Types affichés : `text/html` (y compris `text/html;profile=mcp-app`) et `text/uri-list`. Les autres types sont ignorés et le texte reste.
+- La taille et le nombre de widgets sont bornés (`CLASSINUS_MCP_UI_HTML_MAX_OCTETS`, `CLASSINUS_MCP_UI_MAX_PAR_RESULTAT`) et la lecture du contenu a un délai maximal (`CLASSINUS_MCP_UI_DELAI_LECTURE_SECONDES`).
+- La fonction se coupe avec `CLASSINUS_MCP_UI_ACTIF=0`. Sans widget, un résultat d’outil n’est jamais modifié.
+- Les serveurs ajoutés par l’utilisateur (`connexions/mcp_personnalises.py`) n’affichent pas encore de widget.
+- Le frontend ne laisse un widget qu’ouvrir un lien ou changer sa hauteur. Les appels d’outils depuis un widget sont refusés.
+
+Tests : `test_ressources_ui.py`.
+
 ## Ajouter une intégration
 
 1. Étudier le protocole OAuth ou MCP documenté par le fournisseur.

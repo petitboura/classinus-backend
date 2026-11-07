@@ -48,7 +48,7 @@ from supabase import create_client, ClientOptions
 from client_http_supabase import nouveau_client_http_supabase
 
 from registre_outils import SERVEURS_MCP
-from core.ressources_ui import collecter_ressources_ui, joindre_ressources_ui
+from core.ressources_ui import adresse_widget_declaree, collecter_ressources_ui, joindre_ressources_ui
 from libelles_activite_ia import PARAMETRE_LIBELLE_OUTIL, schema_avec_libelle
 
 
@@ -553,7 +553,7 @@ def _enveloppe_medias_higgsfield(nom_outil, resultat):
         return resultat
 
 
-async def _appeler_outil_async(url, nom_outil, arguments, headers=None):
+async def _appeler_outil_async(url, nom_outil, arguments, headers=None, adresse_widget=None):
     async with create_mcp_http_client(headers=headers) as http_client:
         async with streamable_http_client(url, http_client=http_client) as (read, write):
             async with ClientSession(read, write) as session:
@@ -563,7 +563,9 @@ async def _appeler_outil_async(url, nom_outil, arguments, headers=None):
                 texte = _enveloppe_medias_higgsfield(nom_outil, texte)
                 # 04/11/2026 : les widgets MCP-UI (ressources ui://) voyagent a part du texte, qui
                 # reste le repli. Aucun widget = texte strictement inchange (voir ressources_ui.py).
-                widgets = await collecter_ressources_ui(session, resultat, texte)
+                # 07/11/2026 : `adresse_widget` est l'adresse declaree sur la definition de l'outil
+                # (MCP Apps), utilisee quand le resultat n'a aucun bloc ui://.
+                widgets = await collecter_ressources_ui(session, resultat, texte, adresse_widget)
                 return joindre_ressources_ui(texte, widgets)
 
 
@@ -736,6 +738,11 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
                     route["reveil_url"] = url_reveil
                 if prefixe:
                     route["nom_reel"] = outil.name
+                # 07/11/2026 : widget MCP Apps declare sur la definition de l'outil (_meta.ui.resourceUri).
+                # Lu ici, dans le catalogue deja en cache, donc sans appel reseau de plus par outil.
+                adresse_widget = adresse_widget_declaree(outil)
+                if adresse_widget:
+                    route["widget_ui_uri"] = adresse_widget
                 if _route_via_app_telephone(serveur, outil.name):
                     # 29/10/2026 : outils téléphone exécutés sur le PC de
                     # l'utilisateur via son appli (canal agent applicatif),
@@ -1012,7 +1019,12 @@ def appeler_outil(nom_outil, arguments, table_routage, arret=None):
                 return f"Erreur : {e}"
             appel = appeler_outil_personnalise_async(url_appel, route.get("nom_reel", nom_outil), arguments, headers_appel)
         else:
-            appel = _appeler_outil_async(route["url"], route.get("nom_reel", nom_outil), arguments, route.get("headers"))
+            # Le parametre widget n'est transmis que pour un outil qui en declare un : les autres
+            # outils sont appeles exactement comme avant.
+            widget_declare = {"adresse_widget": route["widget_ui_uri"]} if route.get("widget_ui_uri") else {}
+            appel = _appeler_outil_async(
+                route["url"], route.get("nom_reel", nom_outil), arguments, route.get("headers"), **widget_declare
+            )
         resultat = asyncio.run(_appeler_avec_delai_et_arret(appel, delai, arret))
         logging.info(f"Résultat outil '{nom_outil}' : {len(resultat or '')} caractères")
         return resultat
