@@ -209,3 +209,14 @@ def lister_tous_outils_diagnostic():
         }
         for o in (resultat.get("tools") or [])
     ]
+
+
+def appeler_outil_brut_diagnostic(nom_outil, arguments):
+    """Diagnostic lecture seule : renvoie la reponse MCP COMPLETE (content, structuredContent, _meta),
+    pas seulement le texte. Limite aux outils allowlistes."""
+    nom = (nom_outil or "").strip()
+    if nom not in OUTILS_MCP_AUTORISES:
+        raise ErreurHiggsfield(f"Outil MCP \"{nom}\" non autorise sur le compte partage Classinus.")
+    token = _token_ou_erreur()
+    with _SessionMCP(token) as session:
+        return session.appeler("tools/call", {"name": nom, "arguments": arguments})

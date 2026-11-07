@@ -235,68 +235,39 @@ def diagnostic_outils_marketing_studio():
     return {"outils_trouves": len(outils), "outils": outils}
 
 
-def _trouver_liste_presets(donnees):
-    """Cherche dans une reponse JSON la liste d'objets qui ressemblent a des presets (cle id)."""
-    if isinstance(donnees, list):
-        if donnees and all(isinstance(x, dict) and "id" in x for x in donnees):
-            return donnees
-        for x in donnees:
-            trouve = _trouver_liste_presets(x)
-            if trouve:
-                return trouve
-    elif isinstance(donnees, dict):
-        for v in donnees.values():
-            trouve = _trouver_liste_presets(v)
-            if trouve:
-                return trouve
-    return []
+def _reduire_pour_diagnostic(valeur, profondeur=0):
+    """Raccourcit une reponse JSON pour l'affichage : 2 elements par liste, textes coupes."""
+    if profondeur > 8:
+        return "..."
+    if isinstance(valeur, list):
+        reduit = [_reduire_pour_diagnostic(x, profondeur + 1) for x in valeur[:2]]
+        if len(valeur) > 2:
+            reduit.append(f"... ({len(valeur)} elements au total)")
+        return reduit
+    if isinstance(valeur, dict):
+        return {k: _reduire_pour_diagnostic(v, profondeur + 1) for k, v in valeur.items()}
+    if isinstance(valeur, str) and len(valeur) > 400:
+        return valeur[:400] + "..."
+    return valeur
 
 
 @router.get("/diagnostic/mcp-marketing-studio-complet")
 def diagnostic_mcp_marketing_studio_complet():
-    """Lecture seule, sans credit depense : (1) tous les outils du MCP partage (pour trouver l'envoi
-    d'image qui donne un media id), (2) quelques presets complets par type (metadata, required_inputs).
-    Ne renvoie jamais de jeton."""
-    import json as _json
-    from core.higgsfield_mcp_partage import lister_tous_outils_diagnostic, appeler_outil_partage
+    """Lecture seule, sans credit depense : reponse MCP COMPLETE (contenu structure compris) de
+    marketing_studio_v2_presets pour quelques categories, raccourcie (2 elements par liste).
+    Sert a voir ou sont metadata, required_inputs et format_slugs. Ne renvoie jamais de jeton."""
+    from core.higgsfield_mcp_partage import appeler_outil_brut_diagnostic
     rapport = {}
-    try:
-        tous = lister_tous_outils_diagnostic()
-        rapport["noms_outils"] = [o["nom"] for o in tous]
-        mots = ("media", "upload", "asset", "file", "input", "image")
-        rapport["outils_medias"] = [
-            o for o in tous if any(m in (o["nom"] or "").lower() for m in mots)
-        ]
-    except Exception as e:
-        logging.error(f"ERREUR diagnostic MCP (outils): {e}")
-        rapport["erreur_outils"] = str(e)[:300]
-    exemples = {}
-    brut = {}
-    for categorie in ("all", "product-shot", "motion"):
+    for categorie in ("all", "product-shot", "motion", "ugc"):
         try:
-            texte = appeler_outil_partage(
-                "marketing_studio_v2_presets", {"category": categorie, "size": 100}
+            brut = appeler_outil_brut_diagnostic(
+                "marketing_studio_v2_presets", {"category": categorie, "size": 3}
             )
+            rapport[categorie] = {
+                "cles_reponse": sorted(brut.keys()) if isinstance(brut, dict) else str(type(brut)),
+                "reponse_reduite": _reduire_pour_diagnostic(brut),
+            }
         except Exception as e:
-            exemples[categorie] = {"erreur": str(e)[:300]}
-            continue
-        try:
-            liste = _trouver_liste_presets(_json.loads(texte))
-        except ValueError:
-            liste = []
-        if not liste:
-            brut[categorie] = texte[:3000]
-            continue
-        par_type = {}
-        for preset in liste:
-            t = str(preset.get("type") or preset.get("preset_type") or "?")
-            if len(par_type.setdefault(t, [])) < 2:
-                par_type[t].append({
-                    k: v for k, v in preset.items()
-                    if k not in ("preview_url", "thumbnail_url", "preview", "poster")
-                })
-        exemples[categorie] = par_type
-    rapport["presets_exemples"] = exemples
-    if brut:
-        rapport["reponses_brutes_non_analysees"] = brut
+            logging.error(f"ERREUR diagnostic MCP presets ({categorie}): {e}")
+            rapport[categorie] = {"erreur": str(e)[:300]}
     return rapport
