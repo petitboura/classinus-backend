@@ -14,6 +14,7 @@ Point d'entrée central de toute la documentation du backend Classinus. L'anglai
 - [Données et sécurité](./DONNEES_ET_SECURITE.fr.md)
 - [Fournisseurs IA et RAG](./IA_ET_RAG.fr.md)
 - [MCP et connecteurs](./MCP_ET_CONNECTEURS.fr.md)
+- [Recherche d'image](./RECHERCHE_IMAGE.fr.md)
 
 ## Exploitation et état du projet
 
