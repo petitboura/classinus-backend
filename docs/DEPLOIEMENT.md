@@ -1,5 +1,7 @@
 # Backend deployment
 
+> **Current Coolify service wiring:** see the [Classinus Coolify services guide](./deployment/COOLIFY_SERVICES.md). The Railway checklist below is retained as historical reference and does not describe the supplied Coolify domains for Class-Tech, video montage, and Vultr Docker.
+
 [English version] · [Français](DEPLOIEMENT.fr.md)
 
 [English version] · [Français](DEPLOIEMENT.fr.md)

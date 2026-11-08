@@ -162,13 +162,10 @@ def _url_notion(get_secret, user_id, agent_id, conversation_id=None):
     return "https://mcp.notion.com/mcp"
 
 
-# 03/11/2026 (demande Bourama) : le serveur d'outils class-tech tourne sur
-# Railway (service class-tech, projet Granink), plus sur Render. L'adresse
-# vient de la variable d'environnement CLASSTECH_URL_MCP si elle existe
-# (changer d'hebergeur ne demande alors aucun deploiement de code), sinon de
-# cette valeur par defaut. Le diagnostic de reveil (/health) est derive de
-# cette URL par mcp_tools._url_reveil.
-URL_DIAGNOSTIC_CLASSTECH_DEFAUT = "https://class-tech.up.railway.app/mcp/diagnostic"
+# Class-Tech est expose sur son domaine de production. La variable
+# CLASSTECH_URL_MCP permet de changer d'hote sans modifier le code.
+# Le diagnostic de reveil (/health) est derive de cette URL par mcp_tools._url_reveil.
+URL_DIAGNOSTIC_CLASSTECH_DEFAUT = "https://classtech.classinus.com/mcp/diagnostic"
 
 
 def _url_diagnostic_classtech(get_secret, user_id, agent_id, conversation_id=None):

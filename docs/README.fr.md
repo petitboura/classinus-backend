@@ -18,7 +18,8 @@ Point d'entrée central de toute la documentation du backend Classinus. L'anglai
 
 ## Exploitation et état du projet
 
-- [Checklist de déploiement Railway](./deployment/RAILWAY_DEPLOY.fr.md)
+- [Raccordement des services Classinus sur Coolify](./deployment/COOLIFY_SERVICES.fr.md)
+- [Checklist historique de déploiement Railway](./deployment/RAILWAY_DEPLOY.fr.md)
 - [État backend Higgsfield](./status/HIGGSFIELD_TODO.fr.md)
 
 ## Historique et travaux archivés
