@@ -175,3 +175,93 @@ class GarderOutilsSansEnum(unittest.TestCase):
     def test_entrees_bizarres(self):
         self.assertEqual(self.ro._valider_noms_a_garder(None, None), ([], []))
         self.assertEqual(self.ro._valider_noms_a_garder([3, None, "a"], [_outil("a")]), (["a"], []))
+
+
+class AppelerOutil(unittest.TestCase):
+    """appeler_outil : liste d'outils fixe, appels deballes cote serveur (cache de prompt)."""
+
+    def setUp(self):
+        import os as _os
+        _os.environ.setdefault("SUPABASE_URL", "http://localhost")
+        _os.environ.setdefault("SUPABASE_SECRET", "test")
+        import json as _json
+        import routage_outils as ro
+        self.ro, self.json = ro, _json
+        self.natifs = [_outil("chercher")]
+        self.vercel = {
+            "type": "function",
+            "function": {
+                "name": "vercel_deploy", "description": "Deploie un projet.",
+                "parameters": {"type": "object", "properties": {"projectId": {"type": "string"}, "libelle": {"type": "string"}}, "required": ["projectId"]},
+            },
+        }
+        self.table = {"chercher": {}, "vercel_deploy": {}}
+
+    def appel(self, nom, arguments, identifiant="c1"):
+        contenu = {"nom": nom, "arguments": arguments}
+        return {"id": identifiant, "name": "appeler_outil", "arguments": self.json.dumps(contenu)}
+
+    def test_definition_constante(self):
+        self.assertEqual(self.ro._outil_appeler_outil(), self.ro._outil_appeler_outil())
+
+    def test_ajoute_avec_demander_outils_au_depart_seulement(self):
+        liste = self.ro._preparer_demander_outils(self.natifs, [], {}, user_id=None)
+        noms = [o["function"]["name"] for o in liste]
+        self.assertEqual(noms[-2:], ["demander_outils", "appeler_outil"])
+
+    def test_deballe_vers_le_vrai_outil(self):
+        appels, refus = self.ro.deballer_appels_appeler_outil(
+            [self.appel("vercel_deploy", {"projectId": "p1", "libelle": "Je deploie"})], self.natifs, [self.vercel], self.table)
+        self.assertEqual(refus, {})
+        self.assertEqual(appels[0]["id"], "c1")
+        self.assertEqual(appels[0]["name"], "vercel_deploy")
+        self.assertEqual(self.json.loads(appels[0]["arguments"]), {"projectId": "p1", "libelle": "Je deploie"})
+
+    def test_les_autres_appels_passent_tels_quels_et_dans_l_ordre(self):
+        normal = {"id": "n1", "name": "chercher", "arguments": "{}"}
+        appels, _ = self.ro.deballer_appels_appeler_outil(
+            [normal, self.appel("vercel_deploy", {"projectId": "p"}, "c2")], self.natifs, [self.vercel], self.table)
+        self.assertEqual([a["id"] for a in appels], ["n1", "c2"])
+        self.assertEqual(appels[0], normal)
+
+    def test_arguments_en_texte_json_acceptes(self):
+        appel = {"id": "c1", "name": "appeler_outil", "arguments": self.json.dumps({"nom": "vercel_deploy", "arguments": '{"projectId": "p"}'})}
+        appels, refus = self.ro.deballer_appels_appeler_outil([appel], self.natifs, [self.vercel], self.table)
+        self.assertEqual(refus, {})
+        self.assertEqual(self.json.loads(appels[0]["arguments"]), {"projectId": "p"})
+
+    def test_refus_outil_inconnu(self):
+        appels, refus = self.ro.deballer_appels_appeler_outil(
+            [self.appel("inconnu", {})], self.natifs, [self.vercel], self.table)
+        self.assertEqual(appels, [])
+        self.assertIn("Outil inconnu", refus["c1"])
+
+    def test_refus_argument_obligatoire_manquant(self):
+        appels, refus = self.ro.deballer_appels_appeler_outil(
+            [self.appel("vercel_deploy", {"libelle": "x"})], self.natifs, [self.vercel], self.table)
+        self.assertEqual(appels, [])
+        self.assertIn("projectId", refus["c1"])
+
+    def test_un_outil_interne_n_est_pas_appelable_par_le_wrapper(self):
+        for interne in ("garder_outils", "demander_outils", "appeler_outil"):
+            appels, refus = self.ro.deballer_appels_appeler_outil(
+                [self.appel(interne, {})], self.natifs + [self.ro._outil_appeler_outil()], [], {})
+            self.assertEqual(appels, [], interne)
+            self.assertIn("c1", refus, interne)
+
+    def test_appel_illisible(self):
+        appels, refus = self.ro.deballer_appels_appeler_outil(
+            [{"id": "c1", "name": "appeler_outil", "arguments": "pas du json"}], self.natifs, [], {})
+        self.assertEqual(appels, [])
+        self.assertIn("c1", refus)
+
+    def test_outils_obtenus_recalcules_depuis_table_routage(self):
+        obtenus = self.ro.outils_obtenus_a_la_demande(self.natifs, self.table, self.natifs + [self.vercel])
+        self.assertEqual([o["function"]["name"] for o in obtenus], ["vercel_deploy"])
+        self.assertEqual(self.ro.outils_obtenus_a_la_demande(self.natifs, {"chercher": {}}, self.natifs + [self.vercel]), [])
+
+    def test_fiche_donne_nom_role_et_parametres(self):
+        fiche = self.ro.fiches_des_outils([self.vercel])
+        self.assertIn("vercel_deploy", fiche)
+        self.assertIn("Deploie un projet.", fiche)
+        self.assertIn('"required":["projectId"]', fiche)

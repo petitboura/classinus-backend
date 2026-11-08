@@ -29,6 +29,9 @@ from routage_outils import (
     _outils_deja_en_main,
     _valider_noms_a_garder,
     NOM_OUTIL_DEMANDER_OUTILS,
+    deballer_appels_appeler_outil,
+    fiches_des_outils,
+    outils_obtenus_a_la_demande,
 )
 from recherche_outils import rechercher_outils_pertinents
 from completion_outils import completer_outils_trouves, prerequis_parmi
@@ -442,6 +445,12 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
     # Actions déjà autorisées pour de bon par cette personne ("Toujours autoriser").
     autorisations = charger_autorisations(user_id or user_id_autorisations)
 
+    # Outils obtenus par demander_outils depuis le debut du tour (07/11/2026, cache de prompt) : ils
+    # ne sont PLUS ajoutes a outils_mcp, dont la liste part en tete de chaque requete et ne doit pas
+    # changer en cours de tour. Le modele les appelle par appeler_outil (voir routage_outils.py).
+    # Recalcule ici depuis table_routage : fonctionne aussi apres une reprise.
+    outils_obtenus = outils_obtenus_a_la_demande(outils_mcp, table_routage, catalogue_complet)
+
     if appels_en_cours_a_finir:
         try:
             for event in _traiter_appels(appels_en_cours_a_finir, messages_agent, table_routage, compteur_sources, arret=arret, autorisations=autorisations):
@@ -725,7 +734,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
         # precedent) des qu'il apparait dans ce lot ; les appels normaux
         # restants repartent seuls dans le circuit habituel juste apres.
         appels_normaux, noms_demandes_ce_lot = _separer_appels_garder_outils(appels)
-        noms_a_garder_ce_lot, noms_ignores_ce_lot = _valider_noms_a_garder(noms_demandes_ce_lot, outils_mcp)
+        noms_a_garder_ce_lot, noms_ignores_ce_lot = _valider_noms_a_garder(noms_demandes_ce_lot, (outils_mcp or []) + outils_obtenus)
         if len(appels_normaux) != len(appels):
             # Que des noms inconnus : on n'ecrase pas ce qui etait deja retenu (avant, l'enum de
             # l'outil empechait d'en envoyer, voir _outil_garder_outils).
@@ -740,6 +749,12 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
         # message assistant avec tool_calls ajoute a messages_agent), pas
         # ici : cette etape ne fait que sortir ces appels du circuit normal.
         appels_normaux, demandes_outils_ce_lot = _separer_appels_demander_outils(appels_normaux)
+        # appeler_outil (07/11/2026, cache de prompt) : remplace chaque appel par le vrai outil qu'il
+        # enveloppe, AVANT la detection de repetition et tout le reste, qui ne voient donc que le
+        # vrai nom. messages_agent garde l'appel tel que le modele l'a fait (voir plus bas).
+        appels_normaux, refus_appeler_outil = deballer_appels_appeler_outil(
+            appels_normaux, outils_mcp, outils_obtenus, table_routage,
+        )
 
         # Detection de repetition (02/09/2026, demande Bourama) : si l'un
         # de ces appels ferait atteindre tolerance_repetition fois
@@ -790,6 +805,12 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
             etat = etat_fournisseur()
             if etat:
                 messages_agent[-1][CLE_ETAT_FOURNISSEUR] = etat
+
+        # Un appel de appeler_outil refuse (nom inconnu, argument manquant) n'est pas execute : le modele
+        # recoit la raison comme resultat, invisible pour l'utilisateur, et peut refaire l'appel.
+        for identifiant, raison in refus_appeler_outil.items():
+            logging.warning(f"appeler_outil refuse sur {modele} : {raison}")
+            messages_agent.append({"role": "tool", "tool_call_id": identifiant, "content": raison})
 
         # Reponses synthetiques pour les appels garder_outils de ce lot --
         # jamais via _traiter_appels (aucun evenement outil_resultat,
@@ -891,7 +912,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                 propositions = {}
                 etats_services = etat_connexions.etats_connexions(user_id) if user_id else {}
                 for recherche in recherches_valides:
-                    deja_en_main = _outils_deja_en_main(outils_mcp) | {
+                    deja_en_main = _outils_deja_en_main((outils_mcp or []) + outils_obtenus) | {
                         o["function"]["name"] for o in trouves_total
                     }
                     candidats = [o for o in catalogue_complet if o["function"]["name"] not in deja_en_main]
@@ -951,7 +972,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                             recherche["categorie"],
                             nombre_outils_restants(
                                 recherche["categorie"], catalogue_complet,
-                                _outils_deja_en_main(outils_mcp) | {o["function"]["name"] for o in trouves_total},
+                                _outils_deja_en_main((outils_mcp or []) + outils_obtenus) | {o["function"]["name"] for o in trouves_total},
                             ),
                         ))
                     etiquette_categorie = f" [{recherche['categorie']}]" if recherche["categorie"] else ""
@@ -965,13 +986,12 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                         lignes_detail.append(f"- \"{recherche['besoin']}\"{etiquette_categorie} -> rien trouvé")
 
                 if trouves_total:
-                    # Nouvelle liste (jamais de mutation en place de
-                    # l'ancienne outils_mcp) : outils_mcp est aussi ce qui
-                    # part dans etat_reprise (confirmation/limite/repetition,
-                    # voir _evenement_confirmation/_evenement_reprise_agent
-                    # plus bas) -- une mutation en place risquerait de
-                    # modifier une reference partagee avec un etat deja capture.
-                    outils_mcp = outils_mcp + trouves_total
+                    # outils_mcp ne change plus en cours de tour (07/11/2026, cache de prompt) : la
+                    # liste d'outils vient avant le prompt systeme et l'historique dans la requete,
+                    # donc l'allonger faisait relire tout le contexte au prix plein a chaque ajout.
+                    # Les outils trouves vont dans outils_obtenus (nouvelle liste, jamais de mutation
+                    # en place) et le modele les lit dans la reponse ci-dessous.
+                    outils_obtenus = outils_obtenus + trouves_total
                     # Etape 4 (revue le 07/11/2026) : garder_outils n'a plus d'enum a rafraichir, ses
                     # noms sont controles a la reception (voir _valider_noms_a_garder), donc un outil
                     # tout juste obtenu ici peut etre garde sans toucher a une definition existante.
@@ -982,8 +1002,8 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                             table_routage[nom] = table_routage_complet[nom]
                     noms_trouves = ", ".join(o["function"]["name"] for o in trouves_total)
                     contenu_reponse = (
-                        f"Trouvé et ajouté à tes outils disponibles : {noms_trouves}. "
-                        "Tu peux les appeler dès maintenant pour continuer."
+                        f"Trouvé : {noms_trouves}. Appelle-les avec appeler_outil(nom, arguments) pour continuer, "
+                        "en suivant leur fiche :\n" + fiches_des_outils(trouves_total)
                     )
                     # Ordre d'appel : si un outil donne ici en exige un autre pour obtenir
                     # un identifiant (projectId...), on le dit au modele.
@@ -1004,17 +1024,17 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     # Les deux versions d'un même service (Classinus et compte de l'utilisateur) :
                     # celle de l'utilisateur d'abord, sauf demande contraire.
                     note_doubles = etat_connexions.note_versions_doubles(
-                        [o["function"]["name"] for o in outils_mcp], etats_services,
+                        [o["function"]["name"] for o in (outils_mcp or []) + outils_obtenus], etats_services,
                     )
                     if note_doubles:
                         contenu_reponse += " " + note_doubles
                     # Ce qu'il reste dans la categorie, puis les categories qui vont avec celles
                     # recues (GitHub et execution de code...). outils_mcp contient deja les
-                    # outils trouves (ajoutes plus haut), donc il represente "en main" apres cette demande.
+                    # outils natifs ; outils_obtenus contient ceux trouves (ajoutes plus haut) : ensemble, ils representent "en main" apres cette demande.
                     texte_restes = texte_outils_restants(restes_par_categorie)
                     if texte_restes:
                         contenu_reponse += " " + texte_restes
-                    texte_familles = consignes_familles(trouves_total, outils_mcp)
+                    texte_familles = consignes_familles(trouves_total, (outils_mcp or []) + outils_obtenus)
                     if texte_familles:
                         contenu_reponse += " " + texte_familles
                 else:

@@ -103,7 +103,7 @@ class CalculsSeuls(unittest.TestCase):
 
 
 def _jouer_demande(recherches, outils_depart=None, messages_suite=None):
-    """Joue un tour : le modele appelle demander_outils avec `recherches`. Renvoie la reponse de l'outil et les outils du tour suivant."""
+    """Joue un tour : le modele appelle demander_outils avec `recherches`. Renvoie la reponse de l'outil et les noms des outils dont elle donne la fiche."""
     arguments = json.dumps({"recherches": recherches})
     appels_api = []
     tours = [
@@ -133,8 +133,10 @@ def _jouer_demande(recherches, outils_depart=None, messages_suite=None):
             catalogue_complet=CATALOGUE, table_routage_complet={o["function"]["name"]: {} for o in CATALOGUE},
         ))
     reponse = [m for m in messages if m["role"] == "tool"][0]["content"]
-    noms_tour_2 = {t.get("name") or (t.get("function") or {}).get("name") for t in appels_api[1].get("tools", [])}
-    return reponse, noms_tour_2
+    # Cache de prompt (07/11/2026) : les outils trouves ne sont plus ajoutes a la liste d'outils du
+    # tour suivant, le modele les lit dans les fiches de la reponse de demander_outils.
+    noms_donnes = set(re.findall(r"^- (\S+) :", reponse, re.M))
+    return reponse, noms_donnes
 
 
 class DansLaBoucle(unittest.TestCase):
