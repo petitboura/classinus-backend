@@ -23,6 +23,10 @@ try:
     from adaptateur_commun import ClientCompatible, DELAI_APPEL_FOURNISSEUR_SECONDES
 except ImportError:
     from core.adaptateur_commun import ClientCompatible, DELAI_APPEL_FOURNISSEUR_SECONDES
+try:
+    from usage_llm import ouvrir_flux_avec_usage
+except ImportError:
+    from core.usage_llm import ouvrir_flux_avec_usage
 
 DUREE_CACHE_CATALOGUE_SECONDES = 10 * 60
 
@@ -94,6 +98,6 @@ class ClientVultr(ClientCompatible):
         # qui reflechit plus de 10 s avant son premier mot (glm-5.3) tombait en timeout.
         # Meme correction que pour Baseten et Vultr DeepSeek.
         arguments_vultr["timeout"] = DELAI_APPEL_FOURNISSEUR_SECONDES
-        reponse = self._client_vultr.chat.completions.create(**arguments_vultr)
+        reponse = ouvrir_flux_avec_usage(self._client_vultr.chat.completions.create, arguments_vultr)
         logging.warning(f"[ROUTE VULTR] Vultr a repondu ({modele_id}, identifiant {identifiant})")
         return reponse

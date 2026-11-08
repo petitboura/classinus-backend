@@ -17,6 +17,7 @@ except ImportError:
     from core.reserve_tokens_sortie import reserve_tokens_sortie
 from efforts_modeles import effort_valide_pour_modele, est_modele_avec_adaptateur
 from adaptateur_commun import CLE_ETAT_FOURNISSEUR
+from usage_llm import empreintes_de_la_requete, journaliser_usage
 from fournisseurs_llm import CONSIGNE_LANGUE_REFLEXION, DEEPSEEK_REASONING_EFFORT, ajouter_consigne_langue_reflexion, normaliser_effort_reflexion
 from execution_outils import _AttenteConfirmation, _traiter_appels, cle_autorisation_appel
 from autorisations_outils import charger_autorisations
@@ -26,7 +27,7 @@ from routage_outils import (
     NOM_OUTIL_GARDER_OUTILS,
     _separer_appels_demander_outils,
     _outils_deja_en_main,
-    _rafraichir_enum_garder_outils,
+    _valider_noms_a_garder,
     NOM_OUTIL_DEMANDER_OUTILS,
 )
 from recherche_outils import rechercher_outils_pertinents
@@ -584,6 +585,11 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                 dernier_finish_reason = chunk.choices[0].finish_reason
             if getattr(chunk, "x_groq", None) and getattr(chunk.x_groq, "usage", None):
                 dernier_usage = chunk.x_groq.usage
+            # Usage du flux (07/11/2026) : les fournisseurs compatibles OpenAI l'envoient dans un
+            # dernier morceau SANS choix, les adaptateurs Claude, GPT, Grok, Meta et Gemini dans leur
+            # morceau final. Lu ici AVANT le saut des morceaux sans choix juste en dessous.
+            if getattr(chunk, "usage", None):
+                dernier_usage = chunk.usage
 
             # Certains fournisseurs (Baseten) envoient des morceaux sans
             # aucun choix (ex. le dernier, qui porte seulement l'usage) :
@@ -619,6 +625,14 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                             etat["name"] += fragment.function.name
                         if fragment.function.arguments:
                             etat["arguments"] += fragment.function.arguments
+
+        # Une ligne [USAGE] par appel au modele : c'est elle qui dit d'ou vient la facture d'entree
+        # (voir core/usage_llm.py). messages et outils donnent la taille de ce qui a ete renvoye.
+        journaliser_usage(
+            modele, dernier_usage,
+            messages=len(messages_agent), outils=len(outils_mcp or []), conversation=conversation_id,
+            **empreintes_de_la_requete(messages_agent, outils_mcp),
+        )
 
         if dernier_finish_reason == "length":
             logging.error(
@@ -710,9 +724,13 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
         # serveur MCP. Ecrit immediatement en base (ecrase le tour
         # precedent) des qu'il apparait dans ce lot ; les appels normaux
         # restants repartent seuls dans le circuit habituel juste apres.
-        appels_normaux, noms_a_garder_ce_lot = _separer_appels_garder_outils(appels)
+        appels_normaux, noms_demandes_ce_lot = _separer_appels_garder_outils(appels)
+        noms_a_garder_ce_lot, noms_ignores_ce_lot = _valider_noms_a_garder(noms_demandes_ce_lot, outils_mcp)
         if len(appels_normaux) != len(appels):
-            _ecrire_outils_retenus(conversation_id, noms_a_garder_ce_lot)
+            # Que des noms inconnus : on n'ecrase pas ce qui etait deja retenu (avant, l'enum de
+            # l'outil empechait d'en envoyer, voir _outil_garder_outils).
+            if noms_a_garder_ce_lot or not noms_ignores_ce_lot:
+                _ecrire_outils_retenus(conversation_id, noms_a_garder_ce_lot)
 
         # Outil interne demander_outils (etape 3, chantier "demander_outils",
         # 06/09/2026, demande Bourama) : sorti du lot ICI, meme principe que
@@ -782,9 +800,15 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     "role": "tool",
                     "tool_call_id": appel["id"],
                     "content": (
-                        f"Outils gardés pour ton prochain message : {', '.join(noms_a_garder_ce_lot)}."
-                        if noms_a_garder_ce_lot else
-                        "Aucun outil gardé pour le prochain message."
+                        (
+                            f"Outils gardés pour ton prochain message : {', '.join(noms_a_garder_ce_lot)}."
+                            if noms_a_garder_ce_lot else
+                            "Aucun outil gardé pour le prochain message."
+                        )
+                        + (
+                            f" Noms ignorés (ne font pas partie des outils disponibles ce tour-ci) : {', '.join(noms_ignores_ce_lot)}."
+                            if noms_ignores_ce_lot else ""
+                        )
                     ),
                 })
 
@@ -948,12 +972,9 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     # plus bas) -- une mutation en place risquerait de
                     # modifier une reference partagee avec un etat deja capture.
                     outils_mcp = outils_mcp + trouves_total
-                    # Etape 4 : sans ce rafraichissement, l'entree garder_outils
-                    # deja presente dans outils_mcp garderait son ANCIEN enum
-                    # (fige par main.py avant le debut du tour) -- le modele ne
-                    # pourrait alors pas garder pour son prochain message un
-                    # outil qu'il vient tout juste d'obtenir via demander_outils.
-                    outils_mcp = _rafraichir_enum_garder_outils(outils_mcp)
+                    # Etape 4 (revue le 07/11/2026) : garder_outils n'a plus d'enum a rafraichir, ses
+                    # noms sont controles a la reception (voir _valider_noms_a_garder), donc un outil
+                    # tout juste obtenu ici peut etre garde sans toucher a une definition existante.
                     table_routage = dict(table_routage)
                     for outil in trouves_total:
                         nom = outil["function"]["name"]

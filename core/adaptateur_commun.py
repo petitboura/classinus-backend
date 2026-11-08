@@ -33,8 +33,11 @@ CLE_ETAT_FOURNISSEUR = "fournisseur_etat"
 TEXTE_RESULTAT_VIDE = "Aucun résultat."
 
 
-def morceau(contenu=None, appels=None, raisonnement=None, fin=None):
-    """Un morceau de flux au format que lit la boucle d'agent."""
+def morceau(contenu=None, appels=None, raisonnement=None, fin=None, usage=None):
+    """
+    Un morceau de flux au format que lit la boucle d'agent. usage : les tokens de l'appel tels que
+    le fournisseur les rapporte (voir core/usage_llm.py), joints au morceau final.
+    """
     delta = types.SimpleNamespace(
         content=contenu,
         tool_calls=appels,
@@ -42,7 +45,7 @@ def morceau(contenu=None, appels=None, raisonnement=None, fin=None):
         reasoning_content=None,
     )
     choix = types.SimpleNamespace(delta=delta, finish_reason=fin)
-    return types.SimpleNamespace(choices=[choix], usage=None)
+    return types.SimpleNamespace(choices=[choix], usage=usage)
 
 
 def fragment_appel(index, identifiant=None, nom=None, arguments=None):

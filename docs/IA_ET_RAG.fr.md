@@ -21,6 +21,31 @@ Variables de base relevées dans le dépôt :
 
 Les fournisseurs supplémentaires utilisent leurs propres variables. Voir [RAILWAY_DEPLOY.md](./deployment/RAILWAY_DEPLOY.md) pour la liste opérationnelle recensée.
 
+## Cache de prompt et mesure des tokens
+
+Chaque étape d'outil renvoie au modèle tout le contexte (prompt système, outils, historique, résultats d'outils) : l'entrée est le poste de coût dominant. Les fournisseurs ne relisent depuis leur cache que le **début identique** d'une requête, facturé bien moins cher. Le premier octet qui change fait refacturer tout ce qui suit.
+
+**Disposition du prompt** (`core/construction_system_prompt.py`, assemblage dans `core/main.py`) :
+
+1. premier message système : la partie **stable** (plateforme, page de l'agent, skills, connexions, configuration, mémoire, modes) ;
+2. l'historique de la conversation ;
+3. second message système : la partie **variable** (blocs qui dépendent du message ou de l'écran, date et heure, journal des outils, note d'avancement) ;
+4. la question en cours.
+
+Tout nouveau bloc de prompt qui change d'un message à l'autre se place **après** `MARQUEUR_PARTIE_VARIABLE`, jamais avant.
+
+**Cache par fournisseur** :
+
+| Fournisseur | Mécanisme |
+|---|---|
+| Claude | marqueurs `cache_control` posés par `core/adaptateur_claude.py` (dernier outil, système, fin de l'historique, dernier message). `CLAUDE_CACHE_PROMPT=0` le coupe, `CLAUDE_CACHE_TTL=1h` allonge la durée (défaut 5 min) |
+| GPT, Grok | cache automatique ; `prompt_cache_key` stable envoyé par `core/adaptateur_responses.py`. `CACHE_PROMPT_CLE=0` le coupe |
+| Meta, Gemini, DeepSeek, GLM, Qwen, NVIDIA | cache automatique du fournisseur, rien à envoyer : seule la stabilité du début compte |
+
+**Mesure** (`core/usage_llm.py`) : une ligne `[USAGE]` par appel dans les logs Railway : `entree`, `cache_lu`, `cache_ecrit`, `sortie`, `part_cache`, nombre de messages et d'outils, et trois empreintes (`empreinte_outils`, `empreinte_tete`, `empreinte_debut_historique`). Si les empreintes ne changent pas d'un appel à l'autre mais que `cache_lu` reste à 0, la cause est chez le fournisseur ; si elles changent, c'est le début de la requête qui bouge. Les appels de conclusion forcée et de relecture ne sont pas encore mesurés.
+
+Limite connue : `demander_outils` ajoute des outils en cours de tour. Ils sont ajoutés à la fin de la liste, mais comme la liste précède le prompt système et l'historique, chaque ajout force une relecture au prix plein, puis le cache reprend. La définition de `garder_outils` est fixe (plus d'`enum` des noms) : ses noms sont contrôlés côté serveur par `_valider_noms_a_garder`. Piste plus profonde, non faite : un outil générique fixe et les fiches des outils fournies dans la conversation.
+
 ## Outils
 
 Les outils sont enregistrés et filtrés par les modules de registre et d’autorisation, notamment `core/registre_outils.py`, `core/mcp_tools.py` et les modules d’exécution spécialisés. Certains appels nécessitent une autorisation explicite et des garde-fous côté serveur.

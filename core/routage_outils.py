@@ -88,7 +88,7 @@ def _ecrire_outils_retenus(conversation_id, outils):
         logging.error(f"ERREUR SUPABASE (ecriture outils_retenus_conversation) : {e}")
 
 
-def _outil_garder_outils(noms_disponibles):
+def _outil_garder_outils(noms_disponibles=None):
     """
     Outil interne (2026-09-04, demande Bourama) : jamais un vrai outil
     MCP, jamais route via table_routage, jamais compte dans le budget
@@ -102,6 +102,13 @@ def _outil_garder_outils(noms_disponibles):
     N'a d'effet que sur le tour suivant : si le modele veut le garder
     encore apres, il doit rappeler cet outil a ce moment-la (voir
     _ecrire_outils_retenus, ecrase a chaque tour).
+
+    CACHE DE PROMPT (07/11/2026, demande Bourama) : la definition de cet outil est FIXE. Elle
+    portait avant un enum des noms d'outils disponibles, recalcule a chaque tour puis a chaque ajout
+    de demander_outils : sa definition changeait, donc le debut de la requete changeait, et les
+    fournisseurs refacturaient tout le prompt systeme et l'historique qui suivent la liste d'outils.
+    Les noms sont maintenant controles cote serveur, a la reception de l'appel (voir
+    _valider_noms_a_garder). noms_disponibles n'est plus utilise, gardé pour ne pas casser les appelants.
     """
     return {
         "type": "function",
@@ -125,7 +132,7 @@ def _outil_garder_outils(noms_disponibles):
                 "properties": {
                     "outils": {
                         "type": "array",
-                        "items": {"type": "string", "enum": noms_disponibles},
+                        "items": {"type": "string"},
                         "description": "Noms exacts (parmi les outils disponibles ce tour-ci) a garder pour le prochain message.",
                     }
                 },
@@ -349,45 +356,26 @@ def _separer_appels_demander_outils(appels):
     return appels_normaux, demandes
 
 
-def _rafraichir_enum_garder_outils(outils_mcp):
+def _valider_noms_a_garder(noms_demandes, outils_mcp):
     """
-    Etape 4 du chantier "demander_outils" (06/09/2026, demande Bourama) :
-    verifie que garder_outils reconnaisse bien les outils ajoutes en
-    direct par demander_outils.
+    Controle cote serveur des noms que le modele veut garder (07/11/2026, demande Bourama). Remplace
+    l'enum de garder_outils : un enum dans la definition de l'outil la faisait changer a chaque tour
+    et a chaque ajout de demander_outils, ce qui cassait le cache de prompt des fournisseurs (voir
+    _outil_garder_outils).
 
-    Probleme sans cette fonction : l'enum de garder_outils (voir
-    _outil_garder_outils, parametres.outils.items.enum) est fige au
-    moment ou main.py construit outils_mcp UNE SEULE FOIS, AVANT que le
-    tour ne commence -- si demander_outils agrandit outils_mcp en cours
-    de route (voir le branchement dans _agent_groq), l'entree
-    garder_outils deja presente dans cette meme liste continue de
-    pointer vers l'ANCIEN enum, sans les noms tout juste ajoutes. Le
-    modele ne pourrait alors pas les "garder" pour son prochain message
-    meme s'il vient de les utiliser avec succes ce tour-ci.
-
-    Reconstruit donc l'entree garder_outils de outils_mcp avec un enum a
-    jour (tous les noms reels actuellement dans outils_mcp, garder_outils
-    et demander_outils eux-memes exclus -- ce sont des outils internes
-    remis en place a chaque tour qualifiant par main.py, jamais quelque
-    chose que le modele devrait "garder" via ce mecanisme).
-
-    A appeler juste apres tout ajout reussi a outils_mcp par
-    demander_outils, AVANT le prochain appel a Groq (voir _agent_groq).
-    Si garder_outils n'est pas present dans outils_mcp (ne devrait pas
-    arriver ici, puisque demander_outils lui-meme n'est ajoute par
-    _preparer_demander_outils que si outils_mcp etait deja non vide au
-    debut du tour -- mais reste fail-safe : renvoie outils_mcp inchange).
+    Valides = les outils reels actuellement dans outils_mcp (ceux ajoutes en cours de tour par
+    demander_outils compris), garder_outils et demander_outils eux-memes exclus : ce sont des outils
+    internes, jamais quelque chose a garder. Renvoie (valides, ignores), dans l'ordre demande, sans
+    doublon.
     """
-    if not any(o["function"]["name"] == NOM_OUTIL_GARDER_OUTILS for o in outils_mcp):
-        return outils_mcp
-    noms_reels = [
-        o["function"]["name"] for o in outils_mcp
+    reels = {
+        o["function"]["name"] for o in (outils_mcp or [])
         if o["function"]["name"] not in (NOM_OUTIL_GARDER_OUTILS, NOM_OUTIL_DEMANDER_OUTILS)
-    ]
-    return [
-        _outil_garder_outils(noms_reels) if o["function"]["name"] == NOM_OUTIL_GARDER_OUTILS else o
-        for o in outils_mcp
-    ]
+    }
+    valides, ignores = [], []
+    for nom in dict.fromkeys(n for n in (noms_demandes or []) if isinstance(n, str)):
+        (valides if nom in reels else ignores).append(nom)
+    return valides, ignores
 
 
 def _outils_deja_en_main(outils_mcp):
