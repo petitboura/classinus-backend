@@ -140,3 +140,38 @@ class CacheClaude(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GarderOutilsSansEnum(unittest.TestCase):
+    """garder_outils : definition fixe (cache de prompt), noms controles cote serveur."""
+
+    def setUp(self):
+        import os as _os
+        _os.environ.setdefault("SUPABASE_URL", "http://localhost")
+        _os.environ.setdefault("SUPABASE_SECRET", "test")
+        import routage_outils as ro
+        self.ro = ro
+
+    def test_la_definition_ne_depend_plus_des_outils_disponibles(self):
+        a = self.ro._outil_garder_outils(["x", "y"])
+        b = self.ro._outil_garder_outils(["autre"])
+        c = self.ro._outil_garder_outils()
+        self.assertEqual(a, b)
+        self.assertEqual(a, c)
+        self.assertNotIn("enum", a["function"]["parameters"]["properties"]["outils"]["items"])
+
+    def test_valide_contre_les_outils_reels_du_moment(self):
+        outils = [_outil("chercher"), _outil("lire"), self.ro._outil_garder_outils()]
+        valides, ignores = self.ro._valider_noms_a_garder(["lire", "inconnu", "garder_outils", "lire"], outils)
+        self.assertEqual(valides, ["lire"])
+        self.assertEqual(ignores, ["inconnu", "garder_outils"])
+
+    def test_un_outil_ajoute_en_cours_de_tour_peut_etre_garde(self):
+        avant = [_outil("chercher")]
+        self.assertEqual(self.ro._valider_noms_a_garder(["vercel_deploy"], avant), ([], ["vercel_deploy"]))
+        apres = avant + [_outil("vercel_deploy")]
+        self.assertEqual(self.ro._valider_noms_a_garder(["vercel_deploy"], apres), (["vercel_deploy"], []))
+
+    def test_entrees_bizarres(self):
+        self.assertEqual(self.ro._valider_noms_a_garder(None, None), ([], []))
+        self.assertEqual(self.ro._valider_noms_a_garder([3, None, "a"], [_outil("a")]), (["a"], []))

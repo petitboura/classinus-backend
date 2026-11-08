@@ -44,7 +44,7 @@ Tout nouveau bloc de prompt qui change d'un message à l'autre se place **après
 
 **Mesure** (`core/usage_llm.py`) : une ligne `[USAGE]` par appel dans les logs Railway : `entree`, `cache_lu`, `cache_ecrit`, `sortie`, `part_cache`, nombre de messages et d'outils, et trois empreintes (`empreinte_outils`, `empreinte_tete`, `empreinte_debut_historique`). Si les empreintes ne changent pas d'un appel à l'autre mais que `cache_lu` reste à 0, la cause est chez le fournisseur ; si elles changent, c'est le début de la requête qui bouge. Les appels de conclusion forcée et de relecture ne sont pas encore mesurés.
 
-Limite connue : `demander_outils` ajoute des outils en cours de tour, ce qui change le début de la requête et force une réécriture du cache à chaque ajout.
+Limite connue : `demander_outils` ajoute des outils en cours de tour. Ils sont ajoutés à la fin de la liste, mais comme la liste précède le prompt système et l'historique, chaque ajout force une relecture au prix plein, puis le cache reprend. La définition de `garder_outils` est fixe (plus d'`enum` des noms) : ses noms sont contrôlés côté serveur par `_valider_noms_a_garder`. Piste plus profonde, non faite : un outil générique fixe et les fiches des outils fournies dans la conversation.
 
 ## Outils
 
