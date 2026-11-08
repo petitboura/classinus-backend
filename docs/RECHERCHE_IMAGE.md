@@ -37,6 +37,12 @@ Wikimedia Commons almost always returns something, so with the default order the
 
 A non-empty result is kept in memory for the same normalized query (case and extra spaces ignored) and the same number of images. Errors and empty results are never cached. The cache is per process, which is enough because the backend runs a single `uvicorn` process (see `Procfile`). It is emptied on restart, and `vider_cache_images()` empties it from code.
 
+## Display: the AI chooses
+
+Since November 8, 2026, nothing is shown automatically after an image search (or a video search). The tool returns its results under the key `images_trouvees` (and `videos_trouvees` for videos), which the automatic display does not recognise. The AI reads the titles, keeps only what matches the request, and writes each image as markdown `![title](url)` at the point of its message where it talks about it. If no result fits, it places none and says so.
+
+Do not rename these keys to `images` or `videos`: those names trigger the automatic display of every result, which other tools rely on (browser captures, Higgsfield). Test: `tests/verifier_recherche_media_choix_ia.py`.
+
 ## Behavior to know
 
 - Only `https` addresses are kept for Wikimedia, Openverse, Serper and SerpApi, because an `http` image is blocked inside an `https` page. For Serper and SerpApi, when the original image is not `https`, the thumbnail (hosted by Google) is used instead.

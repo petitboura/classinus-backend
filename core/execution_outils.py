@@ -245,10 +245,12 @@ def _images_depuis_json_generique(resultat_brut):
     mais pour une galerie d'images (evenement SSE "images", voir
     ChatIA.tsx/GalerieImagesBulle.tsx) : tout outil qui renvoie un JSON
     de la forme {"images": [{"titre", "url", "miniature"}, ...]} voit sa
-    galerie affichee automatiquement -- couvre rechercher_image
-    aujourd'hui (voir core/outils_generation_media.py), et n'importe
-    quel outil FUTUR qui renverrait la meme forme, sans toucher a ce
-    fichier.
+    galerie affichee automatiquement (captures du navigateur, images
+    Higgsfield, outils MCP), et n'importe quel outil FUTUR qui renverrait
+    la meme forme, sans toucher a ce fichier.
+    NE couvre PAS rechercher_image depuis le 08/11/2026 : cet outil renvoie
+    la cle "images_trouvees" pour que le modele choisisse lui-meme ce qui
+    s'affiche (voir core/outils_generation_media.py).
 
     Cle "images" DELIBEREMENT distincte de "results" (utilisee par
     _sources_depuis_json_generique) : les deux detecteurs tournent sur
@@ -284,8 +286,10 @@ def _videos_depuis_json_generique(resultat_brut):
     Meme principe que _images_depuis_json_generique juste au-dessus, pour
     les cartes de vidéos (evenement SSE "videos") : tout outil qui renvoie
     un JSON de la forme {"videos": [{"titre", "url", "miniature", "chaine",
-    "duree"}, ...]} voit ses cartes affichees automatiquement. Couvre
-    rechercher_video (voir core/outils_generation_media.py).
+    "duree"}, ...]} voit ses cartes affichees automatiquement (videos
+    Higgsfield, outils MCP). NE couvre PAS rechercher_video depuis le
+    08/11/2026 : cet outil renvoie la cle "videos_trouvees" pour que le
+    modele choisisse lui-meme ce qui s'affiche.
 
     Cle "videos" distincte de "results" et de "images" : les detecteurs
     tournent sur CHAQUE resultat d'outil, un outil ne doit jamais se
