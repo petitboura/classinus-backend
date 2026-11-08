@@ -224,6 +224,15 @@ def separer_ressources_ui(resultat):
     return json.dumps(donnees, ensure_ascii=False), widgets
 
 
+def marquer_source(ressources, nom_outil):
+    """Ajoute `outil_source` (nom expose de l'outil qui a affiche le widget) a chaque widget.
+
+    Le frontend le renvoie tel quel avec un appel d'outil du widget ; le backend en deduit le serveur
+    autorise (core/widgets_appel_outil.py) et le re-verifie, il ne s'y fie pas aveuglement.
+    """
+    return [{**r, "outil_source": nom_outil} for r in ressources or [] if isinstance(r, dict)]
+
+
 NOTE_POUR_LE_MODELE = (
     "[Un widget interactif est déjà affiché à l'utilisateur dans la conversation : ne recopie pas "
     "l'adresse ui:// dans ta réponse, décris-le juste brièvement en texte si besoin.]"
