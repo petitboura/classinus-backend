@@ -18,7 +18,8 @@ Central entry point for all Classinus backend documentation. English is the defa
 
 ## Operations and project status
 
-- [Railway deployment checklist](./deployment/RAILWAY_DEPLOY.md)
+- [Classinus services on Coolify](./deployment/COOLIFY_SERVICES.md)
+- [Historical Railway deployment checklist](./deployment/RAILWAY_DEPLOY.md)
 - [Higgsfield backend status](./status/HIGGSFIELD_TODO.md)
 
 ## Project history and archived work
