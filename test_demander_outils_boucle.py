@@ -98,10 +98,15 @@ class DemanderOutilsDansLaBoucle(unittest.TestCase):
         detail = [e for e in evenements if e.get("type") == "outil_resultat" and e.get("nom_outil") == "demander_outils"][0]["resultat"]
         self.assertIn("railway_redeploy", detail)
 
-        # Le tour suivant recoit ces outils dans sa liste.
-        noms_tour_2 = {t.get("name") or (t.get("function") or {}).get("name") for t in appels_api[1].get("tools", [])}
-        for nom in ("railway_redeploy", "railway_list-projects", "railway_list-services"):
-            self.assertIn(nom, noms_tour_2)
+        # Cache de prompt (07/11/2026) : la liste d'outils du tour suivant est IDENTIQUE a celle du
+        # premier appel (elle part en tete de la requete, la changer ferait tout relire au prix
+        # plein). Les outils trouves arrivent par leur fiche, dans la reponse de demander_outils.
+        noms_tour_1 = [t.get("name") or (t.get("function") or {}).get("name") for t in appels_api[0].get("tools", [])]
+        noms_tour_2 = [t.get("name") or (t.get("function") or {}).get("name") for t in appels_api[1].get("tools", [])]
+        self.assertEqual(noms_tour_1, noms_tour_2)
+        self.assertNotIn("railway_redeploy", noms_tour_2)
+        self.assertIn("Parametres :", reponse_outil)
+        self.assertIn("appeler_outil", reponse_outil)
         texte = "".join(e.get("texte", "") for e in evenements if e.get("type") == "reponse")
         self.assertEqual(texte, "Fait.")
 
@@ -135,9 +140,120 @@ class DemanderOutilsDansLaBoucle(unittest.TestCase):
                 catalogue_complet=CATALOGUE, table_routage_complet={},
             ))
         reponse_outil = [m for m in messages if m["role"] == "tool"][0]["content"]
-        self.assertIn("Trouvé et ajouté", reponse_outil)
+        self.assertIn("Trouvé :", reponse_outil)
         self.assertNotIn("Aucun outil correspondant", reponse_outil)
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AppelerOutilDansLaBoucle(unittest.TestCase):
+    """Cache de prompt (07/11/2026) : le modele obtient un outil avec demander_outils puis l'appelle
+    par appeler_outil, sans que la liste d'outils envoyee au fournisseur change d'un appel a l'autre."""
+
+    def test_de_la_demande_a_l_execution(self):
+        demande = json.dumps({"recherches": [{"besoin": "lister les projets", "categorie": "railway"}]})
+        appel_wrapper = json.dumps({"nom": "railway_list-projects", "arguments": {"libelle": "Je liste les projets"}})
+        tours = [
+            [
+                NS(type="response.output_item.added", item=NS(type="function_call", id="fc_1", call_id="c1", name="demander_outils")),
+                NS(type="response.function_call_arguments.delta", item_id="fc_1", delta=demande),
+                NS(type="response.output_item.done", item=_element(
+                    "function_call", id="fc_1", call_id="c1", name="demander_outils", arguments=demande)),
+            ],
+            [
+                NS(type="response.output_item.added", item=NS(type="function_call", id="fc_2", call_id="c2", name="appeler_outil")),
+                NS(type="response.function_call_arguments.delta", item_id="fc_2", delta=appel_wrapper),
+                NS(type="response.output_item.done", item=_element(
+                    "function_call", id="fc_2", call_id="c2", name="appeler_outil", arguments=appel_wrapper)),
+            ],
+            [NS(type="response.output_text.delta", delta="Voila."), NS(type="response.completed")],
+        ]
+        appels_api = []
+
+        def creer(**kwargs):
+            appels_api.append(kwargs)
+            return iter(tours[len(appels_api) - 1])
+
+        executes = []
+
+        def faux_traiter_appels(appels, messages_agent, *args, **kwargs):
+            for appel in appels:
+                executes.append(appel)
+                yield {"type": "outil_resultat", "nom_outil": appel["name"], "id_appel": appel["id"], "resultat": "ok"}
+                messages_agent.append({"role": "tool", "tool_call_id": appel["id"], "content": "[projets]"})
+
+        client = ClientResponses("cle", "openai")
+        client._client = NS(responses=NS(create=creer))
+        params = {"budget_depart": 5, "palier_extension": 5, "plafond_absolu": 10, "tolerance_repetition": 3}
+        messages = [{"role": "system", "content": "S"}, {"role": "user", "content": "Liste mes projets"}]
+        outils_depart = [_outil("demander_outils"), _outil("appeler_outil")]
+        with patch.object(boucle_agent, "parametres_outils", return_value=params), \
+                patch.object(efforts_modeles, "distributeur_du_modele", return_value="gpt"), \
+                patch.object(boucle_agent, "retirer_messages_etudiant", return_value=[]), \
+                patch.object(boucle_agent, "plafond_tour", return_value=None), \
+                patch.object(boucle_agent, "_traiter_appels", faux_traiter_appels):
+            evenements = list(boucle_agent._agent_groq(
+                client, messages, outils_depart, {}, modele="gpt-6-astra", reasoning_effort="none",
+                catalogue_complet=CATALOGUE, table_routage_complet={o["function"]["name"]: {} for o in CATALOGUE},
+            ))
+
+        # 1. Les trois appels au fournisseur recoivent exactement la meme liste d'outils.
+        listes = [[t.get("name") or (t.get("function") or {}).get("name") for t in a.get("tools", [])] for a in appels_api]
+        self.assertEqual(len(listes), 3)
+        self.assertEqual(listes[0], listes[1])
+        self.assertEqual(listes[1], listes[2])
+        self.assertNotIn("railway_list-projects", listes[2])
+
+        # 2. Ce qui est execute est le VRAI outil, avec ses vrais arguments et l'identifiant du modele.
+        self.assertEqual(len(executes), 1)
+        self.assertEqual(executes[0]["name"], "railway_list-projects")
+        self.assertEqual(executes[0]["id"], "c2")
+        self.assertEqual(json.loads(executes[0]["arguments"]), {"libelle": "Je liste les projets"})
+
+        # 3. Les evenements (cartes du chat, journal) portent le vrai nom, jamais appeler_outil.
+        noms_evenements = {e.get("nom_outil") for e in evenements if e.get("type") == "outil_resultat"}
+        self.assertIn("railway_list-projects", noms_evenements)
+        self.assertNotIn("appeler_outil", noms_evenements)
+
+        # 4. La conversation garde l'appel tel que le modele l'a fait, avec un resultat pour chaque id.
+        appeles = [c["function"]["name"] for m in messages if m.get("tool_calls") for c in m["tool_calls"]]
+        self.assertEqual(appeles, ["demander_outils", "appeler_outil"])
+        resultats = {m["tool_call_id"] for m in messages if m["role"] == "tool"}
+        self.assertEqual(resultats, {"c1", "c2"})
+
+    def test_appel_refuse_renvoie_la_raison_au_modele(self):
+        appel_wrapper = json.dumps({"nom": "n_importe_quoi", "arguments": {}})
+        tours = [
+            [
+                NS(type="response.output_item.added", item=NS(type="function_call", id="fc_1", call_id="c1", name="appeler_outil")),
+                NS(type="response.function_call_arguments.delta", item_id="fc_1", delta=appel_wrapper),
+                NS(type="response.output_item.done", item=_element(
+                    "function_call", id="fc_1", call_id="c1", name="appeler_outil", arguments=appel_wrapper)),
+            ],
+            [NS(type="response.output_text.delta", delta="Ok."), NS(type="response.completed")],
+        ]
+        appels_api = []
+
+        def creer(**kwargs):
+            appels_api.append(kwargs)
+            return iter(tours[len(appels_api) - 1])
+
+        client = ClientResponses("cle", "openai")
+        client._client = NS(responses=NS(create=creer))
+        params = {"budget_depart": 5, "palier_extension": 5, "plafond_absolu": 10, "tolerance_repetition": 3}
+        messages = [{"role": "system", "content": "S"}, {"role": "user", "content": "x"}]
+        with patch.object(boucle_agent, "parametres_outils", return_value=params), \
+                patch.object(efforts_modeles, "distributeur_du_modele", return_value="gpt"), \
+                patch.object(boucle_agent, "retirer_messages_etudiant", return_value=[]), \
+                patch.object(boucle_agent, "plafond_tour", return_value=None):
+            list(boucle_agent._agent_groq(
+                client, messages, [_outil("demander_outils"), _outil("appeler_outil")], {}, modele="gpt-6-astra",
+                reasoning_effort="none", catalogue_complet=CATALOGUE, table_routage_complet={},
+            ))
+        retour = [m for m in messages if m["role"] == "tool"]
+        self.assertEqual(len(retour), 1)
+        self.assertEqual(retour[0]["tool_call_id"], "c1")
+        self.assertIn("Outil inconnu", retour[0]["content"])
+        self.assertEqual(len(appels_api), 2)

@@ -229,8 +229,9 @@ def _outil_demander_outils(categories_perso=None):
                 "plusieurs appels : chaque entree est cherchee "
                 "independamment, dans SA categorie si elle en a une. Si "
                 "un outil correspondant existe dans le catalogue de "
-                "Classinus, il t'est ajoute immediatement et tu peux "
-                "l'appeler dans la foulee, sans attendre le prochain "
+                "Classinus, sa fiche (nom, role, parametres) t'est donnee "
+                "tout de suite : appelle-le dans la foulee avec "
+                "appeler_outil(nom, arguments), sans attendre le prochain "
                 "message de l'utilisateur. Si rien ne correspond, on te "
                 "le dit clairement -- adapte-toi alors plutot que de "
                 "rester bloque en silence. A utiliser seulement quand tu "
@@ -395,6 +396,132 @@ def _outils_deja_en_main(outils_mcp):
     return {o["function"]["name"] for o in (outils_mcp or [])}
 
 
+NOM_OUTIL_APPELER_OUTIL = "appeler_outil"
+
+
+def _outil_appeler_outil():
+    """
+    Outil interne FIXE (07/11/2026, demande Bourama : l'entree coutait beaucoup trop cher). Sert a
+    appeler un outil obtenu avec demander_outils. Avant, chaque outil trouve etait AJOUTE a la liste
+    d'outils de la requete : cette liste vient avant le prompt systeme et l'historique, donc chaque
+    ajout changeait le debut de la requete et obligeait le fournisseur a tout relire au prix plein
+    (un tiers des tokens non relus depuis le cache dans les logs de production du 08/11/2026).
+    Maintenant la liste ne bouge plus : la fiche des outils trouves arrive dans le RESULTAT de
+    demander_outils (donc a la fin de la conversation) et le modele les appelle par ce wrapper. Le
+    serveur le deballe avant d'executer (voir deballer_appels_appeler_outil) : cartes du chat,
+    approbations, plafonds, journal et detection de repetition ne voient que le vrai outil.
+
+    Definition constante : ne depend ni du tour, ni de l'utilisateur, ni des outils trouves.
+    """
+    return {
+        "type": "function",
+        "function": {
+            "name": NOM_OUTIL_APPELER_OUTIL,
+            "description": (
+                "Appelle un outil que demander_outils vient de te donner (sa fiche est dans la reponse de "
+                "demander_outils). Passe son nom exact dans nom et ses arguments, tels que la fiche les "
+                "decrit, dans arguments. Pour un outil que tu avais deja directement, appelle-le comme "
+                "d'habitude, sans cet outil."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "nom": {"type": "string", "description": "Nom exact de l'outil, tel qu'ecrit dans sa fiche."},
+                    "arguments": {
+                        "type": "object",
+                        "description": "Arguments de l'outil, selon sa fiche (sans arguments : {}).",
+                    },
+                },
+                "required": ["nom", "arguments"],
+            },
+        },
+    }
+
+
+def outils_obtenus_a_la_demande(outils_mcp, table_routage, catalogue_complet):
+    """
+    Les outils obtenus par demander_outils depuis le debut du tour : ceux que table_routage sait
+    router mais qui ne sont pas dans la liste d'outils envoyee au modele. Recalcule a l'entree de la
+    boucle, donc aussi apres une pause (confirmation, limite) : l'etat de reprise garde deja
+    table_routage, il n'y a rien d'autre a sauvegarder.
+    """
+    natifs = {o["function"]["name"] for o in (outils_mcp or [])}
+    return [
+        o for o in (catalogue_complet or [])
+        if o["function"]["name"] in (table_routage or {}) and o["function"]["name"] not in natifs
+    ]
+
+
+def fiches_des_outils(outils):
+    """
+    Fiche texte de chaque outil (nom, role, parametres), pour la reponse de demander_outils : le
+    modele ne les recoit plus dans sa liste d'outils, il les lit ici. Les parametres sont le schema
+    reel de l'outil, libelle et delai compris, que le modele repasse dans arguments.
+    """
+    fiches = []
+    for o in outils:
+        f = o["function"]
+        parametres = json.dumps(f.get("parameters") or {}, ensure_ascii=False, separators=(",", ":"))
+        fiches.append(f"- {f['name']} : {(f.get('description') or '').strip()}\n  Parametres : {parametres}")
+    return "\n".join(fiches)
+
+
+def deballer_appels_appeler_outil(appels, outils_mcp, outils_obtenus, table_routage):
+    """
+    Remplace chaque appel de appeler_outil par l'appel reel qu'il enveloppe, au meme identifiant et a
+    la meme place : la suite du circuit (confirmations, plafonds, repetition, execution, evenements)
+    ne voit que le vrai nom et les vrais arguments. Renvoie (appels, refus), refus etant
+    {identifiant: message pour le modele} pour un appel qu'on n'execute pas (nom inconnu, argument
+    obligatoire manquant) : le modele recoit la raison comme resultat et peut se corriger.
+
+    Les types des arguments ne sont PAS verifies ici, seulement les noms obligatoires : le serveur
+    de l'outil les controle deja, et un controle plus strict que celui d'avant refuserait des appels
+    qui passaient.
+    """
+    outils_connus = {o["function"]["name"]: o for o in list(outils_mcp or []) + list(outils_obtenus or [])}
+    for interne in (NOM_OUTIL_GARDER_OUTILS, NOM_OUTIL_DEMANDER_OUTILS, NOM_OUTIL_APPELER_OUTIL):
+        outils_connus.pop(interne, None)
+    for nom_route in (table_routage or {}):
+        outils_connus.setdefault(nom_route, None)
+
+    deballes, refus = [], {}
+    for appel in appels:
+        if appel["name"] != NOM_OUTIL_APPELER_OUTIL:
+            deballes.append(appel)
+            continue
+        try:
+            contenu = json.loads(appel["arguments"] or "{}")
+        except Exception:
+            contenu = None
+        if not isinstance(contenu, dict):
+            refus[appel["id"]] = "Appel illisible. Format : appeler_outil(nom, arguments), arguments etant un objet."
+            continue
+        nom = contenu.get("nom")
+        arguments = contenu.get("arguments", {})
+        if isinstance(arguments, str):
+            try:
+                arguments = json.loads(arguments or "{}")
+            except Exception:
+                arguments = None
+        if not isinstance(arguments, dict):
+            refus[appel["id"]] = f"Les arguments de {nom} doivent etre un objet (ou {{}} sans argument)."
+            continue
+        if not isinstance(nom, str) or nom not in outils_connus:
+            refus[appel["id"]] = (
+                f"Outil inconnu : {nom!r}. Utilise le nom exact d'une fiche recue de demander_outils, "
+                "ou refais une demande avec demander_outils."
+            )
+            continue
+        outil = outils_connus[nom]
+        requis = ((outil or {}).get("function", {}).get("parameters") or {}).get("required") or []
+        manquants = [r for r in requis if r not in arguments]
+        if manquants:
+            refus[appel["id"]] = f"Arguments obligatoires manquants pour {nom} : {', '.join(manquants)}. Refais l'appel complet."
+            continue
+        deballes.append({"id": appel["id"], "name": nom, "arguments": json.dumps(arguments, ensure_ascii=False)})
+    return deballes, refus
+
+
 def _preparer_demander_outils(outils_mcp, catalogue_complet, table_routage_complet, user_id=None):
     """
     A appeler UNE SEULE FOIS dans main.py, au meme point de convergence
@@ -425,7 +552,7 @@ def _preparer_demander_outils(outils_mcp, catalogue_complet, table_routage_compl
             categories_perso = categories_pour_utilisateur(user_id)
         except Exception:
             categories_perso = []
-    return (outils_mcp or []) + [_outil_demander_outils(categories_perso)]
+    return (outils_mcp or []) + [_outil_demander_outils(categories_perso), _outil_appeler_outil()]
 
 
 NOMS_OUTILS_MEMOIRE_TOUJOURS_DISPONIBLES = OUTILS_TOUJOURS_PRESENTS
