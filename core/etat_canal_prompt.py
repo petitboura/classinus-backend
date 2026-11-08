@@ -5,17 +5,18 @@ devinait seulement a la presence de ses outils. Ce bloc le dit clairement, et di
 le canal les cartes de videos et d'images ne s'affichent pas d'elles-memes : il doit donner leur
 lien.
 
-Les outils de recherche de videos et d'images disent au modele que ses cartes s'affichent quand
-meme sous sa reponse s'il n'en place aucune. C'est vrai dans le chat normal, pas dans la bulle du
-canal : ce bloc, ajoute en fin de prompt, precise donc la regle pour le canal actif.
+Depuis le 08/11/2026, les outils de recherche de videos et d'images disent au modele que rien ne
+s'affiche automatiquement : seul ce qu'il ecrit dans sa reponse est vu (en markdown dans le chat
+normal). Dans la bulle du canal le markdown ne s'affiche pas en carte : ce bloc, ajoute en fin de
+prompt, precise donc la regle pour le canal actif (lien complet en clair).
 """
 
 TEXTE_CANAL_ACTIF = (
     "\n\n## Canal en direct : ACTIVÉ\n"
     "Le canal en direct est activé pour ce message : tu vois l'écran de l'étudiant et tu peux agir "
     "dessus avec tes outils.\n"
-    "Les cartes de vidéos et d'images ne s'affichent pas d'elles-mêmes dans le canal, pas même sous "
-    "ta réponse (ce que disent les outils de recherche à ce sujet ne vaut que pour le chat normal). "
+    "Les cartes de vidéos et d'images ne s'affichent pas d'elles-mêmes dans le canal : le format "
+    "markdown que décrivent les outils de recherche ne vaut que pour le chat normal. "
     "Chaque fois que tu proposes une vidéo ou une image, écris son titre puis son lien complet en "
     "clair (l'adresse qui commence par https://), sinon l'étudiant ne la verra pas."
 )
