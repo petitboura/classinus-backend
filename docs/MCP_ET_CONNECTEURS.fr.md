@@ -47,9 +47,19 @@ Règles communes aux deux cas :
 - La taille et le nombre de widgets sont bornés (`CLASSINUS_MCP_UI_HTML_MAX_OCTETS`, `CLASSINUS_MCP_UI_MAX_PAR_RESULTAT`) et la lecture du contenu a un délai maximal (`CLASSINUS_MCP_UI_DELAI_LECTURE_SECONDES`).
 - La fonction se coupe avec `CLASSINUS_MCP_UI_ACTIF=0`. Sans widget, un résultat d’outil n’est jamais modifié.
 - Les serveurs ajoutés par l’utilisateur (`connexions/mcp_personnalises.py`) n’affichent pas encore de widget.
-- Le frontend ne laisse un widget qu’ouvrir un lien ou changer sa hauteur. Les appels d’outils depuis un widget sont refusés.
+- Le frontend laisse un widget ouvrir un lien, changer sa hauteur ou appeler un outil (voir plus bas). `resources/read`, `ui/message`, `prompt` et `intent` sont refusés.
 
-Tests : `test_ressources_ui.py`.
+### Appels d’outils depuis un widget
+
+Un widget peut appeler des outils (`tools/call`). Il ne parle jamais au serveur MCP lui-même : le frontend relaie l’appel à `POST /api/widgets/appel-outil` (`api/widgets_outils.py`, règles dans `core/widgets_appel_outil.py`). Chaque widget porte `outil_source`, le nom exposé de l’outil qui l’a affiché (ajouté par `marquer_source` à l’émission de l’événement `ressources_ui`).
+
+- **Même serveur uniquement.** L’outil demandé doit avoir le même préfixe de serveur que `outil_source` et la même adresse dans la table de routage de la personne. Les serveurs ajoutés par l’utilisateur, les outils de l’app téléphone et les outils internes ne sont jamais relayés.
+- **Même sensibilité que le chat.** `cle_autorisation_appel` décide. Une lecture (`get_`, `list_`, `search_`...) s’exécute tout de suite. Toute autre action, par exemple lancer une génération qui coûte des crédits, renvoie `{"statut": "confirmation_requise"}` ; le frontend affiche la carte de confirmation du chat puis renvoie l’appel avec `approuve=true`. « Toujours autoriser » réutilise `autorisations_outils_permanentes`. Les actions confirmées sont écrites dans le journal d’actions (`outils.widget_appel_confirme`).
+- **Résultat.** Rendu au widget en texte, sans enveloppe interne. Limite : 60 appels par minute et par utilisateur.
+- **Erreurs.** Codes stables `WIDGET_APPEL_REFUSE`, `WIDGET_OUTIL_INTROUVABLE`, `WIDGET_APPEL_ECHEC` (français et anglais dans `core/erreurs.py`).
+- Limite connue : seul le texte du résultat est renvoyé, pas `structuredContent`.
+
+Tests : `test_ressources_ui.py`, `test_widgets_appel_outil.py`.
 
 ## Ajouter une intégration
 

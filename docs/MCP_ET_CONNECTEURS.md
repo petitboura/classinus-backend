@@ -47,9 +47,19 @@ Rules that apply to both:
 - Size and count are capped (`CLASSINUS_MCP_UI_HTML_MAX_OCTETS`, `CLASSINUS_MCP_UI_MAX_PAR_RESULTAT`) and the content read has a timeout (`CLASSINUS_MCP_UI_DELAI_LECTURE_SECONDES`).
 - The feature can be turned off with `CLASSINUS_MCP_UI_ACTIF=0`. Without a widget, a tool result is never modified.
 - Servers added by the user (`connexions/mcp_personnalises.py`) do not display widgets yet.
-- The frontend only lets a widget open a link or change its height. Calls to tools from inside a widget are refused.
+- The frontend lets a widget open a link, change its height, or call a tool (see below). `resources/read`, `ui/message`, `prompt` and `intent` are refused.
 
-Tests: `test_ressources_ui.py`.
+### Tool calls from a widget
+
+A widget can call tools (`tools/call`). It never reaches the MCP server itself: the frontend relays the call to `POST /api/widgets/appel-outil` (`api/widgets_outils.py`, rules in `core/widgets_appel_outil.py`). Each widget carries `outil_source`, the exposed name of the tool that displayed it (added by `marquer_source` when the `ressources_ui` event is emitted).
+
+- **Same server only.** The requested tool must share the server prefix of `outil_source` and the same address in the user's routing table. Servers added by the user, phone-app tools and internal tools are never relayed.
+- **Same sensitivity as the chat.** `cle_autorisation_appel` decides. A read (`get_`, `list_`, `search_`...) runs at once. Any other action, such as starting a generation that costs credits, returns `{"statut": "confirmation_requise"}`; the frontend shows the chat's confirmation card and sends the call again with `approuve=true`. "Always allow" reuses `autorisations_outils_permanentes`. Confirmed actions are written to the action journal (`outils.widget_appel_confirme`).
+- **Result.** Returned to the widget as text, without internal envelopes. Rate limit: 60 calls per minute and user.
+- **Errors.** Stable codes `WIDGET_APPEL_REFUSE`, `WIDGET_OUTIL_INTROUVABLE`, `WIDGET_APPEL_ECHEC` (French and English in `core/erreurs.py`).
+- Known limit: only the text of the result is returned, not `structuredContent`.
+
+Tests: `test_ressources_ui.py`, `test_widgets_appel_outil.py`.
 
 ## Add an integration
 
