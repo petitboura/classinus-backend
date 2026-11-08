@@ -44,7 +44,7 @@ Any new prompt block that changes from one message to the next goes **after** `M
 
 **Metering** (`core/usage_llm.py`): one `[USAGE]` line per call in the Railway logs: `entree` (input), `cache_lu` (cache read), `cache_ecrit` (cache written), `sortie` (output), `part_cache`, message and tool counts, and three fingerprints (`empreinte_outils`, `empreinte_tete`, `empreinte_debut_historique`). If the fingerprints stay the same between calls but `cache_lu` stays at 0, the cause is on the provider side; if they change, the beginning of our request is moving. Forced-conclusion and re-read calls are not metered yet.
 
-Known limit: `demander_outils` adds tools mid-turn, which changes the beginning of the request and forces a cache rewrite on each addition.
+Known limit: `demander_outils` adds tools mid-turn. They are appended to the end of the list, but since the list comes before the system prompt and the history, each addition forces a full-price re-read, then the cache resumes. The `garder_outils` definition is fixed (no more `enum` of names): its names are checked server-side by `_valider_noms_a_garder`. A deeper option, not done: one fixed generic tool, with tool sheets delivered in the conversation.
 
 ## Tools
 

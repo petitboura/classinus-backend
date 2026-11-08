@@ -27,7 +27,7 @@ from routage_outils import (
     NOM_OUTIL_GARDER_OUTILS,
     _separer_appels_demander_outils,
     _outils_deja_en_main,
-    _rafraichir_enum_garder_outils,
+    _valider_noms_a_garder,
     NOM_OUTIL_DEMANDER_OUTILS,
 )
 from recherche_outils import rechercher_outils_pertinents
@@ -724,9 +724,13 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
         # serveur MCP. Ecrit immediatement en base (ecrase le tour
         # precedent) des qu'il apparait dans ce lot ; les appels normaux
         # restants repartent seuls dans le circuit habituel juste apres.
-        appels_normaux, noms_a_garder_ce_lot = _separer_appels_garder_outils(appels)
+        appels_normaux, noms_demandes_ce_lot = _separer_appels_garder_outils(appels)
+        noms_a_garder_ce_lot, noms_ignores_ce_lot = _valider_noms_a_garder(noms_demandes_ce_lot, outils_mcp)
         if len(appels_normaux) != len(appels):
-            _ecrire_outils_retenus(conversation_id, noms_a_garder_ce_lot)
+            # Que des noms inconnus : on n'ecrase pas ce qui etait deja retenu (avant, l'enum de
+            # l'outil empechait d'en envoyer, voir _outil_garder_outils).
+            if noms_a_garder_ce_lot or not noms_ignores_ce_lot:
+                _ecrire_outils_retenus(conversation_id, noms_a_garder_ce_lot)
 
         # Outil interne demander_outils (etape 3, chantier "demander_outils",
         # 06/09/2026, demande Bourama) : sorti du lot ICI, meme principe que
@@ -796,9 +800,15 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     "role": "tool",
                     "tool_call_id": appel["id"],
                     "content": (
-                        f"Outils gardés pour ton prochain message : {', '.join(noms_a_garder_ce_lot)}."
-                        if noms_a_garder_ce_lot else
-                        "Aucun outil gardé pour le prochain message."
+                        (
+                            f"Outils gardés pour ton prochain message : {', '.join(noms_a_garder_ce_lot)}."
+                            if noms_a_garder_ce_lot else
+                            "Aucun outil gardé pour le prochain message."
+                        )
+                        + (
+                            f" Noms ignorés (ne font pas partie des outils disponibles ce tour-ci) : {', '.join(noms_ignores_ce_lot)}."
+                            if noms_ignores_ce_lot else ""
+                        )
                     ),
                 })
 
@@ -962,12 +972,9 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     # plus bas) -- une mutation en place risquerait de
                     # modifier une reference partagee avec un etat deja capture.
                     outils_mcp = outils_mcp + trouves_total
-                    # Etape 4 : sans ce rafraichissement, l'entree garder_outils
-                    # deja presente dans outils_mcp garderait son ANCIEN enum
-                    # (fige par main.py avant le debut du tour) -- le modele ne
-                    # pourrait alors pas garder pour son prochain message un
-                    # outil qu'il vient tout juste d'obtenir via demander_outils.
-                    outils_mcp = _rafraichir_enum_garder_outils(outils_mcp)
+                    # Etape 4 (revue le 07/11/2026) : garder_outils n'a plus d'enum a rafraichir, ses
+                    # noms sont controles a la reception (voir _valider_noms_a_garder), donc un outil
+                    # tout juste obtenu ici peut etre garde sans toucher a une definition existante.
                     table_routage = dict(table_routage)
                     for outil in trouves_total:
                         nom = outil["function"]["name"]

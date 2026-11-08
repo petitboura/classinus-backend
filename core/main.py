@@ -1301,7 +1301,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # TOOL_CODE) : garder_outils, s'il est appelé plus loin, réécrira la
     # bonne valeur par-dessus avant la fin du tour.
     if outils_mcp:
-        outils_mcp = outils_mcp + [_outil_garder_outils([o["function"]["name"] for o in outils_mcp])]
+        outils_mcp = outils_mcp + [_outil_garder_outils()]
         _ecrire_outils_retenus(conversation_id, [])
 
     # Outil interne demander_outils (etape 3, chantier "demander_outils",
