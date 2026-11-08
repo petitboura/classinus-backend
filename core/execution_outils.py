@@ -14,7 +14,7 @@ from profils_agents import _nom_lisible_appel, _action_appel, _champs_domaines_a
 from libelles_activite_ia import champs_timeline_appel
 from historique_outils import champs_historique_outil
 from core import captures_modele
-from core.ressources_ui import separer_ressources_ui, NOTE_POUR_LE_MODELE
+from core.ressources_ui import marquer_source, separer_ressources_ui, NOTE_POUR_LE_MODELE
 
 class _AttenteConfirmation(Exception):
     """
@@ -702,7 +702,7 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                         f"juste brièvement en texte si besoin.]"
                     )
                 if ressources_ui:
-                    yield {"type": "ressources_ui", "id_appel": appel["id"], "ressources": ressources_ui}
+                    yield {"type": "ressources_ui", "id_appel": appel["id"], "ressources": marquer_source(ressources_ui, appel["name"])}
                     contenu_pour_modele = f"{contenu_pour_modele}\n\n{NOTE_POUR_LE_MODELE}"
                 messages_agent.append({
                     "role": "tool",

@@ -8,7 +8,7 @@ from google.genai import types
 from core.skills_catalogue import lister_catalogue_complet
 from core.lecture_media_conversation import media_joint_present
 from core.lecture_document_conversation import document_joint_present
-from core.ressources_ui import separer_ressources_ui, NOTE_POUR_LE_MODELE as NOTE_POUR_LE_MODELE_WIDGET
+from core.ressources_ui import marquer_source, separer_ressources_ui, NOTE_POUR_LE_MODELE as NOTE_POUR_LE_MODELE_WIDGET
 from etat_connexions import bloc_prompt_pour_utilisateur as bloc_connexions_pour_utilisateur
 from comportements_etudiants import (
     lister_comportements as lister_comportements_etudiant,
@@ -640,7 +640,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 if galerie_capture:
                     yield {"type": "images", "images": galerie_capture}
                 if ressources_ui_approuve:
-                    yield {"type": "ressources_ui", "id_appel": appel["id"], "ressources": ressources_ui_approuve}
+                    yield {"type": "ressources_ui", "id_appel": appel["id"], "ressources": marquer_source(ressources_ui_approuve, appel["name"])}
                     resultat = f"{resultat}\n\n{NOTE_POUR_LE_MODELE_WIDGET}"
         else:
             resultat = "Action annulée par l'utilisateur : cet outil n'a pas été exécuté."
