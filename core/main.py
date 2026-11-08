@@ -216,9 +216,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
       recherche web (Tavily) utilisee pour repondre. Peut etre emis plusieurs fois dans le
       meme echange (plusieurs recherches) -- l'appelant accumule/fusionne, ne remplace pas.
     - {"type": "images", "images": [{"titre": "...", "url": "...", "miniature": "...", "credit": "..."}]}
-      -> (01/09) resultats d'une recherche d'image (rechercher_image), affiches en galerie
+      -> (01/09) images d'un outil (captures, Higgsfield, MCP), affichees en galerie ; PAS rechercher_image (le modele choisit, 08/11)
     - {"type": "videos", "videos": [{"titre": "...", "url": "...", "miniature": "...", "chaine": "...", "duree": "..."}]}
-      -> (06/10) resultats d'une recherche de video YouTube (rechercher_video), affiches en cartes
+      -> (06/10) videos d'un outil (Higgsfield, MCP), affichees en cartes ; PAS rechercher_video (le modele choisit, 08/11)
       cote frontend (GalerieImagesBulle.tsx) plutot qu'en simple lien texte.
     - {"type": "ressources_ui", "id_appel": "...", "ressources": [{"uri", "mimeType", "genre", "contenu", "donnees"?}]}
       -> (04/11) widget MCP-UI (ressource ui:// d'un outil MCP), affiche dans une iframe isolee cote

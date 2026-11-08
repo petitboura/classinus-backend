@@ -304,41 +304,47 @@ if sam_disponible():
 # souhaité.
 #
 # Format de retour DÉLIBÉRÉMENT différent des autres outils texte :
-# JSON {"images": [...]}, détecté génériquement par
-# _images_depuis_json_generique (core/execution_outils.py) pour proposer
-# un filet de sécurité côté frontend (GalerieImagesBulle.tsx) pour les images
-# que le modèle n'a pas placées lui même dans sa réponse. Ne PAS transformer
-# ce retour en texte descriptif : la détection générique se base sur cette forme précise.
+# JSON {"images_trouvees": [...]}. La clé n'est PAS "images" : cette clé-là est
+# détectée génériquement par _images_depuis_json_generique (core/execution_outils.py)
+# et afficherait TOUTES les images sous la réponse, y compris celles sans rapport
+# (retour de Bourama, 08/11/2026). Ici c'est le modèle qui choisit lesquelles
+# s'affichent et où, en les écrivant en markdown dans son message : rien ne
+# s'affiche automatiquement. Ne PAS renommer la clé en "images".
 @mcp_generation.tool()
 def rechercher_image(requete: str) -> str:
     """
     Cherche des images déjà existantes sur le web à partir de mots-clés
     (photos, illustrations, schémas...). Renvoie un JSON listant les images
-    trouvées (titre, url). C'est TOI qui les places dans ta réponse, où tu
-    veux : écris chaque image en markdown ![titre](url) avec l'url exacte du
-    résultat, au milieu de ton texte. Plusieurs images écrites à la suite,
-    sur des lignes consécutives sans ligne vide entre elles, s'affichent
-    côte à côte dans une rangée que l'utilisateur peut faire défiler ;
-    sépare-les par une ligne vide pour les mettre l'une sous l'autre. Si tu
-    n'en places aucune, elles s'affichent quand même sous ta réponse.
-    N'écris JAMAIS "[Image jointe : ...]" : ce format ne s'affiche pas.
+    trouvées (titre, url, credit). RIEN ne s'affiche automatiquement : seules
+    les images que tu écris dans ta réponse sont vues par l'utilisateur. Les
+    résultats peuvent être sans rapport avec la demande : lis chaque titre et
+    garde UNIQUEMENT celles qui correspondent vraiment à ce que l'utilisateur
+    a demandé. Si aucune ne convient, n'en place aucune et dis-le simplement,
+    sans en montrer une au hasard. Pour afficher une image, écris-la en
+    markdown ![titre](url) avec l'url exacte du résultat, à l'endroit de ton
+    texte où tu en parles. Plusieurs images écrites à la suite, sur des lignes
+    consécutives sans ligne vide entre elles, s'affichent côte à côte dans une
+    rangée que l'utilisateur peut faire défiler ; sépare-les par une ligne
+    vide pour les mettre l'une sous l'autre. N'écris JAMAIS
+    "[Image jointe : ...]" : ce format ne s'affiche pas.
     """
     try:
         images = _rechercher_images(requete)
         if not images:
             return "Aucune image trouvée pour cette recherche."
-        return json.dumps({"images": images}, ensure_ascii=False)
+        return json.dumps({"images_trouvees": images}, ensure_ascii=False)
     except Exception as e:
         logging.error(f"ERREUR outil recherche image : {e}")
         return "Erreur : la recherche d'image a échoué, réessaie."
 
 
 # Recherche de VIDÉOS YouTube (06/10/2026, demande Bourama). Même principe
-# que rechercher_image juste au-dessus : retour JSON {"videos": [...]},
-# détecté génériquement par _videos_depuis_json_generique
-# (core/execution_outils.py) pour proposer un filet de sécurité côté
-# frontend (cartes sous le message) si le modèle ne place pas les liens. Ne PAS transformer ce retour en texte descriptif : la détection
-# se base sur cette forme précise. Les vidéos ne sont pas enregistrées en
+# que rechercher_image juste au-dessus : retour JSON {"videos_trouvees": [...]},
+# clé volontairement différente de "videos" (détectée génériquement par
+# _videos_depuis_json_generique, core/execution_outils.py, qui afficherait toutes
+# les vidéos sous le message). Le modèle choisit lesquelles s'affichent et où, en
+# écrivant leur lien ; rien ne s'affiche automatiquement (08/11/2026). Ne PAS
+# renommer la clé en "videos". Les vidéos ne sont pas enregistrées en
 # bibliothèque (ce sont des liens trouvés, pas un contenu créé).
 @mcp_generation.tool()
 def rechercher_video(requete: str) -> str:
@@ -348,20 +354,24 @@ def rechercher_video(requete: str) -> str:
     une vidéo, un tuto ou quelque chose à regarder. Renvoie un JSON listant
     les vidéos trouvées (titre, url, chaîne, durée). Pour savoir ce qui est
     DIT dans une vidéo (résumer, répondre à une question dessus), appelle
-    ensuite lire_video avec son url. C'est TOI qui les places
-    dans ta réponse, où tu veux : écris le lien de chaque vidéo en markdown
-    [titre](url) avec l'url exacte du résultat, ce qui l'affiche en grande
-    carte lisible sur place. Plusieurs liens écrits à la suite, sur des
-    lignes consécutives sans ligne vide entre elles, s'affichent côte à côte
-    dans une rangée que l'utilisateur peut faire défiler ; sépare-les par
-    une ligne vide pour les mettre l'un sous l'autre. Si tu n'en places
-    aucune, elles s'affichent quand même sous ta réponse.
+    ensuite lire_video avec son url. RIEN ne s'affiche automatiquement :
+    seules les vidéos dont tu écris le lien dans ta réponse sont vues par
+    l'utilisateur. Les résultats peuvent être sans rapport avec la demande :
+    lis chaque titre et chaque chaîne, et garde UNIQUEMENT les vidéos qui
+    correspondent vraiment à ce que l'utilisateur a demandé. Si aucune ne
+    convient, n'en place aucune et dis-le simplement. Pour en afficher une,
+    écris son lien en markdown [titre](url) avec l'url exacte du résultat, à
+    l'endroit de ton texte où tu en parles : il s'affiche en grande carte
+    lisible sur place. Plusieurs liens écrits à la suite, sur des lignes
+    consécutives sans ligne vide entre elles, s'affichent côte à côte dans
+    une rangée que l'utilisateur peut faire défiler ; sépare-les par une
+    ligne vide pour les mettre l'un sous l'autre.
     """
     try:
         videos = _rechercher_videos(requete)
         if not videos:
             return "Aucune vidéo trouvée pour cette recherche."
-        return json.dumps({"videos": videos}, ensure_ascii=False)
+        return json.dumps({"videos_trouvees": videos}, ensure_ascii=False)
     except Exception as e:
         logging.error(f"ERREUR outil recherche vidéo : {e}")
         return "Erreur : la recherche de vidéos a échoué, réessaie."

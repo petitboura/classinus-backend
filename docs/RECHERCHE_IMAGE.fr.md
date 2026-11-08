@@ -37,6 +37,12 @@ Wikimedia Commons renvoie presque toujours quelque chose, donc avec l'ordre par 
 
 Un résultat non vide est gardé en mémoire pour la même requête normalisée (majuscules et espaces en trop ignorés) et le même nombre d'images. Les erreurs et les résultats vides ne sont jamais gardés. Le cache est propre à chaque processus, ce qui suffit car le backend tourne avec un seul processus `uvicorn` (voir `Procfile`). Il est vidé au redémarrage, et `vider_cache_images()` le vide depuis le code.
 
+## Affichage : c'est l'IA qui choisit
+
+Depuis le 8 novembre 2026, rien ne s'affiche automatiquement après une recherche d'image (ni après une recherche de vidéo). L'outil renvoie ses résultats sous la clé `images_trouvees` (et `videos_trouvees` pour les vidéos), que l'affichage automatique ne reconnaît pas. L'IA lit les titres, garde seulement ce qui correspond à la demande, et écrit chaque image en markdown `![titre](url)` à l'endroit de son message où elle en parle. Si aucun résultat ne convient, elle n'en place aucun et le dit.
+
+Ne pas renommer ces clés en `images` ou `videos` : ces noms-là déclenchent l'affichage automatique de tous les résultats, utilisé par les autres outils (captures du navigateur, Higgsfield). Test : `tests/verifier_recherche_media_choix_ia.py`.
+
 ## Comportements à connaître
 
 - Seules les adresses `https` sont gardées pour Wikimedia, Openverse, Serper et SerpApi, car une image `http` est bloquée dans une page `https`. Pour Serper et SerpApi, quand l'image d'origine n'est pas en `https`, la miniature (hébergée par Google) est utilisée à la place.
