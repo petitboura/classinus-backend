@@ -195,14 +195,12 @@ if higgsfield_api_disponible():
         "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "2:1" ou "1:2", et `qualite` :
         "1k" ou "2k". Pour soul, `format_image` : "1:1", "9:16", "16:9", "4:3",
         "3:4", "2:3" ou "3:2", et `qualite` : "720p" ou "1080p". Génération
-        payante, avec un nombre limité par jour et par utilisateur. Pour garder
-        le même personnage d'une image à l'autre avec grok, redonne la même image
+        payante. Pour garder le même personnage d'une image à l'autre avec grok, redonne la même image
         de référence. Si l'utilisateur a joint une image dans cette conversation,
         son lien réel (visible dans le message) peut servir de référence.
         """
         try:
             adresse, corps = construire_requete_image(modele, prompt, format_image, qualite, images_reference, style_id)
-            reserver_generation(_supabase_memoire, _id_utilisateur(ctx), "image")
             resultat = lancer_generation(adresse, corps)
             return (
                 f"Génération d'image Higgsfield lancée (id: {resultat['request_id']}). "

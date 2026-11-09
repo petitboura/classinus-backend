@@ -104,7 +104,6 @@ def lancer_image(request: Request, demande: DemandeImage, utilisateur=Depends(ut
     _verifier_disponible()
     try:
         adresse, corps = construire_requete_image(demande.modele, demande.prompt, demande.format_image, demande.qualite, demande.images_reference, demande.style_id)
-        reserver_generation(_supabase_memoire, utilisateur.id, "image")
         resultat = lancer_generation(adresse, corps)
         higgsfield_suivi.enregistrer(utilisateur.id, resultat["request_id"], demande.titre, "image")
         return {"request_id": resultat["request_id"], "titre": demande.titre}
@@ -164,16 +163,19 @@ def lancer_marketing_studio(request: Request, demande: DemandeMarketingStudio, u
             demande.preset_id, demande.preset_type, demande.preset_nom, media_produit, media_avatar,
             demande.url_marque, demande.prompt, demande.format_image,
         )
-        try:
-            reserver_generation(_supabase_memoire, utilisateur.id, "mcp")
-        except ErreurHiggsfield as e:
-            if "Limite du jour" in str(e):
-                from core.higgsfield_limites import limite_du_jour
-                raise marketing_studio.ErreurMarketingStudio("MARKETING_LIMITE_JOUR", limite=limite_du_jour("mcp")) from e
-            raise marketing_studio.ErreurMarketingStudio("MARKETING_LIMITE_INDISPONIBLE") from e
+        media = marketing_studio.media_du_type(demande.preset_type)
+        if media != "image":
+            # Les images n'ont pas de limite par jour ; les videos gardent celle du compte partage.
+            try:
+                reserver_generation(_supabase_memoire, utilisateur.id, "mcp")
+            except ErreurHiggsfield as e:
+                if "Limite du jour" in str(e):
+                    from core.higgsfield_limites import limite_du_jour
+                    raise marketing_studio.ErreurMarketingStudio("MARKETING_LIMITE_JOUR", limite=limite_du_jour("mcp")) from e
+                raise marketing_studio.ErreurMarketingStudio("MARKETING_LIMITE_INDISPONIBLE") from e
         job_id = marketing_studio.creer(arguments)
         request_id = marketing_studio.PREFIXE_SUIVI + job_id
-        higgsfield_suivi.enregistrer(utilisateur.id, request_id, demande.titre, "video")
+        higgsfield_suivi.enregistrer(utilisateur.id, request_id, demande.titre, media)
         return {"request_id": request_id, "titre": demande.titre}
     except marketing_studio.ErreurMarketingStudio as e:
         raise erreur_api(400, e.code, **e.params)
