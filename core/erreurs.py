@@ -395,6 +395,12 @@ MESSAGES_FR: dict[str, str] = {
     "MARKETING_INDISPONIBLE": "La génération Marketing Studio n'est pas disponible pour le moment. Réessaie plus tard.",
     "MARKETING_LIMITE_JOUR": "Limite du jour atteinte ({limite} générations par jour). Tu pourras en refaire demain.",
     "MARKETING_LIMITE_INDISPONIBLE": "Impossible de vérifier ta limite du jour, réessaie dans un instant.",
+    # 09/11/2026, crédits d'images (core/credits_images.py). Codes à garder synchronisés avec lib/erreurs.ts côté frontend.
+    "CREDITS_IMAGES_EPUISES": "Tu n'as plus de crédits d'images. Invite tes amis pour en gagner d'autres.",
+    "CREDITS_IMAGES_INDISPONIBLE": "Impossible de vérifier ton solde de crédits d'images, réessaie dans un instant.",
+    # 09/11/2026, parrainage (core/parrainage.py). Codes à garder synchronisés avec lib/erreurs.ts côté frontend.
+    "PARRAINAGE_CODE_INVALIDE": "Ce lien de parrainage n'est pas valide.",
+    "PARRAINAGE_INDISPONIBLE": "Le parrainage n'est pas disponible pour le moment, réessaie dans un instant.",
 }
 
 
@@ -791,6 +797,10 @@ MESSAGES_EN: dict[str, str] = {
     "MARKETING_INDISPONIBLE": "Marketing Studio generation is not available right now. Try again later.",
     "MARKETING_LIMITE_JOUR": "Daily limit reached ({limite} generations per day). You can generate more tomorrow.",
     "MARKETING_LIMITE_INDISPONIBLE": "Could not check your daily limit, try again in a moment.",
+    "CREDITS_IMAGES_EPUISES": "You have no image credits left. Invite your friends to earn more.",
+    "CREDITS_IMAGES_INDISPONIBLE": "Could not check your image credit balance, try again in a moment.",
+    "PARRAINAGE_CODE_INVALIDE": "This referral link is not valid.",
+    "PARRAINAGE_INDISPONIBLE": "Referrals are not available right now, try again in a moment.",
 }
 
 def erreur_api(status_code: int, code: str, message: str | None = None, **kwargs) -> HTTPException:

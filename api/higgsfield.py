@@ -2,7 +2,7 @@
 
 Branchée sur la même logique que core/outils_higgsfield.py (clé partagée),
 mais en REST pour le frontend : upload → lancer → polling statut.
-Limite journalière identique (higgsfield_usage).
+Vidéos : limite journalière (higgsfield_usage). Images : 1 crédit par image (credits_images).
 """
 import logging
 from typing import List, Optional
@@ -12,6 +12,12 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from api.auth import utilisateur_courant
+from core.credits_images import (
+    ErreurCreditsImages,
+    rattacher_credit_image,
+    rendre_credit_image,
+    reserver_credit_image,
+)
 from core.erreurs import erreur_api
 from core.higgsfield_limites import reserver_generation
 from core.higgsfield_messages_en import message_en
@@ -104,15 +110,22 @@ def lancer_video(request: Request, demande: DemandeVideo, utilisateur=Depends(ut
 @limiteur.limit("10/minute")
 def lancer_image(request: Request, demande: DemandeImage, utilisateur=Depends(utilisateur_courant)):
     _verifier_disponible()
+    reference_credit = None
     try:
         adresse, corps = construire_requete_image(demande.modele, demande.prompt, demande.format_image, demande.qualite, demande.images_reference, demande.style_id)
-        reserver_generation(_supabase_memoire, utilisateur.id, "image")
+        # Un crédit est retiré juste avant l'envoi (la demande est déjà validée) et rendu si l'envoi échoue.
+        reference_credit = reserver_credit_image(_supabase_memoire, utilisateur.id)
         resultat = lancer_generation(adresse, corps)
+        rattacher_credit_image(_supabase_memoire, utilisateur.id, reference_credit, resultat["request_id"])
         higgsfield_suivi.enregistrer(utilisateur.id, resultat["request_id"], demande.titre, "image")
         return {"request_id": resultat["request_id"], "titre": demande.titre}
+    except ErreurCreditsImages as e:
+        raise erreur_api(402, e.code)
     except ErreurHiggsfield as e:
+        rendre_credit_image(_supabase_memoire, utilisateur.id, reference_credit)
         raise erreur_api(400, "HIGGSFIELD_REQUETE_INVALIDE", detail=str(e), detail_en=message_en(str(e)))
     except Exception as e:
+        rendre_credit_image(_supabase_memoire, utilisateur.id, reference_credit)
         logging.error(f"ERREUR Higgsfield image user {utilisateur.id}: {e}")
         raise erreur_api(500, "ECHEC_LANCEMENT_HIGGSFIELD")
 
@@ -166,17 +179,31 @@ def lancer_marketing_studio(request: Request, demande: DemandeMarketingStudio, u
             demande.preset_id, demande.preset_type, demande.preset_nom, media_produit, media_avatar,
             demande.url_marque, demande.prompt, demande.format_image,
         )
+        media = marketing_studio.media_du_type(demande.preset_type)
+        reference_credit = None
+        if media == "image":
+            # Une image coûte 1 crédit d'images (pas de limite par jour) ; les videos gardent la limite du compte partage.
+            reference_credit = reserver_credit_image(_supabase_memoire, utilisateur.id)
+        else:
+            try:
+                reserver_generation(_supabase_memoire, utilisateur.id, "mcp")
+            except ErreurHiggsfield as e:
+                if "Limite du jour" in str(e):
+                    from core.higgsfield_limites import limite_du_jour
+                    raise marketing_studio.ErreurMarketingStudio("MARKETING_LIMITE_JOUR", limite=limite_du_jour("mcp")) from e
+                raise marketing_studio.ErreurMarketingStudio("MARKETING_LIMITE_INDISPONIBLE") from e
         try:
-            reserver_generation(_supabase_memoire, utilisateur.id, "mcp")
-        except ErreurHiggsfield as e:
-            if "Limite du jour" in str(e):
-                from core.higgsfield_limites import limite_du_jour
-                raise marketing_studio.ErreurMarketingStudio("MARKETING_LIMITE_JOUR", limite=limite_du_jour("mcp")) from e
-            raise marketing_studio.ErreurMarketingStudio("MARKETING_LIMITE_INDISPONIBLE") from e
-        job_id = marketing_studio.creer(arguments)
+            job_id = marketing_studio.creer(arguments)
+        except Exception:
+            # Le lancement a échoué : le crédit retiré est rendu avant de remonter l'erreur.
+            rendre_credit_image(_supabase_memoire, utilisateur.id, reference_credit)
+            raise
         request_id = marketing_studio.PREFIXE_SUIVI + job_id
-        higgsfield_suivi.enregistrer(utilisateur.id, request_id, demande.titre, "video")
+        rattacher_credit_image(_supabase_memoire, utilisateur.id, reference_credit, request_id)
+        higgsfield_suivi.enregistrer(utilisateur.id, request_id, demande.titre, media)
         return {"request_id": request_id, "titre": demande.titre}
+    except ErreurCreditsImages as e:
+        raise erreur_api(402, e.code)
     except marketing_studio.ErreurMarketingStudio as e:
         raise erreur_api(400, e.code, **e.params)
     except ErreurHiggsfield as e:
