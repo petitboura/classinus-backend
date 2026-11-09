@@ -29,6 +29,16 @@ La liste exacte des routeurs montés est dans la section d’assemblage de `api/
 
 Les services MCP sont exposés sur des chemins distincts de l’API REST. Leur liste et leur mode d’authentification sont décrits dans [MCP et connecteurs](MCP_ET_CONNECTEURS.md).
 
+## Téléchargement d’image débloqué par le partage (Higgsfield)
+
+Une image générée ne se télécharge qu’une fois que l’appli a signalé un partage terminé. La vidéo n’est jamais verrouillée.
+
+- `POST /api/higgsfield/partage-termine/{request_id}` : l’appli signale le partage terminé d’une image terminée. Enregistre `partage_termine_a` sur la ligne de la génération.
+- `GET /api/higgsfield/telecharger/{request_id}` : renvoie le fichier en pièce jointe. Une image non partagée reçoit `403 TELECHARGEMENT_PARTAGE_REQUIS`.
+- `GET /api/higgsfield/statut/{request_id}` et `GET /api/higgsfield/generations` renvoient maintenant `telechargement_debloque`.
+
+Le signal vient de l’appli : il pousse à partager, il ne protège pas un secret. Logique dans `core/higgsfield_telechargement.py` ; migration `migrations/2026_11_09_higgsfield_partage_telechargement.sql`.
+
 ## Ajouter ou modifier une route
 
 1. Identifier le domaine fonctionnel et le routeur existant dans `api/`.

@@ -8,6 +8,7 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from api.auth import utilisateur_courant
@@ -18,6 +19,7 @@ from core.higgsfield_requetes import ErreurHiggsfield, construire_requete_genjut
 from core.generation_video_higgsfield import annuler_generation, estimer_cout, higgsfield_api_disponible, lancer_generation
 from core.limitation_debit import limiteur
 from core import higgsfield_suivi
+from core import higgsfield_telechargement
 from core import higgsfield_marketing_studio as marketing_studio
 from core.outils_generation_commun import _supabase_memoire
 
@@ -198,7 +200,10 @@ def statut(request_id: str, utilisateur=Depends(utilisateur_courant)):
         if ligne["etat"] == "en_cours":
             higgsfield_suivi.traiter_une_generation(utilisateur.id, request_id)
             ligne = higgsfield_suivi.obtenir(utilisateur.id, request_id) or ligne
-        return {"etat": ligne["etat"], "etape": ligne.get("etape", "creation"), "url": ligne["url"], "erreur": ligne["erreur"]}
+        return {
+            "etat": ligne["etat"], "etape": ligne.get("etape", "creation"), "url": ligne["url"], "erreur": ligne["erreur"],
+            "telechargement_debloque": higgsfield_telechargement.est_debloque(ligne),
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -210,10 +215,51 @@ def statut(request_id: str, utilisateur=Depends(utilisateur_courant)):
 def generations(limite: int = 20, utilisateur=Depends(utilisateur_courant)):
     """Générations récentes de l'utilisateur (en cours et terminées), pour retrouver ce qui a tourné app fermée."""
     try:
-        return {"generations": higgsfield_suivi.lister(utilisateur.id, limite)}
+        lignes = higgsfield_suivi.lister(utilisateur.id, limite)
+        for ligne in lignes:
+            ligne["telechargement_debloque"] = higgsfield_telechargement.est_debloque(ligne)
+        return {"generations": lignes}
     except Exception as e:
         logging.error(f"ERREUR Higgsfield liste generations user {utilisateur.id}: {e}")
         raise erreur_api(500, "IMPOSSIBLE_STATUT_HIGGSFIELD")
+
+
+@router.post("/partage-termine/{request_id}")
+@limiteur.limit("30/minute")
+def partage_termine(request: Request, request_id: str, utilisateur=Depends(utilisateur_courant)):
+    """L'appli signale que l'utilisateur a terminé le partage de son image : le téléchargement se débloque."""
+    try:
+        if higgsfield_suivi.obtenir(utilisateur.id, request_id) is None:
+            raise erreur_api(404, "GENERATION_HIGGSFIELD_INTROUVABLE")
+        if not higgsfield_telechargement.marquer_partage_termine(utilisateur.id, request_id):
+            raise erreur_api(400, "PARTAGE_IMAGE_INVALIDE")
+        return {"telechargement_debloque": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"ERREUR Higgsfield partage termine {request_id}: {e}")
+        raise erreur_api(500, "IMPOSSIBLE_STATUT_HIGGSFIELD")
+
+
+@router.get("/telecharger/{request_id}")
+@limiteur.limit("30/minute")
+def telecharger(request: Request, request_id: str, utilisateur=Depends(utilisateur_courant)):
+    """Télécharge le résultat d'une génération. Une image exige un partage terminé, la vidéo non."""
+    try:
+        ligne = higgsfield_suivi.obtenir(utilisateur.id, request_id)
+        if ligne is None:
+            raise erreur_api(404, "GENERATION_HIGGSFIELD_INTROUVABLE")
+        if ligne["etat"] != "terminee" or not ligne.get("url"):
+            raise erreur_api(409, "IMPOSSIBLE_TELECHARGER_HIGGSFIELD")
+        if not higgsfield_telechargement.est_debloque(ligne):
+            raise erreur_api(403, "TELECHARGEMENT_PARTAGE_REQUIS")
+        contenu, type_mime, nom = higgsfield_telechargement.lire_fichier(ligne)
+        return Response(content=contenu, media_type=type_mime, headers={"Content-Disposition": f'attachment; filename="{nom}"'})
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"ERREUR Higgsfield telecharger {request_id}: {e}")
+        raise erreur_api(500, "IMPOSSIBLE_TELECHARGER_HIGGSFIELD")
 
 
 @router.post("/annuler/{request_id}")

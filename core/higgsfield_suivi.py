@@ -41,7 +41,7 @@ def enregistrer(user_id: str, request_id: str, titre: str, genre: str) -> None:
 def lister(user_id: str, limite: int = 20) -> list[dict]:
     res = (
         supabase.table(TABLE)
-        .select("request_id,titre,genre,etat,etape,url,erreur,sauvegardee,cree_a,termine_a")
+        .select("request_id,titre,genre,etat,etape,url,erreur,sauvegardee,partage_termine_a,cree_a,termine_a")
         .eq("user_id", user_id)
         .order("cree_a", desc=True)
         .limit(max(1, min(limite, 50)))
@@ -53,7 +53,7 @@ def lister(user_id: str, limite: int = 20) -> list[dict]:
 def obtenir(user_id: str, request_id: str) -> dict | None:
     res = (
         supabase.table(TABLE)
-        .select("request_id,titre,genre,etat,etape,url,erreur,sauvegardee,cree_a,termine_a")
+        .select("request_id,titre,genre,etat,etape,url,erreur,sauvegardee,partage_termine_a,cree_a,termine_a")
         .eq("user_id", user_id)
         .eq("request_id", request_id)
         .limit(1)

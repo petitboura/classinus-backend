@@ -205,6 +205,9 @@ MESSAGES_FR: dict[str, str] = {
     "IMPOSSIBLE_STATUT_HIGGSFIELD": "Impossible de lire l'état de cette génération pour le moment.",
     "IMPOSSIBLE_ANNULER_HIGGSFIELD": "Impossible d'annuler cette génération pour le moment.",
     "IMPOSSIBLE_ESTIMER_HIGGSFIELD": "Impossible d'estimer le coût de cette génération pour le moment.",
+    "TELECHARGEMENT_PARTAGE_REQUIS": "Partage ton image pour la télécharger.",
+    "IMPOSSIBLE_TELECHARGER_HIGGSFIELD": "Impossible de télécharger ce fichier pour le moment. Réessaie dans un instant.",
+    "PARTAGE_IMAGE_INVALIDE": "Seule une image terminée peut être partagée.",
     # 07/10/2026, vidéo d'une animation du chat (core/rendu_animation_travaux.py).
     # Codes à garder synchronisés avec lib/erreurs.ts côté frontend.
     "RENDU_VIDEO_FORMAT_INVALIDE": "Ce format de vidéo n'existe pas.",
@@ -431,6 +434,9 @@ MESSAGES_EN: dict[str, str] = {
     "IMPOSSIBLE_STATUT_HIGGSFIELD": "Unable to read the status of this generation right now.",
     "IMPOSSIBLE_ANNULER_HIGGSFIELD": "Unable to cancel this generation right now.",
     "IMPOSSIBLE_ESTIMER_HIGGSFIELD": "Unable to estimate the cost of this generation right now.",
+    "TELECHARGEMENT_PARTAGE_REQUIS": "Share your image to download it.",
+    "IMPOSSIBLE_TELECHARGER_HIGGSFIELD": "Unable to download this file right now. Try again in a moment.",
+    "PARTAGE_IMAGE_INVALIDE": "Only a finished image can be shared.",
     "NOM_DEJA_UTILISE_BIBLIOTHEQUE_PERSO": "You already have a file named \"{nom}\" in your library. Rename it or replace the existing one.",
     "NOM_DEJA_UTILISE_BIBLIOTHEQUE_PUBLIQUE": "A document named \"{nom}\" already exists in the public library. Choose a different name.",
     "FICHIER_AUDIO_VIDE": "Empty audio file.",
