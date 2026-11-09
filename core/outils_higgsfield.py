@@ -21,6 +21,13 @@ from core.higgsfield_requetes import (
     construire_requete_image,
     construire_requete_video,
 )
+from core.credits_images import (
+    ErreurCreditsImages,
+    message_pour_ia,
+    rattacher_credit_image,
+    rendre_credit_image,
+    reserver_credit_image,
+)
 from core.higgsfield_limites import reserver_generation
 from core.outils_generation_commun import (
     mcp_generation,
@@ -71,6 +78,9 @@ def _texte_suivi(request_id: str, titre: str, genre: str, ctx) -> str:
         # JSON {"images": [...]} : détecté génériquement pour afficher
         # la galerie sous la réponse, comme rechercher_image.
         return json.dumps({"images": [{"titre": titre.strip() or nom, "url": url}]}, ensure_ascii=False)
+    if etat in ("echec", "bloquee", "annulee") and genre == "image":
+        # La génération n'a pas abouti : le crédit d'image retiré au lancement est rendu (une seule fois).
+        rendre_credit_image(_supabase_memoire, _id_utilisateur(ctx), request_id)
     if etat == "echec":
         raison = f" ({resultat['erreur']})" if resultat["erreur"] else ""
         return (
@@ -195,18 +205,27 @@ if higgsfield_api_disponible():
         "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "2:1" ou "1:2", et `qualite` :
         "1k" ou "2k". Pour soul, `format_image` : "1:1", "9:16", "16:9", "4:3",
         "3:4", "2:3" ou "3:2", et `qualite` : "720p" ou "1080p". Génération
-        payante. Pour garder le même personnage d'une image à l'autre avec grok, redonne la même image
+        payante : chaque image utilise un crédit d'images de l'utilisateur, rendu
+        si elle échoue. Pour garder le même personnage d'une image à l'autre avec grok, redonne la même image
         de référence. Si l'utilisateur a joint une image dans cette conversation,
         son lien réel (visible dans le message) peut servir de référence.
         """
+        utilisateur = _id_utilisateur(ctx)
+        reference_credit = None
         try:
             adresse, corps = construire_requete_image(modele, prompt, format_image, qualite, images_reference, style_id)
+            # Un crédit est retiré juste avant l'envoi (la demande est déjà validée) et rendu si l'envoi échoue.
+            reference_credit = reserver_credit_image(_supabase_memoire, utilisateur)
             resultat = lancer_generation(adresse, corps)
+            rattacher_credit_image(_supabase_memoire, utilisateur, reference_credit, resultat["request_id"])
             return (
                 f"Génération d'image Higgsfield lancée (id: {resultat['request_id']}). "
                 f"Utilise ensuite consulter_image_higgsfield avec cet identifiant et le même titre ({titre})."
             )
+        except ErreurCreditsImages as e:
+            return message_pour_ia(e)
         except Exception as e:
+            rendre_credit_image(_supabase_memoire, utilisateur, reference_credit)
             return _message_erreur(e, "lancer la génération d'image")
 
     @mcp_generation.tool()
