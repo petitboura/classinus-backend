@@ -17,6 +17,10 @@ La checklist opérationnelle et la liste des variables sont maintenues dans [`RA
 
 Le dépôt contient aussi `api/main_montage.py` et `Dockerfile.montage` pour le service de montage séparé. Le backend principal peut lui déléguer le montage lorsque `MONTAGE_VIDEO_URL` est configurée. Les paramètres dédiés et variables de ce service sont décrits dans `RAILWAY_DEPLOY.md`.
 
+## Service de voix bambara (test)
+
+Le dépôt contient aussi `api/main_bouche.py` et `Dockerfile.bouche` pour un service séparé de synthèse vocale bambara, destiné aux tests. Il ne fait pas encore partie du déploiement de production. Voir [`BOUCHE_BAMBARA.fr.md`](./BOUCHE_BAMBARA.fr.md) pour ses variables et ses limites.
+
 ## Docker et environnements de test
 
 Le `Dockerfile` racine décrit une construction Docker distincte de la construction Railpack. Ses commentaires indiquent notamment son emploi pour des builds Docker et des environnements de test. Ne pas supposer qu’un fichier Docker est utilisé par le déploiement Railway principal : vérifier le réglage de construction du service concerné.

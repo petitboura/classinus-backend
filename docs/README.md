@@ -15,6 +15,7 @@ Central entry point for all Classinus backend documentation. English is the defa
 - [AI providers and RAG](./IA_ET_RAG.md)
 - [MCP and connectors](./MCP_ET_CONNECTEURS.md)
 - [Image search](./RECHERCHE_IMAGE.md)
+- [Bambara voice, test mouth](./BOUCHE_BAMBARA.md)
 
 ## Operations and project status
 

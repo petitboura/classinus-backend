@@ -392,6 +392,14 @@ MESSAGES_FR: dict[str, str] = {
     "MARKETING_INDISPONIBLE": "La génération Marketing Studio n'est pas disponible pour le moment. Réessaie plus tard.",
     "MARKETING_LIMITE_JOUR": "Limite du jour atteinte ({limite} générations par jour). Tu pourras en refaire demain.",
     "MARKETING_LIMITE_INDISPONIBLE": "Impossible de vérifier ta limite du jour, réessaie dans un instant.",
+    # 12/11/2026, bouche bambara de test (api/bouche.py, api/main_bouche.py).
+    "BOUCHE_NON_CONFIGUREE": "La voix de test n'est pas branchée pour le moment.",
+    "BOUCHE_INDISPONIBLE": "La voix de test ne répond pas pour le moment. Réessaie dans un instant.",
+    "BOUCHE_VOIX_INCONNUE": "Cette voix n'existe pas ou n'est pas activée.",
+    "BOUCHE_TEXTE_VIDE": "Écris un texte à faire lire.",
+    "BOUCHE_TEXTE_TROP_LONG": "Ce texte est trop long pour la voix de test. Raccourcis-le.",
+    "BOUCHE_LOCUTEUR_INVALIDE": "Ce locuteur n'existe pas pour cette voix.",
+    "BOUCHE_SYNTHESE_ECHEC": "La voix n'a pas réussi à lire ce texte, réessaie.",
 }
 
 
@@ -785,6 +793,13 @@ MESSAGES_EN: dict[str, str] = {
     "MARKETING_INDISPONIBLE": "Marketing Studio generation is not available right now. Try again later.",
     "MARKETING_LIMITE_JOUR": "Daily limit reached ({limite} generations per day). You can generate more tomorrow.",
     "MARKETING_LIMITE_INDISPONIBLE": "Could not check your daily limit, try again in a moment.",
+    "BOUCHE_NON_CONFIGUREE": "The test voice is not connected yet.",
+    "BOUCHE_INDISPONIBLE": "The test voice is not responding right now. Try again in a moment.",
+    "BOUCHE_VOIX_INCONNUE": "This voice does not exist or is not enabled.",
+    "BOUCHE_TEXTE_VIDE": "Write a text to read aloud.",
+    "BOUCHE_TEXTE_TROP_LONG": "This text is too long for the test voice. Shorten it.",
+    "BOUCHE_LOCUTEUR_INVALIDE": "This speaker does not exist for this voice.",
+    "BOUCHE_SYNTHESE_ECHEC": "The voice could not read this text, try again.",
 }
 
 def erreur_api(status_code: int, code: str, message: str | None = None, **kwargs) -> HTTPException:

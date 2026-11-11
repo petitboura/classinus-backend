@@ -19,6 +19,10 @@ The operational checklist and environment-variable list are maintained in [`RAIL
 
 The repository also contains `api/main_montage.py` and `Dockerfile.montage` for the separate montage service. The main backend can delegate montage work to it when `MONTAGE_VIDEO_URL` is configured. The service-specific settings and variables are described in `RAILWAY_DEPLOY.md`.
 
+## Separate Bambara voice service (test)
+
+The repository also contains `api/main_bouche.py` and `Dockerfile.bouche` for a separate Bambara text-to-speech test service. It is not part of the production deployment yet. See [`BOUCHE_BAMBARA.md`](./BOUCHE_BAMBARA.md) for its variables and limits.
+
 ## Docker and test environments
 
 The root `Dockerfile` describes a Docker build separate from the Railpack build. Its comments note its use for Docker builds and test environments. Do not assume that the main Railway production deployment uses this Dockerfile; verify the build configuration of the actual service.

@@ -1,0 +1,25 @@
+# Service bouche bambara séparé (demande de Bourama, 12/11/2026).
+# Service Railway à part : variable RAILWAY_DOCKERFILE_PATH=Dockerfile.bouche.
+# Voix de test sur processeur seul, sans carte graphique. Les poids des voix sont
+# téléchargés au premier usage de chaque voix : brancher un volume sur HF_HOME évite de
+# les retélécharger à chaque redémarrage.
+FROM python:3.12-slim-bookworm
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
+COPY requirements-bouche.txt .
+RUN pip install --no-cache-dir -r requirements-bouche.txt
+
+# Seulement ce dont le service a besoin : jamais le reste du backend.
+COPY api/__init__.py api/__init__.py
+COPY api/main_bouche.py api/main_bouche.py
+COPY core/bouche_bambara.py core/bouche_bambara.py
+COPY core/erreurs.py core/erreurs.py
+
+ENV HF_HOME=/data/huggingface
+
+EXPOSE 8000
+
+CMD ["sh", "-c", "uvicorn api.main_bouche:app --host 0.0.0.0 --port ${PORT:-8000}"]

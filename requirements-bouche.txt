@@ -1,0 +1,8 @@
+# Dépendances du service bouche séparé (Dockerfile.bouche), distinctes de requirements.txt
+# pour ne jamais alourdir le backend principal. torch est installé à part, en version
+# processeur seul, dans le Dockerfile.
+fastapi
+uvicorn[standard]
+pydantic
+numpy
+transformers>=5.9

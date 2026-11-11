@@ -80,6 +80,7 @@ from api.canal_temps_reel import router as canal_temps_reel_router
 from api.canal_agent_applicatif import router as canal_agent_applicatif_router
 from api.gemini_live import router as gemini_live_router
 from api.minuteurs import router_minuteurs
+from api.bouche import router as bouche_router  # 12/11/2026, relais de la page de test bouche bambara
 from api.webhooks_github import router as webhooks_github_router
 from api.dossiers_designes import router as dossiers_designes_router
 from api.programme_notions import router as programme_notions_router
@@ -961,6 +962,7 @@ app.include_router(canal_temps_reel_router)
 app.include_router(canal_agent_applicatif_router)
 app.include_router(gemini_live_router)
 app.include_router(router_minuteurs)
+app.include_router(bouche_router)
 app.include_router(dossiers_designes_router)
 app.include_router(webhooks_github_router)
 app.include_router(programme_notions_router)

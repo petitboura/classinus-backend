@@ -15,6 +15,7 @@ Point d'entrée central de toute la documentation du backend Classinus. L'anglai
 - [Fournisseurs IA et RAG](./IA_ET_RAG.fr.md)
 - [MCP et connecteurs](./MCP_ET_CONNECTEURS.fr.md)
 - [Recherche d'image](./RECHERCHE_IMAGE.fr.md)
+- [Voix bambara, bouche de test](./BOUCHE_BAMBARA.fr.md)
 
 ## Exploitation et état du projet
 
