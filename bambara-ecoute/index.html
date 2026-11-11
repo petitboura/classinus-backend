@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test bambara : écoute</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px 16px; background: #fafafa; color: #222; }
+  h1 { font-size: 1.3rem; }
+  button { padding: 14px 20px; font-size: 1rem; border: 0; border-radius: 10px; background: #222; color: #fff; cursor: pointer; transition: opacity .25s, transform .25s; }
+  button:active { transform: scale(.97); }
+  button:disabled { opacity: .4; }
+  button.rec { background: #c0392b; }
+  .ligne { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0; }
+  #statut, #resultat { margin-top: 16px; padding: 14px; border-radius: 10px; background: #fff; border: 1px solid #ddd; opacity: 0; transition: opacity .4s; min-height: 20px; }
+  .visible { opacity: 1 !important; }
+  .points span { display: inline-block; animation: saut 1s infinite; }
+  .points span:nth-child(2) { animation-delay: .15s; }
+  .points span:nth-child(3) { animation-delay: .3s; }
+  @keyframes saut { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-5px); } }
+</style>
+</head>
+<body>
+<h1>Test bambara : le modèle écoute</h1>
+<div class="ligne">
+  <button id="btnRec">Enregistrer</button>
+  <button id="btnFichier">Choisir un fichier audio</button>
+  <input type="file" id="fichier" accept="audio/*" hidden>
+</div>
+<div id="statut"></div>
+<div id="resultat"></div>
+<script>
+const statut = document.getElementById('statut');
+const resultat = document.getElementById('resultat');
+const btnRec = document.getElementById('btnRec');
+let recorder = null, morceaux = [];
+
+function montrer(el, html) { el.innerHTML = html; el.classList.add('visible'); }
+function cacher(el) { el.classList.remove('visible'); }
+const points = '<span class="points"><span>.</span><span>.</span><span>.</span></span>';
+
+async function verifierEtat() {
+  try {
+    const r = await (await fetch('/etat')).json();
+    if (r.erreur) { montrer(statut, 'Erreur de chargement du modèle : ' + r.erreur); return; }
+    if (!r.pret) { montrer(statut, 'Le modèle charge ' + points); setTimeout(verifierEtat, 3000); return; }
+    montrer(statut, 'Modèle prêt.');
+  } catch (e) { setTimeout(verifierEtat, 3000); }
+}
+
+async function envoyer(blob) {
+  cacher(resultat);
+  montrer(statut, 'Le modèle écoute ' + points);
+  const f = new FormData();
+  f.append('fichier', blob, 'audio');
+  try {
+    const r = await fetch('/transcrire', { method: 'POST', body: f });
+    const j = await r.json();
+    if (!r.ok) { montrer(statut, j.erreur || 'Erreur.'); return; }
+    montrer(statut, 'Terminé.');
+    montrer(resultat, j.texte || '(rien compris)');
+  } catch (e) { montrer(statut, 'Erreur de connexion.'); }
+}
+
+btnRec.onclick = async () => {
+  if (recorder) { recorder.stop(); return; }
+  try {
+    const flux = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recorder = new MediaRecorder(flux); morceaux = [];
+    recorder.ondataavailable = e => morceaux.push(e.data);
+    recorder.onstop = () => {
+      flux.getTracks().forEach(t => t.stop());
+      recorder = null; btnRec.textContent = 'Enregistrer'; btnRec.classList.remove('rec');
+      envoyer(new Blob(morceaux));
+    };
+    recorder.start(); btnRec.textContent = 'Arrêter'; btnRec.classList.add('rec');
+  } catch (e) { montrer(statut, 'Micro refusé ou indisponible.'); }
+};
+document.getElementById('btnFichier').onclick = () => document.getElementById('fichier').click();
+document.getElementById('fichier').onchange = e => { if (e.target.files[0]) envoyer(e.target.files[0]); };
+verifierEtat();
+</script>
+</body>
+</html>
