@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tests traducteurs bambara</title>
+<style>
+  :root { --bg:#faf8f4; --fg:#1f1d1a; --card:#fff; --line:#e4dfd6; --accent:#b8860b; --ok:#2e7d32; --mid:#c77700; --bad:#c62828; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161513; --fg:#f1ede6; --card:#211f1c; --line:#38342f; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--fg); }
+  main { max-width: 860px; margin: 0 auto; padding: 16px; }
+  header { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
+  h1 { font-size: 1.25rem; margin: 8px 0; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin:12px 0; animation: rise .3s ease both; }
+  @keyframes rise { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform:none; } }
+  label { display:block; font-size:.85rem; margin:8px 0 4px; opacity:.8; }
+  select, textarea, button, input { font: inherit; color: inherit; background: var(--bg); border:1px solid var(--line); border-radius:10px; padding:10px; width:100%; }
+  textarea { min-height: 90px; resize: vertical; }
+  .row { display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:10px; }
+  button { cursor:pointer; transition: transform .15s ease, background .2s ease, opacity .2s ease; }
+  button:hover { transform: translateY(-1px); }
+  button.primary { background: var(--accent); color:#fff; border-color: var(--accent); }
+  button:disabled { opacity:.5; cursor:wait; }
+  .out { white-space: pre-wrap; margin-top:8px; }
+  .meta { font-size:.8rem; opacity:.7; }
+  .shimmer { height: 14px; border-radius: 7px; background: linear-gradient(90deg, var(--line), transparent, var(--line)); background-size: 200% 100%; animation: sh 1.2s linear infinite; margin-top:10px; }
+  @keyframes sh { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  .judge { display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; margin-top:10px; }
+  .judge button.sel-ok { background:var(--ok); color:#fff; } .judge button.sel-mid { background:var(--mid); color:#fff; } .judge button.sel-bad { background:var(--bad); color:#fff; }
+  .err { color: var(--bad); }
+  .toolbar { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="title"></h1>
+    <select id="lang" style="width:auto"><option value="fr">Français</option><option value="en">English</option></select>
+  </header>
+
+  <section class="card">
+    <div class="row">
+      <div><label id="l_engine"></label><select id="engine"></select></div>
+      <div><label id="l_pair"></label><select id="pair"></select></div>
+    </div>
+    <label id="l_text"></label>
+    <textarea id="text"></textarea>
+    <div style="margin-top:10px"><button class="primary" id="go"></button></div>
+  </section>
+
+  <div id="results"></div>
+
+  <section class="card">
+    <div class="toolbar">
+      <button id="copy"></button>
+      <button id="csv"></button>
+    </div>
+    <div class="meta" id="hint"></div>
+  </section>
+</main>
+<script>
+const I18N = {
+  fr: { title:"Tests traducteurs bambara", engine:"Moteur", pair:"Sens de traduction", text:"Phrase à traduire",
+        go:"Traduire", loading:"Chargement du modèle, la première fois peut prendre plusieurs minutes...",
+        ok:"Compris", mid:"À moitié", bad:"Faux", copy:"Copier le tableau", csv:"Télécharger en CSV",
+        hint:"Un locuteur bambara juge chaque résultat avec les trois boutons. Le tableau garde tout.",
+        sec:"s", err_generic:"Une erreur est survenue. Réessaie dans un instant.", err_pair:"Ce moteur ne gère pas ce sens.",
+        err_long:"Texte trop long.", err_empty:"Écris une phrase d'abord.", err_denied:"Accès refusé.",
+        ph:"Ex : Bonjour, comment vas-tu ?" },
+  en: { title:"Bambara translator tests", engine:"Engine", pair:"Direction", text:"Sentence to translate",
+        go:"Translate", loading:"Loading the model, the first time can take several minutes...",
+        ok:"Understood", mid:"Half", bad:"Wrong", copy:"Copy table", csv:"Download CSV",
+        hint:"A Bambara speaker rates each result with the three buttons. The table keeps everything.",
+        sec:"s", err_generic:"Something went wrong. Try again in a moment.", err_pair:"This engine does not handle this direction.",
+        err_long:"Text too long.", err_empty:"Write a sentence first.", err_denied:"Access denied.",
+        ph:"Eg: Hello, how are you?" }
+};
+const PAIR_LABELS = { "fra-bam":"Français → Bambara", "eng-bam":"English → Bambara", "bam-fra":"Bambara → Français", "bam-eng":"Bambara → English" };
+const $ = id => document.getElementById(id);
+let ENG = {}, ROWS = [], T = I18N.fr;
+const token = new URLSearchParams(location.search).get("token") || "";
+
+function applyLang() {
+  T = I18N[$("lang").value];
+  document.documentElement.lang = $("lang").value;
+  $("title").textContent = T.title; $("l_engine").textContent = T.engine; $("l_pair").textContent = T.pair;
+  $("l_text").textContent = T.text; $("go").textContent = T.go; $("copy").textContent = T.copy; $("csv").textContent = T.csv;
+  $("hint").textContent = T.hint; $("text").placeholder = T.ph;
+  renderRows();
+}
+function fillPairs() {
+  const e = ENG[$("engine").value]; $("pair").innerHTML = "";
+  (e ? e.pairs : []).forEach(p => { const o = document.createElement("option"); o.value = p; o.textContent = PAIR_LABELS[p] || p; $("pair").appendChild(o); });
+}
+function errText(code) { return ({unsupported_pair:T.err_pair, text_too_long:T.err_long, empty_text:T.err_empty, access_denied:T.err_denied})[code] || T.err_generic; }
+
+function renderRows() {
+  const box = $("results"); box.innerHTML = "";
+  ROWS.slice().reverse().forEach((r, idx) => {
+    const i = ROWS.length - 1 - idx;
+    const d = document.createElement("section"); d.className = "card";
+    if (r.pending) { d.innerHTML = `<div class="meta"></div><div class="shimmer"></div><div class="shimmer" style="width:60%"></div>`; d.firstChild.textContent = T.loading; box.appendChild(d); return; }
+    if (r.error) { d.innerHTML = `<div class="err"></div>`; d.firstChild.textContent = errText(r.error); box.appendChild(d); return; }
+    d.innerHTML = `<div class="meta"></div><div class="meta in"></div><div class="out"></div><div class="judge"></div>`;
+    d.children[0].textContent = `${r.engine_label} · ${PAIR_LABELS[r.pair] || r.pair} · ${r.seconds}${T.sec}`;
+    d.children[1].textContent = r.input; d.children[2].textContent = r.output;
+    [["ok", T.ok], ["mid", T.mid], ["bad", T.bad]].forEach(([k, label]) => {
+      const b = document.createElement("button"); b.textContent = label; if (r.verdict === k) b.className = "sel-" + k;
+      b.onclick = () => { r.verdict = k; renderRows(); }; d.children[3].appendChild(b);
+    });
+    box.appendChild(d);
+  });
+}
+function table() { return ROWS.filter(r => r.output).map(r => [r.engine_label, r.pair, r.input, r.output, r.verdict || ""]); }
+function csvEscape(s) { return '"' + String(s).replace(/"/g, '""') + '"'; }
+
+async function run() {
+  const text = $("text").value.trim(); if (!text) { ROWS.push({ error: "empty_text" }); renderRows(); return; }
+  const [source, target] = $("pair").value.split("-"), engine = $("engine").value;
+  const row = { pending: true }; ROWS.push(row); renderRows(); $("go").disabled = true;
+  try {
+    const res = await fetch("/translate", { method: "POST", headers: { "Content-Type": "application/json", "x-access-token": token }, body: JSON.stringify({ engine, source, target, text }) });
+    const data = await res.json();
+    Object.keys(row).forEach(k => delete row[k]);
+    if (!res.ok) row.error = data.error || (typeof data.detail === "string" ? data.detail : null) || "generic";
+    else Object.assign(row, data, { engine_label: ENG[engine].label });
+  } catch (e) { Object.keys(row).forEach(k => delete row[k]); row.error = "generic"; }
+  $("go").disabled = false; renderRows();
+}
+
+$("lang").onchange = applyLang; $("engine").onchange = fillPairs; $("go").onclick = run;
+$("copy").onclick = () => navigator.clipboard.writeText(table().map(r => r.join("\t")).join("\n"));
+$("csv").onclick = () => {
+  const csv = "engine,pair,input,output,verdict\n" + table().map(r => r.map(csvEscape).join(",")).join("\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "resultats-traduction.csv"; a.click();
+};
+fetch("/engines").then(r => r.json()).then(d => {
+  ENG = d; Object.entries(d).forEach(([k, v]) => { const o = document.createElement("option"); o.value = k; o.textContent = v.label; $("engine").appendChild(o); });
+  fillPairs();
+}).catch(() => {});
+applyLang();
+</script>
+</body>
+</html>

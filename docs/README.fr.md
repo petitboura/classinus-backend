@@ -21,6 +21,10 @@ Point d'entrée central de toute la documentation du backend Classinus. L'anglai
 - [Checklist de déploiement Railway](./deployment/RAILWAY_DEPLOY.fr.md)
 - [État backend Higgsfield](./status/HIGGSFIELD_TODO.fr.md)
 
+## Chantiers en cours
+
+- [Tests des traducteurs bambara](./chantiers/TESTS_TRADUCTEURS_BAMBARA.fr.md)
+
 ## Historique et travaux archivés
 
 - [Consolidation des branches, 31 octobre 2026](./project-history/BRANCHES-CONSOLIDATION-2026-10-31.fr.md)

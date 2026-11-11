@@ -21,6 +21,10 @@ Central entry point for all Classinus backend documentation. English is the defa
 - [Railway deployment checklist](./deployment/RAILWAY_DEPLOY.md)
 - [Higgsfield backend status](./status/HIGGSFIELD_TODO.md)
 
+## Work in progress
+
+- [Bambara translator tests](./chantiers/TESTS_TRADUCTEURS_BAMBARA.md)
+
 ## Project history and archived work
 
 - [Branch consolidation, 31 October 2026](./project-history/BRANCHES-CONSOLIDATION-2026-10-31.md)
