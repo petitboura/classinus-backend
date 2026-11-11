@@ -11,14 +11,17 @@ A small server with a test page: pick an engine and a direction, write a sentenc
 | Engine | Model | Directions |
 |---|---|---|
 | MADLAD-400 3B | `google/madlad400-3b-mt` | French or English to Bambara, Bambara to French or English |
+| NLLB Bambara (oza75) | `oza75/bm-nllb-1.3B-03` | French or English to Bambara, Bambara to French or English |
 | LocaleNLP English to Bambara | `LocaleNLP/localenlp-eng-bam-0.03` | English to Bambara |
 | LocaleNLP Bambara to English | `LocaleNLP/localenlp-bam-eng-0.03` | Bambara to English |
 
 The LocaleNLP ids were checked on Hugging Face. For MADLAD, the Bambara tag `<2bm>` still has to be confirmed at the first test.
 
+License: the oza75 NLLB model derives from `facebook/nllb-200-distilled-1.3B`. Check it before any use in a paid product (the base model license may forbid commercial use). A neighboring model (`oza75/bm-nllb-1.3B`) asks to accept conditions: if the download is refused, set `HF_TOKEN`.
+
 ## Settings (environment variables)
 - `MAX_LOADED_MODELS` (default 1), `MODEL_DTYPE` (default bfloat16), `MAX_NEW_TOKENS`, `MAX_INPUT_CHARS`, `PORT`.
-- `MADLAD_MODEL`, `LOCALENLP_ENG_BAM_MODEL`, `LOCALENLP_BAM_ENG_MODEL` to swap a model.
+- `MADLAD_MODEL`, `NLLB_BAMBARA_MODEL`, `LOCALENLP_ENG_BAM_MODEL`, `LOCALENLP_BAM_ENG_MODEL` to swap a model.
 - `TEST_ACCESS_TOKEN`: when set, translation requires this token (open the page with `?token=VALUE`).
 - `HF_TOKEN`: only if a model requires a Hugging Face login.
 

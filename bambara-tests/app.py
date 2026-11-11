@@ -35,6 +35,13 @@ ENGINES = {
         "tags": {"bam": "<2bm> ", "fra": "<2fr> ", "eng": "<2en> "},
         "pairs": ["fra-bam", "eng-bam", "bam-fra", "bam-eng"],
     },
+    "nllb_bambara": {
+        "label": "NLLB Bambara (oza75)",
+        "model": os.getenv("NLLB_BAMBARA_MODEL", "oza75/bm-nllb-1.3B-03"),
+        "family": "nllb",
+        "codes": {"fra": "fra_Latn", "eng": "eng_Latn", "bam": "bam_Latn"},
+        "pairs": ["fra-bam", "eng-bam", "bam-fra", "bam-eng"],
+    },
     "localenlp_eng_bam": {
         "label": "LocaleNLP eng vers bam",
         "model": os.getenv("LOCALENLP_ENG_BAM_MODEL", "LocaleNLP/localenlp-eng-bam-0.03"),
@@ -124,11 +131,18 @@ def translate(body: TranslateIn, x_access_token: str = Header(default=None)):
         import torch
         with _lock:
             tok, model = _load(body.engine)
-            prompt = cfg["tags"][body.target] + text
+            gen_args = {}
+            if cfg["family"] == "nllb":
+                # NLLB : la langue source se règle sur le tokenizer, la cible se force au départ
+                tok.src_lang = cfg["codes"][body.source]
+                prompt = text
+                gen_args["forced_bos_token_id"] = tok.convert_tokens_to_ids(cfg["codes"][body.target])
+            else:
+                prompt = cfg["tags"][body.target] + text
             inputs = tok(prompt, return_tensors="pt", truncation=True, max_length=512)
             t0 = time.time()
             with torch.no_grad():
-                out = model.generate(**inputs, max_new_tokens=MAX_NEW_TOKENS, num_beams=4)
+                out = model.generate(**inputs, max_new_tokens=MAX_NEW_TOKENS, num_beams=4, **gen_args)
             result = tok.decode(out[0], skip_special_tokens=True)
             elapsed = time.time() - t0
         return {"engine": body.engine, "pair": pair, "input": text, "output": result, "seconds": round(elapsed, 2)}

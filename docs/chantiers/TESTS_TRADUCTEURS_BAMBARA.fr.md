@@ -11,14 +11,17 @@ Petit serveur avec une page de test : on choisit un moteur et un sens de traduct
 | Moteur | Modèle | Sens |
 |---|---|---|
 | MADLAD-400 3B | `google/madlad400-3b-mt` | français ou anglais vers bambara, bambara vers français ou anglais |
+| NLLB Bambara (oza75) | `oza75/bm-nllb-1.3B-03` | français ou anglais vers bambara, bambara vers français ou anglais |
 | LocaleNLP anglais vers bambara | `LocaleNLP/localenlp-eng-bam-0.03` | anglais vers bambara |
 | LocaleNLP bambara vers anglais | `LocaleNLP/localenlp-bam-eng-0.03` | bambara vers anglais |
 
 Les identifiants LocaleNLP ont été vérifiés sur Hugging Face. Pour MADLAD, la balise bambara `<2bm>` reste à confirmer au premier test.
 
+Licence : le modèle NLLB d'oza75 dérive de `facebook/nllb-200-distilled-1.3B`. À vérifier avant tout usage dans un produit payant (la licence du modèle de base pourrait interdire l'usage commercial). Le dépôt d'un modèle voisin (`oza75/bm-nllb-1.3B`) demande d'accepter des conditions : si le téléchargement est refusé, renseigner `HF_TOKEN`.
+
 ## Réglages (variables d'environnement)
 - `MAX_LOADED_MODELS` (défaut 1), `MODEL_DTYPE` (défaut bfloat16), `MAX_NEW_TOKENS`, `MAX_INPUT_CHARS`, `PORT`.
-- `MADLAD_MODEL`, `LOCALENLP_ENG_BAM_MODEL`, `LOCALENLP_BAM_ENG_MODEL` pour changer de modèle.
+- `MADLAD_MODEL`, `NLLB_BAMBARA_MODEL`, `LOCALENLP_ENG_BAM_MODEL`, `LOCALENLP_BAM_ENG_MODEL` pour changer de modèle.
 - `TEST_ACCESS_TOKEN` : si défini, la traduction exige ce jeton (page ouverte avec `?token=VALEUR`).
 - `HF_TOKEN` : seulement si un modèle exige une connexion Hugging Face.
 
