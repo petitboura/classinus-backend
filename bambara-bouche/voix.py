@@ -21,6 +21,38 @@ logger = logging.getLogger(__name__)
 #   "non_commercial" : la fiche interdit l'usage commercial, test seulement.
 #   "a_verifier"     : la fiche ne dit rien de clair, à confirmer avant toute production.
 VOIX: dict[str, dict] = {
+    "ekodi_femme": {
+        "nom": "ekodi, voix de femme (ynnov)",
+        "depot": "ynnov/ekodi-bambara-tts-female",
+        "locuteurs": 1,
+        "minuscules": False,
+        # Fiche du modèle : vitesse conseillée 0.82.
+        "vitesse": 0.82,
+        # Fiche du modèle : Apache 2.0, mais même architecture et même taille que MMS (non
+        # commercial) : à confirmer avant toute production.
+        "licence": "a_verifier",
+        "experimental": False,
+    },
+    "mms_meta": {
+        "nom": "MMS Bambara (Meta)",
+        "depot": "facebook/mms-tts-bam",
+        "locuteurs": 1,
+        "minuscules": False,
+        # Fiche du modèle : CC BY-NC 4.0, usage non commercial seulement (référence de comparaison).
+        "licence": "non_commercial",
+        "experimental": False,
+    },
+    "bam_fintech": {
+        "nom": "Bam VITS fintech (RobotsMali)",
+        "depot": "RobotsMali/bam-vits-fintech",
+        # Fiche du modèle : un seul locuteur; la config garde 20 lignes mais l'entraînement
+        # n'utilisait pas de locuteur, donc on n'envoie aucun speaker_id.
+        "locuteurs": 1,
+        "minuscules": True,
+        "licence": "a_verifier",
+        # Fiche du modèle : point de contrôle de recherche, très peu entraîné.
+        "experimental": True,
+    },
     "bam_vits": {
         "nom": "Bam VITS (RobotsMali)",
         "depot": "RobotsMali/bam-vits",
@@ -43,9 +75,9 @@ VOIX: dict[str, dict] = {
 }
 
 TEXTE_MAX_DEFAUT = 600
-# Hasard ajouté à chaque synthèse par VITS (défaut du modèle : 0.667 et 0.8). Les voix peu
-# entraînées le transforment en bruit audible : on le baisse, réglable sans toucher au code.
-BRUIT_DEFAUT = 0.3
+# Hasard ajouté à chaque synthèse par VITS : valeurs par défaut du modèle (0.667 et 0.8),
+# réglables par variable d'environnement sans toucher au code.
+BRUIT_DEFAUT = 0.667
 BRUIT_DUREE_DEFAUT = 0.8
 
 
@@ -130,6 +162,8 @@ def charger(voix_id: str) -> None:
         _etat[voix_id]["manquantes"] = manquantes[:20]
         _etat[voix_id]["nb_manquantes"] = len(manquantes)
         modele.eval()
+        if "vitesse" in VOIX[voix_id]:
+            modele.speaking_rate = VOIX[voix_id]["vitesse"]
         modele.noise_scale = bruit_scale()
         modele.noise_scale_duration = bruit_duree()
         _modeles[voix_id] = (tokenizer, modele)

@@ -13,9 +13,12 @@ A small server with a single test page. You type a Bambara sentence and listen t
 | Id | Model | Speakers | Licence status (read on the model card) |
 |---|---|---|---|
 | `bam_vits` | `RobotsMali/bam-vits` | 20 | Not checked. The card calls it an undertrained research checkpoint. |
+| `ekodi_femme` | `ynnov/ekodi-bambara-tts-female` | 1 | Card says Apache 2.0, but the model has the same architecture and size as MMS (non-commercial): confirm before production. Speaking rate 0.82 as the card advises. |
+| `mms_meta` | `facebook/mms-tts-bam` | 1 | CC BY-NC 4.0: non-commercial only, comparison reference. |
+| `bam_fintech` | `RobotsMali/bam-vits-fintech` | 1 | CC BY 4.0 on the card. Same family as `bam_vits`, retrained on clean single-speaker recordings; still an undertrained research checkpoint. |
 | `mms_sudoping01` | `sudoping01/bambara-tts` | 1 | CC BY-NC 4.0: non-commercial only, test use only. |
 
-The `ekodi` female voice is not in the catalogue: its model card could not be read, so its loading method and licence are unverified. Adding a voice means adding one entry to `VOIX` in `voix.py`. Licence statuses are what the cards say, not legal advice.
+`bam_vits` is kept for comparison but is not a useful voice after measurement: every recording carries a fixed 256-sample pattern (a hum at 86 Hz and its multiples) that does not depend on text, speaker or noise setting, so the defect is in the model's decoder. Gated models (`MALIBA-AI/bambara-tts`, `RobotsMali/Wuro`) are not in the catalogue until access is granted. Adding a voice means adding one entry to `VOIX` in `voix.py`. Licence statuses are what the cards say, not legal advice.
 
 ## Settings (environment variables)
 
@@ -23,7 +26,7 @@ The `ekodi` female voice is not in the catalogue: its model card could not be re
 - `VOIX_ACTIVES`: comma-separated voice ids, all voices if absent.
 - `TEXTE_MAX` (default 600): maximum text length in characters.
 - `SYNTHESES_MAX` (default 1): simultaneous syntheses.
-- `BRUIT_SCALE` (default 0.3, between 0 and 1): random noise VITS adds to each synthesis (model default 0.667). Lower it if the voice sounds noisy; undertrained voices turn this randomness into audible noise. `BRUIT_DUREE` (default 0.8): same for rhythm.
+- `BRUIT_SCALE` (default 0.667, between 0 and 1): random noise VITS adds to each synthesis (the model default). `BRUIT_DUREE` (default 0.8): same for rhythm.
 - `PRECHARGER` (default 1): set to 0 to load each voice at first use instead of at startup.
 - `TEST_ACCESS_TOKEN`: if set, `/voix` and `/synthese` require it. Open the page with `?token=VALUE`.
 - `HF_HOME` (set to `/data/hf` in the Dockerfile): where model weights are kept. Mount a volume on `/data`.

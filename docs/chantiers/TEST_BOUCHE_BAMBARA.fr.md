@@ -13,9 +13,12 @@ Un petit serveur avec une seule page de test. On écrit une phrase en bambara et
 | Id | Modèle | Locuteurs | Statut de licence (lu sur la fiche du modèle) |
 |---|---|---|---|
 | `bam_vits` | `RobotsMali/bam-vits` | 20 | Non vérifié. La fiche le décrit comme un point de contrôle de recherche très peu entraîné. |
+| `ekodi_femme` | `ynnov/ekodi-bambara-tts-female` | 1 | La fiche annonce Apache 2.0, mais le modèle a la même architecture et la même taille que MMS (non commercial) : à confirmer avant la production. Vitesse 0,82 comme la fiche le conseille. |
+| `mms_meta` | `facebook/mms-tts-bam` | 1 | CC BY-NC 4.0 : usage non commercial seulement, référence de comparaison. |
+| `bam_fintech` | `RobotsMali/bam-vits-fintech` | 1 | CC BY 4.0 sur la fiche. Même famille que `bam_vits`, réentraînée sur des enregistrements propres d'un seul locuteur; reste un point de contrôle de recherche très peu entraîné. |
 | `mms_sudoping01` | `sudoping01/bambara-tts` | 1 | CC BY-NC 4.0 : usage non commercial seulement, test uniquement. |
 
-La voix de femme `ekodi` n'est pas au catalogue : sa fiche n'a pas pu être lue, donc sa méthode de chargement et sa licence ne sont pas vérifiées. Ajouter une voix revient à ajouter une entrée dans `VOIX` de `voix.py`. Les statuts de licence sont ceux des fiches, pas un avis juridique.
+`bam_vits` reste pour comparaison mais n'est pas une voix utile après mesure : chaque enregistrement porte un motif fixe de 256 échantillons (un bourdonnement à 86 Hz et ses multiples) qui ne dépend ni du texte, ni du locuteur, ni du réglage du bruit; le défaut est dans le décodeur du modèle. Les modèles sur demande d'accès (`MALIBA-AI/bambara-tts`, `RobotsMali/Wuro`) ne sont pas au catalogue tant que l'accès n'est pas accordé. Ajouter une voix revient à ajouter une entrée dans `VOIX` de `voix.py`. Les statuts de licence sont ceux des fiches, pas un avis juridique.
 
 ## Réglages (variables d'environnement)
 
@@ -23,7 +26,7 @@ La voix de femme `ekodi` n'est pas au catalogue : sa fiche n'a pas pu être lue,
 - `VOIX_ACTIVES` : identifiants de voix séparés par des virgules, toutes si absente.
 - `TEXTE_MAX` (600 par défaut) : longueur maximale du texte en caractères.
 - `SYNTHESES_MAX` (1 par défaut) : synthèses simultanées.
-- `BRUIT_SCALE` (0,3 par défaut, entre 0 et 1) : hasard que VITS ajoute à chaque synthèse (défaut du modèle : 0,667). À baisser si la voix est bruitée; une voix peu entraînée transforme ce hasard en bruit audible. `BRUIT_DUREE` (0,8 par défaut) : pareil pour le rythme.
+- `BRUIT_SCALE` (0,667 par défaut, entre 0 et 1) : hasard que VITS ajoute à chaque synthèse (le défaut du modèle). `BRUIT_DUREE` (0,8 par défaut) : pareil pour le rythme.
 - `PRECHARGER` (1 par défaut) : mettre 0 pour charger chaque voix à son premier usage plutôt qu'au démarrage.
 - `TEST_ACCESS_TOKEN` : si défini, `/voix` et `/synthese` l'exigent. Ouvrir la page avec `?token=VALEUR`.
 - `HF_HOME` (fixé à `/data/hf` dans le Dockerfile) : dossier où les poids des modèles sont gardés. Monter un volume sur `/data`.

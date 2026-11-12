@@ -88,6 +88,12 @@ class CatalogueTests(unittest.TestCase):
     def test_voix_non_commerciale_signalee(self):
         statuts = {v["id"]: v["licence"] for v in voix.lister_voix()}
         self.assertEqual(statuts["mms_sudoping01"], "non_commercial")
+        self.assertEqual(statuts["mms_meta"], "non_commercial")
+
+    def test_voix_a_un_seul_locuteur_sans_speaker_id(self):
+        for v in voix.lister_voix():
+            if v["id"] in ("ekodi_femme", "mms_meta", "bam_fintech"):
+                self.assertEqual(v["locuteurs"], 1)
 
     def test_texte_max_variable_et_valeur_invalide(self):
         with mock.patch.dict(os.environ, {"TEXTE_MAX": "42"}):
