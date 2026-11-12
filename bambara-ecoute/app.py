@@ -2,6 +2,7 @@ import os
 import subprocess
 import tempfile
 import threading
+import traceback
 
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
@@ -56,5 +57,10 @@ async def transcrire(fichier: UploadFile = File(...)):
             premier = resultat[0]
             texte = premier.text if hasattr(premier, "text") else str(premier)
         except Exception as e:
-            return JSONResponse({"erreur": "Échec de la transcription : " + str(e)}, status_code=500)
+            trace = traceback.format_exc()
+            print(trace, flush=True)
+            return JSONResponse(
+                {"erreur": "Échec de la transcription : " + str(e), "detail": trace},
+                status_code=500,
+            )
     return {"texte": texte}

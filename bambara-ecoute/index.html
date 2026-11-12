@@ -56,7 +56,7 @@ async function envoyer(blob) {
   try {
     const r = await fetch('/transcrire', { method: 'POST', body: f });
     const j = await r.json();
-    if (!r.ok) { montrer(statut, j.erreur || 'Erreur.'); return; }
+    if (!r.ok) { montrer(statut, (j.erreur || 'Erreur.') + (j.detail ? '<pre style="white-space:pre-wrap;font-size:12px">' + j.detail.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</pre>' : '')); return; }
     montrer(statut, 'Terminé.');
     montrer(resultat, j.texte || '(rien compris)');
   } catch (e) { montrer(statut, 'Erreur de connexion.'); }
