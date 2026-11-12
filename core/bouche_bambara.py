@@ -32,7 +32,8 @@ VOIX: dict[str, dict] = {
         # Les données d'entraînement ont été mises en minuscules (fiche du modèle).
         "minuscules": True,
         "licence": "a_verifier",
-        "remarque": "Point de contrôle de recherche, la fiche le dit très peu entraîné.",
+        # Fiche du modèle : point de contrôle de recherche, très peu entraîné.
+        "experimental": True,
     },
     "mms_sudoping01": {
         "nom": "MMS Bambara (sudoping01)",
@@ -40,7 +41,8 @@ VOIX: dict[str, dict] = {
         "locuteurs": 1,
         "minuscules": False,
         "licence": "non_commercial",
-        "remarque": "Licence CC BY-NC 4.0 : usage non commercial seulement, test uniquement.",
+        # Licence CC BY-NC 4.0 sur la fiche : usage non commercial seulement.
+        "experimental": False,
     },
 }
 
@@ -78,7 +80,10 @@ def voix_actives() -> list[str]:
 
 
 def lister_voix() -> list[dict]:
-    """Description des voix actives, pour la page de test."""
+    """Description des voix actives, pour la page de test.
+
+    Aucun texte lisible n'est renvoyé : l'écran écrit lui-même les libellés, en français et en anglais.
+    """
     return [
         {
             "id": voix_id,
@@ -86,7 +91,7 @@ def lister_voix() -> list[dict]:
             "depot": VOIX[voix_id]["depot"],
             "locuteurs": VOIX[voix_id]["locuteurs"],
             "licence": VOIX[voix_id]["licence"],
-            "remarque": VOIX[voix_id]["remarque"],
+            "experimental": VOIX[voix_id]["experimental"],
         }
         for voix_id in voix_actives()
     ]

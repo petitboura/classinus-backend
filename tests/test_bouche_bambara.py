@@ -93,6 +93,10 @@ class CatalogueTests(unittest.TestCase):
         statuts = {v["id"]: v["licence"] for v in bouche.lister_voix()}
         self.assertEqual(statuts["mms_sudoping01"], "non_commercial")
 
+    def test_la_description_ne_contient_aucun_texte_a_traduire(self):
+        for voix in bouche.lister_voix():
+            self.assertEqual(set(voix), {"id", "nom", "depot", "locuteurs", "licence", "experimental"})
+
     def test_texte_max_par_variable_et_valeur_invalide(self):
         with mock.patch.dict(os.environ, {"BOUCHE_TEXTE_MAX": "42"}):
             self.assertEqual(bouche.texte_max(), 42)
