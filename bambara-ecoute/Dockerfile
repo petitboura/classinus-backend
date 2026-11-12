@@ -9,6 +9,9 @@ WORKDIR /app
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+# NeMo 2.6.2 impose lhotse 1.31.1, incompatible avec le torch récent (Sampler sans data_source).
+# La 1.33.0 corrige ce point exact; installée à part car le résolveur refuserait le conflit.
+RUN pip install --no-cache-dir --no-deps lhotse==1.33.0
 
 COPY app.py index.html ./
 
