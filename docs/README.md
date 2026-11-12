@@ -37,3 +37,7 @@ These are not general project guides. Their locations are required by the skill 
 - [Word document skill](../skills_plateforme/documents-word/SKILL.md)
 - [Disabled Programme code warning](../_desactive_programme/LISEZ_MOI_NE_JAMAIS_REUTILISER.md)
 - [Disabled role hierarchy warning](../_desactive_roles_hierarchie/LISEZ_MOI_NE_JAMAIS_REUTILISER.md)
+
+## Work in progress
+
+- [Bambara voice test](./chantiers/TEST_BOUCHE_BAMBARA.md)

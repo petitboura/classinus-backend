@@ -37,3 +37,7 @@ Ce ne sont pas des guides généraux. Leur emplacement est requis par le synchro
 - [Compétence Documents Word](../skills_plateforme/documents-word/SKILL.fr.md)
 - [Avertissement du code Programme désactivé](../_desactive_programme/LISEZ_MOI_NE_JAMAIS_REUTILISER.fr.md)
 - [Avertissement de la hiérarchie des rôles désactivée](../_desactive_roles_hierarchie/LISEZ_MOI_NE_JAMAIS_REUTILISER.fr.md)
+
+## Chantiers en cours
+
+- [Test des voix bambara](./chantiers/TEST_BOUCHE_BAMBARA.fr.md)

@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Test bambara : les voix</title>
+<style>
+  :root { --fond: #fafafa; --carte: #ffffff; --texte: #222222; --muet: #666666; --bord: #dddddd; --accent: #222222; --sur-accent: #ffffff; --alerte: #c0392b; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fond: #151515; --carte: #1f1f1f; --texte: #eeeeee; --muet: #a0a0a0; --bord: #343434; --accent: #eeeeee; --sur-accent: #151515; --alerte: #ff7b6b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, sans-serif; background: var(--fond); color: var(--texte);
+    padding: calc(env(safe-area-inset-top, 0px) + 24px) 16px calc(env(safe-area-inset-bottom, 0px) + 32px); }
+  main { max-width: 600px; margin: 0 auto; }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  p { margin: 0; }
+  .muet { color: var(--muet); font-size: .9rem; }
+  label { display: block; margin: 20px 0 6px; font-size: .8rem; color: var(--muet); text-transform: uppercase; letter-spacing: .04em; }
+  textarea { width: 100%; min-height: 110px; resize: vertical; padding: 12px; font: inherit; font-size: 1rem;
+    color: var(--texte); background: var(--carte); border: 1px solid var(--bord); border-radius: 10px; }
+  textarea:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .ligne-compteur { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; }
+  button { min-height: 44px; padding: 12px 18px; font: inherit; font-size: .95rem; border: 0; border-radius: 10px;
+    background: var(--accent); color: var(--sur-accent); cursor: pointer; transition: opacity .25s, transform .2s; }
+  button:active:not(:disabled) { transform: scale(.97); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.sobre { background: transparent; color: var(--texte); border: 1px solid var(--bord); }
+  .carte { margin-top: 16px; padding: 16px; background: var(--carte); border: 1px solid var(--bord); border-radius: 12px;
+    animation: apparition .35s ease both; }
+  .carte h2 { font-size: 1rem; margin: 0; }
+  .depot { color: var(--muet); font-size: .8rem; word-break: break-all; }
+  .pastilles { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+  .pastilles li { padding: 2px 10px; font-size: .75rem; border: 1px solid var(--bord); border-radius: 999px; color: var(--muet); }
+  .pastilles li.fort { color: var(--texte); border-color: var(--muet); }
+  .pastilles li.erreur { color: var(--alerte); border-color: var(--alerte); }
+  .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 14px; }
+  .actions select { min-height: 44px; padding: 8px 10px; font: inherit; color: var(--texte); background: var(--carte); border: 1px solid var(--bord); border-radius: 10px; }
+  .actions button { margin-left: auto; }
+  audio { width: 100%; margin-top: 14px; animation: apparition .35s ease both; }
+  .message { margin-top: 12px; font-size: .9rem; color: var(--alerte); }
+  details { margin-top: 8px; font-size: .8rem; color: var(--muet); }
+  pre { white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow: auto; margin: 6px 0 0; }
+  .squelette { margin-top: 16px; padding: 16px; background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; }
+  .squelette span { display: block; height: 14px; border-radius: 6px; margin-bottom: 12px; background: linear-gradient(90deg, var(--bord) 25%, transparent 50%, var(--bord) 75%); background-size: 250% 100%; animation: brille 1.4s linear infinite; }
+  .squelette span:first-child { width: 55%; height: 18px; }
+  .squelette span:last-child { width: 100%; height: 44px; margin: 0; }
+  .point { display: inline-block; width: 12px; height: 12px; margin-right: 8px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; vertical-align: -1px; animation: tour .8s linear infinite; }
+  @keyframes apparition { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @keyframes brille { from { background-position: 150% 0; } to { background-position: -100% 0; } }
+  @keyframes tour { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Test bambara : les voix</h1>
+  <p class="muet">Écris une phrase en bambara, puis écoute chaque voix pour les comparer.</p>
+
+  <label for="texte">Texte en bambara</label>
+  <textarea id="texte" placeholder="Ex. : An ka taa sugu la."></textarea>
+  <div class="ligne-compteur muet">
+    <span>La première fois, une voix met plus longtemps à se charger.</span>
+    <span id="compteur"></span>
+  </div>
+
+  <div id="message-global" class="message" role="alert" hidden></div>
+  <div class="actions" style="margin-top: 16px"><button id="tout" class="sobre" disabled>Tout écouter</button></div>
+  <div id="liste" aria-live="polite">
+    <div class="squelette" aria-hidden="true"><span></span><span></span><span></span></div>
+    <div class="squelette" aria-hidden="true"><span></span><span></span><span></span></div>
+  </div>
+</main>
+
+<script>
+const jeton = new URLSearchParams(location.search).get('token') || '';
+const entetes = jeton ? { 'X-Test-Token': jeton } : {};
+
+const zoneTexte = document.getElementById('texte');
+const compteur = document.getElementById('compteur');
+const liste = document.getElementById('liste');
+const boutonTout = document.getElementById('tout');
+const messageGlobal = document.getElementById('message-global');
+
+let texteMax = 0;
+let voix = [];               // description des voix (venue du serveur)
+const cartes = {};           // id -> éléments de la carte
+const adresses = {};         // id -> adresse audio temporaire à libérer
+let occupe = false;
+let enSerie = false;         // « Tout écouter » en cours
+
+function el(nom, classe, texte) {
+  const e = document.createElement(nom);
+  if (classe) e.className = classe;
+  if (texte !== undefined) e.textContent = texte;
+  return e;
+}
+
+function afficherGlobal(texte) {
+  messageGlobal.textContent = texte || '';
+  messageGlobal.hidden = !texte;
+}
+
+function texteValide() {
+  const n = zoneTexte.value.trim().length;
+  return n > 0 && (!texteMax || zoneTexte.value.length <= texteMax);
+}
+
+function majCompteur() {
+  compteur.textContent = texteMax ? zoneTexte.value.length + ' / ' + texteMax : '';
+}
+
+function majBoutons() {
+  const ok = texteValide() && !occupe && !enSerie;
+  for (const id of Object.keys(cartes)) {
+    const c = cartes[id];
+    c.bouton.disabled = !ok || !c.pret;
+  }
+  boutonTout.disabled = !ok || !Object.values(cartes).some((c) => c.pret);
+}
+
+function construireCartes() {
+  liste.replaceChildren();
+  for (const v of voix) {
+    const carte = el('section', 'carte');
+    const titre = el('h2', '', v.nom);
+    const depot = el('p', 'depot', v.depot);
+    const pastilles = el('ul', 'pastilles');
+    pastilles.appendChild(el('li', v.licence === 'non_commercial' ? 'fort' : '',
+      v.licence === 'non_commercial' ? 'Licence non commerciale : pour tester seulement' : 'Licence à vérifier avant toute mise en production'));
+    if (v.experimental) pastilles.appendChild(el('li', '', 'Modèle expérimental'));
+    const pastilleEtat = el('li', '', 'Chargement du modèle…');
+    pastilles.appendChild(pastilleEtat);
+
+    const actions = el('div', 'actions');
+    let choix = null;
+    if (v.locuteurs > 1) {
+      choix = el('select');
+      choix.setAttribute('aria-label', 'Locuteur pour ' + v.nom);
+      for (let i = 0; i < v.locuteurs; i++) {
+        const o = el('option', '', 'Locuteur ' + (i + 1));
+        o.value = String(i);
+        choix.appendChild(o);
+      }
+      actions.appendChild(choix);
+    }
+    const bouton = el('button', '', 'Écouter');
+    bouton.disabled = true;
+    actions.appendChild(bouton);
+
+    const zoneAudio = el('div');
+    const zoneErreur = el('div');
+
+    carte.append(titre, depot, pastilles, actions, zoneAudio, zoneErreur);
+    liste.appendChild(carte);
+    cartes[v.id] = { bouton, choix, pastilleEtat, zoneAudio, zoneErreur, pret: false };
+    bouton.addEventListener('click', () => ecouter(v.id));
+  }
+}
+
+function montrerErreur(id, message, detail) {
+  const zone = cartes[id].zoneErreur;
+  zone.replaceChildren();
+  if (!message) return;
+  zone.appendChild(el('p', 'message', message));
+  if (detail) {
+    const d = el('details');
+    d.appendChild(el('summary', '', 'Détail technique'));
+    d.appendChild(el('pre', '', detail));
+    zone.appendChild(d);
+  }
+}
+
+async function ecouter(id) {
+  const c = cartes[id];
+  const ancienTexte = c.bouton.textContent;
+  occupe = true;
+  majBoutons();
+  c.bouton.textContent = '';
+  c.bouton.append(el('span', 'point'), document.createTextNode('Préparation…'));
+  montrerErreur(id, '');
+  try {
+    const reponse = await fetch('synthese', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...entetes },
+      body: JSON.stringify({ voix: id, texte: zoneTexte.value, locuteur: c.choix ? Number(c.choix.value) : 0 }),
+    });
+    if (!reponse.ok) {
+      let corps = {};
+      try { corps = await reponse.json(); } catch (e) { /* corps non JSON */ }
+      montrerErreur(id, corps.erreur || 'Erreur ' + reponse.status, corps.detail);
+      return;
+    }
+    const audio = await reponse.blob();
+    const lecteur = el('audio');
+    lecteur.controls = true;
+    lecteur.setAttribute('aria-label', 'Écouter la voix ' + voix.find((v) => v.id === id).nom);
+    if (adresses[id]) URL.revokeObjectURL(adresses[id]);
+    adresses[id] = URL.createObjectURL(audio);
+    lecteur.src = adresses[id];
+    c.zoneAudio.replaceChildren(lecteur);
+    lecteur.play().catch(() => { /* lecture auto refusée : le lecteur reste utilisable */ });
+  } catch (e) {
+    montrerErreur(id, 'Le serveur ne répond pas. Réessaie dans un instant.', String(e));
+  } finally {
+    c.bouton.textContent = ancienTexte;
+    occupe = false;
+    majBoutons();
+  }
+}
+
+async function toutEcouter() {
+  enSerie = true;
+  majBoutons();
+  try {
+    for (const v of voix) {
+      if (!cartes[v.id].pret) continue;
+      await ecouter(v.id);
+    }
+  } finally {
+    enSerie = false;
+    majBoutons();
+  }
+}
+
+let minuteur = null;
+async function majEtat() {
+  try {
+    const reponse = await fetch('etat');
+    const etat = await reponse.json();
+    let attente = false;
+    for (const id of Object.keys(cartes)) {
+      const e = etat.voix[id];
+      const c = cartes[id];
+      if (!e) continue;
+      c.pret = !!e.pret;
+      c.pastilleEtat.className = e.erreur ? 'erreur' : (e.pret ? 'fort' : '');
+      c.pastilleEtat.textContent = e.erreur ? 'Échec du chargement : ' + e.erreur : (e.pret ? 'Prête' : 'Chargement du modèle…');
+      if (!e.pret && !e.erreur) attente = true;
+    }
+    majBoutons();
+    if (!attente) { clearInterval(minuteur); minuteur = null; }
+  } catch (e) {
+    /* le prochain passage réessaiera */
+  }
+}
+
+async function demarrer() {
+  try {
+    const reponse = await fetch('voix', { headers: entetes });
+    if (!reponse.ok) {
+      let corps = {};
+      try { corps = await reponse.json(); } catch (e) { /* corps non JSON */ }
+      liste.replaceChildren();
+      afficherGlobal(corps.erreur || 'Impossible de charger la liste des voix (erreur ' + reponse.status + ').');
+      return;
+    }
+    const donnees = await reponse.json();
+    voix = donnees.voix;
+    texteMax = donnees.texte_max;
+    majCompteur();
+    if (!voix.length) {
+      liste.replaceChildren();
+      afficherGlobal("Aucune voix n'est activée pour le moment.");
+      return;
+    }
+    construireCartes();
+    await majEtat();
+    minuteur = minuteur || setInterval(majEtat, 3000);
+    if (Object.values(cartes).every((c) => c.pret)) { clearInterval(minuteur); minuteur = null; }
+  } catch (e) {
+    liste.replaceChildren();
+    afficherGlobal('Le serveur ne répond pas. Réessaie dans un instant.');
+  }
+}
+
+zoneTexte.addEventListener('input', () => { majCompteur(); majBoutons(); });
+boutonTout.addEventListener('click', toutEcouter);
+demarrer();
+</script>
+</body>
+</html>
