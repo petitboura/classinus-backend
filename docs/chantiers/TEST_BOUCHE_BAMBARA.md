@@ -41,3 +41,7 @@ Build pack Dockerfile, base directory `/bambara-bouche`, port 8000, domain start
 ## Run the tests
 
 From the folder: `python3 -m unittest test_app`.
+
+## Buzzing diagnosis
+
+A constant buzz at 86 Hz (the model frame rate, 22050/256) that does not change with the speaker or the noise setting points to model weights that were not loaded. `transformers` is pinned to 5.9.0, the version the model card was tested with. Open `/etat`: each voice shows `nb_manquantes` (number of weights missing from the voice file, should be 0) and `manquantes` (the first names). The same list is written to the logs as a warning.

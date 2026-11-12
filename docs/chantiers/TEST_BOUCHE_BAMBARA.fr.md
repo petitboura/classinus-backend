@@ -41,3 +41,7 @@ Build pack Dockerfile, dossier de base `/bambara-bouche`, port 8000, domaine com
 ## Lancer les tests
 
 Depuis le dossier : `python3 -m unittest test_app`.
+
+## Diagnostic du bourdonnement
+
+Un bourdonnement constant à 86 Hz (la cadence interne du modèle, 22050/256) qui ne change ni avec le locuteur ni avec le réglage du bruit indique des poids du modèle non chargés. `transformers` est fixé à 5.9.0, la version avec laquelle la fiche du modèle a été testée. Ouvrir `/etat` : chaque voix indique `nb_manquantes` (nombre de poids absents du fichier de voix, doit valoir 0) et `manquantes` (les premiers noms). La même liste est écrite dans les logs en avertissement.

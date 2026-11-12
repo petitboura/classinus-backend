@@ -122,7 +122,13 @@ def charger(voix_id: str) -> None:
 
         depot = VOIX[voix_id]["depot"]
         tokenizer = AutoTokenizer.from_pretrained(depot)
-        modele = VitsModel.from_pretrained(depot)
+        modele, infos = VitsModel.from_pretrained(depot, output_loading_info=True)
+        # Poids absents du fichier de voix : ils restent au hasard et donnent un bourdonnement.
+        manquantes = sorted(infos.get("missing_keys", []))
+        if manquantes:
+            logger.warning("Voix %s : %d poids non chargés : %s", voix_id, len(manquantes), manquantes[:20])
+        _etat[voix_id]["manquantes"] = manquantes[:20]
+        _etat[voix_id]["nb_manquantes"] = len(manquantes)
         modele.eval()
         modele.noise_scale = bruit_scale()
         modele.noise_scale_duration = bruit_duree()

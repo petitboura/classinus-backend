@@ -173,6 +173,21 @@ class SyntheseTests(unittest.TestCase):
         self.assertFalse(etats["bam_vits"]["pret"])
         self.assertIn("hors ligne", etats["bam_vits"]["erreur"])
 
+    def test_chargement_signale_les_poids_manquants(self):
+        faux_modele = _FauxModele()
+        faux_modele.eval = lambda: None
+        faux = types.ModuleType("transformers")
+        faux.AutoTokenizer = types.SimpleNamespace(from_pretrained=mock.Mock(return_value=_faux_tokenizer))
+        faux.VitsModel = types.SimpleNamespace(
+            from_pretrained=mock.Mock(return_value=(faux_modele, {"missing_keys": ["decoder.b", "decoder.a"]}))
+        )
+        etats = {i: {"pret": False, "chargement": False, "erreur": None} for i in voix.VOIX}
+        with mock.patch.object(voix, "_etat", etats), mock.patch.object(voix, "_modeles", {}), \
+                mock.patch.dict(sys.modules, {"transformers": faux}):
+            voix.charger("bam_vits")
+        self.assertTrue(etats["bam_vits"]["pret"])
+        self.assertEqual((etats["bam_vits"]["nb_manquantes"], etats["bam_vits"]["manquantes"]), (2, ["decoder.a", "decoder.b"]))
+
     def test_echec_du_modele_donne_un_detail(self):
         class Casse(_FauxModele):
             def __call__(self, **kwargs):
