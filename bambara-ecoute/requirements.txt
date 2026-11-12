@@ -1,4 +1,4 @@
-nemo_toolkit[asr]
+nemo_toolkit[asr]==2.6.2
 fastapi
 uvicorn
 python-multipart
