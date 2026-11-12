@@ -102,6 +102,15 @@ class ValidationTests(unittest.TestCase):
             voix.valider(*args)
         return ctx.exception.statut
 
+    def test_bruit_variable_et_valeur_invalide(self):
+        with mock.patch.dict(os.environ, {"BRUIT_SCALE": "0.1", "BRUIT_DUREE": "abc"}):
+            self.assertEqual(voix.bruit_scale(), 0.1)
+            self.assertEqual(voix.bruit_duree(), voix.BRUIT_DUREE_DEFAUT)
+        with mock.patch.dict(os.environ, {"BRUIT_SCALE": "5"}):
+            self.assertEqual(voix.bruit_scale(), voix.BRUIT_DEFAUT)
+        with mock.patch.dict(os.environ, {"BRUIT_SCALE": "0"}):
+            self.assertEqual(voix.bruit_scale(), 0.0)
+
     def test_cas_refuses(self):
         self.assertEqual(self._statut("nexiste_pas", "An ka taa", 0), 404)
         self.assertEqual(self._statut("bam_vits", "   ", 0), 400)

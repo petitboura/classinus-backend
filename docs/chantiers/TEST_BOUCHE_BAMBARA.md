@@ -23,6 +23,7 @@ The `ekodi` female voice is not in the catalogue: its model card could not be re
 - `VOIX_ACTIVES`: comma-separated voice ids, all voices if absent.
 - `TEXTE_MAX` (default 600): maximum text length in characters.
 - `SYNTHESES_MAX` (default 1): simultaneous syntheses.
+- `BRUIT_SCALE` (default 0.3, between 0 and 1): random noise VITS adds to each synthesis (model default 0.667). Lower it if the voice sounds noisy; undertrained voices turn this randomness into audible noise. `BRUIT_DUREE` (default 0.8): same for rhythm.
 - `PRECHARGER` (default 1): set to 0 to load each voice at first use instead of at startup.
 - `TEST_ACCESS_TOKEN`: if set, `/voix` and `/synthese` require it. Open the page with `?token=VALUE`.
 - `HF_HOME` (set to `/data/hf` in the Dockerfile): where model weights are kept. Mount a volume on `/data`.

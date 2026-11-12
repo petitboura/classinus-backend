@@ -43,6 +43,10 @@ VOIX: dict[str, dict] = {
 }
 
 TEXTE_MAX_DEFAUT = 600
+# Hasard ajouté à chaque synthèse par VITS (défaut du modèle : 0.667 et 0.8). Les voix peu
+# entraînées le transforment en bruit audible : on le baisse, réglable sans toucher au code.
+BRUIT_DEFAUT = 0.3
+BRUIT_DUREE_DEFAUT = 0.8
 
 
 class ErreurVoix(Exception):
@@ -61,6 +65,23 @@ def _entier_env(nom: str, defaut: int) -> int:
     except ValueError:
         return defaut
     return valeur if valeur > 0 else defaut
+
+
+def _flottant_env(nom: str, defaut: float) -> float:
+    """Lit un nombre entre 0 et 1 dans l'environnement; valeur absente ou invalide : défaut."""
+    try:
+        valeur = float((os.environ.get(nom) or "").strip())
+    except ValueError:
+        return defaut
+    return valeur if 0.0 <= valeur <= 1.0 else defaut
+
+
+def bruit_scale() -> float:
+    return _flottant_env("BRUIT_SCALE", BRUIT_DEFAUT)
+
+
+def bruit_duree() -> float:
+    return _flottant_env("BRUIT_DUREE", BRUIT_DUREE_DEFAUT)
 
 
 def texte_max() -> int:
@@ -103,6 +124,8 @@ def charger(voix_id: str) -> None:
         tokenizer = AutoTokenizer.from_pretrained(depot)
         modele = VitsModel.from_pretrained(depot)
         modele.eval()
+        modele.noise_scale = bruit_scale()
+        modele.noise_scale_duration = bruit_duree()
         _modeles[voix_id] = (tokenizer, modele)
         _etat[voix_id].update(pret=True, chargement=False)
     except Exception as e:
