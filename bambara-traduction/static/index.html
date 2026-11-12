@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Test bambara : les traducteurs</title>
+<style>
+  :root { --fond:#fafafa; --carte:#ffffff; --texte:#222222; --muet:#666666; --bord:#dddddd; --accent:#222222; --sur-accent:#ffffff; --alerte:#c0392b; --ok:#2e7d32; --moyen:#b26a00; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fond:#151515; --carte:#1f1f1f; --texte:#eeeeee; --muet:#a0a0a0; --bord:#343434; --accent:#eeeeee; --sur-accent:#151515; --alerte:#ff7b6b; --ok:#6fcf73; --moyen:#ffb54d; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background:var(--fond); color:var(--texte);
+    padding: calc(env(safe-area-inset-top, 0px) + 24px) 16px calc(env(safe-area-inset-bottom, 0px) + 32px); }
+  main { max-width: 640px; margin: 0 auto; }
+  .entete { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+  h1 { font-size:1.3rem; margin:0 0 4px; }
+  p { margin:0; }
+  .muet { color:var(--muet); font-size:.9rem; }
+  label { display:block; margin:20px 0 6px; font-size:.8rem; color:var(--muet); text-transform:uppercase; letter-spacing:.04em; }
+  select, textarea { width:100%; font:inherit; color:var(--texte); background:var(--carte); border:1px solid var(--bord); border-radius:10px; padding:12px; min-height:44px; }
+  textarea { min-height:110px; resize:vertical; font-size:1rem; }
+  #langue { width:auto; }
+  .grille { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; }
+  textarea:focus-visible, select:focus-visible, button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  button { min-height:44px; padding:12px 18px; font:inherit; font-size:.95rem; border:0; border-radius:10px; background:var(--accent); color:var(--sur-accent); cursor:pointer; transition:opacity .25s, transform .2s; }
+  button:active:not(:disabled) { transform:scale(.97); }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  button.sobre { background:transparent; color:var(--texte); border:1px solid var(--bord); }
+  .actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:16px; }
+  .carte { margin-top:16px; padding:16px; background:var(--carte); border:1px solid var(--bord); border-radius:12px; animation: apparition .35s ease both; }
+  .meta { color:var(--muet); font-size:.8rem; }
+  .entree { margin-top:8px; color:var(--muet); }
+  .sortie { margin-top:8px; font-size:1.05rem; white-space:pre-wrap; word-break:break-word; }
+  .note { margin-top:8px; font-size:.8rem; color:var(--muet); }
+  .alerte { color:var(--alerte); }
+  .verdicts { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-top:12px; }
+  .verdicts button { background:transparent; color:var(--texte); border:1px solid var(--bord); }
+  .verdicts button.choisi-ok { background:var(--ok); color:#fff; border-color:var(--ok); }
+  .verdicts button.choisi-moyen { background:var(--moyen); color:#fff; border-color:var(--moyen); }
+  .verdicts button.choisi-faux { background:var(--alerte); color:#fff; border-color:var(--alerte); }
+  .squelette span { display:block; height:14px; border-radius:6px; margin-bottom:12px; background:linear-gradient(90deg, var(--bord) 25%, transparent 50%, var(--bord) 75%); background-size:250% 100%; animation: brille 1.4s linear infinite; }
+  .squelette span:last-child { width:60%; margin:0; }
+  details { margin-top:8px; font-size:.8rem; color:var(--muet); }
+  pre { white-space:pre-wrap; word-break:break-word; max-height:200px; overflow:auto; margin:6px 0 0; }
+  @keyframes apparition { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+  @keyframes brille { from { background-position:150% 0; } to { background-position:-100% 0; } }
+  @media (prefers-reduced-motion: reduce) { * { animation:none !important; transition:none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="entete">
+    <div><h1 id="titre"></h1><p class="muet" id="intro"></p></div>
+    <select id="langue" aria-label="Langue / Language"><option value="fr">Français</option><option value="en">English</option></select>
+  </div>
+
+  <label for="moteur" id="l-moteur"></label><select id="moteur"></select>
+  <div class="note" id="note-moteur"></div>
+  <label for="sens" id="l-sens"></label><select id="sens"></select>
+  <label for="texte" id="l-texte"></label>
+  <textarea id="texte"></textarea>
+  <div class="meta" id="compteur"></div>
+
+  <div id="message-global" class="alerte" role="alert" hidden></div>
+  <div class="actions">
+    <button id="traduire"></button>
+    <button id="copier" class="sobre"></button>
+    <button id="csv" class="sobre"></button>
+  </div>
+  <p class="muet" style="margin-top:12px" id="aide"></p>
+  <div id="liste" aria-live="polite"></div>
+</main>
+<script>
+const TEXTES = {
+  fr: { titre:"Test bambara : les traducteurs", intro:"Choisis un moteur, écris une phrase, compare les résultats. Un locuteur bambara note chaque résultat.",
+        moteur:"Moteur", sens:"Sens de traduction", texte:"Phrase à traduire", ph:"Ex. : Bonjour, comment vas-tu ?",
+        traduire:"Traduire", copier:"Copier le tableau", csv:"Télécharger en CSV", compris:"Compris", moitie:"À moitié", faux:"Faux",
+        attente:"Traduction en cours. La première fois, le modèle se télécharge et peut mettre plusieurs minutes.",
+        aide:"Un locuteur bambara juge chaque résultat avec les trois boutons. Le tableau garde tout.", sec:"s", detail:"Détail technique",
+        erreurs:{ acces_refuse:"Accès refusé : ajoute ?token=VALEUR à l'adresse.", moteur_inconnu:"Moteur inconnu.", sens_non_gere:"Ce moteur ne gère pas ce sens.",
+                  texte_vide:"Écris une phrase d'abord.", texte_trop_long:"Texte trop long.", echec_modele:"Le modèle a échoué (téléchargement ou mémoire). Voir le détail.", generique:"Une erreur est survenue. Réessaie dans un instant." } },
+  en: { titre:"Bambara test: the translators", intro:"Pick an engine, write a sentence, compare the results. A Bambara speaker rates each result.",
+        moteur:"Engine", sens:"Direction", texte:"Sentence to translate", ph:"E.g.: Hello, how are you?",
+        traduire:"Translate", copier:"Copy table", csv:"Download CSV", compris:"Understood", moitie:"Half", faux:"Wrong",
+        attente:"Translating. The first time, the model downloads and can take several minutes.",
+        aide:"A Bambara speaker rates each result with the three buttons. The table keeps everything.", sec:"s", detail:"Technical detail",
+        erreurs:{ acces_refuse:"Access denied: add ?token=VALUE to the address.", moteur_inconnu:"Unknown engine.", sens_non_gere:"This engine does not handle this direction.",
+                  texte_vide:"Write a sentence first.", texte_trop_long:"Text too long.", echec_modele:"The model failed (download or memory). See the detail.", generique:"Something went wrong. Try again in a moment." } }
+};
+const SENS = { "fra-bam":"Français → Bambara", "eng-bam":"English → Bambara", "bam-fra":"Bambara → Français", "bam-eng":"Bambara → English" };
+const $ = id => document.getElementById(id);
+const jeton = new URLSearchParams(location.search).get("token") || "";
+let T = TEXTES.fr, MOTEURS = {}, TEXTE_MAX = 600, LIGNES = [];
+
+function appliquerLangue() {
+  T = TEXTES[$("langue").value]; document.documentElement.lang = $("langue").value;
+  $("titre").textContent = T.titre; $("intro").textContent = T.intro; $("l-moteur").textContent = T.moteur; $("l-sens").textContent = T.sens;
+  $("l-texte").textContent = T.texte; $("texte").placeholder = T.ph; $("traduire").textContent = T.traduire;
+  $("copier").textContent = T.copier; $("csv").textContent = T.csv; $("aide").textContent = T.aide; majCompteur(); dessiner();
+}
+function majCompteur() { $("compteur").textContent = $("texte").value.length + " / " + TEXTE_MAX; }
+function remplirSens() {
+  const m = MOTEURS[$("moteur").value]; $("sens").innerHTML = ""; $("note-moteur").textContent = m ? m.note : "";
+  (m ? m.sens : []).forEach(s => { const o = document.createElement("option"); o.value = s; o.textContent = SENS[s] || s; $("sens").appendChild(o); });
+}
+function message(code) { return T.erreurs[code] || T.erreurs.generique; }
+function dessiner() {
+  const zone = $("liste"); zone.innerHTML = "";
+  LIGNES.slice().reverse().forEach(l => {
+    const c = document.createElement("section"); c.className = "carte";
+    if (l.attente) { c.className += " squelette"; c.innerHTML = "<span></span><span></span>"; const p = document.createElement("p"); p.className = "meta"; p.textContent = T.attente; c.prepend(p); zone.appendChild(c); return; }
+    if (l.erreur) {
+      const p = document.createElement("p"); p.className = "alerte"; p.textContent = message(l.erreur); c.appendChild(p);
+      if (l.detail) { const d = document.createElement("details"); const s = document.createElement("summary"); s.textContent = T.detail; const pre = document.createElement("pre"); pre.textContent = l.detail; d.append(s, pre); c.appendChild(d); }
+      zone.appendChild(c); return;
+    }
+    const meta = document.createElement("div"); meta.className = "meta"; meta.textContent = `${l.nom} · ${SENS[l.sens] || l.sens} · ${l.secondes}${T.sec}`;
+    const e = document.createElement("div"); e.className = "entree"; e.textContent = l.entree;
+    const s = document.createElement("div"); s.className = "sortie"; s.textContent = l.sortie;
+    const v = document.createElement("div"); v.className = "verdicts";
+    [["ok", T.compris], ["moyen", T.moitie], ["faux", T.faux]].forEach(([k, lib]) => {
+      const b = document.createElement("button"); b.textContent = lib; if (l.verdict === k) b.className = "choisi-" + k;
+      b.onclick = () => { l.verdict = k; dessiner(); }; v.appendChild(b);
+    });
+    c.append(meta, e, s, v); zone.appendChild(c);
+  });
+}
+function tableau() { return LIGNES.filter(l => l.sortie).map(l => [l.nom, l.sens, l.entree, l.sortie, l.verdict || ""]); }
+const guillemets = s => '"' + String(s).replace(/"/g, '""') + '"';
+
+async function traduire() {
+  const texte = $("texte").value.trim();
+  if (!texte) { LIGNES.push({ erreur: "texte_vide" }); dessiner(); return; }
+  const [source, cible] = $("sens").value.split("-"), moteur = $("moteur").value;
+  const l = { attente: true }; LIGNES.push(l); dessiner(); $("traduire").disabled = true;
+  try {
+    const r = await fetch("/traduire", { method: "POST", headers: { "Content-Type": "application/json", "X-Test-Token": jeton }, body: JSON.stringify({ moteur, source, cible, texte }) });
+    const d = await r.json(); delete l.attente;
+    if (!r.ok) { l.erreur = d.erreur || "generique"; l.detail = d.detail || ""; }
+    else Object.assign(l, d, { nom: MOTEURS[moteur].nom });
+  } catch (e) { delete l.attente; l.erreur = "generique"; }
+  $("traduire").disabled = false; dessiner();
+}
+
+$("langue").onchange = appliquerLangue; $("moteur").onchange = remplirSens; $("traduire").onclick = traduire; $("texte").oninput = majCompteur;
+$("copier").onclick = () => navigator.clipboard.writeText(tableau().map(r => r.join("\t")).join("\n"));
+$("csv").onclick = () => {
+  const csv = "moteur,sens,entree,sortie,verdict\n" + tableau().map(r => r.map(guillemets).join(",")).join("\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "resultats-traduction.csv"; a.click();
+};
+fetch("/moteurs", { headers: { "X-Test-Token": jeton } }).then(async r => {
+  const d = await r.json();
+  if (!r.ok) { $("message-global").hidden = false; $("message-global").textContent = message(d.erreur); return; }
+  MOTEURS = d.moteurs; TEXTE_MAX = d.texte_max; $("texte").maxLength = TEXTE_MAX;
+  Object.entries(MOTEURS).forEach(([k, v]) => { const o = document.createElement("option"); o.value = k; o.textContent = v.nom; $("moteur").appendChild(o); });
+  remplirSens(); majCompteur();
+}).catch(() => { $("message-global").hidden = false; $("message-global").textContent = message("generique"); });
+appliquerLangue();
+</script>
+</body>
+</html>

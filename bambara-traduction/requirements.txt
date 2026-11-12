@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+httpx
+transformers>=4.47,<6
+sentencepiece
+sacremoses
+protobuf
+accelerate
