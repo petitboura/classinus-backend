@@ -15,7 +15,7 @@ etat = {"modele": None, "pret": False, "erreur": None}
 def charger_modele():
     try:
         import nemo.collections.asr as nemo_asr
-        etat["modele"] = nemo_asr.models.ASRModel.from_pretrained(model_name=MODEL_NAME)
+        etat["modele"] = nemo_asr.models.EncDecHybridRNNTCTCBPEModel.from_pretrained(model_name=MODEL_NAME)
         etat["pret"] = True
     except Exception as e:
         etat["erreur"] = str(e)
