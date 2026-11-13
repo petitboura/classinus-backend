@@ -8,11 +8,16 @@ VOIX_ACTIVES (identifiants séparés par des virgules), toutes si elle est absen
 """
 from __future__ import annotations
 
+import base64
 import io
+import json
 import logging
 import os
+import re
 import threading
 import traceback
+import urllib.error
+import urllib.request
 import wave
 
 logger = logging.getLogger(__name__)
@@ -20,6 +25,7 @@ logger = logging.getLogger(__name__)
 # Statut de licence tel que lu sur la fiche du modèle (pas un avis juridique) :
 #   "non_commercial" : la fiche interdit l'usage commercial, test seulement.
 #   "a_verifier"     : la fiche ne dit rien de clair, à confirmer avant toute production.
+#   "service_google" : service payant de Google (pas un modèle téléchargé), utilise la clé GOOGLE_API_KEY.
 VOIX: dict[str, dict] = {
     "ekodi_femme": {
         "nom": "ekodi, voix de femme (ynnov)",
@@ -72,6 +78,17 @@ VOIX: dict[str, dict] = {
         "licence": "non_commercial",
         "experimental": False,
     },
+    "gemini_tts": {
+        "nom": "Gemini TTS (Google)",
+        # Nom du modèle affiché sur la page : il vient de GEMINI_TTS_MODELE (voir modele_gemini).
+        "depot": "gemini-3.8-flash-tts",
+        "fournisseur": "gemini",
+        "locuteurs": 1,
+        "minuscules": False,
+        # Pas de modèle à télécharger : appel au service Google avec la clé GOOGLE_API_KEY.
+        "licence": "service_google",
+        "experimental": False,
+    },
 }
 
 TEXTE_MAX_DEFAUT = 600
@@ -79,6 +96,11 @@ TEXTE_MAX_DEFAUT = 600
 # réglables par variable d'environnement sans toucher au code.
 BRUIT_DEFAUT = 0.667
 BRUIT_DUREE_DEFAUT = 0.8
+# Voix Gemini : valeurs par défaut, réglables par variable d'environnement sans toucher au code.
+GEMINI_MODELE_DEFAUT = "gemini-3.8-flash-tts"
+GEMINI_VOIX_DEFAUT = "Kore"
+GEMINI_DELAI_DEFAUT = 60
+GEMINI_ADRESSE = "https://generativelanguage.googleapis.com/v1beta/models/{modele}:generateContent"
 
 
 class ErreurVoix(Exception):
@@ -116,6 +138,22 @@ def bruit_duree() -> float:
     return _flottant_env("BRUIT_DUREE", BRUIT_DUREE_DEFAUT)
 
 
+def cle_google() -> str:
+    return (os.environ.get("GOOGLE_API_KEY") or "").strip()
+
+
+def modele_gemini() -> str:
+    return (os.environ.get("GEMINI_TTS_MODELE") or "").strip() or GEMINI_MODELE_DEFAUT
+
+
+def voix_gemini() -> str:
+    return (os.environ.get("GEMINI_TTS_VOIX") or "").strip() or GEMINI_VOIX_DEFAUT
+
+
+def _est_gemini(voix_id: str) -> bool:
+    return VOIX[voix_id].get("fournisseur") == "gemini"
+
+
 def texte_max() -> int:
     return _entier_env("TEXTE_MAX", TEXTE_MAX_DEFAUT)
 
@@ -128,7 +166,11 @@ def voix_actives() -> list[str]:
 
 
 def lister_voix() -> list[dict]:
-    return [{"id": i, **{k: VOIX[i][k] for k in ("nom", "depot", "locuteurs", "licence", "experimental")}} for i in voix_actives()]
+    voix_listees = [{"id": i, **{k: VOIX[i][k] for k in ("nom", "depot", "locuteurs", "licence", "experimental")}} for i in voix_actives()]
+    for v in voix_listees:
+        if _est_gemini(v["id"]):
+            v["depot"] = modele_gemini()
+    return voix_listees
 
 
 # Chargement des modèles : un état par voix, lisible par la page pendant le téléchargement.
@@ -150,6 +192,11 @@ def charger(voix_id: str) -> None:
             return
         etat.update(chargement=True, erreur=None)
     try:
+        if _est_gemini(voix_id):
+            if not cle_google():
+                raise RuntimeError("GOOGLE_API_KEY absente : ajoute la clé Google dans les variables du service.")
+            _etat[voix_id].update(pret=True, chargement=False)
+            return
         from transformers import AutoTokenizer, VitsModel
 
         depot = VOIX[voix_id]["depot"]
@@ -213,6 +260,9 @@ def synthetiser(voix_id: str, texte: str, locuteur: int = 0) -> bytes:
                 raise ErreurVoix(500, "Cette voix n'a pas pu se charger.", etat["erreur"])
         else:
             raise ErreurVoix(503, "La voix charge encore, réessaie dans une minute.")
+    if _est_gemini(voix_id):
+        with _places:
+            return _synthetiser_gemini(propre)
     if VOIX[voix_id]["minuscules"]:
         propre = propre.lower()
     tokenizer, modele = _modeles[voix_id]
@@ -229,3 +279,82 @@ def synthetiser(voix_id: str, texte: str, locuteur: int = 0) -> bytes:
             trace = traceback.format_exc()
             logger.error("Synthèse échouée avec la voix %s\n%s", voix_id, trace)
             raise ErreurVoix(500, "La voix n'a pas réussi à lire ce texte : " + str(e), trace)
+
+
+def _wav_depuis_pcm(brut: bytes, frequence: int) -> bytes:
+    tampon = io.BytesIO()
+    with wave.open(tampon, "wb") as fichier:
+        fichier.setnchannels(1)
+        fichier.setsampwidth(2)
+        fichier.setframerate(int(frequence))
+        fichier.writeframes(brut)
+    return tampon.getvalue()
+
+
+def _synthetiser_gemini(texte: str) -> bytes:
+    """Lecture de texte par Gemini TTS (appel direct à l'API Google, sans bibliothèque en plus).
+
+    La langue est détectée par Gemini. Le bambara n'est pas dans sa liste de langues : le but
+    de cette voix est de vérifier à l'oreille ce qu'il en fait. La réponse est un WAV complet
+    (24 kHz, mono) pour une requête simple; du PCM brut est aussi accepté par prudence.
+    """
+    cle = cle_google()
+    if not cle:
+        raise ErreurVoix(500, "La clé Google n'est pas configurée dans ce service (variable GOOGLE_API_KEY).")
+    corps = {
+        "contents": [{"role": "user", "parts": [{"text": texte}]}],
+        "generationConfig": {
+            "responseModalities": ["AUDIO"],
+            "speechConfig": {"voiceConfig": {"voice": voix_gemini()}},
+        },
+    }
+    requete = urllib.request.Request(
+        GEMINI_ADRESSE.format(modele=modele_gemini()),
+        data=json.dumps(corps).encode("utf-8"),
+        headers={"Content-Type": "application/json", "x-goog-api-key": cle},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(requete, timeout=_entier_env("GEMINI_DELAI_S", GEMINI_DELAI_DEFAUT)) as reponse:
+            donnees = json.loads(reponse.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")[:1500]
+        logger.error("Gemini TTS : erreur HTTP %s : %s", e.code, detail)
+        if e.code == 429:
+            message = "Google refuse pour l'instant (quota atteint). Réessaie dans un moment."
+        elif e.code in (401, 403):
+            message = "Google a refusé la clé ou le modèle (clé invalide, ou accès à ce modèle non autorisé)."
+        elif e.code == 404:
+            message = "Google ne connaît pas ce modèle de voix (vérifie GEMINI_TTS_MODELE)."
+        else:
+            message = f"Google a renvoyé une erreur ({e.code})."
+        raise ErreurVoix(502, message, detail)
+    except Exception as e:
+        logger.error("Gemini TTS : appel impossible\n%s", traceback.format_exc())
+        raise ErreurVoix(502, "Impossible de joindre Google : " + str(e), traceback.format_exc())
+
+    audio, type_mime = None, ""
+    for candidat in (donnees.get("candidates") or []):
+        for partie in ((candidat.get("content") or {}).get("parts") or []):
+            brut = partie.get("inlineData") or partie.get("inline_data")
+            if brut and brut.get("data"):
+                audio, type_mime = brut["data"], str(brut.get("mimeType") or brut.get("mime_type") or "")
+                break
+        if audio:
+            break
+    if not audio:
+        detail = json.dumps(
+            {"promptFeedback": donnees.get("promptFeedback"),
+             "finishReason": [c.get("finishReason") for c in (donnees.get("candidates") or [])]},
+            ensure_ascii=False,
+        )
+        logger.error("Gemini TTS : aucun son dans la réponse : %s", detail)
+        raise ErreurVoix(502, "Gemini n'a renvoyé aucun son pour ce texte (il l'a peut-être refusé).", detail)
+    try:
+        octets = base64.b64decode(audio)
+    except Exception as e:
+        raise ErreurVoix(502, "Le son renvoyé par Gemini est illisible : " + str(e))
+    if octets[:4] == b"RIFF":
+        return octets
+    trouve = re.search(r"rate=(\d+)", type_mime)
+    return _wav_depuis_pcm(octets, int(trouve.group(1)) if trouve else 24000)

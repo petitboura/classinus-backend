@@ -127,8 +127,12 @@ function construireCartes() {
     const titre = el('h2', '', v.nom);
     const depot = el('p', 'depot', v.depot);
     const pastilles = el('ul', 'pastilles');
+    const textesLicence = {
+      non_commercial: 'Licence non commerciale : pour tester seulement',
+      service_google: 'Service Google payant : utilise la clé Google du service',
+    };
     pastilles.appendChild(el('li', v.licence === 'non_commercial' ? 'fort' : '',
-      v.licence === 'non_commercial' ? 'Licence non commerciale : pour tester seulement' : 'Licence à vérifier avant toute mise en production'));
+      textesLicence[v.licence] || 'Licence à vérifier avant toute mise en production'));
     if (v.experimental) pastilles.appendChild(el('li', '', 'Modèle expérimental'));
     const pastilleEtat = el('li', '', 'Chargement du modèle…');
     pastilles.appendChild(pastilleEtat);

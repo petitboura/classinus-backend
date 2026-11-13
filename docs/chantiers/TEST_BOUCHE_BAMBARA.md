@@ -17,6 +17,7 @@ A small server with a single test page. You type a Bambara sentence and listen t
 | `mms_meta` | `facebook/mms-tts-bam` | 1 | CC BY-NC 4.0: non-commercial only, comparison reference. |
 | `bam_fintech` | `RobotsMali/bam-vits-fintech` | 1 | CC BY 4.0 on the card. Same family as `bam_vits`, retrained on clean single-speaker recordings; still an undertrained research checkpoint. |
 | `mms_sudoping01` | `sudoping01/bambara-tts` | 1 | CC BY-NC 4.0: non-commercial only, test use only. |
+| `gemini_tts` | `gemini-3.8-flash-tts` (Google) | 1 | Paid Google service, not a downloaded model: uses the `GOOGLE_API_KEY` key. Bambara is not in Gemini TTS's language list (Dyula, a close relative, is); this voice exists to check by ear what it does with Bambara. |
 
 `bam_vits` is kept for comparison but is not a useful voice after measurement: every recording carries a fixed 256-sample pattern (a hum at 86 Hz and its multiples) that does not depend on text, speaker or noise setting, so the defect is in the model's decoder. Gated models (`MALIBA-AI/bambara-tts`, `RobotsMali/Wuro`) are not in the catalogue until access is granted. Adding a voice means adding one entry to `VOIX` in `voix.py`. Licence statuses are what the cards say, not legal advice.
 
@@ -27,6 +28,9 @@ A small server with a single test page. You type a Bambara sentence and listen t
 - `TEXTE_MAX` (default 600): maximum text length in characters.
 - `SYNTHESES_MAX` (default 1): simultaneous syntheses.
 - `BRUIT_SCALE` (default 0.667, between 0 and 1): random noise VITS adds to each synthesis (the model default). `BRUIT_DUREE` (default 0.8): same for rhythm.
+- `GOOGLE_API_KEY`: Google key, only needed for the `gemini_tts` voice. Without it that card shows the error and the other voices work normally.
+- `GEMINI_TTS_MODELE` (default `gemini-3.8-flash-tts`): Gemini voice model (for example `gemini-3.8-flash-lite-tts`).
+- `GEMINI_TTS_VOIX` (default `Kore`): Gemini voice name among its 30 prebuilt voices. `GEMINI_DELAI_S` (default 60): maximum wait for Google, in seconds.
 - `PRECHARGER` (default 1): set to 0 to load each voice at first use instead of at startup.
 - `TEST_ACCESS_TOKEN`: if set, `/voix` and `/synthese` require it. Open the page with `?token=VALUE`.
 - `HF_HOME` (set to `/data/hf` in the Dockerfile): where model weights are kept. Mount a volume on `/data`.

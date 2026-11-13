@@ -2,11 +2,14 @@
 
 Lancer depuis ce dossier : python3 -m unittest test_app
 """
+import base64
 import io
+import json
 import os
 import sys
 import types
 import unittest
+import urllib.error
 import wave
 from contextlib import contextmanager
 from pathlib import Path
@@ -204,6 +207,111 @@ class SyntheseTests(unittest.TestCase):
                 voix.synthetiser("bam_vits", "An ka taa", 0)
         self.assertEqual(ctx.exception.statut, 500)
         self.assertIn("ZeroDivisionError", ctx.exception.detail)
+
+
+class _FausseReponse:
+    def __init__(self, contenu: dict):
+        self._octets = json.dumps(contenu).encode("utf-8")
+
+    def read(self):
+        return self._octets
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+
+def _reponse_audio(octets: bytes, mime: str = "audio/wav"):
+    donnees = base64.b64encode(octets).decode("ascii")
+    return _FausseReponse({"candidates": [{"content": {"parts": [{"inlineData": {"mimeType": mime, "data": donnees}}]}}]})
+
+
+def _erreur_http(code: int):
+    return urllib.error.HTTPError("https://exemple", code, "erreur", {}, io.BytesIO(b'{"error": "detail de test"}'))
+
+
+class GeminiTests(unittest.TestCase):
+    def test_voix_au_catalogue_avec_modele_de_la_variable(self):
+        statuts = {v["id"]: v for v in voix.lister_voix()}
+        self.assertEqual(statuts["gemini_tts"]["licence"], "service_google")
+        self.assertEqual(statuts["gemini_tts"]["locuteurs"], 1)
+        self.assertEqual(statuts["gemini_tts"]["depot"], "gemini-3.8-flash-tts")
+        with mock.patch.dict(os.environ, {"GEMINI_TTS_MODELE": "gemini-3.8-flash-lite-tts"}):
+            self.assertEqual({v["id"]: v for v in voix.lister_voix()}["gemini_tts"]["depot"], "gemini-3.8-flash-lite-tts")
+
+    def test_charger_sans_cle_garde_l_erreur(self):
+        etats = {i: {"pret": False, "chargement": False, "erreur": None} for i in voix.VOIX}
+        with mock.patch.object(voix, "_etat", etats), mock.patch.dict(os.environ, {"GOOGLE_API_KEY": ""}):
+            voix.charger("gemini_tts")
+        self.assertFalse(etats["gemini_tts"]["pret"])
+        self.assertIn("GOOGLE_API_KEY", etats["gemini_tts"]["erreur"])
+
+    def test_charger_avec_cle_est_pret_sans_telechargement(self):
+        etats = {i: {"pret": False, "chargement": False, "erreur": None} for i in voix.VOIX}
+        with mock.patch.object(voix, "_etat", etats), mock.patch.dict(os.environ, {"GOOGLE_API_KEY": "cle-de-test"}):
+            voix.charger("gemini_tts")
+        self.assertTrue(etats["gemini_tts"]["pret"])
+
+    def test_synthese_envoie_texte_voix_modele_et_cle(self):
+        wav = voix.encoder_wav([0.0, 0.5], 24000)
+        with _voix_pretes(), mock.patch.dict(os.environ, {"GOOGLE_API_KEY": "cle-de-test", "GEMINI_TTS_VOIX": "Puck"}), \
+                mock.patch.object(voix.urllib.request, "urlopen", return_value=_reponse_audio(wav)) as appel:
+            audio = voix.synthetiser("gemini_tts", "  An ka taa  ", 0)
+        requete = appel.call_args.args[0]
+        self.assertIn("gemini-3.8-flash-tts:generateContent", requete.full_url)
+        self.assertEqual(requete.get_header("X-goog-api-key"), "cle-de-test")
+        corps = json.loads(requete.data.decode("utf-8"))
+        self.assertEqual(corps["contents"][0]["parts"][0]["text"], "An ka taa")
+        self.assertEqual(corps["generationConfig"]["speechConfig"]["voiceConfig"]["voice"], "Puck")
+        self.assertEqual(corps["generationConfig"]["responseModalities"], ["AUDIO"])
+        self.assertEqual(audio, wav)
+
+    def test_pcm_brut_enveloppe_dans_un_wav_a_la_frequence_annoncee(self):
+        pcm = np.array([0, 1000, -1000], dtype="<i2").tobytes()
+        with _voix_pretes(), mock.patch.dict(os.environ, {"GOOGLE_API_KEY": "cle-de-test"}), \
+                mock.patch.object(voix.urllib.request, "urlopen", return_value=_reponse_audio(pcm, "audio/L16;codec=pcm;rate=16000")):
+            audio = voix.synthetiser("gemini_tts", "An ka taa", 0)
+        with wave.open(io.BytesIO(audio)) as f:
+            self.assertEqual((f.getnchannels(), f.getsampwidth(), f.getframerate(), f.getnframes()), (1, 2, 16000, 3))
+
+    def test_cle_absente_donne_500(self):
+        with _voix_pretes(), mock.patch.dict(os.environ, {"GOOGLE_API_KEY": ""}):
+            with self.assertRaises(voix.ErreurVoix) as ctx:
+                voix.synthetiser("gemini_tts", "An ka taa", 0)
+        self.assertEqual(ctx.exception.statut, 500)
+        self.assertIn("GOOGLE_API_KEY", ctx.exception.message)
+
+    def test_erreurs_google_en_messages_lisibles(self):
+        attendus = {429: "quota", 403: "refusé la clé", 404: "ne connaît pas ce modèle", 500: "erreur (500)"}
+        for code, extrait in attendus.items():
+            with self.subTest(code=code), _voix_pretes(), mock.patch.dict(os.environ, {"GOOGLE_API_KEY": "cle-de-test"}), \
+                    mock.patch.object(voix.urllib.request, "urlopen", side_effect=_erreur_http(code)):
+                with self.assertRaises(voix.ErreurVoix) as ctx:
+                    voix.synthetiser("gemini_tts", "An ka taa", 0)
+            self.assertEqual(ctx.exception.statut, 502)
+            self.assertIn(extrait, ctx.exception.message)
+            self.assertIn("detail de test", ctx.exception.detail)
+            self.assertNotIn("cle-de-test", ctx.exception.message + ctx.exception.detail)
+
+    def test_reponse_sans_son_donne_502_avec_detail(self):
+        vide = _FausseReponse({"candidates": [{"finishReason": "OTHER"}], "promptFeedback": {"blockReason": "SAFETY"}})
+        with _voix_pretes(), mock.patch.dict(os.environ, {"GOOGLE_API_KEY": "cle-de-test"}), \
+                mock.patch.object(voix.urllib.request, "urlopen", return_value=vide):
+            with self.assertRaises(voix.ErreurVoix) as ctx:
+                voix.synthetiser("gemini_tts", "An ka taa", 0)
+        self.assertEqual(ctx.exception.statut, 502)
+        self.assertIn("aucun son", ctx.exception.message)
+        self.assertIn("SAFETY", ctx.exception.detail)
+
+    def test_reseau_coupe_donne_502(self):
+        with _voix_pretes(), mock.patch.dict(os.environ, {"GOOGLE_API_KEY": "cle-de-test"}), \
+                mock.patch.object(voix.urllib.request, "urlopen", side_effect=OSError("hors ligne")):
+            with self.assertRaises(voix.ErreurVoix) as ctx:
+                voix.synthetiser("gemini_tts", "An ka taa", 0)
+        self.assertEqual(ctx.exception.statut, 502)
+        self.assertIn("hors ligne", ctx.exception.message)
 
 
 class ServeurTests(unittest.TestCase):
