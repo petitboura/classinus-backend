@@ -106,11 +106,15 @@ class DansLaListe(BaseTest):
         self.env({**CLES_AUTRES, "BASETEN_API_KEY": "b"})
         self.assertEqual(fournisseurs_llm.modeles_disponibles_pour_agent("aucun", "pro"), [])
 
-    def test_aucun_reglage_d_effort_pour_open(self):
-        self.assertEqual(efforts_modeles.efforts_pour_modele(OPEN_ID, "meta"), [])
-        # C'est ce que la boucle d'agent appelle (_effort_reflexion) : rien n'est envoyé à Baseten.
+    def test_reglage_d_effort_branche_pour_open(self):
+        # Doc Baseten (13/11/2026) : low, medium, high, xhigh, defaut xhigh chez eux, donc on envoie
+        # toujours un niveau explicite, par defaut le plus leger.
+        self.assertEqual(efforts_modeles.efforts_pour_modele(OPEN_ID, "meta"), ["low", "medium", "high", "xhigh"])
+        # C'est ce que la boucle d'agent appelle (_effort_reflexion).
         self.assertTrue(efforts_modeles.est_modele_avec_adaptateur(OPEN_ID))
-        self.assertIsNone(efforts_modeles.effort_valide_pour_modele(OPEN_ID, "high"))
+        self.assertEqual(efforts_modeles.effort_valide_pour_modele(OPEN_ID, "high"), "high")
+        self.assertEqual(efforts_modeles.effort_valide_pour_modele(OPEN_ID, "none"), "low")
+        self.assertEqual(efforts_modeles.effort_valide_pour_modele(OPEN_ID, None), "low")
         # Muse Spark 1.3 garde ses réglages.
         self.assertIn("high", efforts_modeles.efforts_pour_modele("muse-spark-1.3", "meta"))
 

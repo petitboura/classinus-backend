@@ -85,7 +85,8 @@ class Client(Base):
         client.chat.completions.create(model="nemotron-nano-omni-30b-a3b-reasoning", messages=[], reasoning_effort="high")
         envoye = faux.appels[0]
         self.assertEqual(envoye["model"], "nemotron-3-nano-omni-30b-a3b-reasoning")
-        self.assertNotIn("reasoning_effort", envoye)
+        # L'effort choisi doit partir chez Vultr (regle "tout modele a son effort", 13/11/2026).
+        self.assertEqual(envoye["reasoning_effort"], "high")
         self.assertGreater(envoye["timeout"], 10)
 
     def test_le_delai_court_de_la_cascade_est_remplace(self):
@@ -132,10 +133,21 @@ class Disponibilite(Base):
             self.assertEqual(fournisseurs_llm.VARIABLES_CLE_PAR_DISTRIBUTEUR[fournisseur], "VULTR_INFERENCE_API_KEY")
             self.assertIn(fournisseur, fournisseurs_llm._STREAMERS_PAR_DISTRIBUTEUR)
 
-    def test_aucun_effort_propose(self):
-        for modele in ("glm-5.3", "qwen3.8-27b", "nemotron-nano-omni-30b-a3b-reasoning", "muse-glimmer-30b"):
-            self.assertEqual(efforts_modeles.efforts_pour_modele(modele), [])
-            self.assertIsNone(efforts_modeles.effort_valide_pour_modele(modele, "high"))
+    def test_tous_les_modeles_vultr_ont_un_effort_branche(self):
+        attendus = {
+            "glm-5.3": ["low", "high", "max"],
+            "glm-5.3-flash": ["low", "high", "max"],
+            "qwen3.8-27b": ["low", "medium", "high"],
+            "qwen3.8-flash-next": ["low", "medium", "high"],
+            "nemotron-nano-omni-30b-a3b-reasoning": ["low", "medium", "high"],
+            "muse-glimmer-30b": ["low", "medium", "high"],
+        }
+        for modele, niveaux in attendus.items():
+            self.assertEqual(efforts_modeles.efforts_pour_modele(modele), niveaux, modele)
+            # Sans choix valide, c'est le niveau le plus leger : jamais le maximum par accident.
+            self.assertEqual(efforts_modeles.effort_valide_pour_modele(modele, None), "low", modele)
+            self.assertEqual(efforts_modeles.effort_valide_pour_modele(modele, "none"), "low", modele)
+            self.assertEqual(efforts_modeles.effort_valide_pour_modele(modele, "high"), "high", modele)
 
     def test_aucun_identifiant_contributor_chez_meta(self):
         for info in fournisseurs_llm.HIERARCHIE_MODELES["meta"].values():

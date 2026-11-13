@@ -80,6 +80,20 @@ class Efforts(unittest.TestCase):
         self.assertEqual(effort_valide_pour_modele("claude-opus-5-5", "xhigh", "claude"), "xhigh")
         self.assertIsNone(effort_defaut([]))
 
+    def test_aucun_modele_du_catalogue_sans_effort_branche(self):
+        # Regle absolue de Bourama (13/11/2026, voir CLAUDE.md) : tout modele du selecteur a son
+        # reglage d'effort, quel que soit le fournisseur qui le sert et qui l'ajoute. Ce test
+        # echoue des qu'un modele est ajoute au catalogue sans ses niveaux dans
+        # core/efforts_modeles.py. Seul le palier "specialise" (Grok Build, affichage seulement,
+        # jamais branche) en est exempt.
+        for distributeur, paliers in fournisseurs_llm.HIERARCHIE_MODELES.items():
+            for palier, info in paliers.items():
+                if palier == "specialise":
+                    continue
+                efforts = efforts_pour_modele(info["id"], distributeur)
+                self.assertTrue(efforts, f"{info['id']} ({distributeur}, {palier}) n'a aucun effort branche")
+                self.assertTrue(effort_defaut(efforts), f"{info['id']} n'a pas d'effort par defaut")
+
     def test_la_liste_des_modeles_porte_les_efforts(self):
         avec_cles = {"ANTHROPIC_API_KEY": "x", "DEEPSEEK_API_KEY": "x"}
         fournisseurs_llm.reinitialiser_cache_config_modeles()

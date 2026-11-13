@@ -13,7 +13,8 @@ catalogue (GET /v1/models, cache 10 minutes) : si Vultr a ajoute un suffixe de d
 invente : sans correspondance dans le catalogue, l'identifiant de Supabase part tel quel et c'est
 la reponse de Vultr qui dit ce qui ne va pas.
 
-Aucun reglage d'effort de reflexion n'est envoye (jamais verifie chez Vultr pour ces modeles).
+L'effort de reflexion est envoye comme pour tous les autres modeles (reasoning_effort, niveaux
+dans core/efforts_modeles.py, verifies le 13/11/2026 dans la doc Vultr et chez les createurs).
 """
 
 import logging
@@ -90,8 +91,9 @@ class ClientVultr(ClientCompatible):
         identifiant = self._correspondance.get(modele_id, modele_id)
         identifiant = resoudre_identifiant_vultr(self._client_vultr, identifiant)
         arguments_vultr = {**arguments, "model": identifiant}
-        # Pas de reglage d'effort : jamais verifie chez Vultr pour ces modeles.
-        arguments_vultr.pop("reasoning_effort", None)
+        # L'effort de reflexion choisi (core/efforts_modeles.py) part tel quel : Vultr accepte
+        # reasoning_effort sur chat completions (verifie le 13/11/2026). Ne jamais le retirer :
+        # GLM 5.3 reflechit sinon au niveau maximal par defaut (reflexion tres longue).
         # Pas de modele de secours : meme patience que les autres fournisseurs sans repli.
         # Affectation directe et non setdefault (06/11/2026) : la boucle d'agent envoie toujours
         # le delai court de la cascade (10 s), donc setdefault ne s'appliquait jamais et un modele

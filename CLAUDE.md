@@ -55,3 +55,14 @@ Bourama's order from 7 November 2026. It is a rule, not a question: never ask wh
 - Catalogue and data texts carry their English version next to the French one (for example `descriptionEn`), and the screen picks one from the language chosen in Settings. Backend errors go through a stable code with a French and an English message (`core/erreurs.py` and `lib/erreurs.ts`).
 - If a text lives in Supabase, add its English version there too.
 - A task that adds or changes visible text without its English version is not finished.
+
+## Every model must have its effort setting wired, with no exception
+
+Bourama's order from 13 November 2026. It is a rule that is never skipped, not a question: never ask whether to wire it.
+
+- Every model in the picker follows the same rule as Claude, GPT, Gemini, Grok, DeepSeek and Meta, whichever provider serves it (direct API, Vultr, Baseten or any future route) and whoever adds it.
+- When a model is added, in the same delivery: read the provider's documentation for the levels it accepts and its default, add them to `core/efforts_modeles.py` (the specific prefix rule, or the provider list), and make sure the adapter sends the chosen effort to the API. An adapter must never remove the effort silently.
+- A model that thinks by default must never run at its maximum level by accident: when nothing valid is requested, the lightest level the model accepts is sent (see `effort_defaut`).
+- Only a model whose provider documents no effort setting at all may have an empty list, and the documentation consulted and its date go in a comment next to that empty list.
+- Existing models are covered too: after any change to the catalogue, check that no model is left without its effort wiring, and list the exceptions.
+- A task that adds or changes a model without its effort wiring is not finished.

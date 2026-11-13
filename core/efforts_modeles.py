@@ -38,11 +38,16 @@ EFFORTS_PAR_FOURNISSEUR = {
     "gemini": ("low", "medium", "high"),
     "grok": ("low", "medium", "high"),
     "meta": ("minimal", "low", "medium", "high", "xhigh", "max"),
-    # Z.ai, Alibaba et NVIDIA par Vultr (04/11/2026) : aucun reglage d'effort verifie chez Vultr
-    # pour ces modeles, donc aucun n'est propose ni envoye.
-    "zai": (),
-    "alibaba": (),
-    "nvidia": (),
+    # Z.ai, Alibaba et NVIDIA par Vultr (verifie le 13/11/2026, regle "tout modele a son effort",
+    # voir CLAUDE.md). Vultr accepte reasoning_effort sur chat completions (api.vultrinference.com,
+    # page Reasoning) et la page de chaque modele liste les niveaux. Listes volontairement
+    # prudentes : seuls les niveaux presents a la fois chez Vultr et chez le createur du modele.
+    # GLM 5.3 : Z.ai ne documente que low, high, max (pas de medium, reflexion jamais coupable, defaut
+    # max : sans effort envoye il reflechissait donc toujours au maximum). Qwen et Nemotron : la
+    # doc Vultr liste minimal a max sans defaut ni mode "coupe", on propose low, medium, high.
+    "zai": ("low", "high", "max"),
+    "alibaba": ("low", "medium", "high"),
+    "nvidia": ("low", "medium", "high"),
 }
 
 # Règles précises, par début d'identifiant de modèle. La première qui correspond gagne.
@@ -57,11 +62,14 @@ EFFORTS_PAR_PREFIXE_MODELE = (
     ("grok-4.3", ("none", "low", "medium", "high")),
     ("muse-spark-1.3", ("minimal", "low", "medium", "high", "xhigh", "max")),
     ("muse-wonder-1.0", ("minimal", "low", "medium", "high", "xhigh", "max")),
-    # Muse Spark Open (30/10/2026) : servi par Baseten, qui ne documente pas de reglage d'effort
-    # pour ce modele (reflexion toujours active). Liste vide : aucun reglage, rien n'est envoye.
-    ("muse-spark-open", ()),
-    # Muse Glimmer 30B (04/11/2026) : servi par Vultr, aucun reglage d'effort verifie.
-    ("muse-glimmer", ()),
+    # Muse Spark Open : servi par Baseten. Doc Baseten (docs.baseten.co, page Reasoning, verifiee le
+    # 13/11/2026) : reflexion toujours active mais profondeur reglable par reasoning_effort, niveaux
+    # low, medium, high, xhigh, defaut xhigh (donc le plus lent si rien n'est envoye), none et
+    # minimal retombent sur low.
+    ("muse-spark-open", ("low", "medium", "high", "xhigh")),
+    # Muse Glimmer 30B : servi par Vultr, la doc Vultr du modele liste minimal a ultra sans defaut
+    # (verifie le 13/11/2026) : liste prudente low, medium, high.
+    ("muse-glimmer", ("low", "medium", "high")),
 )
 
 # Fournisseurs dont les modèles passent par un adaptateur d'outils (voir

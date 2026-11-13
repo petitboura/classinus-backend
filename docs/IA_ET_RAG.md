@@ -21,6 +21,8 @@ Core variables found in the repository:
 
 Additional providers use their own variables. See [`RAILWAY_DEPLOY.md`](./deployment/RAILWAY_DEPLOY.md) for the current operational list.
 
+**Reasoning effort (every model, no exception)**: each model of the picker has its effort levels in `core/efforts_modeles.py`, taken from the documentation of its provider (checked 2026-11-13), and the adapter sends the chosen level to the API (`reasoning_effort`). When nothing valid is requested, the lightest level the model accepts is sent, so a model that thinks by default (GLM 5.3 defaults to its maximum level, Muse Spark Open to `xhigh`) never thinks at full depth by accident. A test (`test_adaptateurs_llm.py`, `test_aucun_modele_du_catalogue_sans_effort_branche`) fails when a catalogue model has no effort wiring. The rule is in `CLAUDE.md`.
+
 ## Prompt caching and token metering
 
 Every tool step resends the whole context (system prompt, tools, history, tool results) to the model, so input is the dominant cost. Providers only reuse from their cache the **identical beginning** of a request, billed much lower. The first byte that changes makes everything after it billable again.
