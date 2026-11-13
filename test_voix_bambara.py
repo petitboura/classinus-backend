@@ -51,7 +51,7 @@ def _reponse(statut=200, **kwargs):
     return httpx.Response(statut, request=httpx.Request("POST", "http://x"), **kwargs)
 
 
-# --- /etat -----------------------------------------------------------------------------------------
+# /etat
 
 def test_etat_sans_adresses_bambara_non_disponible(client):
     assert client.get("/api/voix-bambara/etat").json() == {"disponible": False, "texte_max": 600}
@@ -74,7 +74,7 @@ def test_etat_adresse_sans_protocole_ignoree(client, monkeypatch):
     assert client.get("/api/voix-bambara/etat").json()["disponible"] is False
 
 
-# --- /transcrire -----------------------------------------------------------------------------------
+# /transcrire
 
 def _envoyer_audio(client, contenu=b"RIFFaudio"):
     return client.post("/api/voix-bambara/transcrire", files={"fichier": ("voix.webm", contenu, "audio/webm")})
@@ -138,7 +138,7 @@ def test_transcrire_reponse_sans_texte(client, monkeypatch):
     assert reponse.status_code == 503
 
 
-# --- /synthese -------------------------------------------------------------------------------------
+# /synthese
 
 def test_synthese_non_configuree(client):
     reponse = client.post("/api/voix-bambara/synthese", json={"texte": "i ni ce"})
@@ -201,7 +201,7 @@ def test_routes_exigent_un_compte():
     assert sans_compte.post("/api/voix-bambara/synthese", json={"texte": "a"}).status_code in (401, 403)
 
 
-# --- consignes à l'IA ------------------------------------------------------------------------------
+# consignes à l'IA
 
 def _prompt(**kwargs):
     with patch.object(csp, "get_system_prompt", return_value="IDENTITE_AGENT"):
@@ -239,7 +239,7 @@ def test_valeur_du_client_insensible_a_la_casse_et_aux_espaces():
     assert not prompt_voix_bambara.est_client_voix_bambara(3)
 
 
-# --- messages d'erreur ------------------------------------------------------------------------------
+# messages d'erreur
 
 def test_codes_d_erreur_traduits():
     codes = [c for c in MESSAGES_FR if c.startswith("VOIX_BAMBARA_")]
