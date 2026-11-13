@@ -558,7 +558,7 @@ def _preparer_demander_outils(outils_mcp, catalogue_complet, table_routage_compl
 NOMS_OUTILS_MEMOIRE_TOUJOURS_DISPONIBLES = OUTILS_TOUJOURS_PRESENTS
 
 
-def _outils_memoire_toujours_disponibles(outils_mcp, table_routage, catalogue_complet, table_routage_complet):
+def _outils_memoire_toujours_disponibles(outils_mcp, table_routage, catalogue_complet, table_routage_complet, noms=None):
     """
     Chantier "memoire utilisateur" (27/09/2026, demande Bourama) : les 3 outils
     de core/outils_memoire_eleve.py doivent etre disponibles a CHAQUE
@@ -583,11 +583,17 @@ def _outils_memoire_toujours_disponibles(outils_mcp, table_routage, catalogue_co
     catalogue_complet ne contient pas encore ces 3 noms (ex.
     registre_outils_plateforme pas encore a jour, voir
     migrations/2026_09_27_memoire_eleve.sql).
+
+    14/11/2026 (demande Bourama) : parametre `noms` optionnel, la liste des
+    outils a ajouter. Absent, c'est la liste de memoire, comme avant. Le mode
+    vocal bambara s'en sert pour donner ses outils de recherche a chaque
+    message (voir core/prompt_voix_bambara.py, OUTILS_TOUJOURS_VOIX_BAMBARA).
     """
+    noms_a_ajouter = NOMS_OUTILS_MEMOIRE_TOUJOURS_DISPONIBLES if noms is None else noms
     deja_presents = {o["function"]["name"] for o in (outils_mcp or [])}
     a_ajouter = [
         o for o in (catalogue_complet or [])
-        if o["function"]["name"] in NOMS_OUTILS_MEMOIRE_TOUJOURS_DISPONIBLES
+        if o["function"]["name"] in noms_a_ajouter
         and o["function"]["name"] not in deja_presents
     ]
     table_routage = dict(table_routage or {})

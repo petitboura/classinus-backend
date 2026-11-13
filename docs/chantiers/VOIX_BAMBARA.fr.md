@@ -22,10 +22,15 @@ Deux services séparés font le travail audio, hors du backend principal : `bamb
 
 ## Consignes données à l'IA
 
-Le frontend envoie `client: "voix_bambara"` avec chaque message du mode bambara (même principe que `thonny`, voir `core/prompt_voix_bambara.py`). Le prompt reçoit alors deux notes, dans sa partie variable, et rien d'autre ne change :
+Le frontend envoie `client: "voix_bambara"` avec chaque message du mode bambara (même principe que `thonny`, voir `core/prompt_voix_bambara.py`). Le prompt reçoit alors trois notes, dans sa partie variable, et rien d'autre ne change :
 
-1. Tout est du texte simple, aucun élément enrichi (fichier, lien, code, diagramme, fiche, QCM, image, tableau), puisque tout est lu à voix haute.
+1. Le texte reste simple puisqu'il est lu à voix haute : aucun élément écrit (fichier, code, diagramme, fiche, QCM, tableau). Les images et les vidéos sont permises, voir la note 3.
 2. L'utilisateur comprend uniquement le bambara, ne sait ni lire ni écrire, peut seulement parler et écouter : l'IA répond en bambara, adapté à l'oral.
+3. Ajoutée le 14 novembre 2026 : l'IA doit toujours privilégier les visuels, images et vidéos, plutôt que la voix seule, parce qu'ils se comprennent sans savoir lire.
+
+### Outils toujours donnés dans ce mode
+
+À chaque message du mode bambara, l'IA reçoit aussi directement ces outils, sans passer par `demander_outils` : `tavily_search`, `rechercher_image`, `rechercher_video`, `lire_video`. `tavily_extract`, `tavily_crawl`, `tavily_map` et `tavily_research` sont volontairement exclus. La liste est `OUTILS_TOUJOURS_VOIX_BAMBARA` dans `core/prompt_voix_bambara.py` ; elle est branchée dans `core/main.py` par `_outils_memoire_toujours_disponibles(..., noms=...)` dans `core/routage_outils.py`. Les autres clients ne sont pas concernés.
 
 ## Configuration (variables d'environnement du backend principal)
 

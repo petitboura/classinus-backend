@@ -5,19 +5,35 @@ Soloni transcrit seulement, le texte part à l'IA de Classinus, et sa réponse e
 haute par la voix Gemini. Le frontend l'annonce avec le champ `client` de la requête de chat
 (valeur `voix_bambara`), comme le plugin Thonny annonce `thonny` : jamais deviné par le serveur.
 
-Deux notes sont alors ajoutées à la fin du prompt système, et rien d'autre ne change :
-  1. tout est du texte simple, aucun élément enrichi, puisque tout est lu à voix haute ;
+Trois notes sont alors ajoutées à la fin du prompt système, et rien d'autre ne change :
+  1. le texte reste simple et lu à voix haute : aucun élément écrit (fichier, code, diagramme,
+     fiche, QCM, tableau). Les images et les vidéos sont permises, voir la note 3 ;
   2. l'utilisateur ne comprend que le bambara, ne sait ni lire ni écrire, peut seulement parler
-     et écouter : l'IA répond en bambara, adapté à l'oral.
+     et écouter : l'IA répond en bambara, adapté à l'oral ;
+  3. (14/11/2026, demande de Bourama) l'IA privilégie obligatoirement les visuels, images et
+     vidéos, plutôt que la voix seule : ils se comprennent sans savoir lire.
 Pour tous les autres clients, le prompt est exactement celui d'avant.
+
+Les outils de recherche listés dans OUTILS_TOUJOURS_VOIX_BAMBARA sont donnés à l'IA à chaque
+message de ce client, sans passer par demander_outils (branchement dans core/main.py, qui
+utilise core/routage_outils.py::_outils_memoire_toujours_disponibles).
 """
 
 CLIENT_VOIX_BAMBARA = "voix_bambara"
 
+# Outils donnés à chaque message du client voix_bambara (14/11/2026, demande de Bourama) :
+# la recherche web, la recherche d'image, la recherche de vidéo et la lecture d'une vidéo.
+# Volontairement sans tavily_extract, tavily_crawl, tavily_map ni tavily_research.
+# Pour changer la liste, il suffit de modifier ce tuple.
+OUTILS_TOUJOURS_VOIX_BAMBARA = (
+    "tavily_search", "rechercher_image", "rechercher_video", "lire_video",
+)
+
 NOTE_TEXTE_SIMPLE = (
-    "MODE VOCAL BAMBARA, note 1 : tout ce que tu écris est lu à voix haute, rien n'est affiché. "
-    "Écris donc uniquement du texte simple. N'utilise aucun élément enrichi : ni fichier, ni lien, "
-    "ni code, ni diagramme, ni fiche, ni QCM, ni image, ni tableau."
+    "MODE VOCAL BAMBARA, note 1 : ton texte est lu à voix haute. Écris donc uniquement du texte "
+    "simple. N'utilise aucun élément écrit : ni fichier, ni code, ni diagramme, ni fiche, ni QCM, "
+    "ni tableau. Les images et les vidéos, elles, sont permises et même obligatoires quand c'est "
+    "possible : voir la note 3."
 )
 
 NOTE_BAMBARA_ORAL = (
@@ -26,11 +42,21 @@ NOTE_BAMBARA_ORAL = (
     "bambara adapté à l'oral."
 )
 
+NOTE_VISUELS = (
+    "MODE VOCAL BAMBARA, note 3 : tu dois désormais, obligatoirement, privilégier les visuels, "
+    "images et vidéos, plutôt que la voix seule. L'utilisateur comprend ce qu'il voit sans avoir "
+    "besoin de lire : dès qu'une image ou une vidéo peut montrer ou expliquer ce qu'il demande, "
+    "montre-la, en plus de ta réponse parlée, et ne te contente jamais de la voix seule quand un "
+    "visuel existe. Tes outils de recherche (recherche web, recherche d'image, recherche de vidéo, "
+    "lecture d'une vidéo) sont déjà dans ta liste à chaque message : appelle-les directement, sans "
+    "passer par demander_outils et sans demander la permission."
+)
+
 
 def est_client_voix_bambara(client):
     return isinstance(client, str) and client.strip().lower() == CLIENT_VOIX_BAMBARA
 
 
 def consignes():
-    """Les deux notes, prêtes à être ajoutées au prompt système."""
-    return "\n\n" + NOTE_TEXTE_SIMPLE + "\n\n" + NOTE_BAMBARA_ORAL
+    """Les trois notes, prêtes à être ajoutées au prompt système."""
+    return "\n\n" + NOTE_TEXTE_SIMPLE + "\n\n" + NOTE_BAMBARA_ORAL + "\n\n" + NOTE_VISUELS

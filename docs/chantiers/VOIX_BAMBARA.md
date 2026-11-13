@@ -22,10 +22,15 @@ Two separate services do the audio work, outside the main backend: `bambara-ecou
 
 ## Instructions given to the AI
 
-The frontend sends `client: "voix_bambara"` with every Bambara-mode message (same idea as `thonny`, see `core/prompt_voix_bambara.py`). The prompt then gets two notes in its variable part, and nothing else changes:
+The frontend sends `client: "voix_bambara"` with every Bambara-mode message (same idea as `thonny`, see `core/prompt_voix_bambara.py`). The prompt then gets three notes in its variable part, and nothing else changes:
 
-1. Everything is plain text, no rich element (file, link, code, diagram, flashcard, quiz, image, table), because everything is read aloud.
+1. The text stays plain because it is read aloud: no written element (file, code, diagram, flashcard, quiz, table). Images and videos are allowed, see note 3.
 2. The user understands only Bambara, can neither read nor write, and can only speak and listen: the AI answers in Bambara suited to speech.
+3. Added on 14 November 2026: the AI must always favor visuals, images and videos, over voice alone, because they can be understood without reading.
+
+### Tools always given in this mode
+
+On every Bambara-mode message, the AI also gets these tools directly, without going through `demander_outils`: `tavily_search`, `rechercher_image`, `rechercher_video`, `lire_video`. `tavily_extract`, `tavily_crawl`, `tavily_map` and `tavily_research` are deliberately left out. The list is `OUTILS_TOUJOURS_VOIX_BAMBARA` in `core/prompt_voix_bambara.py`; it is wired in `core/main.py` through `_outils_memoire_toujours_disponibles(..., noms=...)` in `core/routage_outils.py`. Other clients are not affected.
 
 ## Configuration (environment variables of the main backend)
 

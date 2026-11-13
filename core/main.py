@@ -65,6 +65,7 @@ from routage_outils import (
     _ecrire_outils_retenus, _lire_outils_retenus, _outil_garder_outils, _router_outils,
     _preparer_demander_outils, _catalogue_pour_demander_outils, _outils_memoire_toujours_disponibles,
 )
+from prompt_voix_bambara import est_client_voix_bambara, OUTILS_TOUJOURS_VOIX_BAMBARA
 from construction_system_prompt import _construire_system_prompt, _est_timeout, _repli_si_reponse_partielle, separer_partie_variable, MARQUEUR_PARTIE_VARIABLE
 from persistance_echanges import _sauvegarder_echange, _finaliser_memoire_en_arriere_plan
 from historique_outils import historique_texte_seul, journal_outils_historique, a_des_outils_allegers, champs_historique_outil
@@ -1323,6 +1324,14 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         if user_id:
             outils_mcp, table_routage = _outils_memoire_toujours_disponibles(
                 outils_mcp, table_routage, catalogue_complet, table_routage_complet
+            )
+        # Mode vocal bambara (14/11/2026, demande Bourama) : recherche web, recherche d'image,
+        # recherche de video et lecture de video donnees a CHAQUE message de ce client, sans passer
+        # par demander_outils. Aucun autre client n'est concerne.
+        if est_client_voix_bambara(client):
+            outils_mcp, table_routage = _outils_memoire_toujours_disponibles(
+                outils_mcp, table_routage, catalogue_complet, table_routage_complet,
+                noms=OUTILS_TOUJOURS_VOIX_BAMBARA,
             )
 
     # Etat du canal dit au modele a chaque message (16/10/2026, demande Bourama) : active ou
