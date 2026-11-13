@@ -15,6 +15,7 @@ from historique_reponses_qcm import formater_reponses_qcm
 from core.configuration_etudiant import construire_bloc_configuration
 from core.memoire_eleve import construire_bloc_sommaire
 import prompt_thonny
+import prompt_voix_bambara
 
 
 # Alignée sur la longueur voulue côté frontend (lib/scanElementsInteractifs.ts) :
@@ -462,6 +463,12 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
 
     # A partir d'ici, tout depend du message ou de l'ecran du moment : voir MARQUEUR_PARTIE_VARIABLE.
     system_final += MARQUEUR_PARTIE_VARIABLE
+
+    # Mode vocal bambara (13/11/2026, demande Bourama) : deux notes (texte simple, reponse en
+    # bambara oral), ajoutees ici, dans la partie variable, pour ne pas toucher a la partie stable
+    # partagee par tous les clients (cache du prompt). Aucun autre client n'est concerne.
+    if prompt_voix_bambara.est_client_voix_bambara(client):
+        system_final += prompt_voix_bambara.consignes()
 
     # Chantier "agent applicatif continu" (19/09/2026, decision Bourama :
     # retrait de l'outil lister_actions_disponibles, plus jamais demande
