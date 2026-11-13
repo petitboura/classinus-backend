@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+numpy
+# Version avec laquelle la fiche du modèle a été testée (la dernière, 5.22, n'a pas été vérifiée).
+transformers==5.9.0

@@ -401,6 +401,11 @@ MESSAGES_FR: dict[str, str] = {
     # 09/11/2026, parrainage (core/parrainage.py). Codes à garder synchronisés avec lib/erreurs.ts côté frontend.
     "PARRAINAGE_CODE_INVALIDE": "Ce lien de parrainage n'est pas valide.",
     "PARRAINAGE_INDISPONIBLE": "Le parrainage n'est pas disponible pour le moment, réessaie dans un instant.",
+    # 13/11/2026, voix bambara (api/voix_bambara.py). Codes à garder synchronisés avec lib/erreurs.ts côté frontend.
+    "VOIX_BAMBARA_NON_CONFIGUREE": "La voix bambara n'est pas branchée pour le moment.",
+    "VOIX_BAMBARA_INDISPONIBLE": "La voix bambara ne répond pas pour le moment, réessaie dans un instant.",
+    "VOIX_BAMBARA_AUDIO_INVALIDE": "L'enregistrement est vide ou trop gros, réessaie en parlant un peu moins longtemps.",
+    "VOIX_BAMBARA_TEXTE_INVALIDE": "Il n'y a rien à lire à voix haute.",
 }
 
 
@@ -801,6 +806,10 @@ MESSAGES_EN: dict[str, str] = {
     "CREDITS_IMAGES_INDISPONIBLE": "Could not check your image credit balance, try again in a moment.",
     "PARRAINAGE_CODE_INVALIDE": "This referral link is not valid.",
     "PARRAINAGE_INDISPONIBLE": "Referrals are not available right now, try again in a moment.",
+    "VOIX_BAMBARA_NON_CONFIGUREE": "The Bambara voice is not connected right now.",
+    "VOIX_BAMBARA_INDISPONIBLE": "The Bambara voice is not responding right now, try again in a moment.",
+    "VOIX_BAMBARA_AUDIO_INVALIDE": "The recording is empty or too large, try again with a shorter message.",
+    "VOIX_BAMBARA_TEXTE_INVALIDE": "There is nothing to read aloud.",
 }
 
 def erreur_api(status_code: int, code: str, message: str | None = None, **kwargs) -> HTTPException:
