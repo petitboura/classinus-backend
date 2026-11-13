@@ -14,6 +14,11 @@
   .ligne { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0; }
   #statut, #resultat { margin-top: 16px; padding: 14px; border-radius: 10px; background: #fff; border: 1px solid #ddd; opacity: 0; transition: opacity .4s; min-height: 20px; }
   .visible { opacity: 1 !important; }
+  .moteur { margin: 16px 0 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: .95rem; }
+  .moteur select { padding: 10px 12px; font-size: 1rem; border-radius: 10px; border: 1px solid #ccc; background: #fff; }
+  #infoGemini { font-size: .8rem; color: #777; margin-top: 6px; min-height: 1em; }
+  .reponse + .reponse { margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee; }
+  .reponse b { display: block; font-size: .8rem; color: #777; margin-bottom: 2px; }
   .points span { display: inline-block; animation: saut 1s infinite; }
   .points span:nth-child(2) { animation-delay: .15s; }
   .points span:nth-child(3) { animation-delay: .3s; }
@@ -22,6 +27,15 @@
 </head>
 <body>
 <h1>Test bambara : le modèle écoute</h1>
+<div class="moteur">
+  <label for="moteur">Moteur :</label>
+  <select id="moteur">
+    <option value="soloni">Soloni (fait pour le bambara)</option>
+    <option value="gemini">Gemini (Google)</option>
+    <option value="les_deux">Les deux, pour comparer</option>
+  </select>
+</div>
+<div id="infoGemini"></div>
 <div class="ligne">
   <button id="btnRec">Enregistrer</button>
   <button id="btnFichier">Choisir un fichier audio</button>
@@ -33,6 +47,10 @@
 const statut = document.getElementById('statut');
 const resultat = document.getElementById('resultat');
 const btnRec = document.getElementById('btnRec');
+const infoGemini = document.getElementById('infoGemini');
+const choixMoteur = document.getElementById('moteur');
+const nomsMoteurs = { soloni: 'Soloni', gemini: 'Gemini' };
+function echapper(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 let recorder = null, morceaux = [];
 
 function montrer(el, html) { el.innerHTML = html; el.classList.add('visible'); }
@@ -42,24 +60,37 @@ const points = '<span class="points"><span>.</span><span>.</span><span>.</span><
 async function verifierEtat() {
   try {
     const r = await (await fetch('/etat')).json();
+    infoGemini.textContent = r.gemini && r.gemini.disponible ? 'Gemini prêt (' + r.gemini.modele + ').' : 'Gemini : clé Google absente dans ce service.';
     if (r.erreur) { montrer(statut, 'Erreur de chargement du modèle : ' + r.erreur); return; }
     if (!r.pret) { montrer(statut, 'Le modèle charge ' + points); setTimeout(verifierEtat, 3000); return; }
     montrer(statut, 'Modèle prêt.');
   } catch (e) { setTimeout(verifierEtat, 3000); }
 }
 
-async function envoyer(blob) {
-  cacher(resultat);
-  montrer(statut, 'Le modèle écoute ' + points);
+async function transcrireAvec(moteur, blob) {
   const f = new FormData();
   f.append('fichier', blob, 'audio');
   try {
-    const r = await fetch('/transcrire', { method: 'POST', body: f });
+    const r = await fetch('/transcrire?moteur=' + moteur, { method: 'POST', body: f });
     const j = await r.json();
-    if (!r.ok) { montrer(statut, (j.erreur || 'Erreur.') + (j.detail ? '<pre style="white-space:pre-wrap;font-size:12px">' + j.detail.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</pre>' : '')); return; }
-    montrer(statut, 'Terminé.');
-    montrer(resultat, j.texte || '(rien compris)');
-  } catch (e) { montrer(statut, 'Erreur de connexion.'); }
+    if (!r.ok) return { moteur, ok: false, erreur: j.erreur || 'Erreur.', detail: j.detail || '' };
+    return { moteur, ok: true, texte: j.texte };
+  } catch (e) { return { moteur, ok: false, erreur: 'Erreur de connexion.', detail: '' }; }
+}
+
+async function envoyer(blob) {
+  cacher(resultat);
+  const moteurs = choixMoteur.value === 'les_deux' ? ['soloni', 'gemini'] : [choixMoteur.value];
+  montrer(statut, (moteurs.length > 1 ? 'Les deux écoutent ' : (nomsMoteurs[moteurs[0]] + ' écoute ')) + points);
+  const reponses = await Promise.all(moteurs.map((m) => transcrireAvec(m, blob)));
+  const blocs = reponses.map((r) => {
+    const titre = '<b>' + nomsMoteurs[r.moteur] + '</b>';
+    if (r.ok) return '<div class="reponse">' + titre + (echapper(r.texte) || '(rien compris)') + '</div>';
+    const detail = r.detail ? '<pre style="white-space:pre-wrap;font-size:12px">' + echapper(r.detail) + '</pre>' : '';
+    return '<div class="reponse">' + titre + 'Erreur : ' + echapper(r.erreur) + detail + '</div>';
+  });
+  montrer(statut, 'Terminé.');
+  montrer(resultat, blocs.join(''));
 }
 
 btnRec.onclick = async () => {
