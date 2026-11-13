@@ -17,10 +17,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr-fra \
     nodejs \
     npm \
+    libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 # nodejs et npm : requis par les outils Remotion du montage vidéo (remotion_create_project,
 # remotion_render). Sans eux la passerelle les déclare indisponibles. railpack.json les
 # installe déjà côté Railway, ce fichier les ajoute pour les builds Docker (staging Render).
+# libatomic1 (13/11/2026) : le pilote Node de Playwright (version 1.65, requirements.txt n'épingle
+# pas la version) refuse de démarrer sans elle ("libatomic.so.1: cannot open shared object file",
+# code 127), ce qui faisait échouer `playwright install` et donc tout le déploiement Coolify.
+# Elle doit être installée AVANT `playwright install --with-deps`, qui lance ce pilote.
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
