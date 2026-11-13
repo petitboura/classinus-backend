@@ -392,6 +392,11 @@ MESSAGES_FR: dict[str, str] = {
     "MARKETING_INDISPONIBLE": "La génération Marketing Studio n'est pas disponible pour le moment. Réessaie plus tard.",
     "MARKETING_LIMITE_JOUR": "Limite du jour atteinte ({limite} générations par jour). Tu pourras en refaire demain.",
     "MARKETING_LIMITE_INDISPONIBLE": "Impossible de vérifier ta limite du jour, réessaie dans un instant.",
+    # 13/11/2026, voix bambara (api/voix_bambara.py). Codes à garder synchronisés avec lib/erreurs.ts côté frontend.
+    "VOIX_BAMBARA_NON_CONFIGUREE": "La voix bambara n'est pas branchée pour le moment.",
+    "VOIX_BAMBARA_INDISPONIBLE": "La voix bambara ne répond pas pour le moment, réessaie dans un instant.",
+    "VOIX_BAMBARA_AUDIO_INVALIDE": "L'enregistrement est vide ou trop gros, réessaie en parlant un peu moins longtemps.",
+    "VOIX_BAMBARA_TEXTE_INVALIDE": "Il n'y a rien à lire à voix haute.",
 }
 
 
@@ -785,6 +790,10 @@ MESSAGES_EN: dict[str, str] = {
     "MARKETING_INDISPONIBLE": "Marketing Studio generation is not available right now. Try again later.",
     "MARKETING_LIMITE_JOUR": "Daily limit reached ({limite} generations per day). You can generate more tomorrow.",
     "MARKETING_LIMITE_INDISPONIBLE": "Could not check your daily limit, try again in a moment.",
+    "VOIX_BAMBARA_NON_CONFIGUREE": "The Bambara voice is not connected right now.",
+    "VOIX_BAMBARA_INDISPONIBLE": "The Bambara voice is not responding right now, try again in a moment.",
+    "VOIX_BAMBARA_AUDIO_INVALIDE": "The recording is empty or too large, try again with a shorter message.",
+    "VOIX_BAMBARA_TEXTE_INVALIDE": "There is nothing to read aloud.",
 }
 
 def erreur_api(status_code: int, code: str, message: str | None = None, **kwargs) -> HTTPException:
