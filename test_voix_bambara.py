@@ -208,11 +208,12 @@ def _prompt(**kwargs):
         return csp._construire_system_prompt("bonjour", "agent-test", user_id="u1", **kwargs)
 
 
-def test_client_voix_bambara_recoit_les_trois_notes():
+def test_client_voix_bambara_recoit_les_quatre_notes():
     prompt = _prompt(client="voix_bambara")
     assert prompt_voix_bambara.NOTE_TEXTE_SIMPLE in prompt
     assert prompt_voix_bambara.NOTE_BAMBARA_ORAL in prompt
     assert prompt_voix_bambara.NOTE_VISUELS in prompt
+    assert prompt_voix_bambara.NOTE_RECHERCHE in prompt
     for mot in ("fichier", "code", "diagramme", "fiche", "QCM", "tableau"):
         assert mot in prompt_voix_bambara.NOTE_TEXTE_SIMPLE
     assert "ni lire ni écrire" in prompt_voix_bambara.NOTE_BAMBARA_ORAL
@@ -229,6 +230,17 @@ def test_note_visuels_oblige_les_visuels_plutot_que_la_voix_seule():
     note = prompt_voix_bambara.NOTE_VISUELS
     for mot in ("obligatoirement", "images", "vidéos", "voix seule", "demander_outils"):
         assert mot in note
+
+
+def test_note_recherche_oblige_a_chercher_en_ligne_au_lieu_de_dire_je_ne_sais_pas():
+    note = prompt_voix_bambara.NOTE_RECHERCHE
+    for mot in ("je ne sais pas", "cherches d'abord en ligne", "recherche web", "sans demander la permission", "honnêtement"):
+        assert mot in note
+
+
+def test_autres_clients_ne_recoivent_pas_la_note_recherche():
+    for client in (None, "thonny", "web", ""):
+        assert prompt_voix_bambara.NOTE_RECHERCHE not in _prompt(client=client)
 
 
 def test_outils_toujours_donnes_au_client_voix_bambara():

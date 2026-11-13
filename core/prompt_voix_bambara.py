@@ -5,13 +5,15 @@ Soloni transcrit seulement, le texte part à l'IA de Classinus, et sa réponse e
 haute par la voix Gemini. Le frontend l'annonce avec le champ `client` de la requête de chat
 (valeur `voix_bambara`), comme le plugin Thonny annonce `thonny` : jamais deviné par le serveur.
 
-Trois notes sont alors ajoutées à la fin du prompt système, et rien d'autre ne change :
+Quatre notes sont alors ajoutées à la fin du prompt système, et rien d'autre ne change :
   1. le texte reste simple et lu à voix haute : aucun élément écrit (fichier, code, diagramme,
      fiche, QCM, tableau). Les images et les vidéos sont permises, voir la note 3 ;
   2. l'utilisateur ne comprend que le bambara, ne sait ni lire ni écrire, peut seulement parler
      et écouter : l'IA répond en bambara, adapté à l'oral ;
   3. (14/11/2026, demande de Bourama) l'IA privilégie obligatoirement les visuels, images et
-     vidéos, plutôt que la voix seule : ils se comprennent sans savoir lire.
+     vidéos, plutôt que la voix seule : ils se comprennent sans savoir lire ;
+  4. (14/11/2026, demande de Bourama) quand l'IA ne sait pas, elle cherche en ligne avec ses
+     outils de recherche au lieu de répondre « je ne sais pas ».
 Pour tous les autres clients, le prompt est exactement celui d'avant.
 
 Les outils de recherche listés dans OUTILS_TOUJOURS_VOIX_BAMBARA sont donnés à l'IA à chaque
@@ -52,11 +54,23 @@ NOTE_VISUELS = (
     "passer par demander_outils et sans demander la permission."
 )
 
+NOTE_RECHERCHE = (
+    "MODE VOCAL BAMBARA, note 4 : quand tu ne connais pas la réponse, quand tu hésites, ou quand "
+    "l'information peut avoir changé, tu ne réponds jamais simplement « je ne sais pas ». Tu "
+    "cherches d'abord en ligne avec tes outils de recherche (recherche web, recherche d'image, "
+    "recherche de vidéo), tout de suite, sans demander la permission, puis tu réponds avec ce que "
+    "tu as trouvé. Tu ne dis que tu n'as rien trouvé qu'après avoir réellement cherché et que la "
+    "recherche n'a rien donné d'utilisable : dans ce cas, dis-le honnêtement, en bambara."
+)
+
 
 def est_client_voix_bambara(client):
     return isinstance(client, str) and client.strip().lower() == CLIENT_VOIX_BAMBARA
 
 
 def consignes():
-    """Les trois notes, prêtes à être ajoutées au prompt système."""
-    return "\n\n" + NOTE_TEXTE_SIMPLE + "\n\n" + NOTE_BAMBARA_ORAL + "\n\n" + NOTE_VISUELS
+    """Les quatre notes, prêtes à être ajoutées au prompt système."""
+    return (
+        "\n\n" + NOTE_TEXTE_SIMPLE + "\n\n" + NOTE_BAMBARA_ORAL
+        + "\n\n" + NOTE_VISUELS + "\n\n" + NOTE_RECHERCHE
+    )
