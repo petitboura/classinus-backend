@@ -208,14 +208,56 @@ def _prompt(**kwargs):
         return csp._construire_system_prompt("bonjour", "agent-test", user_id="u1", **kwargs)
 
 
-def test_client_voix_bambara_recoit_les_deux_notes():
+def test_client_voix_bambara_recoit_les_trois_notes():
     prompt = _prompt(client="voix_bambara")
     assert prompt_voix_bambara.NOTE_TEXTE_SIMPLE in prompt
     assert prompt_voix_bambara.NOTE_BAMBARA_ORAL in prompt
-    for mot in ("fichier", "lien", "code", "diagramme", "fiche", "QCM", "image", "tableau"):
+    assert prompt_voix_bambara.NOTE_VISUELS in prompt
+    for mot in ("fichier", "code", "diagramme", "fiche", "QCM", "tableau"):
         assert mot in prompt_voix_bambara.NOTE_TEXTE_SIMPLE
     assert "ni lire ni écrire" in prompt_voix_bambara.NOTE_BAMBARA_ORAL
     assert "bambara" in prompt_voix_bambara.NOTE_BAMBARA_ORAL
+
+
+def test_note_1_n_interdit_plus_les_images_et_les_videos():
+    assert "ni image" not in prompt_voix_bambara.NOTE_TEXTE_SIMPLE
+    assert "ni lien" not in prompt_voix_bambara.NOTE_TEXTE_SIMPLE
+    assert "images et les vidéos" in prompt_voix_bambara.NOTE_TEXTE_SIMPLE
+
+
+def test_note_visuels_oblige_les_visuels_plutot_que_la_voix_seule():
+    note = prompt_voix_bambara.NOTE_VISUELS
+    for mot in ("obligatoirement", "images", "vidéos", "voix seule", "demander_outils"):
+        assert mot in note
+
+
+def test_outils_toujours_donnes_au_client_voix_bambara():
+    from core.registre_outils import CATEGORIES_OUTILS
+    noms = prompt_voix_bambara.OUTILS_TOUJOURS_VOIX_BAMBARA
+    assert set(noms) == {"tavily_search", "rechercher_image", "rechercher_video", "lire_video"}
+    for exclu in ("tavily_crawl", "tavily_map", "tavily_research", "tavily_extract"):
+        assert exclu not in noms
+    for nom in noms:
+        assert nom in CATEGORIES_OUTILS["recherche_web"]
+
+
+def test_injection_des_outils_de_recherche_sans_toucher_a_la_memoire():
+    from core.routage_outils import _outils_memoire_toujours_disponibles
+
+    def _outil(nom):
+        return {"function": {"name": nom}}
+
+    catalogue = [_outil(n) for n in ("tavily_search", "rechercher_image", "rechercher_video", "lire_video",
+                                     "tavily_crawl", "memoire_lire")]
+    complet = {o["function"]["name"]: {"url": o["function"]["name"]} for o in catalogue}
+    outils, table = _outils_memoire_toujours_disponibles(
+        [_outil("rechercher_image")], {}, catalogue, complet,
+        noms=prompt_voix_bambara.OUTILS_TOUJOURS_VOIX_BAMBARA,
+    )
+    noms = [o["function"]["name"] for o in outils]
+    assert sorted(noms) == ["lire_video", "rechercher_image", "rechercher_video", "tavily_search"]
+    assert "tavily_crawl" not in noms and "memoire_lire" not in noms
+    assert set(table) == {"lire_video", "rechercher_video", "tavily_search"}
 
 
 def test_notes_dans_la_partie_variable_la_partie_stable_ne_change_pas():
