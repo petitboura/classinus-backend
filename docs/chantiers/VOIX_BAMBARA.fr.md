@@ -22,11 +22,12 @@ Deux services séparés font le travail audio, hors du backend principal : `bamb
 
 ## Consignes données à l'IA
 
-Le frontend envoie `client: "voix_bambara"` avec chaque message du mode bambara (même principe que `thonny`, voir `core/prompt_voix_bambara.py`). Le prompt reçoit alors trois notes, dans sa partie variable, et rien d'autre ne change :
+Le frontend envoie `client: "voix_bambara"` avec chaque message du mode bambara (même principe que `thonny`, voir `core/prompt_voix_bambara.py`). Le prompt reçoit alors quatre notes, dans sa partie variable, et rien d'autre ne change :
 
 1. Le texte reste simple puisqu'il est lu à voix haute : aucun élément écrit (fichier, code, diagramme, fiche, QCM, tableau). Les images et les vidéos sont permises, voir la note 3.
 2. L'utilisateur comprend uniquement le bambara, ne sait ni lire ni écrire, peut seulement parler et écouter : l'IA répond en bambara, adapté à l'oral.
 3. Ajoutée le 14 novembre 2026 : l'IA doit toujours privilégier les visuels, images et vidéos, plutôt que la voix seule, parce qu'ils se comprennent sans savoir lire.
+4. Ajoutée le 14 novembre 2026 : quand l'IA ne sait pas, elle doit chercher en ligne avec ses outils de recherche au lieu de répondre « je ne sais pas ». Elle ne dit qu'elle n'a rien trouvé qu'après avoir vraiment cherché sans rien obtenir d'utilisable, et elle le dit alors honnêtement, en bambara.
 
 ### Outils toujours donnés dans ce mode
 

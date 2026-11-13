@@ -22,11 +22,12 @@ Two separate services do the audio work, outside the main backend: `bambara-ecou
 
 ## Instructions given to the AI
 
-The frontend sends `client: "voix_bambara"` with every Bambara-mode message (same idea as `thonny`, see `core/prompt_voix_bambara.py`). The prompt then gets three notes in its variable part, and nothing else changes:
+The frontend sends `client: "voix_bambara"` with every Bambara-mode message (same idea as `thonny`, see `core/prompt_voix_bambara.py`). The prompt then gets four notes in its variable part, and nothing else changes:
 
 1. The text stays plain because it is read aloud: no written element (file, code, diagram, flashcard, quiz, table). Images and videos are allowed, see note 3.
 2. The user understands only Bambara, can neither read nor write, and can only speak and listen: the AI answers in Bambara suited to speech.
 3. Added on 14 November 2026: the AI must always favor visuals, images and videos, over voice alone, because they can be understood without reading.
+4. Added on 14 November 2026: when the AI does not know something, it must search online with its search tools instead of answering "I don't know". It only says it found nothing after really searching and getting nothing usable, and then says so honestly, in Bambara.
 
 ### Tools always given in this mode
 
