@@ -1601,7 +1601,10 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 # Les etapes suivantes ("reflechit" puis le texte de reponse)
                 # sont deja couvertes par l'existant (IndicateurReflexion,
                 # streaming normal) une fois cette bulle disparue.
-                client_google = genai.Client(api_key=get_secret("GOOGLE_API_KEY"))
+                client_google = genai.Client(
+                api_key=get_secret("GOOGLE_API_KEY"),
+                http_options=types.HttpOptions(api_version="v1beta"),
+            )
                 response = client_google.models.generate_content_stream(
                     model=GOOGLE_MODEL,
                     contents=gemini_messages,
@@ -1996,7 +1999,10 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # (indisponibilite technique temporaire) plutot que de se presenter
         # comme une IA incapable de faire des recherches par nature.
         try:
-            client_google = genai.Client(api_key=get_secret("GOOGLE_API_KEY"))
+            client_google = genai.Client(
+                api_key=get_secret("GOOGLE_API_KEY"),
+                http_options=types.HttpOptions(api_version="v1beta"),
+            )
             outil_deja_execute = any(m.get("role") == "tool" for m in messages_agent)
             gemini_messages = []
             for m in messages_agent:
