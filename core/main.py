@@ -67,7 +67,7 @@ from routage_outils import (
 )
 from prompt_voix_bambara import est_client_voix_bambara, OUTILS_TOUJOURS_VOIX_BAMBARA
 from construction_system_prompt import _construire_system_prompt, _est_timeout, _repli_si_reponse_partielle, separer_partie_variable, MARQUEUR_PARTIE_VARIABLE
-from persistance_echanges import _sauvegarder_echange, _finaliser_memoire_en_arriere_plan
+from persistance_echanges import _sauvegarder_echange, _finaliser_memoire_en_arriere_plan, _enregistrer_question, _derniere_question_sans_reponse
 from historique_outils import historique_texte_seul, journal_outils_historique, a_des_outils_allegers, champs_historique_outil
 from historique_conversation import (
     alleger_historique_ancien,
@@ -523,12 +523,15 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                         conversation_id, modele=modele_reprise, meta_assistant=meta_assistant,
                         parent_id=parent_id, sauvegarder_message_utilisateur=True,
                     )
-                elif parent_id:
+                elif parent_id or (parent_reprise := _derniere_question_sans_reponse(user_id, agent_id, conversation_id)):
+                    # Sans parent recu (15/11/2026), la suite se rattache a la question restee
+                    # sans reponse dans ce fil, au lieu d'etre perdue.
                     ids_historique = _sauvegarder_echange(
                         user_id, agent_id, "",
                         "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules),
                         conversation_id, modele=modele_reprise, meta_assistant=meta_assistant,
-                        parent_id=parent_id, sauvegarder_message_utilisateur=False,
+                        parent_id=parent_id or parent_reprise,
+                        sauvegarder_message_utilisateur=False,
                     )
                 else:
                     ids_historique = None
@@ -1434,6 +1437,18 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     if contexte_video:
         meta_utilisateur = {**(meta_utilisateur or {}), "contexte_video": meta_contexte_video}
 
+    # Question gardee des son arrivee (15/11/2026, bug remonte par Bourama : derniers messages
+    # et certains messages perdus). Avant, elle n'etait ecrite qu'a la fin du tour avec la
+    # reponse, et rien n'etait garde si la reponse etait vide, en erreur, en pause ou coupee
+    # par un redemarrage. La reponse viendra se rattacher a cette ligne (question_id). Pas
+    # pour un reessai (la question existe deja) ni pour un message automatique (minuteur).
+    question_id = None
+    if user_id and not regenerer and not message_automatique:
+        question_id = _enregistrer_question(
+            user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre),
+            conversation_id, parent_id, meta_utilisateur,
+        )
+
     if toutes_les_urls_images or images_base64:
         # Chemin dédié image(s) : voir docstring ci-dessus. Pas de cascade
         # multi-modeles ici, Gemini est le seul maillon capable de traiter
@@ -1728,7 +1743,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre),
                     "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules),
                     conversation_id, modele=modele_force, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant,
-                    parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer
+                    parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer, question_id=question_id
                 )
                 if ids_historique:
                     yield {"type": "meta", **ids_historique}
@@ -1764,7 +1779,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             logging.info(f"Réponse via MODELE PREMIUM : {modele_force}")
             ids_historique = _sauvegarder_echange(
                 user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre), "".join(reponse_accumulee), conversation_id, modele=modele_force, meta_utilisateur=meta_utilisateur,
-                parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer
+                parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer, question_id=question_id
             )
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
@@ -1840,7 +1855,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     meta_assistant,
                     fichiers_generes_accumules,
                 )
-                ids_historique = _sauvegarder_echange(user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre), "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=DEEPSEEK_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
+                ids_historique = _sauvegarder_echange(user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre), "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=DEEPSEEK_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer, question_id=question_id)
                 if ids_historique:
                     yield {"type": "meta", **ids_historique}
                 if not (arret_tour is not None and arret_tour.est_demande()):
@@ -1869,7 +1884,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 meta_assistant,
                 fichiers_generes_accumules,
             )
-            ids_historique = _sauvegarder_echange(user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre), "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GROQ_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
+            ids_historique = _sauvegarder_echange(user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre), "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GROQ_PRIMARY, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer, question_id=question_id)
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
             if not (arret_tour is not None and arret_tour.est_demande()):
@@ -1915,7 +1930,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                     meta_assistant,
                     fichiers_generes_accumules,
                 )
-                ids_historique = _sauvegarder_echange(user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre), "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=model, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
+                ids_historique = _sauvegarder_echange(user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre), "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=model, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer, question_id=question_id)
                 # Signale au frontend quand la reponse vient d'un modele de
                 # qualite reduite (demande Bourama, 26/07) : evite que
                 # l'utilisateur juge la plateforme sur une reponse plus
@@ -2049,7 +2064,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # deja obtenus par un modele Groq/DeepSeek avant l'echec
             # disparaissaient donc reellement a la reouverture de la
             # conversation, meme s'ils restaient visibles en direct.
-            ids_historique = _sauvegarder_echange(user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre), "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GOOGLE_MODEL, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer)
+            ids_historique = _sauvegarder_echange(user_id, agent_id, _texte_a_enregistrer(message_utilisateur, message_enregistre), "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules), conversation_id, modele=GOOGLE_MODEL, meta_utilisateur=meta_utilisateur, meta_assistant=meta_assistant, parent_id=parent_id, sauvegarder_message_utilisateur=not regenerer, question_id=question_id)
             if ids_historique:
                 yield {"type": "meta", **ids_historique}
             if not (arret_tour is not None and arret_tour.est_demande()):
