@@ -67,7 +67,7 @@ from routage_outils import (
 )
 from prompt_voix_bambara import est_client_voix_bambara, OUTILS_TOUJOURS_VOIX_BAMBARA
 from construction_system_prompt import _construire_system_prompt, _est_timeout, _repli_si_reponse_partielle, separer_partie_variable, MARQUEUR_PARTIE_VARIABLE
-from persistance_echanges import _sauvegarder_echange, _finaliser_memoire_en_arriere_plan, _enregistrer_question, _derniere_question_sans_reponse
+from persistance_echanges import _sauvegarder_echange, _finaliser_memoire_en_arriere_plan, _enregistrer_question, _derniere_question_sans_reponse, _question_du_dernier_echange, _sauvegarder_suite_reponse
 from historique_outils import historique_texte_seul, journal_outils_historique, a_des_outils_allegers, champs_historique_outil
 from historique_conversation import (
     alleger_historique_ancien,
@@ -660,16 +660,39 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             })
             captures_modele.ajouter_message_images(messages_agent, captures_reprise)
 
+        reponse_accumulee = []
+        meta_assistant = {}
+        fichiers_generes_accumules = []
         try:
-            yield from _agent_groq(
-                client_groq, messages_agent, outils_mcp, table_routage,
-                appels_en_cours_a_finir=etat.get("appels_restants") or None,
-                modele=modele_reprise, reasoning_effort=reasoning_effort_reprise,
-                agent_nom=etat.get("agent_nom"), conversation_id=conversation_id,
-                catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
-                user_id=user_id, user_id_autorisations=utilisateur_autorisations, arret=arret_tour,
-                erreur_si_vide=True,
+            yield from _capturer_reponse(
+                _agent_groq(
+                    client_groq, messages_agent, outils_mcp, table_routage,
+                    appels_en_cours_a_finir=etat.get("appels_restants") or None,
+                    modele=modele_reprise, reasoning_effort=reasoning_effort_reprise,
+                    agent_nom=etat.get("agent_nom"), conversation_id=conversation_id,
+                    catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
+                    user_id=user_id, user_id_autorisations=utilisateur_autorisations, arret=arret_tour,
+                    erreur_si_vide=True,
+                ),
+                reponse_accumulee,
+                meta_assistant,
+                fichiers_generes_accumules,
             )
+            # Correctif 15/11/2026 (messages perdus, signale par Bourama) : la suite de la
+            # reponse apres un clic sur Confirmer ou Refuser etait seulement diffusee en
+            # direct, jamais enregistree. Elle est maintenant ajoutee a la reponse commencee
+            # avant la confirmation, sous la meme question. Sans parent recu du client, la
+            # question est retrouvee dans le fil.
+            texte_suite = "".join(reponse_accumulee) + _bloc_fichiers_generes(fichiers_generes_accumules)
+            if user_id and "".join(reponse_accumulee).strip():
+                agent_suite = agent_id or get_secret("AGENT_ID") or AGENT_ID_PAR_DEFAUT
+                question_suite = parent_id or _question_du_dernier_echange(user_id, agent_suite, conversation_id)
+                ids_historique = _sauvegarder_suite_reponse(
+                    user_id, agent_suite, question_suite, texte_suite, conversation_id,
+                    modele=modele_reprise, meta_assistant=meta_assistant,
+                )
+                if ids_historique:
+                    yield {"type": "meta", **ids_historique}
         except Exception as e:
             logging.error(f"ERREUR GROQ (reprise apres confirmation) {modele_reprise}: {e}")
             evenement = evenement_echec(

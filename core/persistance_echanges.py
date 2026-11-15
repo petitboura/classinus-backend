@@ -50,6 +50,21 @@ def _parent_effectif(user_id, agent_id, conversation_id, parent_id):
             )
             parents = res_parent.data or []
             if parents and parents[0].get("role") == "assistant":
+                # Correctif 15/11/2026 (messages perdus) : une question restee sans reponse
+                # (reponse en erreur ou vide) reste maintenant enregistree. Le frontend, lui,
+                # envoie encore la derniere reponse connue comme parent : la nouvelle question
+                # deviendrait la soeur de la question sans reponse, et le frontend les lirait
+                # comme deux versions du meme message, en cachant l'une. Elle vient donc APRES.
+                res_derniere_ligne = (
+                    _dans_le_fil(supabase.table("historique_conversations").select("id, role, parent_id"))
+                    .order("created_at", desc=True)
+                    .order("id", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+                lignes_fin = res_derniere_ligne.data or []
+                if lignes_fin and lignes_fin[0].get("role") == "user" and lignes_fin[0].get("parent_id") == parent_id:
+                    return lignes_fin[0]["id"]
                 return parent_id
         res_derniere = (
             _dans_le_fil(supabase.table("historique_conversations").select("id"))
@@ -133,6 +148,90 @@ def _derniere_question_sans_reponse(user_id, agent_id, conversation_id):
     except Exception as e:
         logging.error(f"ERREUR SUPABASE (question en attente de reponse) : {e}")
     return None
+
+
+def _question_du_dernier_echange(user_id, agent_id, conversation_id):
+    """
+    Id de la question du dernier echange du fil (15/11/2026) : la derniere ligne si c'est une
+    question restee sans reponse, ou le parent de la derniere reponse. Sert a rattacher la
+    suite d'une reponse (apres une confirmation d'outil) quand le client n'a pas envoye le
+    parent. Sans conversation_id, rien n'est devine : None.
+    """
+    if not user_id or not conversation_id:
+        return None
+    try:
+        res = (
+            supabase.table("historique_conversations")
+            .select("id, role, parent_id")
+            .eq("user_id", user_id).eq("agent_id", agent_id).eq("conversation_id", conversation_id)
+            .order("created_at", desc=True)
+            .order("id", desc=True)
+            .limit(1)
+            .execute()
+        )
+        lignes = res.data or []
+        if not lignes:
+            return None
+        derniere = lignes[0]
+        return derniere["id"] if derniere.get("role") == "user" else derniere.get("parent_id")
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (question du dernier echange) : {e}")
+        return None
+
+
+def _sauvegarder_suite_reponse(user_id, agent_id, question_id, texte, conversation_id=None, modele=None, meta_assistant=None):
+    """
+    Enregistre la SUITE d'une reponse deja commencee (15/11/2026, apres la confirmation d'un
+    outil) : avant, cette suite n'etait jamais ecrite, donc perdue au rechargement.
+
+    Si la question a deja une reponse (le debut, ecrit quand le tour s'est arrete sur la
+    demande de confirmation), la suite est ajoutee A LA FIN de cette meme reponse, pour que
+    l'ensemble reste un seul message comme a l'ecran, et non une "autre version". Sinon une
+    reponse est creee sous la question. Renvoie les identifiants pour l'evenement "meta".
+    """
+    if not user_id or not question_id or not (texte or "").strip():
+        return None
+    try:
+        res = (
+            supabase.table("historique_conversations")
+            .select("id, content, meta, created_at")
+            .eq("parent_id", question_id).eq("role", "assistant")
+            .order("created_at", desc=True)
+            .order("id", desc=True)
+            .limit(1)
+            .execute()
+        )
+        lignes = res.data or []
+        if not lignes:
+            return _sauvegarder_echange(
+                user_id, agent_id, "", texte, conversation_id, modele=modele, meta_assistant=meta_assistant,
+                parent_id=question_id, sauvegarder_message_utilisateur=False,
+            )
+        existante = lignes[0]
+        meta_fusionnee = dict(existante.get("meta") or {})
+        for cle, valeur in (meta_assistant or {}).items():
+            ancienne = meta_fusionnee.get(cle)
+            if isinstance(valeur, list) and isinstance(ancienne, list):
+                meta_fusionnee[cle] = ancienne + valeur
+            elif cle not in meta_fusionnee:
+                meta_fusionnee[cle] = valeur
+        debut = (existante.get("content") or "").rstrip()
+        contenu = f"{debut}\n\n{texte.lstrip()}" if debut else texte
+        (
+            supabase.table("historique_conversations")
+            .update({"content": contenu, "meta": meta_fusionnee or None})
+            .eq("id", existante["id"])
+            .execute()
+        )
+        return {
+            "message_id_user": question_id,
+            "message_id_assistant": existante["id"],
+            "created_at_assistant": existante.get("created_at"),
+            "modele": modele,
+        }
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (suite de reponse) : {e}")
+        return None
 
 
 def _sauvegarder_echange(user_id, agent_id, message_utilisateur, reponse_finale, conversation_id=None, modele=None, meta_utilisateur=None, meta_assistant=None, parent_id=None, sauvegarder_message_utilisateur=True, question_id=None):
