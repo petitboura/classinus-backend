@@ -8,7 +8,7 @@ from groq import Groq
 from constantes_agent import get_secret, supabase, MODELE_ROUTEUR_OUTILS, MODELE_ROUTEUR_OUTILS_REPLI, DELAI_MAX_PAR_APPEL
 from core.mcp_tools import lister_outils_autorises_pour_agent
 from registre_outils import NOMS_CATEGORIES_PROPOSEES_A_L_IA, INDEX_CATEGORIES_OUTILS, OUTILS_TOUJOURS_PRESENTS
-from libelles_activite_ia import schema_avec_libelle, libelle_ia_de_l_appel
+from libelles_activite_ia import schema_avec_libelle, libelle_ia_de_l_appel, outils_avec_libelle
 
 def _resume_description_outil(description, max_caracteres=200):
     """
@@ -464,6 +464,36 @@ def fiches_des_outils(outils):
         parametres = json.dumps(f.get("parameters") or {}, ensure_ascii=False, separators=(",", ":"))
         fiches.append(f"- {f['name']} : {(f.get('description') or '').strip()}\n  Parametres : {parametres}")
     return "\n".join(fiches)
+
+
+def differer_outils_forces(outils_mcp, noms_forces, noms_choisis_par_utilisateur=None):
+    """
+    16/11/2026, demande Bourama (cache de prompt) : les outils forces par le contexte (code actif,
+    media joint, historique allege, canal en direct...) restent envoyes AUTOMATIQUEMENT, mais ils
+    arrivent comme un outil trouve par demander_outils : leur fiche est lue dans la conversation,
+    pas dans la liste d'outils. Cette liste part en tete de chaque requete : tant qu'un outil
+    forcé y entrait ou en sortait d'un message a l'autre, le debut de la requete changeait et le
+    fournisseur relisait tout au prix plein.
+
+    Renvoie (outils_mcp sans les outils forces, texte de fiches a ajouter a la FIN du prompt
+    systeme, c'est-a-dire dans sa partie variable). Les outils que l'utilisateur a choisis lui-meme
+    (bouton Outils) ne sont pas touches : ils restent dans la liste. Un outil force absent de
+    outils_mcp (non autorise pour cet agent) est ignore. L'appel se fait par appeler_outil (voir
+    deballer_appels_appeler_outil) ou directement par son nom, les deux sont executes, car la
+    table de routage garde l'outil.
+    """
+    a_differer = set(noms_forces or []) - set(noms_choisis_par_utilisateur or [])
+    differes = [o for o in (outils_mcp or []) if o["function"]["name"] in a_differer]
+    if not differes:
+        return outils_mcp, ""
+    restants = [o for o in outils_mcp if o["function"]["name"] not in a_differer]
+    noms = ", ".join(o["function"]["name"] for o in differes)
+    texte = (
+        f"\n\nOUTILS DEJA OBTENUS POUR CE MESSAGE : {noms}. Pas besoin de demander_outils pour eux. "
+        "Appelle-les avec appeler_outil(nom, arguments), en suivant leur fiche :\n"
+        + fiches_des_outils(outils_avec_libelle(differes))
+    )
+    return restants, texte
 
 
 def deballer_appels_appeler_outil(appels, outils_mcp, outils_obtenus, table_routage):

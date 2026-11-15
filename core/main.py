@@ -63,7 +63,7 @@ from ocr_pages_scannees import ocr_tesseract_image_fiable
 from profils_agents import _nom_agent, _nom_lisible, _nom_lisible_appel, _action_appel, _champs_domaines_appel
 from routage_outils import (
     _ecrire_outils_retenus, _lire_outils_retenus, _outil_garder_outils, _router_outils,
-    _preparer_demander_outils, _catalogue_pour_demander_outils, _outils_memoire_toujours_disponibles,
+    _preparer_demander_outils, _catalogue_pour_demander_outils, _outils_memoire_toujours_disponibles, differer_outils_forces,
 )
 from prompt_voix_bambara import est_client_voix_bambara, OUTILS_TOUJOURS_VOIX_BAMBARA
 from construction_system_prompt import _construire_system_prompt, _est_timeout, _repli_si_reponse_partielle, separer_partie_variable, MARQUEUR_PARTIE_VARIABLE
@@ -927,6 +927,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # lister_mes_programmes_legers(user_id) + lister_programmes_recus_legers(user_id)).
     mes_programmes = []
     reponses_qcm_recentes = reponses_qcm_a_injecter(historique, conversation_id)
+    # 16/11/2026 (cache de prompt) : ce que l'utilisateur a choisi lui-meme avec le bouton Outils, lu ICI
+    # car outil_force est fusionne avec les outils forces plus bas. Voir differer_outils_forces.
+    outils_choisis_par_utilisateur = list(outil_force) if isinstance(outil_force, (list, tuple, set)) else ([outil_force] if isinstance(outil_force, str) and outil_force else [])
     outils_forces_contexte = []
     if contexte_video:
         outils_forces_contexte.extend(["video_lister_outils", "video_executer_outil"])
@@ -1330,7 +1333,20 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # plusieurs fois pour CE MÊME tour -- cascade de secours, rattrapage
     # TOOL_CODE) : garder_outils, s'il est appelé plus loin, réécrira la
     # bonne valeur par-dessus avant la fin du tour.
-    if outils_mcp:
+    # 16/11/2026, demande Bourama (cache de prompt) : les outils forces par le contexte sortent de la
+    # liste d'outils (qui part en tete de requete) et arrivent comme un outil trouve par
+    # demander_outils : fiche a la fin du prompt, appel par appeler_outil. Ils restent dans
+    # table_routage, donc executes. garder_outils garde sa condition d'avant (liste non vide AVANT
+    # le retrait) pour que le modele puisse toujours garder les outils trouves.
+    avait_des_outils = bool(outils_mcp)
+    noms_outils_differes = set()
+    if catalogue_complet is not None and outils_mcp:
+        noms_avant_retrait = {o["function"]["name"] for o in outils_mcp}
+        outils_mcp, fiches_outils_forces = differer_outils_forces(outils_mcp, outils_forces_contexte, outils_choisis_par_utilisateur)
+        noms_outils_differes = noms_avant_retrait - {o["function"]["name"] for o in outils_mcp}
+        if fiches_outils_forces and system_final:
+            system_final += fiches_outils_forces
+    if avait_des_outils:
         outils_mcp = outils_mcp + [_outil_garder_outils()]
         _ecrire_outils_retenus(conversation_id, [])
 
@@ -1417,7 +1433,10 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     # les outils MCP et les 3 outils de gestion d'historique comme la cascade : DeepSeek depuis le
     # 15/10/2026, Claude, GPT, Gemini et Grok depuis le 20/10/2026. Seul un modèle resté en texte
     # seul (clé API absente) n'a aucun outil, ce que modele_a_des_outils indique.
-    noms_outils_tour = set() if (modele_force and not modele_a_des_outils(modele_force)) else {o["function"]["name"] for o in (outils_mcp or [])}
+    # Les outils forces sortis de la liste (voir differer_outils_forces) restent proposes ce tour-ci : leur
+    # fiche est a la fin du prompt. Sans les compter ici, l'allegement de l'historique, la note
+    # d'avancement et le journal des outils croiraient les trois outils d'historique absents.
+    noms_outils_tour = set() if (modele_force and not modele_a_des_outils(modele_force)) else ({o["function"]["name"] for o in (outils_mcp or [])} | noms_outils_differes)
     if a_des_messages_allegers(historique_allege) and "rappeler_echange_conversation" not in noms_outils_tour:
         historique_pour_modele = historique
     else:
