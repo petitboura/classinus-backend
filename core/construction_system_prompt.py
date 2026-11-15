@@ -313,8 +313,12 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # Ce bloc est TOUJOURS présent (contrairement aux blocs suivants,
     # conditionnels), pour que le modèle sache dans tous les cas s'il est
     # en mode cours ou non.
+    # 15/11/2026, cache de prompt : ce bloc change des qu'un code est rattache ou detache, donc il ne
+    # doit PAS etre dans la partie stable (avant MARQUEUR_PARTIE_VARIABLE) : la tete du prompt
+    # changerait et le fournisseur relirait tout au prix plein. Le texte est prepare ici et ajoute
+    # plus bas, juste apres le marqueur, avec exactement le meme contenu qu'avant.
     if code_actif:
-        system_final += (
+        bloc_mode_cours = (
             "\n\nMODE COURS : ACTIF pour cette conversation (un code est rattaché). OBLIGATION, sans "
             "exception : avant de répondre à CE message, appelle l'outil verifier_consignes_code_actif "
             "pour les trois actions \"comportements\", \"programme\" et \"signalements\", même si les "
@@ -323,7 +327,7 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
             "tant que le mode cours est actif, c'est un passage obligatoire avant toute réponse."
         )
     else:
-        system_final += "\n\nMODE COURS : inactif pour cette conversation (aucun code rattaché ou aucun mode choisi)."
+        bloc_mode_cours = "\n\nMODE COURS : inactif pour cette conversation (aucun code rattaché ou aucun mode choisi)."
 
     # 25/10/2026, demande Bourama : catalogue des skills avec dossier et fichiers
     # (nom et description seulement, chargement progressif comme chez Claude). Le
@@ -463,6 +467,7 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
 
     # A partir d'ici, tout depend du message ou de l'ecran du moment : voir MARQUEUR_PARTIE_VARIABLE.
     system_final += MARQUEUR_PARTIE_VARIABLE
+    system_final += bloc_mode_cours
 
     # Mode vocal bambara (13/11/2026, demande Bourama) : deux notes (texte simple, reponse en
     # bambara oral), ajoutees ici, dans la partie variable, pour ne pas toucher a la partie stable

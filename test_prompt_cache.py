@@ -41,6 +41,19 @@ class SeparationDuPrompt(unittest.TestCase):
         self.assertEqual(tete_a, tete_b)
         self.assertNotEqual(queue_a, queue_b)
 
+    def test_le_mode_cours_ne_change_pas_la_tete(self):
+        # 15/11/2026 : basculer le mode cours (code rattache ou non) changeait la tete du prompt et
+        # cassait le cache (empreinte_tete 4120 -> 5b47 -> 4120 dans les logs de production).
+        inactif = construire("bonjour", code_actif=False)
+        actif = construire("bonjour", code_actif=True)
+        tete_inactif, queue_inactif = csp.separer_partie_variable(inactif)
+        tete_actif, queue_actif = csp.separer_partie_variable(actif)
+        self.assertEqual(tete_inactif, tete_actif)
+        self.assertNotIn("MODE COURS", tete_actif)
+        self.assertIn("MODE COURS : inactif", queue_inactif)
+        self.assertIn("MODE COURS : ACTIF", queue_actif)
+        self.assertIn("verifier_consignes_code_actif", queue_actif)
+
     def test_tete_contient_la_page_de_l_agent_et_queue_la_date(self):
         tete, queue = csp.separer_partie_variable(construire("bonjour"))
         self.assertIn("PAGE DE L'AGENT", tete)
