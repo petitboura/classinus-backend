@@ -398,6 +398,18 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
     # Canal en direct (19/09/2026) : tant que ce flux tourne, l'etudiant peut
     # envoyer un message qui sera lu par la boucle d'agent au prochain
     # aller-retour (voir core/canal_agent_applicatif.py).
+    # Correctif 15/11/2026 (messages perdus, signale par Bourama) : un clic sur Confirmer ou
+    # Refuser repartait sans conversation, et la suite de la reponse n'etait jamais
+    # enregistree si l'application affichee n'envoyait pas ces informations (application
+    # pas encore mise a jour). La conversation est donc aussi gardee DANS l'etat de la pause
+    # (voir plus bas) et reprise ici quand elle manque.
+    if payload.reprise is not None:
+        contexte_pause = (payload.reprise.etat_reprise or {}).get("contexte_conversation")
+        if isinstance(contexte_pause, dict):
+            if not payload.conversation_id and contexte_pause.get("conversation_id"):
+                payload.conversation_id = contexte_pause["conversation_id"]
+            if not payload.agent_id and contexte_pause.get("agent_id"):
+                payload.agent_id = contexte_pause["agent_id"]
     if user_id:
         definir_lecture_editeur_chat(user_id, payload.conversation_id, payload.etat_editeur)
         debuter_tour(user_id)
@@ -490,6 +502,14 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
                         evenement_affiche["message"] = (
                             f"{nom_agent_affiche} wants to do this: {libelle_action.rstrip('.')}."
                         )
+            if isinstance(evenement_affiche, dict) and isinstance(evenement_affiche.get("etat_reprise"), dict):
+                evenement_affiche = {
+                    **evenement_affiche,
+                    "etat_reprise": {
+                        **evenement_affiche["etat_reprise"],
+                        "contexte_conversation": {"conversation_id": payload.conversation_id, "agent_id": payload.agent_id},
+                    },
+                }
             yield f"data: {json.dumps(evenement_affiche)}\n\n"
     except Exception as e:
         logging.error(f"ERREUR chat() en streaming (agent_id={payload.agent_id}) : {e}")
