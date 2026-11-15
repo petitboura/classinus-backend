@@ -72,7 +72,7 @@ HIERARCHIE_MODELES = {
     },
     "gemini": {
         "essentiel": {"id": "gemini-3.5-flash-lite", "label": "Gemini 3.5 Flash-Lite"},
-        "avance": {"id": "gemini-3.8-flash", "label": "Gemini 3.8 Flash"},
+        "avance": {"id": "gemini-4-hydrogen", "label": "Gemini 4 Hydrogen"},
         "pro": {"id": "gemini-4-argon", "label": "Gemini 4 Argon"},
     },
     "grok": {
@@ -101,11 +101,15 @@ HIERARCHIE_MODELES = {
         # 24/07/2026 (15:59 UTC) -- remplaces ici par les noms actuels.
         # Bug decouvert en verifiant les prix pour Bourama : nos appels
         # DeepSeek echouaient probablement en silence depuis le 24/07.
+        # 15/11/2026, demande de Bourama : l'etiquette devient DeepSeek V4.1 Flash. DeepSeek a
+        # remplace V4 Flash par V4.1 Flash le 10/09/2026 et redirige l'ancien nom vers lui ; en prod
+        # Vultr sert deja deepseek-v4.1-flash-1017. L'identifiant deepseek-v4-flash ne change pas :
+        # il sert de cle (modele prefere des eleves, cascade).
         # Slugs Baseten (29/10/2026, demande Bourama, source : doc officielle
         # Baseten, page Reasoning, table des modeles) : traduits depuis l'id
         # direct par core/adaptateur_baseten.py quand l'interrupteur est ON.
-        "essentiel": {"id": "deepseek-v4-flash", "label": "DeepSeek V4 Flash", "baseten": "deepseek-ai/DeepSeek-V4-Flash-0731"},
-        "avance": {"id": "deepseek-v4-flash", "label": "DeepSeek V4 Flash", "baseten": "deepseek-ai/DeepSeek-V4-Flash-0731"},
+        "essentiel": {"id": "deepseek-v4-flash", "label": "DeepSeek V4.1 Flash", "baseten": "deepseek-ai/DeepSeek-V4-Flash-0731"},
+        "avance": {"id": "deepseek-v4-flash", "label": "DeepSeek V4.1 Flash", "baseten": "deepseek-ai/DeepSeek-V4-Flash-0731"},
         "pro": {"id": "deepseek-v4-pro", "label": "DeepSeek V4 Pro", "baseten": "deepseek-ai/DeepSeek-V4-Pro-0813"},
     },
     "meta": {

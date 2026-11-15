@@ -31,7 +31,7 @@ NOMS_FOURNISSEURS = {
 # configuration du sélecteur. Clé = identifiant envoyé à l'API, valeur = (fournisseur,
 # nom du modèle). À mettre à jour quand la cascade change.
 MODELES_CASCADE = {
-    "deepseek-v4-flash": ("DeepSeek", "DeepSeek V4 Flash"),
+    "deepseek-v4-flash": ("DeepSeek", "DeepSeek V4.1 Flash"),
     "openai/gpt-oss-120b": ("OpenAI", "GPT-OSS 120B"),
     "openai/gpt-oss-20b": ("OpenAI", "GPT-OSS 20B"),
     "qwen/qwen3.6-27b": ("Alibaba", "Qwen 3.6 27B"),
