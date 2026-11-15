@@ -75,7 +75,67 @@ def _parent_effectif(user_id, agent_id, conversation_id, parent_id):
         return parent_id
 
 
-def _sauvegarder_echange(user_id, agent_id, message_utilisateur, reponse_finale, conversation_id=None, modele=None, meta_utilisateur=None, meta_assistant=None, parent_id=None, sauvegarder_message_utilisateur=True):
+def _enregistrer_question(user_id, agent_id, message_utilisateur, conversation_id=None, parent_id=None, meta_utilisateur=None):
+    """
+    Enregistre la question de l'utilisateur DES SON ARRIVEE (15/11/2026, bug remonte par
+    Bourama : derniers messages et certains messages perdus).
+
+    Avant, la question n'etait ecrite en base qu'a la toute fin du tour, et seulement si la
+    reponse de l'IA contenait du texte. Une reponse vide, une erreur, une pause pour
+    confirmation ou un redemarrage du serveur faisaient donc disparaitre aussi la question
+    (54 tours sur 177 en une semaine). Ici elle est gardee tout de suite : la reponse viendra
+    ensuite s'y rattacher (voir `question_id` dans _sauvegarder_echange).
+
+    Renvoie l'id de la ligne creee, ou None (visiteur sans compte, texte vide, erreur de base) :
+    dans ce cas l'ancien comportement s'applique, la question est ecrite avec la reponse.
+    """
+    if not user_id or not (message_utilisateur or "").strip():
+        return None
+    try:
+        parent_effectif = _parent_effectif(user_id, agent_id, conversation_id, parent_id)
+        res = (
+            supabase.table("historique_conversations")
+            .insert({
+                "user_id": user_id, "agent_id": agent_id, "role": "user", "content": message_utilisateur,
+                "conversation_id": conversation_id, "meta": meta_utilisateur or None, "parent_id": parent_effectif,
+            })
+            .execute()
+        )
+        lignes = res.data or []
+        return lignes[0]["id"] if lignes else None
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (enregistrement immediat de la question) : {e}")
+        return None
+
+
+def _derniere_question_sans_reponse(user_id, agent_id, conversation_id):
+    """
+    Id de la derniere ligne du fil si c'est une question restee sans reponse, sinon None
+    (15/11/2026). Sert a la reprise apres une pause (confirmation, limite) : la suite doit
+    se rattacher a la question en attente, et non rester sans parent. Sans conversation_id,
+    rien n'est devine.
+    """
+    if not user_id or not conversation_id:
+        return None
+    try:
+        res = (
+            supabase.table("historique_conversations")
+            .select("id, role")
+            .eq("user_id", user_id).eq("agent_id", agent_id).eq("conversation_id", conversation_id)
+            .order("created_at", desc=True)
+            .order("id", desc=True)
+            .limit(1)
+            .execute()
+        )
+        lignes = res.data or []
+        if lignes and lignes[0].get("role") == "user":
+            return lignes[0]["id"]
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (question en attente de reponse) : {e}")
+    return None
+
+
+def _sauvegarder_echange(user_id, agent_id, message_utilisateur, reponse_finale, conversation_id=None, modele=None, meta_utilisateur=None, meta_assistant=None, parent_id=None, sauvegarder_message_utilisateur=True, question_id=None):
     """
     Persiste l'echange (question + reponse) dans `conversations`, pour la
     memoire long-terme. Ignore silencieusement si l'utilisateur n'est pas
@@ -132,6 +192,10 @@ def _sauvegarder_echange(user_id, agent_id, message_utilisateur, reponse_finale,
       "assistant" devient une VERSION ALTERNATIVE (meme parent_id que
       l'ancienne reponse) plutot qu'une suite.
     """
+    # `question_id` (15/11/2026) : id de la ligne "user" deja ecrite des l'arrivee de la
+    # question (voir _enregistrer_question). Quand il est donne, la ligne "user" n'est pas
+    # recreee ici : seule la reponse est ecrite, rattachee a cette question. None = ancien
+    # comportement (question et reponse ecrites ensemble).
     ids_historique = None  # renvoyé à l'appelant pour l'indexation du feedback
 
     if not user_id or not (reponse_finale or "").strip():
@@ -181,13 +245,26 @@ def _sauvegarder_echange(user_id, agent_id, message_utilisateur, reponse_finale,
         # uniquement pour une nouvelle ligne "user". En mode reessayer, le
         # parent designe la question existante et doit rester tel quel,
         # sinon la nouvelle reponse ne serait plus une version alternative.
+        question_deja_ecrite = sauvegarder_message_utilisateur and question_id is not None
         parent_effectif = (
             _parent_effectif(user_id, agent_id, conversation_id, parent_id)
-            if sauvegarder_message_utilisateur
+            if sauvegarder_message_utilisateur and not question_deja_ecrite
             else parent_id
         )
-        id_parent_assistant = parent_effectif
-        if sauvegarder_message_utilisateur:
+        id_parent_assistant = question_id if question_deja_ecrite else parent_effectif
+        if question_deja_ecrite and meta_utilisateur:
+            # La ligne "user" a ete ecrite avant que les pieces jointes soient connues : on
+            # complete ses informations maintenant, sans toucher au reste.
+            try:
+                (
+                    supabase.table("historique_conversations")
+                    .update({"meta": meta_utilisateur})
+                    .eq("id", question_id)
+                    .execute()
+                )
+            except Exception as e:
+                logging.error(f"ERREUR SUPABASE (mise a jour des infos de la question) : {e}")
+        if sauvegarder_message_utilisateur and not question_deja_ecrite:
             res_user = (
                 supabase.table("historique_conversations")
                 .insert({
