@@ -29,7 +29,7 @@ class TestBlocIdentite(unittest.TestCase):
     def test_modele_de_la_cascade_fournisseur_puis_modele(self):
         bloc = identite_modele.bloc_identite("deepseek-v4-flash")
 
-        self.assertIn("assistant de Classinus, propulsé par DeepSeek, modèle DeepSeek V4 Flash", bloc)
+        self.assertIn("assistant de Classinus, propulsé par DeepSeek, modèle DeepSeek V4.1 Flash", bloc)
 
     def test_chaque_modele_de_la_cascade_a_un_fournisseur(self):
         for modele_id, (fournisseur, modele) in identite_modele.MODELES_CASCADE.items():

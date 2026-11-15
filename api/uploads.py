@@ -176,6 +176,18 @@ PROMPT_EXTRACTION_FORMULE = (
 )
 
 
+# Modele Gemini de l'extraction de formules (15/11/2026, demande de Bourama). gemini-2.5-flash,
+# ecrit en dur ici jusqu'a present, est annonce ferme par Google (octobre 2026). Le modele se
+# regle maintenant par la variable GEMINI_EXTRACTION_FORMULE_MODELE (a regler sur Railway, comme
+# GEMINI_TTS_MODELE), avec gemini-3.8-flash par defaut : lecture d'image, et il reflechit au
+# niveau moyen par defaut, ce qui suffit pour recopier une formule.
+MODELE_EXTRACTION_FORMULE_DEFAUT = "gemini-3.8-flash"
+
+
+def _modele_extraction_formule():
+    return (get_secret("GEMINI_EXTRACTION_FORMULE_MODELE") or "").strip() or MODELE_EXTRACTION_FORMULE_DEFAUT
+
+
 @router.post("/extraire-formule")
 async def extraire_formule(
     fichier: UploadFile = File(...),
@@ -208,7 +220,7 @@ async def extraire_formule(
     try:
         client_google = genai.Client(api_key=get_secret("GOOGLE_API_KEY"))
         reponse = client_google.models.generate_content(
-            model="gemini-2.5-flash",
+            model=_modele_extraction_formule(),
             contents=[{
                 "role": "user",
                 "parts": [
