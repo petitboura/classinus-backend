@@ -668,7 +668,10 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque, email
     "aucun" : dans ce cas le frontend n'affiche AUCUN selecteur, l'agent
     tourne sur la cascade Groq habituelle comme avant cette feature.
 
-    Chaque element : {"modele_id", "label", "distributeur", "palier"}.
+    Chaque element : {"modele_id", "label", "distributeur", "nom_distributeur", "palier"}.
+    nom_distributeur est le nom du fournisseur affiche dans le selecteur (colonne nom_affiche de
+    fournisseurs_llm, 15/11/2026, demande de Bourama) : None quand Supabase ne le donne pas, le
+    frontend garde alors son nom de repli.
     Cumulatif sur les deux axes (voir docstring du module) ET filtre par
     la regle de cle API (cle absente et cle_api_requise vrai : fournisseur
     invisible). Les fournisseurs marques Bientôt dans Supabase sont toujours
@@ -743,6 +746,7 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque, email
                 "modele_id": info["id"],
                 "label": info["label"],
                 "distributeur": distributeur,
+                "nom_distributeur": config["fournisseurs"][distributeur].get("nom_affiche"),
                 "palier": palier,
                 "efforts": efforts,
                 "effort_defaut": effort_defaut(efforts),
@@ -793,6 +797,7 @@ def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque, email=Non
                 "modele_id": info["id"],
                 "label": info["label"],
                 "distributeur": distributeur,
+                "nom_distributeur": config["fournisseurs"][distributeur].get("nom_affiche"),
                 "palier": palier,
                 "libelles_bientot": dict(libelles),
             })
