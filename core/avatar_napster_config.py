@@ -15,7 +15,8 @@ Tout vient de variables d'environnement (Railway), rien n'est écrit en dur :
 - NAPSTER_API_URL             (facultatif) adresse de l'API, https://companion-api.napster.com par défaut.
 - AVATAR_NAPSTER_DELAI_MIN_S  (facultatif) attente minimale entre deux démarrages d'un même compte, 5 par défaut.
 - AVATAR_NAPSTER_CONSIGNES, AVATAR_NAPSTER_DESCRIPTION_OUTIL, AVATAR_NAPSTER_ACCUEIL,
-  AVATAR_NAPSTER_ANNONCE_REPONSE, AVATAR_NAPSTER_ANNONCE_BULLE, AVATAR_NAPSTER_ATTENTE :
+  AVATAR_NAPSTER_ANNONCE_REPONSE, AVATAR_NAPSTER_ANNONCE_BULLE, AVATAR_NAPSTER_ATTENTE,
+  AVATAR_NAPSTER_SUITE_DEMANDE :
   textes donnés à l'avatar (facultatifs, valeurs par défaut ci dessous).
 """
 
@@ -53,6 +54,11 @@ ANNONCE_REPONSE_PAR_DEFAUT = (
 ANNONCE_BULLE_PAR_DEFAUT = "Classinus a un message pour l'utilisateur. Dis le à voix haute tel quel : "
 
 ATTENTE_PAR_DEFAUT = "Classinus travaille sur la demande. Dis brièvement à l'utilisateur de patienter, sans rien inventer."
+
+SUITE_DEMANDE_PAR_DEFAUT = (
+    "Classinus a terminé la demande en cours. Dis à voix haute l'essentiel de sa réponse, "
+    "en quelques phrases, sans rien ajouter. Réponse : "
+)
 
 
 def _texte(nom: str, defaut: str) -> str:
@@ -101,4 +107,5 @@ def reglages_avatar_napster() -> dict:
         "annonce_reponse": _texte("AVATAR_NAPSTER_ANNONCE_REPONSE", ANNONCE_REPONSE_PAR_DEFAUT),
         "annonce_bulle": _texte("AVATAR_NAPSTER_ANNONCE_BULLE", ANNONCE_BULLE_PAR_DEFAUT),
         "attente": _texte("AVATAR_NAPSTER_ATTENTE", ATTENTE_PAR_DEFAUT),
+        "suite_demande": _texte("AVATAR_NAPSTER_SUITE_DEMANDE", SUITE_DEMANDE_PAR_DEFAUT),
     }
