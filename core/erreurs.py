@@ -406,6 +406,10 @@ MESSAGES_FR: dict[str, str] = {
     "VOIX_BAMBARA_INDISPONIBLE": "La voix bambara ne répond pas pour le moment, réessaie dans un instant.",
     "VOIX_BAMBARA_AUDIO_INVALIDE": "L'enregistrement est vide ou trop gros, réessaie en parlant un peu moins longtemps.",
     "VOIX_BAMBARA_TEXTE_INVALIDE": "Il n'y a rien à lire à voix haute.",
+    # 16/11/2026, avatar Napster du mode vocal (api/avatar_napster.py). Codes à garder synchronisés avec lib/erreurs.ts côté frontend.
+    "AVATAR_NAPSTER_NON_CONFIGURE": "L'avatar n'est pas branché pour le moment.",
+    "AVATAR_NAPSTER_INDISPONIBLE": "L'avatar ne répond pas pour le moment, réessaie dans un instant.",
+    "AVATAR_NAPSTER_TROP_RAPIDE": "Patiente quelques secondes avant de relancer l'avatar.",
 }
 
 
@@ -810,6 +814,9 @@ MESSAGES_EN: dict[str, str] = {
     "VOIX_BAMBARA_INDISPONIBLE": "The Bambara voice is not responding right now, try again in a moment.",
     "VOIX_BAMBARA_AUDIO_INVALIDE": "The recording is empty or too large, try again with a shorter message.",
     "VOIX_BAMBARA_TEXTE_INVALIDE": "There is nothing to read aloud.",
+    "AVATAR_NAPSTER_NON_CONFIGURE": "The avatar is not connected right now.",
+    "AVATAR_NAPSTER_INDISPONIBLE": "The avatar is not responding right now, try again in a moment.",
+    "AVATAR_NAPSTER_TROP_RAPIDE": "Wait a few seconds before starting the avatar again.",
 }
 
 def erreur_api(status_code: int, code: str, message: str | None = None, **kwargs) -> HTTPException:
