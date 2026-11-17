@@ -1,0 +1,99 @@
+"""
+Routes de la liste d'attente des modeles "Bientot" (16/11/2026, demande de Bourama).
+
+Toute la logique vit dans core/liste_attente.py. Ces routes servent le formulaire qui s'ouvre
+quand l'utilisateur clique sur un modele grise du selecteur. Aucun paiement n'est pris.
+"""
+
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel
+
+from api.auth import utilisateur_courant
+from core import liste_attente
+from core.erreurs import erreur_api
+from core.limitation_debit import limiteur
+
+router_liste_attente = APIRouter(prefix="/api/liste-attente", tags=["liste-attente"])
+
+
+def _lever(e: liste_attente.ErreurListeAttente):
+    raise erreur_api(e.statut_http, e.code)
+
+
+class InscriptionPayload(BaseModel):
+    modele_id: str
+    palier_prix: int
+    profil: str
+    consentement: bool
+    pays: Optional[str] = None
+    whatsapp: Optional[str] = None
+    langue: Optional[str] = None
+    source: Optional[str] = None
+
+
+class DesinscriptionPayload(BaseModel):
+    modele_id: str
+
+
+class EvenementPayload(BaseModel):
+    etape: str
+    modele_id: Optional[str] = None
+    langue: Optional[str] = None
+    source: Optional[str] = None
+
+
+@router_liste_attente.get("/config")
+@limiteur.limit("30/minute")
+def lire_config(request: Request, utilisateur=Depends(utilisateur_courant)):
+    """Paliers, textes (francais et anglais) et inscriptions actives de l'utilisateur."""
+    try:
+        return liste_attente.charger_config(utilisateur.id)
+    except liste_attente.ErreurListeAttente as e:
+        _lever(e)
+
+
+@router_liste_attente.post("")
+@limiteur.limit("10/minute")
+def s_inscrire(request: Request, payload: InscriptionPayload, utilisateur=Depends(utilisateur_courant)):
+    try:
+        return liste_attente.inscrire(
+            utilisateur.id,
+            getattr(utilisateur, "email", None),
+            payload.modele_id,
+            payload.palier_prix,
+            payload.profil,
+            payload.consentement,
+            pays=payload.pays,
+            whatsapp=payload.whatsapp,
+            langue=payload.langue,
+            source=payload.source,
+        )
+    except liste_attente.ErreurListeAttente as e:
+        _lever(e)
+
+
+@router_liste_attente.post("/desinscription")
+@limiteur.limit("10/minute")
+def se_desinscrire(request: Request, payload: DesinscriptionPayload, utilisateur=Depends(utilisateur_courant)):
+    try:
+        return liste_attente.desinscrire(utilisateur.id, payload.modele_id)
+    except liste_attente.ErreurListeAttente as e:
+        _lever(e)
+
+
+@router_liste_attente.post("/evenement")
+@limiteur.limit("60/minute")
+def noter_evenement(request: Request, payload: EvenementPayload, utilisateur=Depends(utilisateur_courant)):
+    """Une etape de l'entonnoir (ouverture du selecteur, clic, ouverture du formulaire)."""
+    if payload.etape == "inscription_validee":
+        # Cette etape n'est ecrite que par l'inscription elle-meme, jamais par le client.
+        raise erreur_api(400, "LISTE_ATTENTE_ETAPE_INVALIDE")
+    try:
+        liste_attente.enregistrer_evenement(
+            utilisateur.id, payload.etape, payload.modele_id, payload.langue, payload.source
+        )
+    except liste_attente.ErreurListeAttente as e:
+        _lever(e)
+    return {"ok": True}

@@ -83,6 +83,7 @@ from api.gemini_live import router as gemini_live_router
 from api.voix_bambara import router as voix_bambara_router  # 13/11/2026, relais du mode vocal bambara
 from api.avatar_napster import router as avatar_napster_router  # 16/11/2026, avatar Napster du mode vocal
 from api.minuteurs import router_minuteurs
+from api.liste_attente import router_liste_attente  # 16/11/2026, liste d'attente des modèles Bientôt
 from api.webhooks_github import router as webhooks_github_router
 from api.dossiers_designes import router as dossiers_designes_router
 from api.programme_notions import router as programme_notions_router
@@ -967,6 +968,7 @@ app.include_router(gemini_live_router)
 app.include_router(voix_bambara_router)  # 13/11/2026, relais du mode vocal bambara
 app.include_router(avatar_napster_router)  # 16/11/2026, avatar Napster du mode vocal
 app.include_router(router_minuteurs)
+app.include_router(router_liste_attente)
 app.include_router(dossiers_designes_router)
 app.include_router(webhooks_github_router)
 app.include_router(programme_notions_router)
