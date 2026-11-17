@@ -7,8 +7,10 @@ pris. Ce module garde toute la logique ; api/liste_attente.py n'est que la couch
 
 Tables (voir migrations/2026_11_16_liste_attente_modeles.sql) :
 - paliers_liste_attente : les paliers proposes, lus ici, jamais ecrits en dur.
-- liste_attente_modeles : une ligne par utilisateur et par modele (un meme utilisateur peut donc
-  s'inscrire a plusieurs modeles, ce qui montre mieux la demande reelle).
+- liste_attente_modeles : UNE seule ligne par utilisateur (17/11/2026, demande de Bourama : une
+  seule liste d'attente, pas une par modele). modele_id garde le modele sur lequel la personne a
+  clique en s'inscrivant (le modele d'origine) ; une nouvelle inscription ou une modification ne le
+  change pas.
 - evenements_liste_attente : les quatre etapes de l'entonnoir, pour les chiffres investisseurs.
 - Les textes du formulaire sont dans textes_modeles_llm (cles attente_*), en francais et en anglais.
 
@@ -96,27 +98,29 @@ def lire_textes() -> dict:
     return textes
 
 
-def lister_inscriptions(user_id: str) -> list[dict]:
-    """Inscriptions actives de l'utilisateur : le formulaire s'en sert pour dire "deja inscrit"."""
+def lire_inscription(user_id: str) -> dict | None:
+    """Inscription active de l'utilisateur (une seule liste) : le formulaire s'en sert pour dire "deja inscrit"."""
     try:
         res = (
             supabase.table("liste_attente_modeles")
             .select("modele_id, palier_prix, profil, statut")
             .eq("user_id", user_id)
             .eq("statut", "actif")
+            .limit(1)
             .execute()
         )
     except Exception as e:
-        logging.error(f"ERREUR SUPABASE (lecture inscriptions liste d'attente user={user_id}) : {e}")
+        logging.error(f"ERREUR SUPABASE (lecture inscription liste d'attente user={user_id}) : {e}")
         raise ErreurListeAttente("LISTE_ATTENTE_ECHEC", 500)
-    return res.data or []
+    lignes = res.data or []
+    return lignes[0] if lignes else None
 
 
 def charger_config(user_id: str) -> dict:
     return {
         "paliers": lister_paliers(),
         "textes": lire_textes(),
-        "inscriptions": lister_inscriptions(user_id),
+        "inscription": lire_inscription(user_id),
         "profils": list(PROFILS),
     }
 
@@ -133,7 +137,7 @@ def inscrire(
     langue=None,
     source=None,
 ) -> dict:
-    """Cree ou met a jour l'inscription de l'utilisateur pour ce modele (une ligne par modele)."""
+    """Cree ou met a jour l'unique inscription de l'utilisateur ; modele_id est le modele clique."""
     modele = _modele_id_valide(modele_id)
     if profil not in PROFILS:
         raise ErreurListeAttente("LISTE_ATTENTE_PROFIL_INVALIDE")
@@ -147,7 +151,6 @@ def inscrire(
     ligne = {
         "user_id": user_id,
         "email": _nettoyer(email, 254),
-        "modele_id": modele,
         "palier_prix": palier_prix,
         "profil": profil,
         "pays": _nettoyer(pays, LONGUEUR_MAX_PAYS),
@@ -159,19 +162,27 @@ def inscrire(
         "statut": "actif",
         "modifie_a": maintenant,
     }
+    modele_origine = modele
     try:
-        supabase.table("liste_attente_modeles").upsert(ligne, on_conflict="user_id,modele_id").execute()
+        existant = (
+            supabase.table("liste_attente_modeles").select("modele_id").eq("user_id", user_id).limit(1).execute()
+        ).data or []
+        if existant:
+            # Deja sur la liste : on met a jour les choix, le modele d'origine ne change pas.
+            modele_origine = existant[0].get("modele_id") or modele
+            supabase.table("liste_attente_modeles").update(ligne).eq("user_id", user_id).execute()
+        else:
+            supabase.table("liste_attente_modeles").insert({**ligne, "modele_id": modele}).execute()
     except Exception as e:
         logging.error(f"ERREUR SUPABASE (inscription liste d'attente user={user_id} modele={modele}) : {e}")
         raise ErreurListeAttente("LISTE_ATTENTE_ECHEC", 500)
 
     enregistrer_evenement(user_id, "inscription_validee", modele, langue, source)
-    return {"modele_id": modele, "palier_prix": palier_prix, "profil": profil, "statut": "actif"}
+    return {"modele_id": modele_origine, "palier_prix": palier_prix, "profil": profil, "statut": "actif"}
 
 
-def desinscrire(user_id: str, modele_id) -> dict:
+def desinscrire(user_id: str) -> dict:
     """Passe l'inscription en "desinscrit" (la ligne reste pour les statistiques, sans donnee en plus)."""
-    modele = _modele_id_valide(modele_id)
     try:
         (
             supabase.table("liste_attente_modeles")
@@ -183,13 +194,12 @@ def desinscrire(user_id: str, modele_id) -> dict:
                 }
             )
             .eq("user_id", user_id)
-            .eq("modele_id", modele)
             .execute()
         )
     except Exception as e:
-        logging.error(f"ERREUR SUPABASE (desinscription liste d'attente user={user_id} modele={modele}) : {e}")
+        logging.error(f"ERREUR SUPABASE (desinscription liste d'attente user={user_id}) : {e}")
         raise ErreurListeAttente("LISTE_ATTENTE_ECHEC", 500)
-    return {"modele_id": modele, "statut": "desinscrit"}
+    return {"statut": "desinscrit"}
 
 
 def enregistrer_evenement(user_id: str, etape, modele_id=None, langue=None, source=None) -> None:

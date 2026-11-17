@@ -33,10 +33,6 @@ class InscriptionPayload(BaseModel):
     source: Optional[str] = None
 
 
-class DesinscriptionPayload(BaseModel):
-    modele_id: str
-
-
 class EvenementPayload(BaseModel):
     etape: str
     modele_id: Optional[str] = None
@@ -76,9 +72,10 @@ def s_inscrire(request: Request, payload: InscriptionPayload, utilisateur=Depend
 
 @router_liste_attente.post("/desinscription")
 @limiteur.limit("10/minute")
-def se_desinscrire(request: Request, payload: DesinscriptionPayload, utilisateur=Depends(utilisateur_courant)):
+def se_desinscrire(request: Request, utilisateur=Depends(utilisateur_courant)):
+    """Retire l'utilisateur de la liste d'attente (une seule liste, donc aucun modele a preciser)."""
     try:
-        return liste_attente.desinscrire(utilisateur.id, payload.modele_id)
+        return liste_attente.desinscrire(utilisateur.id)
     except liste_attente.ErreurListeAttente as e:
         _lever(e)
 
