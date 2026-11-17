@@ -1,8 +1,9 @@
 /*
   Liste d'attente unique (17/11/2026, demande de Bourama) : une seule inscription par utilisateur,
   pas une par modele. La colonne modele_id garde le modele sur lequel la personne a clique en
-  s'inscrivant (le modele d'origine). Ajoute aussi les noms des paliers (Pro, Max, Ultra), les
-  points de chaque palier et les textes mis a jour pour une liste unique.
+  s'inscrivant (le modele d'origine). Ajoute aussi les noms des paliers (Pro, Max, Ultra) et les textes
+  mis a jour pour une liste unique. Les points de chaque palier et « par mois » sont dans
+  2026_11_17_capacites_paliers_liste_attente.sql, qui en reste la seule source.
 */
 
 -- Une ligne par utilisateur : on garde la plus recente (derniers choix) et on retire les autres.
@@ -34,13 +35,5 @@ insert into public.textes_modeles_llm (cle, langue, texte) values
   ('attente_palier_nom_20', 'fr', 'Ultra'),
   ('attente_palier_nom_20', 'en', 'Ultra'),
   ('attente_palier_20', 'fr', 'Comme Max, avec plus de crédit et une exécution de code quasi illimitée.'),
-  ('attente_palier_20', 'en', 'Like Max, with more credit and nearly unlimited code execution.'),
-  ('attente_palier_par_mois', 'fr', 'par mois'),
-  ('attente_palier_par_mois', 'en', 'per month'),
-  ('attente_palier_10_points', 'fr', 'Recherche, bibliothèque, skills et pédagogie sans limite|Sans accès aux plus grands modèles|Connecteurs et exécution de code limités|OCR sans limite'),
-  ('attente_palier_10_points', 'en', 'Unlimited search, library, skills and learning tools|No access to the largest models|Limited connectors and code execution|Unlimited OCR'),
-  ('attente_palier_17_points', 'fr', 'Tous les groupes de modèles avec ton crédit|Connecteurs et exécution de code illimités|Agent navigateur et ordinateur|Voix en direct, vidéos YouTube et exploration web profonde'),
-  ('attente_palier_17_points', 'en', 'Every model group with your credit|Unlimited connectors and code execution|Browser and computer agent|Live voice, YouTube videos and deep web exploration'),
-  ('attente_palier_20_points', 'fr', 'Tout ce que contient Max|Plus de crédit de modèles chaque mois|Exécution de code quasi illimitée'),
-  ('attente_palier_20_points', 'en', 'Everything in Max|More model credit every month|Nearly unlimited code execution')
+  ('attente_palier_20', 'en', 'Like Max, with more credit and nearly unlimited code execution.')
 on conflict (cle, langue) do update set texte = excluded.texte, updated_at = now();
