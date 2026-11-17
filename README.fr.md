@@ -77,6 +77,7 @@ Détails et tableau complet : [`boites_service/README.md`](boites_service/README
 - Connexions OAuth et intégrations de services externes.
 - Services MCP internes et serveurs MCP publics.
 - Fonctions multimédias, notifications, voix et canal en direct.
+- Page vocale bambara : le client `page_bambara` ne garde que les outils de recherche, de génération visuelle et de mémoire, ajoute les consignes de bambara oral et force l’effort de réflexion au plus faible (`core/outils_page_bambara.py`).
 
 ## Architecture technique
 

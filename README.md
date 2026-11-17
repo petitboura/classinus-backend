@@ -79,6 +79,7 @@ Details and the full table: [`boites_service/README.md`](boites_service/README.m
 - OAuth connections and integrations with external services.
 - Internal MCP services and public MCP servers.
 - Media features, notifications, voice, and the live channel.
+- Bambara voice page: the `page_bambara` client keeps only search, visual generation and memory tools, adds spoken-Bambara instructions, and forces the lowest reasoning effort (`core/outils_page_bambara.py`).
 
 ## Technical architecture
 
