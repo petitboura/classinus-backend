@@ -591,7 +591,7 @@ def _raison_execution_code_masque(conversation_id):
     return None
 
 
-def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, conversation_id=None, origine=None, contexte_video=False):
+def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, conversation_id=None, origine=None, contexte_video=False, client=None):
     """
     Se connecte a chaque serveur MCP du registre actif cote plateforme et
     retourne :
@@ -782,7 +782,11 @@ def lister_outils_autorises_pour_agent(get_secret, user_id=None, agent_id=None, 
     # Origine de l'appareil (20/10/2026, demande de Bourama) : les outils d'écran qui n'existent pas
     # sur l'appareil utilisé ne sont jamais proposés. Origine inconnue : rien n'est retiré.
     from core.origine_appareil import filtrer_catalogue_par_origine
-    return filtrer_catalogue_par_origine(outils_pour_llm, table_routage, origine)
+    outils_pour_llm, table_routage = filtrer_catalogue_par_origine(outils_pour_llm, table_routage, origine)
+    # Page bambara (16/11/2026) : seuls la generation visuelle, la memoire et la recherche restent.
+    # Les autres clients ne sont pas touches.
+    from core.outils_page_bambara import filtrer_catalogue_par_client
+    return filtrer_catalogue_par_client(outils_pour_llm, table_routage, client)
 
 
 def filtrer_catalogue_par_outil_force(outils_pour_llm, table_routage, outil_force=None):

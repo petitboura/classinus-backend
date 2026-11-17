@@ -45,6 +45,7 @@ from main import chat as chat_generateur  # core/main.py:chat()
 from erreur_tour import classer_erreur
 from core.libelles_outils_anglais import traduire_libelle_outil
 from fournisseurs_llm import modele_id_est_autorise
+from core.outils_page_bambara import effort_reflexion_page
 
 logging.basicConfig(level=logging.INFO)
 
@@ -423,6 +424,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
                 erreurs_typees=bool(payload.erreurs_typees),
             )
         else:
+            modele_force_tour = _resoudre_modele_force(payload.agent_id, payload.modele, email_utilisateur)
             generateur = chat_generateur(
                 message_utilisateur=payload.message,
                 historique=[m.model_dump() for m in payload.historique],
@@ -439,8 +441,9 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
                 recherche_forcee=payload.recherche_forcee,
                 outil_force=payload.outil_force,
                 ignorer_suggestion_outils=payload.ignorer_suggestion_outils or False,
-                modele_force=_resoudre_modele_force(payload.agent_id, payload.modele, email_utilisateur),
-                effort_reflexion=payload.effort_reflexion,
+                modele_force=modele_force_tour,
+                # Page bambara : effort toujours au plus faible (core/outils_page_bambara.py).
+                effort_reflexion=effort_reflexion_page(payload.client, modele_force_tour, payload.effort_reflexion),
                 sans_enseignant=payload.sans_enseignant or False,
                 natif=payload.natif or False,
                 canal_en_direct=payload.canal_en_direct or False,
