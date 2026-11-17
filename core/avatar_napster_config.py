@@ -13,7 +13,7 @@ Tout vient de variables d'environnement (Railway), rien n'est écrit en dur :
 - NAPSTER_API_KEY             clé de l'API Napster (reste côté serveur).
 - NAPSTER_AGENT_ID            identifiant de l'agent Napster.
 - NAPSTER_API_URL             (facultatif) adresse de l'API, https://companion-api.napster.com par défaut.
-- AVATAR_NAPSTER_DELAI_MIN_S  (facultatif) attente minimale entre deux démarrages d'un même compte, 5 par défaut.
+- AVATAR_NAPSTER_MAX_PAR_MINUTE  (facultatif) nombre maximal de jetons par minute et par compte, 6 par défaut.
 - AVATAR_NAPSTER_CONSIGNES, AVATAR_NAPSTER_DESCRIPTION_OUTIL, AVATAR_NAPSTER_ACCUEIL,
   AVATAR_NAPSTER_ANNONCE_REPONSE, AVATAR_NAPSTER_ANNONCE_BULLE, AVATAR_NAPSTER_ATTENTE,
   AVATAR_NAPSTER_SUITE_DEMANDE :
@@ -23,7 +23,7 @@ Tout vient de variables d'environnement (Railway), rien n'est écrit en dur :
 import os
 
 URL_PAR_DEFAUT = "https://companion-api.napster.com"
-DELAI_MIN_PAR_DEFAUT_S = 5.0
+DEMARRAGES_MAX_PAR_MINUTE_PAR_DEFAUT = 6
 
 NOM_OUTIL = "demander_a_classinus"
 
@@ -89,12 +89,12 @@ def est_configure() -> bool:
     return bool(cle_api() and identifiant_agent())
 
 
-def delai_minimum_s() -> float:
+def demarrages_max_par_minute() -> int:
     try:
-        valeur = float((os.environ.get("AVATAR_NAPSTER_DELAI_MIN_S") or "").strip())
+        valeur = int((os.environ.get("AVATAR_NAPSTER_MAX_PAR_MINUTE") or "").strip())
     except ValueError:
-        return DELAI_MIN_PAR_DEFAUT_S
-    return valeur if valeur >= 0 else DELAI_MIN_PAR_DEFAUT_S
+        return DEMARRAGES_MAX_PAR_MINUTE_PAR_DEFAUT
+    return valeur if valeur >= 1 else DEMARRAGES_MAX_PAR_MINUTE_PAR_DEFAUT
 
 
 def reglages_avatar_napster() -> dict:

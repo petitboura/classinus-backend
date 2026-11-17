@@ -25,10 +25,13 @@ from core.erreurs import erreur_api
 router = APIRouter(prefix="/api/avatar-napster", tags=["avatar-napster"])
 
 DELAI_APPEL_S = 15.0
+FENETRE_S = 60.0
 
-# Dernier démarrage par compte, en mémoire : évite qu'une boucle côté navigateur épuise les
-# crédits Napster. Perdu au redémarrage du serveur, sans conséquence.
-_dernier_demarrage: dict[str, float] = {}
+# Démarrages récents par compte, en mémoire : évite qu'une boucle côté navigateur épuise les
+# crédits Napster. Le paquet Napster peut redemander un jeton pendant une même ouverture
+# (nouvelle tentative), on compte donc par minute au lieu d'imposer un délai fixe.
+# Perdu au redémarrage du serveur, sans conséquence.
+_demarrages: dict[str, list[float]] = {}
 
 
 def _disponible() -> bool:
@@ -48,15 +51,16 @@ def creer_jeton_avatar_napster(utilisateur=Depends(utilisateur_courant)):
         raise erreur_api(503, "AVATAR_NAPSTER_NON_CONFIGURE")
 
     maintenant = time.monotonic()
-    precedent = _dernier_demarrage.get(utilisateur.id)
-    if precedent is not None and maintenant - precedent < reglages.delai_minimum_s():
+    recents = [t for t in _demarrages.get(utilisateur.id, []) if maintenant - t < FENETRE_S]
+    if len(recents) >= reglages.demarrages_max_par_minute():
+        _demarrages[utilisateur.id] = recents
         raise erreur_api(429, "AVATAR_NAPSTER_TROP_RAPIDE")
-    _dernier_demarrage[utilisateur.id] = maintenant
+    recents.append(maintenant)
+    _demarrages[utilisateur.id] = recents
     # Le dictionnaire ne grossit pas sans fin : on oublie les comptes silencieux depuis longtemps.
-    if len(_dernier_demarrage) > 5000:
-        limite = maintenant - 3600
-        for cle in [k for k, v in _dernier_demarrage.items() if v < limite]:
-            _dernier_demarrage.pop(cle, None)
+    if len(_demarrages) > 5000:
+        for cle in [k for k, v in _demarrages.items() if not v or maintenant - v[-1] > 3600]:
+            _demarrages.pop(cle, None)
 
     url = f"{reglages.adresse_api()}/public/agents/{reglages.identifiant_agent()}/connections"
     try:

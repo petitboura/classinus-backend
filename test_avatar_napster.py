@@ -20,7 +20,7 @@ from api import avatar_napster
 from api.auth import utilisateur_courant
 from core.erreurs import MESSAGES_EN, MESSAGES_FR
 
-VARIABLES = ("AVATAR_NAPSTER_ACTIF", "NAPSTER_API_KEY", "NAPSTER_AGENT_ID", "NAPSTER_API_URL", "AVATAR_NAPSTER_DELAI_MIN_S",
+VARIABLES = ("AVATAR_NAPSTER_ACTIF", "NAPSTER_API_KEY", "NAPSTER_AGENT_ID", "NAPSTER_API_URL", "AVATAR_NAPSTER_MAX_PAR_MINUTE",
              "AVATAR_NAPSTER_ACCUEIL", "AVATAR_NAPSTER_CONSIGNES")
 
 
@@ -28,7 +28,7 @@ VARIABLES = ("AVATAR_NAPSTER_ACTIF", "NAPSTER_API_KEY", "NAPSTER_AGENT_ID", "NAP
 def environnement_propre(monkeypatch):
     for nom in VARIABLES:
         monkeypatch.delenv(nom, raising=False)
-    avatar_napster._dernier_demarrage.clear()
+    avatar_napster._demarrages.clear()
 
 
 @pytest.fixture
@@ -43,7 +43,7 @@ def allumer(monkeypatch):
     monkeypatch.setenv("AVATAR_NAPSTER_ACTIF", "1")
     monkeypatch.setenv("NAPSTER_API_KEY", "cle")
     monkeypatch.setenv("NAPSTER_AGENT_ID", "agent_1")
-    monkeypatch.setenv("AVATAR_NAPSTER_DELAI_MIN_S", "0")
+    monkeypatch.setenv("AVATAR_NAPSTER_MAX_PAR_MINUTE", "1000")
 
 
 def reponse_napster(code=200, corps=None):
@@ -108,13 +108,19 @@ def test_reponse_sans_jeton(client, monkeypatch):
         assert client.post("/api/avatar-napster/jeton").status_code == 503
 
 
-def test_delai_minimum_entre_deux_demarrages(client, monkeypatch):
+def test_plusieurs_jetons_pendant_une_ouverture_passent(client, monkeypatch):
     allumer(monkeypatch)
-    monkeypatch.setenv("AVATAR_NAPSTER_DELAI_MIN_S", "60")
     with patch("api.avatar_napster.httpx.post", return_value=reponse_napster()):
-        assert client.post("/api/avatar-napster/jeton").status_code == 200
+        assert [client.post("/api/avatar-napster/jeton").status_code for _ in range(3)] == [200, 200, 200]
+
+
+def test_limite_par_minute(client, monkeypatch):
+    allumer(monkeypatch)
+    monkeypatch.setenv("AVATAR_NAPSTER_MAX_PAR_MINUTE", "2")
+    with patch("api.avatar_napster.httpx.post", return_value=reponse_napster()):
+        codes = [client.post("/api/avatar-napster/jeton").status_code for _ in range(3)]
         r = client.post("/api/avatar-napster/jeton")
-    assert r.status_code == 429
+    assert codes == [200, 200, 429]
     assert r.json()["detail"]["code"] == "AVATAR_NAPSTER_TROP_RAPIDE"
 
 
