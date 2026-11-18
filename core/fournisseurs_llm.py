@@ -10,8 +10,8 @@ modele). La hierarchie des distributeurs est CUMULATIVE DESCENDANTE :
     claude > gpt > gemini > deepseek > grok > meta
 
 debloquer "claude" donne aussi acces a gpt/gemini/deepseek/grok/meta. Le palier est
-lui aussi cumulatif ascendant (pro >= avance >= essentiel) : un agent en
-"pro" peut choisir un modele "essentiel" du meme distributeur si l'usager
+lui aussi cumulatif ascendant (ultra >= max >= premium >= pro >= essentiel) : un agent en
+"max" peut choisir un modele "essentiel" du meme distributeur si l'usager
 veut une reponse plus rapide/moins chere.
 
 IMPORTANT : ces identifiants de modele bougent vite (nouvelles versions
@@ -44,17 +44,15 @@ def get_secret(key):
 ORDRE_DISTRIBUTEURS = ["claude", "gpt", "gemini", "deepseek", "grok", "meta", "zai", "alibaba", "nvidia"]
 
 # Ordre = hierarchie cumulative ascendante.
-ORDRE_PALIERS = ["essentiel", "intermediaire", "avance", "pro", "specialise"]
+ORDRE_PALIERS = ["essentiel", "pro", "premium", "max", "ultra", "specialise"]
 # "specialise" (16/10/2026) : niveau reserve aux modeles a usage precis qu'on
 # affiche sans les proposer en discussion normale (aujourd'hui seulement
 # grok-build-0.1, modele de code). Aucun agent n'a ce palier debloque, donc
 # ces modeles ne sont jamais choisissables ; ils servent a l'affichage Bientot.
 
-# palier "essentiel"/"avance"/"pro" (nom commercial, cote agents/pricing)
-# -> mappe sur le palier de qualite "simple"/"parfait"/"pro" de la page
-# Notion section 2 (nom technique, cote choix du modele). Meme hierarchie
-# a 3 niveaux, deux vocabulaires differents selon le contexte (vente vs
-# ingenierie) -- fusionnes ici pour eviter un 3e mapping inutile.
+# Paliers alignes sur leur niveau numerique (18/11/2026, demande de Bourama), le numero fait foi :
+# 1 = essentiel, 2 = pro, 3 = premium, 4 = max, 5 = ultra, 6 = specialise. Les noms Pro, Max et
+# Ultra sont ceux des offres vendues. Meme etat que la migration 2026_11_18_alignement_paliers.sql.
 HIERARCHIE_MODELES = {
     # Identifiants alignés le 20/10/2026 sur ceux réglés dans Supabase (tables modeles_llm), qui
     # priment : ce repli ne sert que si Supabase ne répond pas. Il portait encore les anciens
@@ -62,30 +60,30 @@ HIERARCHIE_MODELES = {
     # le fournisseur dès que Supabase tombait.
     "claude": {
         "essentiel": {"id": "claude-haiku-5-5", "label": "Claude Haiku 5.5"},
-        "avance": {"id": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5"},
-        "pro": {"id": "claude-opus-5-5", "label": "Claude Opus 5.5"},
+        "premium": {"id": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5"},
+        "max": {"id": "claude-opus-5-5", "label": "Claude Opus 5.5"},
     },
     "gpt": {
         "essentiel": {"id": "gpt-6-luna", "label": "GPT-6 Luna"},
-        "avance": {"id": "gpt-6.1-sol", "label": "GPT-6.1 Sol"},
-        "pro": {"id": "gpt-6-astra", "label": "GPT-6 Astra"},
+        "premium": {"id": "gpt-6.1-sol", "label": "GPT-6.1 Sol"},
+        "max": {"id": "gpt-6-astra", "label": "GPT-6 Astra"},
     },
     "gemini": {
         "essentiel": {"id": "gemini-3.5-flash-lite", "label": "Gemini 3.5 Flash-Lite"},
-        "avance": {"id": "gemini-4-hydrogen", "label": "Gemini 4 Hydrogen"},
-        "pro": {"id": "gemini-4-argon", "label": "Gemini 4 Argon"},
+        "premium": {"id": "gemini-4-hydrogen", "label": "Gemini 4 Hydrogen"},
+        "max": {"id": "gemini-4-argon", "label": "Gemini 4 Argon"},
     },
     "grok": {
         # Grok (xAI), ajoute le 16/10/2026 sur demande de Bourama : seulement
         # grok-4.3 et grok-4.7 (ni grok-build-0.1, modele de code, ni
         # grok-4.20-multi-agent, modele de recherche approfondie en beta).
         # Comme DeepSeek, deux modeles pour trois paliers : essentiel et
-        # avance partagent grok-4.3, pro passe sur grok-4.7. Prix xAI par
+        # premium partagent grok-4.3, max passe sur grok-4.7. Prix xAI par
         # million de tokens (docs.x.ai/developers/pricing) : grok-4.3 a
         # 1,25 $ / 2,50 $, grok-4.7 a 2 $ / 6 $.
         "essentiel": {"id": "grok-4.3", "label": "Grok 4.3"},
-        "avance": {"id": "grok-4.3", "label": "Grok 4.3"},
-        "pro": {"id": "grok-4.7", "label": "Grok 4.7"},
+        "premium": {"id": "grok-4.3", "label": "Grok 4.3"},
+        "max": {"id": "grok-4.7", "label": "Grok 4.7"},
         # Affichage seulement (Bientot), pas branche : grok-build-0.1 est un
         # modele de code (1 $ / 2 $ par million), pas un modele de discussion.
         "specialise": {"id": "grok-build-0.1", "label": "Grok Build 0.1"},
@@ -94,8 +92,8 @@ HIERARCHIE_MODELES = {
         # L'API DeepSeek n'expose que 2 modeles stables a la fois
         # (aujourd'hui deepseek-v4-flash / deepseek-v4-pro), pas de nom
         # par version -- contrairement aux 3 paliers distincts vendus par
-        # les autres fournisseurs. essentiel+avance partagent donc le
-        # meme modele (flash), pro passe sur le plus gros (pro).
+        # les autres fournisseurs. essentiel+premium partagent donc le
+        # meme modele (flash), max passe sur le plus gros (pro).
         # MAJ 02/08/2026 : les anciens alias deepseek-chat/deepseek-
         # reasoner (utilises jusqu'ici) ont ete retires par DeepSeek le
         # 24/07/2026 (15:59 UTC) -- remplaces ici par les noms actuels.
@@ -109,13 +107,13 @@ HIERARCHIE_MODELES = {
         # Baseten, page Reasoning, table des modeles) : traduits depuis l'id
         # direct par core/adaptateur_baseten.py quand l'interrupteur est ON.
         "essentiel": {"id": "deepseek-v4-flash", "label": "DeepSeek V4.1 Flash", "baseten": "deepseek-ai/DeepSeek-V4-Flash-0731"},
-        "avance": {"id": "deepseek-v4-flash", "label": "DeepSeek V4.1 Flash", "baseten": "deepseek-ai/DeepSeek-V4-Flash-0731"},
-        "pro": {"id": "deepseek-v4-pro", "label": "DeepSeek V4 Pro", "baseten": "deepseek-ai/DeepSeek-V4-Pro-0813"},
+        "premium": {"id": "deepseek-v4-flash", "label": "DeepSeek V4.1 Flash", "baseten": "deepseek-ai/DeepSeek-V4-Flash-0731"},
+        "max": {"id": "deepseek-v4-pro", "label": "DeepSeek V4 Pro", "baseten": "deepseek-ai/DeepSeek-V4-Pro-0813"},
     },
     "meta": {
         # Meta, ajouté le 28/10/2026 sur staging en Bientôt (demande de Bourama) : Muse
-        # Spark 1.3 (muse-spark-1.3) au niveau avance, Muse Wonder (muse-wonder-1.0,
-        # en préversion, plus cher) au niveau pro, affiché tout en haut. Jamais de
+        # Spark 1.3 (muse-spark-1.3) au niveau premium, Muse Wonder (muse-wonder-1.0,
+        # en préversion, plus cher) au niveau max, affiché tout en haut. Jamais de
         # niveau essentiel par son API : Meta n'y propose que ces deux modèles. Identifiants exacts
         # de la doc officielle Meta (page Modèles, dev.meta.ai, vérifiés le 29/10/2026).
         # 30/10/2026, demande de Bourama : Muse Spark Open (poids ouverts) au niveau essentiel,
@@ -125,22 +123,22 @@ HIERARCHIE_MODELES = {
         # élèves ne doivent pas entraîner les modèles Meta).
         # 04/11/2026, demande de Bourama : Muse Glimmer 30B prend le niveau essentiel (Vultr
         # seul, comme Muse Spark Open l'est pour Baseten) et Muse Spark Open passe au niveau
-        # intermediaire. Meme etat que la migration 2026_11_04_meta_glimmer.sql.
+        # pro (niveau 2). Meme etat que la migration 2026_11_04_meta_glimmer.sql.
         "essentiel": {"id": "muse-glimmer-30b", "label": "Muse Glimmer 30B", "vultr": "muse-glimmer-30b", "vultr_seul": True},
-        "intermediaire": {"id": "muse-spark-open", "label": "Muse Spark Open", "baseten": "meta-models/muse-spark-open-1026", "baseten_seul": True},
-        "avance": {"id": "muse-spark-1.3", "label": "Muse Spark 1.3"},
-        "pro": {"id": "muse-wonder-1.0", "label": "Muse Wonder"},
+        "pro": {"id": "muse-spark-open", "label": "Muse Spark Open", "baseten": "meta-models/muse-spark-open-1026", "baseten_seul": True},
+        "premium": {"id": "muse-spark-1.3", "label": "Muse Spark 1.3"},
+        "max": {"id": "muse-wonder-1.0", "label": "Muse Wonder"},
     },
     # Z.ai, Alibaba et NVIDIA (04/11/2026, demande de Bourama) : servis par Vultr Serverless
     # Inference, une seule cle (VULTR_INFERENCE_API_KEY), jamais en Bientot, palier pro vide.
     # Meme etat que la migration 2026_11_04_fournisseurs_vultr.sql (qui prime sur ce repli).
     "zai": {
         "essentiel": {"id": "glm-5.3-flash", "label": "GLM 5.3 Flash", "vultr": "glm-5.3-flash", "vultr_seul": True},
-        "avance": {"id": "glm-5.3", "label": "GLM 5.3", "vultr": "glm-5.3", "vultr_seul": True},
+        "premium": {"id": "glm-5.3", "label": "GLM 5.3", "vultr": "glm-5.3", "vultr_seul": True},
     },
     "alibaba": {
         "essentiel": {"id": "qwen3.8-flash-next", "label": "Qwen 3.8 Flash Next", "vultr": "qwen3.8-flash-next", "vultr_seul": True},
-        "avance": {"id": "qwen3.8-27b", "label": "Qwen 3.8 27B", "vultr": "qwen3.8-27b", "vultr_seul": True},
+        "premium": {"id": "qwen3.8-27b", "label": "Qwen 3.8 27B", "vultr": "qwen3.8-27b", "vultr_seul": True},
     },
     "nvidia": {
         "essentiel": {"id": "nemotron-nano-omni-30b-a3b-reasoning", "label": "Nemotron Nano Omni 30B", "vultr": "nemotron-3-nano-omni-30b-a3b-reasoning", "vultr_seul": True},

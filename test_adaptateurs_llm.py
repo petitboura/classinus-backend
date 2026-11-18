@@ -87,7 +87,7 @@ class Efforts(unittest.TestCase):
         config["fournisseurs"]["claude"]["bientot"] = False
         with patch.object(fournisseurs_llm, "_lire_config_modeles_supabase", return_value=config), \
                 patch.dict("os.environ", avec_cles, clear=True):
-            modeles = fournisseurs_llm.modeles_disponibles_pour_agent("claude", "pro")
+            modeles = fournisseurs_llm.modeles_disponibles_pour_agent("claude", "max")
         fournisseurs_llm.reinitialiser_cache_config_modeles()
         for modele in modeles:
             self.assertIn("efforts", modele)
