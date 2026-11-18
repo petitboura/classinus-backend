@@ -6,7 +6,7 @@ Added on 16 November 2026 at Bourama's request. A fake door measures real demand
 
 ## What the form asks
 
-The person must be signed in, so the email comes from the account. The form asks for a plan (Pro 10, Max 17 or Ultra 20 dollars per month, open to everyone), a profile (student, administration or developer), a consent tick, and two optional fields: country and WhatsApp. Plans and texts are not hard coded:
+To sign up, the person must be signed in, so the email comes from the account; reading the plans is open to visitors. The form asks for a plan (Pro 10, Max 17 or Ultra 20 dollars per month, open to everyone), a profile (student, administration or developer), a consent tick, and two optional fields: country and WhatsApp. Plans and texts are not hard coded:
 
 - Plans live in the `paliers_liste_attente` table (price, monthly credit, order, active flag).
 - Form texts live in `textes_modeles_llm` under keys starting with `attente_`, in French and English.
@@ -25,7 +25,7 @@ The funnel steps are, in order: `selecteur_ouvert`, `modele_grise_clique`, `form
 
 ## Routes
 
-All routes need a signed in user (`/api/liste-attente`).
+The write routes (`POST /api/liste-attente` and `/desinscription`) need a signed in user. Since 18 November 2026, `GET /api/liste-attente/config` and `POST /api/liste-attente/evenement` are open to visitors without an account, so that the `/abonnements` page can be seen without signing in: a visitor receives the plans and the texts with a null registration, and their funnel step is ignored without an error (`/api/liste-attente`).
 
 | Route | What it does |
 | --- | --- |

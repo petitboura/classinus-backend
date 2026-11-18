@@ -6,7 +6,7 @@ Ajoutée le 16 novembre 2026 à la demande de Bourama. Une fausse porte mesure l
 
 ## Ce que demande le formulaire
 
-La personne doit être connectée, donc l'e-mail vient du compte. Le formulaire demande un palier (Pro 10, Max 17 ou Ultra 20 dollars par mois, ouverts à tous), un profil (étudiant, administration ou développeur), une case de consentement, et deux champs facultatifs : le pays et le WhatsApp. Les paliers et les textes ne sont pas écrits en dur :
+Pour s'inscrire, la personne doit être connectée, donc l'e-mail vient du compte ; la lecture des paliers est ouverte aux visiteurs. Le formulaire demande un palier (Pro 10, Max 17 ou Ultra 20 dollars par mois, ouverts à tous), un profil (étudiant, administration ou développeur), une case de consentement, et deux champs facultatifs : le pays et le WhatsApp. Les paliers et les textes ne sont pas écrits en dur :
 
 - Les paliers vivent dans la table `paliers_liste_attente` (prix, crédit mensuel, ordre, actif).
 - Les textes du formulaire vivent dans `textes_modeles_llm`, sous des clés qui commencent par `attente_`, en français et en anglais.
@@ -25,7 +25,7 @@ Les étapes, dans l'ordre : `selecteur_ouvert`, `modele_grise_clique`, `formulai
 
 ## Routes
 
-Toutes les routes demandent un utilisateur connecté (`/api/liste-attente`).
+Les routes d'écriture (`POST /api/liste-attente` et `/desinscription`) demandent un utilisateur connecté. Depuis le 18/11/2026, `GET /api/liste-attente/config` et `POST /api/liste-attente/evenement` sont ouvertes aux visiteurs sans compte, pour que la page `/abonnements` soit visible sans connexion : un visiteur reçoit les paliers et les textes avec une inscription nulle, et sa note d'étape est ignorée sans erreur (`/api/liste-attente`).
 
 | Route | Ce qu'elle fait |
 | --- | --- |

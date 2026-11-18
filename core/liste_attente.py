@@ -116,11 +116,12 @@ def lire_inscription(user_id: str) -> dict | None:
     return lignes[0] if lignes else None
 
 
-def charger_config(user_id: str) -> dict:
+def charger_config(user_id: str | None) -> dict:
+    """user_id vaut None pour un visiteur sans compte : il voit les paliers, jamais d'inscription."""
     return {
         "paliers": lister_paliers(),
         "textes": lire_textes(),
-        "inscription": lire_inscription(user_id),
+        "inscription": lire_inscription(user_id) if user_id else None,
         "profils": list(PROFILS),
     }
 

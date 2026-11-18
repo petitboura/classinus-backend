@@ -10,7 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
-from api.auth import utilisateur_courant
+from api.auth import utilisateur_courant, utilisateur_optionnel
 from core import liste_attente
 from core.erreurs import erreur_api
 from core.limitation_debit import limiteur
@@ -42,10 +42,15 @@ class EvenementPayload(BaseModel):
 
 @router_liste_attente.get("/config")
 @limiteur.limit("30/minute")
-def lire_config(request: Request, utilisateur=Depends(utilisateur_courant)):
-    """Paliers, textes (francais et anglais) et inscriptions actives de l'utilisateur."""
+def lire_config(request: Request, utilisateur=Depends(utilisateur_optionnel)):
+    """
+    Paliers, textes (francais et anglais) et inscription active de l'utilisateur.
+
+    Route publique (18/11/2026) : la page /abonnements est visible sans compte. Un visiteur recoit les
+    paliers et les textes, avec une inscription nulle. Le compte n'est exige qu'a l'inscription.
+    """
     try:
-        return liste_attente.charger_config(utilisateur.id)
+        return liste_attente.charger_config(utilisateur.id if utilisateur else None)
     except liste_attente.ErreurListeAttente as e:
         _lever(e)
 
@@ -82,11 +87,14 @@ def se_desinscrire(request: Request, utilisateur=Depends(utilisateur_courant)):
 
 @router_liste_attente.post("/evenement")
 @limiteur.limit("60/minute")
-def noter_evenement(request: Request, payload: EvenementPayload, utilisateur=Depends(utilisateur_courant)):
-    """Une etape de l'entonnoir (ouverture du selecteur, clic, ouverture du formulaire)."""
+def noter_evenement(request: Request, payload: EvenementPayload, utilisateur=Depends(utilisateur_optionnel)):
+    """Une etape de l'entonnoir (ouverture du selecteur, clic, ouverture de la page)."""
     if payload.etape == "inscription_validee":
         # Cette etape n'est ecrite que par l'inscription elle-meme, jamais par le client.
         raise erreur_api(400, "LISTE_ATTENTE_ETAPE_INVALIDE")
+    if utilisateur is None:
+        # Un visiteur sans compte n'a pas d'identifiant a noter : on ne garde rien, sans erreur.
+        return {"ok": True}
     try:
         liste_attente.enregistrer_evenement(
             utilisateur.id, payload.etape, payload.modele_id, payload.langue, payload.source
