@@ -44,6 +44,15 @@ Errors use stable codes (`LISTE_ATTENTE_*` in `core/erreurs.py`) with a French a
 - `migrations/2026_11_17_liste_attente_unique.sql`: one row per user, plan names (Pro, Max, Ultra), plan points and the texts rewritten for a single list.
 - `test_liste_attente.py`: tests without network access.
 
+## Model groups, lock and Max badge
+
+Added on 17 November 2026 at Bourama's request. The word "Coming soon" is gone from the picker: a model that costs credit shows a **lock**, and the frontier models (group 1) also carry a **Max** badge.
+
+- `modeles_llm.groupe` (1 to 5): 1 frontier, 2 to 4 other credit models, 5 very cheap and outside the credit. It is read apart in `core/fournisseurs_llm.py`, so a missing column breaks nothing (no group, no badge). Muse Spark Open has no group yet.
+- Both model lists (`modeles_disponibles_pour_agent`, `modeles_bientot_pour_agent`) send `groupe` and `libelles_badge` (the badge by language, from the texts `badge_groupe_<n>`).
+- The text under the key `bientot` now says "Available with a plan": it is only the tooltip and accessible name of the lock.
+- Placements still to confirm: Muse Spark 1.3, GPT-6 Luna, Gemini 4 Hydrogen and Grok 4.3. Migration: `migrations/2026_11_17_groupe_modeles.sql`.
+
 ## Reading the figures
 
 Bourama reads the data from the Supabase dashboard (the backend key bypasses the row security). The most convincing figure is the conversion rate at each step, split by model clicked, plan chosen, profile and country.

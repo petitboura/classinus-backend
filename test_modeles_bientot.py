@@ -124,7 +124,22 @@ class ModelesBientot(unittest.TestCase):
             config["textes"] = {}
 
         with patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True), _avec_config_supabase(sans_texte):
-            self.assertEqual(libelles_bientot(), {"fr": "Bientôt"})
+            self.assertEqual(libelles_bientot(), {"fr": "Disponible avec un abonnement", "en": "Available with a plan"})
+
+    def test_groupe_et_badge_max_des_modeles_frontiere(self):
+        def avec_groupes(config):
+            config["textes"]["badge_groupe_1"] = {"fr": "Max", "en": "Max"}
+            for info in config["modeles"]["claude"].values():
+                info["groupe"] = 1 if info["id"] == "claude-opus-5-5" else 3
+
+        with patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True), _avec_config_supabase(avec_groupes):
+            par_id = {m["modele_id"]: m for m in modeles_bientot_pour_agent("claude", "pro")}
+        frontiere = par_id["claude-opus-5-5"]
+        self.assertEqual(frontiere["groupe"], 1)
+        self.assertEqual(frontiere["libelles_badge"], {"fr": "Max", "en": "Max"})
+        sonnet = par_id["claude-sonnet-5-5"]
+        self.assertEqual(sonnet["groupe"], 3)
+        self.assertEqual(sonnet["libelles_badge"], {})
 
     def test_supabase_en_panne_utilise_le_repli_du_code(self):
         with patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True), patch.object(

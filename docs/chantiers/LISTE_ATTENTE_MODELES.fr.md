@@ -44,6 +44,15 @@ Les erreurs passent par des codes stables (`LISTE_ATTENTE_*` dans `core/erreurs.
 - `migrations/2026_11_17_liste_attente_unique.sql` : une ligne par utilisateur, noms des paliers (Pro, Max, Ultra), points des paliers et textes réécrits pour une liste unique.
 - `test_liste_attente.py` : tests sans accès au réseau.
 
+## Groupes de modèles, verrou et badge Max
+
+Ajouté le 17 novembre 2026 à la demande de Bourama. Le mot « Bientôt » n'existe plus dans le sélecteur : un modèle à crédit montre un **verrou**, et les modèles frontière (groupe 1) portent en plus un badge **Max**.
+
+- `modeles_llm.groupe` (1 à 5) : 1 frontière, 2 à 4 autres modèles à crédit, 5 très bon marché et hors crédit. Il est lu à part dans `core/fournisseurs_llm.py` : une colonne absente ne casse rien (pas de groupe, pas de badge). Muse Spark Open n'a pas encore de groupe.
+- Les deux listes de modèles (`modeles_disponibles_pour_agent`, `modeles_bientot_pour_agent`) envoient `groupe` et `libelles_badge` (le badge par langue, lu dans les textes `badge_groupe_<n>`).
+- Le texte de la clé `bientot` dit maintenant « Disponible avec un abonnement » : c'est seulement l'info-bulle et le nom accessible du verrou.
+- Placements à confirmer : Muse Spark 1.3, GPT-6 Luna, Gemini 4 Hydrogen et Grok 4.3. Migration : `migrations/2026_11_17_groupe_modeles.sql`.
+
 ## Lire les chiffres
 
 Bourama lit les données dans le tableau de bord Supabase (la clé du backend contourne la sécurité par ligne). Le chiffre le plus convaincant est le taux de conversion à chaque étape, ventilé par modèle cliqué, palier choisi, profil et pays.

@@ -393,7 +393,9 @@ DISTRIBUTEURS_BIENTOT = ["claude", "gpt", "gemini", "grok", "meta"]
 
 # Mot affiché sur les modèles Bientôt, par langue. Valeur de repli : le texte se règle
 # dans la table textes_modeles_llm de Supabase (cle = bientot).
-LIBELLE_BIENTOT_DE_REPLI = {"fr": "Bientôt"}
+# Le mot "Bientôt" n'est plus affiché (17/11/2026, demande de Bourama) : un modèle à crédit montre un
+# verrou, et ce texte ne sert plus que d'info-bulle et de nom accessible du verrou.
+LIBELLE_BIENTOT_DE_REPLI = {"fr": "Disponible avec un abonnement", "en": "Available with a plan"}
 
 # Configuration des modèles (demande de Bourama du 15/10/2026 : tout doit se régler
 # depuis Supabase, sans toucher au code). Trois tables : fournisseurs_llm (ordre de la
@@ -568,6 +570,17 @@ def _lire_config_modeles_supabase():
     except Exception as e:
         logging.warning(f"Colonne bientot de modeles_llm absente ou illisible (migration a appliquer) : {e}")
 
+    # Groupe de chaque modele, de 1 a 5 (17/11/2026, demande de Bourama) : 1 = frontiere (badge Max),
+    # 2 a 4 = autres modeles a credit, 5 = tres bon marche (hors credit). Colonne lue a part, comme
+    # les autres : une migration pas encore appliquee ne casse rien (aucun groupe, aucun badge).
+    groupe_par_modele = {}
+    try:
+        for ligne in client.table("modeles_llm").select("distributeur, palier, groupe").execute().data or []:
+            if ligne.get("groupe"):
+                groupe_par_modele[(ligne["distributeur"], ligne["palier"])] = int(ligne["groupe"])
+    except Exception as e:
+        logging.warning(f"Colonne groupe de modeles_llm absente ou illisible (migration a appliquer) : {e}")
+
     fournisseurs = {}
     for ligne in lignes_fournisseurs:
         fournisseurs[ligne["distributeur"]] = {
@@ -599,6 +612,9 @@ def _lire_config_modeles_supabase():
             entree_modele["vultr_seul"] = True
         if (ligne["distributeur"], ligne["palier"]) in bientot_par_modele:
             entree_modele["bientot"] = True
+        groupe = groupe_par_modele.get((ligne["distributeur"], ligne["palier"]))
+        if groupe:
+            entree_modele["groupe"] = groupe
         modeles.setdefault(ligne["distributeur"], {})[ligne["palier"]] = entree_modele
         niveau = ligne["niveau"]
         niveaux[ligne["palier"]] = min(niveau, niveaux.get(ligne["palier"], niveau))
@@ -642,6 +658,13 @@ def reinitialiser_cache_config_modeles():
 def libelles_bientot():
     """Mot affiché sur les modèles Bientôt, par langue (table textes_modeles_llm)."""
     return dict(_config_modeles()["textes"].get("bientot") or LIBELLE_BIENTOT_DE_REPLI)
+
+
+def libelles_badge(groupe):
+    """Badge affiche devant un modele de ce groupe, par langue (textes badge_groupe_<n>) ; vide sans badge."""
+    if not groupe:
+        return {}
+    return dict(_config_modeles()["textes"].get(f"badge_groupe_{groupe}") or {})
 
 
 def efforts_pour_modele(modele_id, distributeur):
@@ -748,6 +771,8 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque, email
                 "distributeur": distributeur,
                 "nom_distributeur": config["fournisseurs"][distributeur].get("nom_affiche"),
                 "palier": palier,
+                "groupe": info.get("groupe"),
+                "libelles_badge": libelles_badge(info.get("groupe")),
                 "efforts": efforts,
                 "effort_defaut": effort_defaut(efforts),
             })
@@ -760,7 +785,7 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque, email
 
 def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque, email=None):
     """
-    Modèles affichés grisés avec la mention "Bientôt" : tous les niveaux de
+    Modèles affichés grisés avec un verrou (plus de mot "Bientôt" depuis le 17/11/2026) : tous les niveaux de
     chaque fournisseur marqué Bientôt dans Supabase (table fournisseurs_llm),
     dans l'ordre de la hiérarchie puis des niveaux. Même forme d'élément que
     modeles_disponibles_pour_agent, plus la clé libelles_bientot (le mot
@@ -799,6 +824,8 @@ def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque, email=Non
                 "distributeur": distributeur,
                 "nom_distributeur": config["fournisseurs"][distributeur].get("nom_affiche"),
                 "palier": palier,
+                "groupe": info.get("groupe"),
+                "libelles_badge": libelles_badge(info.get("groupe")),
                 "libelles_bientot": dict(libelles),
             })
         # Même ordre que les modèles disponibles : du plus puissant au moins puissant.
