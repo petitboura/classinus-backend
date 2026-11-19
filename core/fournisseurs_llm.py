@@ -657,7 +657,7 @@ def libelles_bientot():
 
 
 def libelles_badge(groupe):
-    """Badge affiche devant un modele de ce groupe, par langue (textes badge_groupe_<n>) ; vide sans badge."""
+    """Badge affiche a la place du verrou d'un modele de ce groupe, par langue (textes badge_groupe_<n>) ; vide sans badge."""
     if not groupe:
         return {}
     return dict(_config_modeles()["textes"].get(f"badge_groupe_{groupe}") or {})

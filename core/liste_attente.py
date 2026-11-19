@@ -20,6 +20,7 @@ n'ont pas de modele grise), donc rien de special a faire ici.
 """
 
 import logging
+import re
 from datetime import datetime, timezone
 
 from api.auth import supabase
@@ -101,8 +102,47 @@ def lister_moyens_paiement() -> list[str]:
     return [ligne["id"] for ligne in (res.data or []) if ligne.get("id")]
 
 
+def noms_modeles_par_palier() -> dict[str, list[str]]:
+    """
+    {palier: [noms de modeles]} lu dans la vraie table (modeles_llm via core/fournisseurs_llm.py), dans l'ordre des
+    fournisseurs de Supabase, un modele une seule fois. Les textes de la page des abonnements s'en servent par le
+    repere {modeles:<palier>} (par exemple {modeles:ultra}) : les listes de noms ne sont plus ecrites a la main dans les
+    textes, donc elles ne peuvent plus s'ecarter du classement reel (19/11/2026, demande de Bourama).
+    """
+    try:
+        from core import fournisseurs_llm
+
+        config = fournisseurs_llm._config_modeles()
+        par_palier: dict[str, list[str]] = {palier: [] for palier in config["paliers"]}
+        deja_vus: set[str] = set()
+        for distributeur in config["distributeurs"]:
+            for palier in config["paliers"]:
+                info = config["modeles"].get(distributeur, {}).get(palier)
+                if not info or info["id"] in deja_vus:
+                    continue
+                deja_vus.add(info["id"])
+                par_palier[palier].append(info["label"])
+        return par_palier
+    except Exception as e:
+        logging.error(f"ERREUR (lecture des modeles par palier pour les textes des abonnements) : {e}")
+        return {}
+
+
+_REPERE_MODELES = re.compile(r"\{modeles:([a-z_]+)\}")
+
+
+def remplir_reperes_modeles(texte: str, par_palier: dict[str, list[str]]) -> str:
+    """Remplace {modeles:<palier>} par les noms du palier, separes par des virgules. Sans nom (palier vide ou lecture
+    qui echoue), le repere disparait avec ses parentheses plutot que d'afficher « {modeles:...} » a l'ecran."""
+    if "{modeles:" not in texte:
+        return texte
+    rempli = _REPERE_MODELES.sub(lambda m: ", ".join(par_palier.get(m.group(1), [])), texte)
+    return re.sub(r"\s*\(\s*\)", "", rempli)
+
+
 def lire_textes() -> dict:
-    """Textes du formulaire, par langue : {"fr": {cle: texte}, "en": {cle: texte}}."""
+    """Textes du formulaire, par langue : {"fr": {cle: texte}, "en": {cle: texte}}. Les reperes {modeles:<palier>} y
+    sont remplis avec les vrais modeles de chaque palier."""
     try:
         res = (
             supabase.table("textes_modeles_llm")
@@ -116,6 +156,12 @@ def lire_textes() -> dict:
     textes: dict[str, dict[str, str]] = {}
     for ligne in res.data or []:
         textes.setdefault(ligne["langue"], {})[ligne["cle"]] = ligne["texte"]
+    if any("{modeles:" in t for langue in textes.values() for t in langue.values()):
+        par_palier = noms_modeles_par_palier()
+        textes = {
+            langue: {cle: remplir_reperes_modeles(t, par_palier) for cle, t in textes_langue.items()}
+            for langue, textes_langue in textes.items()
+        }
     return textes
 
 

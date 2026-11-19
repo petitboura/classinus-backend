@@ -165,6 +165,53 @@ class TestRoutes(unittest.TestCase):
         self.assertEqual(c.exception.detail["code"], "LISTE_ATTENTE_ETAPE_INVALIDE")
 
 
+class TestReperesModeles(unittest.TestCase):
+    """Les listes de modeles des textes de la page des abonnements viennent de la vraie table (19/11/2026)."""
+
+    CONFIG = {
+        "distributeurs": ["claude", "gpt"],
+        "paliers": ["essentiel", "pro", "ultra"],
+        "modeles": {
+            "claude": {
+                "pro": {"id": "c-petit", "label": "Claude Petit"},
+                "ultra": {"id": "c-grand", "label": "Claude Grand"},
+            },
+            "gpt": {"pro": {"id": "g-1", "label": "GPT Un"}, "ultra": {"id": "c-grand", "label": "doublon"}},
+        },
+    }
+
+    def test_noms_par_palier_dans_l_ordre_des_fournisseurs_sans_doublon(self):
+        from core import fournisseurs_llm
+
+        with patch.object(fournisseurs_llm, "_config_modeles", return_value=self.CONFIG):
+            par_palier = liste_attente.noms_modeles_par_palier()
+        self.assertEqual(par_palier, {"essentiel": [], "pro": ["Claude Petit", "GPT Un"], "ultra": ["Claude Grand"]})
+
+    def test_reperes_remplaces_par_les_noms_du_palier(self):
+        par_palier = {"pro": ["A", "B"], "ultra": ["C"]}
+        texte = "Legers ({modeles:pro}) et frontiere : {modeles:ultra}"
+        self.assertEqual(liste_attente.remplir_reperes_modeles(texte, par_palier), "Legers (A, B) et frontiere : C")
+
+    def test_palier_inconnu_ou_lecture_en_panne_retire_le_repere_et_ses_parentheses(self):
+        self.assertEqual(liste_attente.remplir_reperes_modeles("Frontiere ({modeles:ultra}) oui", {}), "Frontiere oui")
+
+    def test_texte_sans_repere_inchange(self):
+        self.assertEqual(liste_attente.remplir_reperes_modeles("Rien (a, b)", {}), "Rien (a, b)")
+
+    def test_lire_textes_remplit_les_reperes(self):
+        from core import fournisseurs_llm
+
+        res = MagicMock()
+        res.data = [{"cle": "attente_comp_x", "langue": "fr", "texte": "Haut ({modeles:ultra})"}]
+        client = MagicMock()
+        client.table.return_value.select.return_value.like.return_value.execute.return_value = res
+        with patch.object(liste_attente, "supabase", client), patch.object(
+            fournisseurs_llm, "_config_modeles", return_value=self.CONFIG
+        ):
+            textes = liste_attente.lire_textes()
+        self.assertEqual(textes["fr"]["attente_comp_x"], "Haut (Claude Grand)")
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -179,11 +226,11 @@ class TestModelesPublics(unittest.TestCase):
             "gpt": {"nom_affiche": None},
             "vide": {"nom_affiche": "Sans modele"},
         },
-        "paliers": ["essentiel", "intermediaire", "avance"],
+        "paliers": ["essentiel", "pro", "premium"],
         "modeles": {
             "claude": {
                 "essentiel": {"id": "c-petit", "label": "Claude Petit", "groupe": 4},
-                "avance": {"id": "c-grand", "label": "Claude Grand", "groupe": 1},
+                "premium": {"id": "c-grand", "label": "Claude Grand", "groupe": 1},
             },
             "gpt": {"essentiel": {"id": "g-1", "label": "GPT Un"}},
         },
