@@ -40,7 +40,7 @@ Rien n'est écrit en dur.
 - `VOIX_BAMBARA_ECOUTE_URL` : adresse du service Soloni, sans chemin.
 - `VOIX_BAMBARA_BOUCHE_URL` : adresse du service de la voix Gemini, sans chemin.
 - `VOIX_BAMBARA_BOUCHE_TOKEN` (facultatif) : envoyé dans `X-Test-Token`, à régler comme `TEST_ACCESS_TOKEN` du service de voix.
-- `VOIX_BAMBARA_VOIX` (facultatif) : identifiant de la voix, `gemini_tts` par défaut.
+- `VOIX_BAMBARA_VOIX` (facultatif) : identifiant de la voix, `gemini_tts` par défaut (`elevenlabs_tts` pour la voix ElevenLabs, réglée dans le service de voix).
 - `VOIX_BAMBARA_TEXTE_MAX` (facultatif, 600) : taille maximale d'un morceau lu. À régler comme `TEXTE_MAX` du service de voix.
 - `VOIX_BAMBARA_AUDIO_MAX_MO` (facultatif, 10) : taille maximale d'un enregistrement.
 - `VOIX_BAMBARA_DELAI_S` (facultatif, 120) : attente maximale d'un service.

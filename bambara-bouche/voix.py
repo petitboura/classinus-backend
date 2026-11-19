@@ -17,6 +17,7 @@ import re
 import threading
 import traceback
 import urllib.error
+import urllib.parse
 import urllib.request
 import wave
 
@@ -89,6 +90,17 @@ VOIX: dict[str, dict] = {
         "licence": "service_google",
         "experimental": False,
     },
+    "elevenlabs_tts": {
+        "nom": "ElevenLabs TTS",
+        # Nom du modèle affiché sur la page : il vient de ELEVENLABS_MODELE (voir modele_elevenlabs).
+        "depot": "eleven_v3",
+        "fournisseur": "elevenlabs",
+        "locuteurs": 1,
+        "minuscules": False,
+        # Pas de modèle à télécharger : appel au service ElevenLabs avec la clé ELEVENLABS_API_KEY.
+        "licence": "service_elevenlabs",
+        "experimental": False,
+    },
 }
 
 TEXTE_MAX_DEFAUT = 600
@@ -101,6 +113,12 @@ GEMINI_MODELE_DEFAUT = "gemini-3.8-flash-tts"
 GEMINI_VOIX_DEFAUT = "Kore"
 GEMINI_DELAI_DEFAUT = 60
 GEMINI_ADRESSE = "https://generativelanguage.googleapis.com/v1beta/models/{modele}:generateContent"
+# Voix ElevenLabs : valeurs par défaut, réglables par variable d'environnement sans toucher au code.
+# L'identifiant de la voix n'a pas de défaut : il se choisit dans la bibliothèque de voix du compte.
+ELEVENLABS_MODELE_DEFAUT = "eleven_v3"
+ELEVENLABS_FORMAT_DEFAUT = "pcm_24000"
+ELEVENLABS_DELAI_DEFAUT = 60
+ELEVENLABS_ADRESSE = "https://api.elevenlabs.io/v1/text-to-speech/{voix}"
 
 
 class ErreurVoix(Exception):
@@ -150,8 +168,34 @@ def voix_gemini() -> str:
     return (os.environ.get("GEMINI_TTS_VOIX") or "").strip() or GEMINI_VOIX_DEFAUT
 
 
+def cle_elevenlabs() -> str:
+    return (os.environ.get("ELEVENLABS_API_KEY") or "").strip()
+
+
+def modele_elevenlabs() -> str:
+    return (os.environ.get("ELEVENLABS_MODELE") or "").strip() or ELEVENLABS_MODELE_DEFAUT
+
+
+def voix_elevenlabs() -> str:
+    return (os.environ.get("ELEVENLABS_VOICE_ID") or "").strip()
+
+
+def format_elevenlabs() -> tuple[str, int]:
+    """Format audio demandé à ElevenLabs et sa fréquence. Seul le PCM est accepté (il devient un WAV, comme Gemini)."""
+    brut = (os.environ.get("ELEVENLABS_FORMAT") or "").strip()
+    trouve = re.fullmatch(r"pcm_(\d+)", brut)
+    if not trouve:
+        brut = ELEVENLABS_FORMAT_DEFAUT
+        trouve = re.fullmatch(r"pcm_(\d+)", brut)
+    return brut, int(trouve.group(1))
+
+
 def _est_gemini(voix_id: str) -> bool:
     return VOIX[voix_id].get("fournisseur") == "gemini"
+
+
+def _est_elevenlabs(voix_id: str) -> bool:
+    return VOIX[voix_id].get("fournisseur") == "elevenlabs"
 
 
 def texte_max() -> int:
@@ -170,6 +214,8 @@ def lister_voix() -> list[dict]:
     for v in voix_listees:
         if _est_gemini(v["id"]):
             v["depot"] = modele_gemini()
+        elif _est_elevenlabs(v["id"]):
+            v["depot"] = modele_elevenlabs()
     return voix_listees
 
 
@@ -195,6 +241,13 @@ def charger(voix_id: str) -> None:
         if _est_gemini(voix_id):
             if not cle_google():
                 raise RuntimeError("GOOGLE_API_KEY absente : ajoute la clé Google dans les variables du service.")
+            _etat[voix_id].update(pret=True, chargement=False)
+            return
+        if _est_elevenlabs(voix_id):
+            if not cle_elevenlabs():
+                raise RuntimeError("ELEVENLABS_API_KEY absente : ajoute la clé ElevenLabs dans les variables du service.")
+            if not voix_elevenlabs():
+                raise RuntimeError("ELEVENLABS_VOICE_ID absente : ajoute l'identifiant de la voix ElevenLabs dans les variables du service.")
             _etat[voix_id].update(pret=True, chargement=False)
             return
         from transformers import AutoTokenizer, VitsModel
@@ -263,6 +316,9 @@ def synthetiser(voix_id: str, texte: str, locuteur: int = 0) -> bytes:
     if _est_gemini(voix_id):
         with _places:
             return _synthetiser_gemini(propre)
+    if _est_elevenlabs(voix_id):
+        with _places:
+            return _synthetiser_elevenlabs(propre)
     if VOIX[voix_id]["minuscules"]:
         propre = propre.lower()
     tokenizer, modele = _modeles[voix_id]
@@ -358,3 +414,55 @@ def _synthetiser_gemini(texte: str) -> bytes:
         return octets
     trouve = re.search(r"rate=(\d+)", type_mime)
     return _wav_depuis_pcm(octets, int(trouve.group(1)) if trouve else 24000)
+
+
+def _synthetiser_elevenlabs(texte: str) -> bytes:
+    """Lecture de texte par ElevenLabs (appel direct à leur API, sans bibliothèque en plus).
+
+    Même principe que la voix Gemini : le bambara n'est dans aucune liste de langues
+    d'ElevenLabs, le but est de juger à l'oreille ce que la voix en fait. Aucune langue n'est
+    imposée, le modèle la détecte. Le son est demandé en PCM brut (16 bits, mono) puis enveloppé
+    dans un WAV, pour que le relais et le navigateur reçoivent exactement la même chose qu'avec Gemini.
+    """
+    cle = cle_elevenlabs()
+    voix_id = voix_elevenlabs()
+    if not cle:
+        raise ErreurVoix(500, "La clé ElevenLabs n'est pas configurée dans ce service (variable ELEVENLABS_API_KEY).")
+    if not voix_id:
+        raise ErreurVoix(500, "La voix ElevenLabs n'est pas choisie dans ce service (variable ELEVENLABS_VOICE_ID).")
+    format_audio, frequence = format_elevenlabs()
+    adresse = ELEVENLABS_ADRESSE.format(voix=urllib.parse.quote(voix_id, safe="")) + "?" + urllib.parse.urlencode({"output_format": format_audio})
+    requete = urllib.request.Request(
+        adresse,
+        data=json.dumps({"text": texte, "model_id": modele_elevenlabs()}).encode("utf-8"),
+        headers={"Content-Type": "application/json", "xi-api-key": cle},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(requete, timeout=_entier_env("ELEVENLABS_DELAI_S", ELEVENLABS_DELAI_DEFAUT)) as reponse:
+            octets = reponse.read()
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")[:1500]
+        logger.error("ElevenLabs : erreur HTTP %s : %s", e.code, detail)
+        if e.code == 429:
+            message = "ElevenLabs refuse pour l'instant (quota ou trop de demandes à la fois). Réessaie dans un moment."
+        elif e.code == 401:
+            message = "ElevenLabs a refusé la clé (clé invalide ou sans l'accès à la synthèse vocale)."
+        elif e.code in (402, 403):
+            message = "ElevenLabs refuse cette demande (abonnement insuffisant pour ce modèle, cette voix ou ce format)."
+        elif e.code == 404:
+            message = "ElevenLabs ne connaît pas cette voix (vérifie ELEVENLABS_VOICE_ID)."
+        elif e.code == 422:
+            message = "ElevenLabs n'a pas accepté la demande (vérifie ELEVENLABS_MODELE et ELEVENLABS_FORMAT)."
+        else:
+            message = f"ElevenLabs a renvoyé une erreur ({e.code})."
+        raise ErreurVoix(502, message, detail)
+    except Exception as e:
+        logger.error("ElevenLabs : appel impossible\n%s", traceback.format_exc())
+        raise ErreurVoix(502, "Impossible de joindre ElevenLabs : " + str(e), traceback.format_exc())
+    if not octets:
+        logger.error("ElevenLabs : réponse vide")
+        raise ErreurVoix(502, "ElevenLabs n'a renvoyé aucun son pour ce texte.")
+    if octets[:4] == b"RIFF":
+        return octets
+    return _wav_depuis_pcm(octets, frequence)

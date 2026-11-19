@@ -40,7 +40,7 @@ Nothing is hard-coded.
 - `VOIX_BAMBARA_ECOUTE_URL`: address of the Soloni service, no path.
 - `VOIX_BAMBARA_BOUCHE_URL`: address of the Gemini voice service, no path.
 - `VOIX_BAMBARA_BOUCHE_TOKEN` (optional): sent in `X-Test-Token`, set it like the voice service's `TEST_ACCESS_TOKEN`.
-- `VOIX_BAMBARA_VOIX` (optional): voice id, `gemini_tts` by default.
+- `VOIX_BAMBARA_VOIX` (optional): voice id, `gemini_tts` by default (`elevenlabs_tts` for the ElevenLabs voice, configured in the voice service).
 - `VOIX_BAMBARA_TEXTE_MAX` (optional, 600): maximum size of a chunk read aloud. Set it like the voice service's `TEXTE_MAX`.
 - `VOIX_BAMBARA_AUDIO_MAX_MO` (optional, 10): maximum size of a recording.
 - `VOIX_BAMBARA_DELAI_S` (optional, 120): maximum wait for a service.
