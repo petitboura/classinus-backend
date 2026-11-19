@@ -13,6 +13,7 @@ VARIABLES = [
     "RECHERCHE_IMAGE_CACHE_MAX",
     "SERPER_API_KEY",
     "SERPAPI_API_KEY",
+    "SEARCHAPI_API_KEY",
     "PIXABAY_API_KEY",
     "PEXELS_API_KEY",
     "FLICKR_API_KEY",
@@ -237,3 +238,74 @@ def test_cache_epargne_les_requetes_et_peut_etre_desactive(monkeypatch):
     ri.rechercher_images("autre")
     ri.rechercher_images("autre")
     assert len(appels) == 3
+
+
+def test_searchapi_utilise_api_key_et_page_et_garde_la_vraie_source(monkeypatch):
+    monkeypatch.setenv("RECHERCHE_IMAGE_ORDRE", "searchapi")
+    monkeypatch.setenv("SEARCHAPI_API_KEY", "cle-searchapi")
+    appels = brancher(monkeypatch, {
+        "www.searchapi.io": Reponse({"images": [{
+            "title": "Marché de Bamako",
+            "source": {
+                "name": "Site photographique malien",
+                "link": "https://photos.example/bamako-market",
+            },
+            "original": {
+                "link": "https://cdn.example/bamako-market.jpg",
+                "width": 1200,
+                "height": 800,
+            },
+            "thumbnail": "https://thumb.example/bamako-market.jpg",
+        }]})
+    })
+
+    resultats = ri.rechercher_images("marché de Bamako", nombre=20, page=3)
+
+    assert len(appels) == 1
+    assert appels[0][1]["headers"]["Authorization"] == "Bearer cle-searchapi"
+    assert appels[0][1]["params"]["engine"] == "google_images"
+    assert appels[0][1]["params"]["page"] == 3
+    assert resultats[0]["source_url"] == "https://photos.example/bamako-market"
+    assert resultats[0]["source_name"] == "photos.example"
+
+
+def test_europeana_utilise_le_header_api_key_recommande(monkeypatch):
+    monkeypatch.setenv("RECHERCHE_IMAGE_ORDRE", "europeana")
+    monkeypatch.setenv("EUROPEANA_API_KEY", "cle-europeana")
+    appels = brancher(monkeypatch, {
+        "api.europeana.eu": Reponse({"items": [{
+            "title": ["Portrait historique"],
+            "edmPreview": ["https://thumb.example/portrait.jpg"],
+            "edmIsShownBy": ["https://media.example/portrait.jpg"],
+            "edmIsShownAt": ["https://museum.example/record/42"],
+        }]})
+    })
+
+    resultats = ri.rechercher_images("portrait historique")
+
+    assert len(appels) == 1
+    assert appels[0][1]["headers"]["X-Api-Key"] == "cle-europeana"
+    assert "wskey" not in appels[0][1]["params"]
+    assert resultats[0]["source_url"] == "https://museum.example/record/42"
+
+
+def test_nasa_images_search_ne_demande_pas_de_cle_api(monkeypatch):
+    monkeypatch.setenv("RECHERCHE_IMAGE_ORDRE", "nasa")
+    appels = brancher(monkeypatch, {
+        "images-api.nasa.gov": Reponse({"collection": {"items": [{
+            "data": [{
+                "title": "Afrique vue depuis l'espace",
+                "nasa_id": "AFRICA-001",
+            }],
+            "links": [{
+                "render": "image",
+                "href": "https://images-assets.nasa.gov/image/AFRICA-001/thumbnail.jpg",
+            }],
+        }]}})
+    })
+
+    resultats = ri.rechercher_images("Afrique vue depuis l'espace")
+
+    assert len(appels) == 1
+    assert "api_key" not in appels[0][1]["params"]
+    assert resultats[0]["source_url"] == "https://images.nasa.gov/details/AFRICA-001"
