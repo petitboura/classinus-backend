@@ -9,7 +9,7 @@ Le moteur de recherche vidéo est défini dans `core/recherche_video.py`.
 2. **Serper Videos** : complète les résultats manquants avec Google Videos.
 3. **SerpApi Google Videos** : autre moteur Google Videos en secours.
 4. **SearchApi Google Videos** : troisième moteur Google Videos.
-5. **Tavily** : dernier recours, limité aux pages vidéo des plateformes connues.
+5. **Tavily** : dernier recours pour compléter les liens YouTube.
 
 Les fournisseurs payants ne sont appelés que si les sources précédentes ne
 remplissent pas le nombre demandé. Les clés manquantes sont ignorées.
