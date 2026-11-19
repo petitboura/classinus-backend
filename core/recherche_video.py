@@ -1,5 +1,5 @@
 """
-Recherche de vidéos YouTube pour Classinus.
+Recherche de vidéos multi-sources pour Classinus.
 
 Trois niveaux, essayés dans cet ordre, sans jamais faire échouer la
 recherche pour l'étudiant :
@@ -15,21 +15,24 @@ recherche pour l'étudiant :
    Google, soit environ 100 recherches (une recherche coûte 100 points,
    la lecture des durées 1 point). Google ne vend pas de quota
    supplémentaire, il faut en faire la demande.
-3. Tavily en secours, restreint à youtube.com, quand la clé YouTube est
-   absente, que la limite du jour est atteinte ou que le service échoue.
-   Résultats moins riches : pas de chaîne ni de durée.
+3. Google Videos via Serper, SerpApi et SearchApi : complète les résultats
+   YouTube, avec des vidéos provenant de plusieurs plateformes.
+4. Tavily en dernier recours, avec un filtrage de domaines vidéo.
+Les fournisseurs payants ne sont appelés que si les précédents ne remplissent
+le nombre demandé.
 
 Quand YouTube répond que la limite du jour est atteinte, on arrête de le
 solliciter pendant un moment (réglable) et on passe directement par
 Tavily, pour ne pas perdre de temps à chaque recherche.
 
-Format de retour : liste de {"titre", "url", "miniature", "chaine",
-"duree", "id_video"}. "chaine" et "duree" valent None quand la source
-(Tavily) ne les fournit pas.
+Format de retour : liste de {"titre", "url", "miniature", "chaine", "duree", "id_video", "source", "source_url", "fournisseur_recherche"}. Les métadonnées absentes restent à None.
 
 Réglages par variables d'environnement :
 - YOUTUBE_API_KEY : clé du service officiel de YouTube (sinon GOOGLE_API_KEY)
-- TAVILY_API_KEY : déjà utilisée ailleurs dans Classinus
+- SERPER_API_KEY : recherche Google Videos via Serper
+- SERPAPI_API_KEY : recherche Google Videos via SerpApi
+- SEARCHAPI_API_KEY : recherche Google Videos via SearchApi
+- TAVILY_API_KEY : secours web déjà utilisé ailleurs dans Classinus
 - RECHERCHE_VIDEO_MEMOIRE_SECONDES : durée de mémorisation (86400 par défaut)
 - RECHERCHE_VIDEO_MEMOIRE_TAILLE : nombre de recherches gardées (500 par défaut)
 - RECHERCHE_VIDEO_PAUSE_QUOTA_SECONDES : pause après limite atteinte (3600 par défaut)
@@ -213,7 +216,7 @@ def _normaliser_video(item, requete, source_api):
     chaine = item.get("channel") or item.get("channel_name") or item.get("author")
     duree = item.get("duration") or item.get("length")
     try:
-        domaine = re.sub(r"^www\\.", "", __import__("urllib.parse", fromlist=["urlparse"]).urlparse(url).hostname or "")
+        domaine = re.sub(r"^www\.", "", __import__("urllib.parse", fromlist=["urlparse"]).urlparse(url).hostname or "")
     except Exception:
         domaine = ""
     return {
