@@ -116,6 +116,42 @@ def lire_inscription(user_id: str) -> dict | None:
     return lignes[0] if lignes else None
 
 
+def lister_modeles_publics() -> list[dict]:
+    """
+    Modeles montres sur la page des abonnements (19/11/2026, demande de Bourama), groupes par
+    entreprise : [{"distributeur", "nom", "modeles": [{"label", "groupe", "badge"}]}].
+
+    Meme source que le selecteur du chat (tables fournisseurs_llm et modeles_llm de Supabase, via
+    core/fournisseurs_llm.py) : rien n'est ecrit ici. Ordre des entreprises = ordre de Supabase,
+    modeles du plus puissant au moins puissant. Une lecture qui echoue ne casse pas la page : la
+    liste est alors vide et le front n'affiche simplement pas le tableau des modeles.
+    """
+    try:
+        from core import fournisseurs_llm
+
+        config = fournisseurs_llm._config_modeles()
+        groupes = []
+        for distributeur in config["distributeurs"]:
+            modeles = []
+            for palier in reversed(config["paliers"]):
+                info = config["modeles"].get(distributeur, {}).get(palier)
+                if not info:
+                    continue
+                groupe = info.get("groupe")
+                modeles.append({
+                    "label": info["label"],
+                    "groupe": groupe,
+                    "badge": fournisseurs_llm.libelles_badge(groupe),
+                })
+            if modeles:
+                nom = config["fournisseurs"][distributeur].get("nom_affiche") or distributeur
+                groupes.append({"distributeur": distributeur, "nom": nom, "modeles": modeles})
+        return groupes
+    except Exception as e:
+        logging.error(f"ERREUR (lecture des modeles pour la page des abonnements) : {e}")
+        return []
+
+
 def charger_config(user_id: str | None) -> dict:
     """user_id vaut None pour un visiteur sans compte : il voit les paliers, jamais d'inscription."""
     return {
@@ -123,6 +159,7 @@ def charger_config(user_id: str | None) -> dict:
         "textes": lire_textes(),
         "inscription": lire_inscription(user_id) if user_id else None,
         "profils": list(PROFILS),
+        "modeles": lister_modeles_publics(),
     }
 
 

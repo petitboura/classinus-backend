@@ -149,3 +149,50 @@ class TestRoutes(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestModelesPublics(unittest.TestCase):
+    """Liste des modeles de la page des abonnements (19/11/2026) : meme source que le selecteur."""
+
+    CONFIG = {
+        "distributeurs": ["claude", "gpt", "vide"],
+        "fournisseurs": {
+            "claude": {"nom_affiche": "Anthropic"},
+            "gpt": {"nom_affiche": None},
+            "vide": {"nom_affiche": "Sans modele"},
+        },
+        "paliers": ["essentiel", "intermediaire", "avance"],
+        "modeles": {
+            "claude": {
+                "essentiel": {"id": "c-petit", "label": "Claude Petit", "groupe": 4},
+                "avance": {"id": "c-grand", "label": "Claude Grand", "groupe": 1},
+            },
+            "gpt": {"essentiel": {"id": "g-1", "label": "GPT Un"}},
+        },
+        "textes": {"badge_groupe_1": {"fr": "Max", "en": "Max"}},
+    }
+
+    def test_groupes_par_entreprise_du_plus_puissant_au_moins_puissant(self):
+        from core import fournisseurs_llm
+
+        with patch.object(fournisseurs_llm, "_config_modeles", return_value=self.CONFIG):
+            groupes = liste_attente.lister_modeles_publics()
+        self.assertEqual([g["distributeur"] for g in groupes], ["claude", "gpt"])
+        self.assertEqual(groupes[0]["nom"], "Anthropic")
+        self.assertEqual([m["label"] for m in groupes[0]["modeles"]], ["Claude Grand", "Claude Petit"])
+        self.assertEqual(groupes[0]["modeles"][0]["badge"], {"fr": "Max", "en": "Max"})
+        self.assertEqual(groupes[0]["modeles"][1]["badge"], {})
+
+    def test_nom_de_repli_et_entreprise_sans_modele_ignoree(self):
+        from core import fournisseurs_llm
+
+        with patch.object(fournisseurs_llm, "_config_modeles", return_value=self.CONFIG):
+            groupes = liste_attente.lister_modeles_publics()
+        self.assertEqual(groupes[1]["nom"], "gpt")
+        self.assertNotIn("vide", [g["distributeur"] for g in groupes])
+
+    def test_une_lecture_qui_echoue_donne_une_liste_vide(self):
+        from core import fournisseurs_llm
+
+        with patch.object(fournisseurs_llm, "_config_modeles", side_effect=RuntimeError("panne")):
+            self.assertEqual(liste_attente.lister_modeles_publics(), [])
