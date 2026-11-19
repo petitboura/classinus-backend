@@ -337,6 +337,8 @@ def rechercher_image(requete: str, nombre: int = 40, page: int = 1) -> str:
     Pour afficher une image, utilise exactement son URL et transmets aussi
     sa page d'origine dans le titre Markdown :
     ![titre](url "source_url")
+    Écris les images l'une à la suite de l'autre, sur des lignes consécutives
+    sans ligne vide, pour qu'elles s'affichent dans la même grille.
     Le petit icône affiché sur l'image ouvrira cette page d'origine. Ne remplace
     jamais source_url par le nom du moteur, du fournisseur ou de l'API.
     """
