@@ -28,15 +28,16 @@ class ErreurMarketingStudio(ErreurHiggsfield):
         self.code = code
         self.params = params
 
+# "media" : ce que le type produit (image ou video), d'apres les apercus du catalogue.
 # Un seul format_slug par type dans le flux reel. "avatar" : photo de personne (People seulement).
 # "url_marque" : adresse du site (SaaS seulement).
 TYPES_MARKETING = {
-    "product_shots": {"format": "standalone", "avatar": False, "url_marque": False},
-    "product_shots_people": {"format": "with-model", "avatar": True, "url_marque": False},
-    "hypermotion": {"format": "hypermotion", "avatar": False, "url_marque": False},
-    "mixed_media": {"format": "mixed-media", "avatar": False, "url_marque": False},
-    "2d_motion": {"format": "2d-product-motion", "avatar": False, "url_marque": False},
-    "saas_motion": {"format": "saas", "avatar": False, "url_marque": True},
+    "product_shots": {"format": "standalone", "avatar": False, "url_marque": False, "media": "image"},
+    "product_shots_people": {"format": "with-model", "avatar": True, "url_marque": False, "media": "image"},
+    "hypermotion": {"format": "hypermotion", "avatar": False, "url_marque": False, "media": "video"},
+    "mixed_media": {"format": "mixed-media", "avatar": False, "url_marque": False, "media": "video"},
+    "2d_motion": {"format": "2d-product-motion", "avatar": False, "url_marque": False, "media": "video"},
+    "saas_motion": {"format": "saas", "avatar": False, "url_marque": True, "media": "video"},
 }
 
 _UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
@@ -218,3 +219,9 @@ def lire_statut(job_id: str) -> dict:
         raise ErreurMarketingStudio("MARKETING_PRESET_INVALIDE")
     resultat = _appeler("marketing_studio_v2_status", {"job_ids": [job_id]})
     return interpreter_statut(resultat, job_id)
+
+
+def media_du_type(preset_type) -> str:
+    """"image" ou "video" selon le type de preset (video par defaut, cas le plus prudent)."""
+    contrat = TYPES_MARKETING.get((preset_type or "").strip())
+    return contrat["media"] if contrat else "video"

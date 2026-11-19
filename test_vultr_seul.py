@@ -104,12 +104,12 @@ class Disponibilite(Base):
             return [m["modele_id"] for m in fournisseurs_llm.modeles_disponibles_pour_agent(distributeur, palier)]
 
     def test_sans_cle_vultr_les_nouveaux_modeles_disparaissent(self):
-        ids = self.ids("claude", "pro", {"DEEPSEEK_API_KEY": "d"})
+        ids = self.ids("claude", "max", {"DEEPSEEK_API_KEY": "d"})
         for modele in ("glm-5.3", "glm-5.3-flash", "qwen3.8-27b", "qwen3.8-flash-next", "muse-glimmer-30b"):
             self.assertNotIn(modele, ids)
 
     def test_avec_cle_vultr_ils_apparaissent_sans_bientot(self):
-        ids = self.ids("claude", "pro", CLES)
+        ids = self.ids("claude", "max", CLES)
         for modele in ("glm-5.3", "glm-5.3-flash", "qwen3.8-27b", "qwen3.8-flash-next",
                        "nemotron-nano-omni-30b-a3b-reasoning", "muse-glimmer-30b"):
             self.assertIn(modele, ids)
@@ -118,13 +118,13 @@ class Disponibilite(Base):
             self.assertFalse(fournisseurs_llm._config_modeles()["fournisseurs"][fournisseur]["bientot"])
 
     def test_nvidia_sans_palier_pro_ne_casse_rien(self):
-        ids = self.ids("claude", "pro", CLES)
+        ids = self.ids("claude", "max", CLES)
         self.assertEqual(ids.count("nemotron-nano-omni-30b-a3b-reasoning"), 1)
-        self.assertEqual(self.ids("nvidia", "pro", CLES), ["nemotron-nano-omni-30b-a3b-reasoning"])
+        self.assertEqual(self.ids("nvidia", "max", CLES), ["nemotron-nano-omni-30b-a3b-reasoning"])
 
     def test_pas_de_bientot_pour_un_modele_vultr_seul(self):
         with patch.dict("os.environ", CLES, clear=True):
-            bientot = [m["modele_id"] for m in fournisseurs_llm.modeles_bientot_pour_agent("claude", "pro")]
+            bientot = [m["modele_id"] for m in fournisseurs_llm.modeles_bientot_pour_agent("claude", "max")]
         self.assertNotIn("muse-glimmer-30b", bientot)
         self.assertNotIn("glm-5.3", bientot)
 

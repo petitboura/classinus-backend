@@ -12,6 +12,7 @@ import requests
 
 from api.auth import supabase
 from core.bibliotheque_fichiers import enregistrer_fichier
+from core.credits_images import rendre_credit_image
 from core.generation_video_higgsfield import statut_generation
 from core.higgsfield_marketing_studio import PREFIXE_SUIVI, lire_statut as lire_statut_marketing
 from core.notifications import creer_notification
@@ -41,7 +42,7 @@ def enregistrer(user_id: str, request_id: str, titre: str, genre: str) -> None:
 def lister(user_id: str, limite: int = 20) -> list[dict]:
     res = (
         supabase.table(TABLE)
-        .select("request_id,titre,genre,etat,etape,url,erreur,sauvegardee,cree_a,termine_a")
+        .select("request_id,titre,genre,etat,etape,url,erreur,sauvegardee,partage_termine_a,cree_a,termine_a")
         .eq("user_id", user_id)
         .order("cree_a", desc=True)
         .limit(max(1, min(limite, 50)))
@@ -53,7 +54,7 @@ def lister(user_id: str, limite: int = 20) -> list[dict]:
 def obtenir(user_id: str, request_id: str) -> dict | None:
     res = (
         supabase.table(TABLE)
-        .select("request_id,titre,genre,etat,etape,url,erreur,sauvegardee,cree_a,termine_a")
+        .select("request_id,titre,genre,etat,etape,url,erreur,sauvegardee,partage_termine_a,cree_a,termine_a")
         .eq("user_id", user_id)
         .eq("request_id", request_id)
         .limit(1)
@@ -63,9 +64,12 @@ def obtenir(user_id: str, request_id: str) -> dict | None:
 
 
 def marquer_annulee(user_id: str, request_id: str) -> None:
-    supabase.table(TABLE).update({"etat": "annulee", "termine_a": _maintenant()}).eq("user_id", user_id).eq(
+    res = supabase.table(TABLE).update({"etat": "annulee", "termine_a": _maintenant()}).eq("user_id", user_id).eq(
         "request_id", request_id
     ).eq("etat", "en_cours").execute()
+    if res.data:
+        # Une image annulée n'a pas été créée : son crédit est rendu (sans effet pour une vidéo, qui n'en a pas).
+        rendre_credit_image(supabase, user_id, request_id)
 
 
 def _revendiquer(request_id: str, colonne: str) -> bool:
@@ -135,6 +139,9 @@ def _terminer(ligne: dict, etat: str, url: str | None, erreur: str | None) -> No
     supabase.table(TABLE).update({"etat": etat, "url": url, "erreur": erreur, "termine_a": _maintenant()}).eq(
         "request_id", ligne["request_id"]
     ).execute()
+    if etat != "terminee" and ligne.get("genre") == "image":
+        # Échec, refus de contenu ou délai dépassé : l'image n'existe pas, le crédit est rendu (une seule fois).
+        rendre_credit_image(supabase, ligne["user_id"], ligne["request_id"])
 
 
 def _traiter_une(ligne: dict) -> None:

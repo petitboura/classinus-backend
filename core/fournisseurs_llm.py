@@ -10,8 +10,8 @@ modele). La hierarchie des distributeurs est CUMULATIVE DESCENDANTE :
     claude > gpt > gemini > deepseek > grok > meta
 
 debloquer "claude" donne aussi acces a gpt/gemini/deepseek/grok/meta. Le palier est
-lui aussi cumulatif ascendant (pro >= avance >= essentiel) : un agent en
-"pro" peut choisir un modele "essentiel" du meme distributeur si l'usager
+lui aussi cumulatif ascendant (ultra >= max >= premium >= pro >= essentiel) : un agent en
+"max" peut choisir un modele "essentiel" du meme distributeur si l'usager
 veut une reponse plus rapide/moins chere.
 
 IMPORTANT : ces identifiants de modele bougent vite (nouvelles versions
@@ -44,58 +44,55 @@ def get_secret(key):
 ORDRE_DISTRIBUTEURS = ["claude", "gpt", "gemini", "deepseek", "grok", "meta", "zai", "alibaba", "nvidia"]
 
 # Ordre = hierarchie cumulative ascendante.
-ORDRE_PALIERS = ["essentiel", "intermediaire", "avance", "pro", "specialise"]
-# "specialise" (16/10/2026) : niveau reserve aux modeles a usage precis qu'on
-# affiche sans les proposer en discussion normale (aujourd'hui seulement
-# grok-build-0.1, modele de code). Aucun agent n'a ce palier debloque, donc
-# ces modeles ne sont jamais choisissables ; ils servent a l'affichage Bientot.
-
-# palier "essentiel"/"avance"/"pro" (nom commercial, cote agents/pricing)
-# -> mappe sur le palier de qualite "simple"/"parfait"/"pro" de la page
-# Notion section 2 (nom technique, cote choix du modele). Meme hierarchie
-# a 3 niveaux, deux vocabulaires differents selon le contexte (vente vs
-# ingenierie) -- fusionnes ici pour eviter un 3e mapping inutile.
+ORDRE_PALIERS = ["essentiel", "pro", "premium", "max", "ultra", "specialise"]
+# Paliers = niveaux numeriques, alignes sur les groupes de la base (19/11/2026, demande de Bourama) :
+# 1 essentiel (groupe 5), 2 pro (groupe 4), 3 premium (groupe 3), 4 max (groupe 2), 5 ultra (groupe 1).
+# Exceptions voulues au palier pro : Muse Spark Open, DeepSeek V4.1 Flash, Grok Build 0.1.
+# "specialise" (6) n'est plus utilise par aucun modele ; il reste dans la liste pour les anciens agents.
+# Meme etat que la migration 2026_11_19_paliers_par_groupe.sql.
 HIERARCHIE_MODELES = {
     # Identifiants alignés le 20/10/2026 sur ceux réglés dans Supabase (tables modeles_llm), qui
     # priment : ce repli ne sert que si Supabase ne répond pas. Il portait encore les anciens
     # noms (claude-sonnet-5, gpt-5.4, gemini-3.6-flash...), donc un modèle absent ou refusé par
     # le fournisseur dès que Supabase tombait.
     "claude": {
-        "essentiel": {"id": "claude-haiku-5-5", "label": "Claude Haiku 5.5"},
-        "avance": {"id": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5"},
-        "pro": {"id": "claude-opus-5-5", "label": "Claude Opus 5.5"},
+        "pro": {"id": "claude-haiku-5-5", "label": "Claude Haiku 5.5"},
+        "premium": {"id": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5"},
+        "max": {"id": "claude-opus-5-5", "label": "Claude Opus 5.5"},
+        "ultra": {"id": "claude-fable-5-2", "label": "Claude Fable 5.2"},
     },
     "gpt": {
-        "essentiel": {"id": "gpt-6-luna", "label": "GPT-6 Luna"},
-        "avance": {"id": "gpt-6.1-sol", "label": "GPT-6.1 Sol"},
-        "pro": {"id": "gpt-6-astra", "label": "GPT-6 Astra"},
+        "pro": {"id": "gpt-6-luna", "label": "GPT-6 Luna"},
+        "premium": {"id": "gpt-6.1-terra", "label": "GPT-6.1 Terra"},
+        "max": {"id": "gpt-6.1-sol", "label": "GPT-6.1 Sol"},
+        "ultra": {"id": "gpt-6-astra", "label": "GPT-6 Astra"},
     },
     "gemini": {
-        "essentiel": {"id": "gemini-3.5-flash-lite", "label": "Gemini 3.5 Flash-Lite"},
-        "avance": {"id": "gemini-4-hydrogen", "label": "Gemini 4 Hydrogen"},
-        "pro": {"id": "gemini-4-argon", "label": "Gemini 4 Argon"},
+        "pro": {"id": "gemini-3.5-flash-lite", "label": "Gemini 3.5 Flash-Lite"},
+        "premium": {"id": "gemini-4-hydrogen", "label": "Gemini 4 Hydrogen"},
+        "max": {"id": "gemini-4-argon", "label": "Gemini 4 Argon"},
+        "ultra": {"id": "gemini-4-carbon", "label": "Gemini 4 Carbon"},
     },
     "grok": {
         # Grok (xAI), ajoute le 16/10/2026 sur demande de Bourama : seulement
-        # grok-4.3 et grok-4.7 (ni grok-build-0.1, modele de code, ni
+        # grok-4.3, grok-4.7 et grok-build-0.1 (pas
         # grok-4.20-multi-agent, modele de recherche approfondie en beta).
-        # Comme DeepSeek, deux modeles pour trois paliers : essentiel et
-        # avance partagent grok-4.3, pro passe sur grok-4.7. Prix xAI par
+        # 19/11/2026 : grok-4.3 au palier premium, grok-4.7 au palier max et
+        # grok-build-0.1 (modele de code) au palier pro. Prix xAI par
         # million de tokens (docs.x.ai/developers/pricing) : grok-4.3 a
         # 1,25 $ / 2,50 $, grok-4.7 a 2 $ / 6 $.
-        "essentiel": {"id": "grok-4.3", "label": "Grok 4.3"},
-        "avance": {"id": "grok-4.3", "label": "Grok 4.3"},
-        "pro": {"id": "grok-4.7", "label": "Grok 4.7"},
+        "pro": {"id": "grok-build-0.1", "label": "Grok Build 0.1"},
+        "premium": {"id": "grok-4.3", "label": "Grok 4.3"},
+        "max": {"id": "grok-4.7", "label": "Grok 4.7"},
         # Affichage seulement (Bientot), pas branche : grok-build-0.1 est un
         # modele de code (1 $ / 2 $ par million), pas un modele de discussion.
-        "specialise": {"id": "grok-build-0.1", "label": "Grok Build 0.1"},
     },
     "deepseek": {
         # L'API DeepSeek n'expose que 2 modeles stables a la fois
         # (aujourd'hui deepseek-v4-flash / deepseek-v4-pro), pas de nom
         # par version -- contrairement aux 3 paliers distincts vendus par
-        # les autres fournisseurs. essentiel+avance partagent donc le
-        # meme modele (flash), pro passe sur le plus gros (pro).
+        # les autres fournisseurs. flash au palier pro et le
+        # plus gros (pro) au palier max (19/11/2026).
         # MAJ 02/08/2026 : les anciens alias deepseek-chat/deepseek-
         # reasoner (utilises jusqu'ici) ont ete retires par DeepSeek le
         # 24/07/2026 (15:59 UTC) -- remplaces ici par les noms actuels.
@@ -108,14 +105,13 @@ HIERARCHIE_MODELES = {
         # Slugs Baseten (29/10/2026, demande Bourama, source : doc officielle
         # Baseten, page Reasoning, table des modeles) : traduits depuis l'id
         # direct par core/adaptateur_baseten.py quand l'interrupteur est ON.
-        "essentiel": {"id": "deepseek-v4-flash", "label": "DeepSeek V4.1 Flash", "baseten": "deepseek-ai/DeepSeek-V4-Flash-0731"},
-        "avance": {"id": "deepseek-v4-flash", "label": "DeepSeek V4.1 Flash", "baseten": "deepseek-ai/DeepSeek-V4-Flash-0731"},
-        "pro": {"id": "deepseek-v4-pro", "label": "DeepSeek V4 Pro", "baseten": "deepseek-ai/DeepSeek-V4-Pro-0813"},
+        "pro": {"id": "deepseek-v4-flash", "label": "DeepSeek V4.1 Flash", "baseten": "deepseek-ai/DeepSeek-V4-Flash-0731"},
+        "max": {"id": "deepseek-v4-pro", "label": "DeepSeek V4 Pro", "baseten": "deepseek-ai/DeepSeek-V4-Pro-0813"},
     },
     "meta": {
         # Meta, ajouté le 28/10/2026 sur staging en Bientôt (demande de Bourama) : Muse
-        # Spark 1.3 (muse-spark-1.3) au niveau avance, Muse Wonder (muse-wonder-1.0,
-        # en préversion, plus cher) au niveau pro, affiché tout en haut. Jamais de
+        # Spark 1.3 (muse-spark-1.3) au niveau premium, Muse Wonder (muse-wonder-1.0,
+        # en préversion, plus cher) au niveau ultra, affiché tout en haut. Jamais de
         # niveau essentiel par son API : Meta n'y propose que ces deux modèles. Identifiants exacts
         # de la doc officielle Meta (page Modèles, dev.meta.ai, vérifiés le 29/10/2026).
         # 30/10/2026, demande de Bourama : Muse Spark Open (poids ouverts) au niveau essentiel,
@@ -125,22 +121,22 @@ HIERARCHIE_MODELES = {
         # élèves ne doivent pas entraîner les modèles Meta).
         # 04/11/2026, demande de Bourama : Muse Glimmer 30B prend le niveau essentiel (Vultr
         # seul, comme Muse Spark Open l'est pour Baseten) et Muse Spark Open passe au niveau
-        # intermediaire. Meme etat que la migration 2026_11_04_meta_glimmer.sql.
+        # pro (niveau 2). Meme etat que la migration 2026_11_04_meta_glimmer.sql.
         "essentiel": {"id": "muse-glimmer-30b", "label": "Muse Glimmer 30B", "vultr": "muse-glimmer-30b", "vultr_seul": True},
-        "intermediaire": {"id": "muse-spark-open", "label": "Muse Spark Open", "baseten": "meta-models/muse-spark-open-1026", "baseten_seul": True},
-        "avance": {"id": "muse-spark-1.3", "label": "Muse Spark 1.3"},
-        "pro": {"id": "muse-wonder-1.0", "label": "Muse Wonder"},
+        "pro": {"id": "muse-spark-open", "label": "Muse Spark Open", "baseten": "meta-models/muse-spark-open-1026", "baseten_seul": True},
+        "premium": {"id": "muse-spark-1.3", "label": "Muse Spark 1.3"},
+        "ultra": {"id": "muse-wonder-1.0", "label": "Muse Wonder"},
     },
     # Z.ai, Alibaba et NVIDIA (04/11/2026, demande de Bourama) : servis par Vultr Serverless
     # Inference, une seule cle (VULTR_INFERENCE_API_KEY), jamais en Bientot, palier pro vide.
     # Meme etat que la migration 2026_11_04_fournisseurs_vultr.sql (qui prime sur ce repli).
     "zai": {
         "essentiel": {"id": "glm-5.3-flash", "label": "GLM 5.3 Flash", "vultr": "glm-5.3-flash", "vultr_seul": True},
-        "avance": {"id": "glm-5.3", "label": "GLM 5.3", "vultr": "glm-5.3", "vultr_seul": True},
+        "pro": {"id": "glm-5.3", "label": "GLM 5.3", "vultr": "glm-5.3", "vultr_seul": True},
     },
     "alibaba": {
         "essentiel": {"id": "qwen3.8-flash-next", "label": "Qwen 3.8 Flash Next", "vultr": "qwen3.8-flash-next", "vultr_seul": True},
-        "avance": {"id": "qwen3.8-27b", "label": "Qwen 3.8 27B", "vultr": "qwen3.8-27b", "vultr_seul": True},
+        "pro": {"id": "qwen3.8-27b", "label": "Qwen 3.8 27B", "vultr": "qwen3.8-27b", "vultr_seul": True},
     },
     "nvidia": {
         "essentiel": {"id": "nemotron-nano-omni-30b-a3b-reasoning", "label": "Nemotron Nano Omni 30B", "vultr": "nemotron-3-nano-omni-30b-a3b-reasoning", "vultr_seul": True},
@@ -393,7 +389,9 @@ DISTRIBUTEURS_BIENTOT = ["claude", "gpt", "gemini", "grok", "meta"]
 
 # Mot affiché sur les modèles Bientôt, par langue. Valeur de repli : le texte se règle
 # dans la table textes_modeles_llm de Supabase (cle = bientot).
-LIBELLE_BIENTOT_DE_REPLI = {"fr": "Bientôt"}
+# Le mot "Bientôt" n'est plus affiché (17/11/2026, demande de Bourama) : un modèle à crédit montre un
+# verrou, et ce texte ne sert plus que d'info-bulle et de nom accessible du verrou.
+LIBELLE_BIENTOT_DE_REPLI = {"fr": "Disponible avec un abonnement", "en": "Available with a plan"}
 
 # Configuration des modèles (demande de Bourama du 15/10/2026 : tout doit se régler
 # depuis Supabase, sans toucher au code). Trois tables : fournisseurs_llm (ordre de la
@@ -568,6 +566,17 @@ def _lire_config_modeles_supabase():
     except Exception as e:
         logging.warning(f"Colonne bientot de modeles_llm absente ou illisible (migration a appliquer) : {e}")
 
+    # Groupe de chaque modele, de 1 a 5 (17/11/2026, demande de Bourama) : 1 = frontiere (badge Max),
+    # 2 a 4 = autres modeles a credit, 5 = tres bon marche (hors credit). Colonne lue a part, comme
+    # les autres : une migration pas encore appliquee ne casse rien (aucun groupe, aucun badge).
+    groupe_par_modele = {}
+    try:
+        for ligne in client.table("modeles_llm").select("distributeur, palier, groupe").execute().data or []:
+            if ligne.get("groupe"):
+                groupe_par_modele[(ligne["distributeur"], ligne["palier"])] = int(ligne["groupe"])
+    except Exception as e:
+        logging.warning(f"Colonne groupe de modeles_llm absente ou illisible (migration a appliquer) : {e}")
+
     fournisseurs = {}
     for ligne in lignes_fournisseurs:
         fournisseurs[ligne["distributeur"]] = {
@@ -599,6 +608,9 @@ def _lire_config_modeles_supabase():
             entree_modele["vultr_seul"] = True
         if (ligne["distributeur"], ligne["palier"]) in bientot_par_modele:
             entree_modele["bientot"] = True
+        groupe = groupe_par_modele.get((ligne["distributeur"], ligne["palier"]))
+        if groupe:
+            entree_modele["groupe"] = groupe
         modeles.setdefault(ligne["distributeur"], {})[ligne["palier"]] = entree_modele
         niveau = ligne["niveau"]
         niveaux[ligne["palier"]] = min(niveau, niveaux.get(ligne["palier"], niveau))
@@ -642,6 +654,13 @@ def reinitialiser_cache_config_modeles():
 def libelles_bientot():
     """Mot affiché sur les modèles Bientôt, par langue (table textes_modeles_llm)."""
     return dict(_config_modeles()["textes"].get("bientot") or LIBELLE_BIENTOT_DE_REPLI)
+
+
+def libelles_badge(groupe):
+    """Badge affiche devant un modele de ce groupe, par langue (textes badge_groupe_<n>) ; vide sans badge."""
+    if not groupe:
+        return {}
+    return dict(_config_modeles()["textes"].get(f"badge_groupe_{groupe}") or {})
 
 
 def efforts_pour_modele(modele_id, distributeur):
@@ -748,6 +767,8 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque, email
                 "distributeur": distributeur,
                 "nom_distributeur": config["fournisseurs"][distributeur].get("nom_affiche"),
                 "palier": palier,
+                "groupe": info.get("groupe"),
+                "libelles_badge": libelles_badge(info.get("groupe")),
                 "efforts": efforts,
                 "effort_defaut": effort_defaut(efforts),
             })
@@ -760,7 +781,7 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque, email
 
 def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque, email=None):
     """
-    Modèles affichés grisés avec la mention "Bientôt" : tous les niveaux de
+    Modèles affichés grisés avec un verrou (plus de mot "Bientôt" depuis le 17/11/2026) : tous les niveaux de
     chaque fournisseur marqué Bientôt dans Supabase (table fournisseurs_llm),
     dans l'ordre de la hiérarchie puis des niveaux. Même forme d'élément que
     modeles_disponibles_pour_agent, plus la clé libelles_bientot (le mot
@@ -799,6 +820,8 @@ def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque, email=Non
                 "distributeur": distributeur,
                 "nom_distributeur": config["fournisseurs"][distributeur].get("nom_affiche"),
                 "palier": palier,
+                "groupe": info.get("groupe"),
+                "libelles_badge": libelles_badge(info.get("groupe")),
                 "libelles_bientot": dict(libelles),
             })
         # Même ordre que les modèles disponibles : du plus puissant au moins puissant.

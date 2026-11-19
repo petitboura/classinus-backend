@@ -205,6 +205,9 @@ MESSAGES_FR: dict[str, str] = {
     "IMPOSSIBLE_STATUT_HIGGSFIELD": "Impossible de lire l'état de cette génération pour le moment.",
     "IMPOSSIBLE_ANNULER_HIGGSFIELD": "Impossible d'annuler cette génération pour le moment.",
     "IMPOSSIBLE_ESTIMER_HIGGSFIELD": "Impossible d'estimer le coût de cette génération pour le moment.",
+    "TELECHARGEMENT_PARTAGE_REQUIS": "Partage ton image pour la télécharger.",
+    "IMPOSSIBLE_TELECHARGER_HIGGSFIELD": "Impossible de télécharger ce fichier pour le moment. Réessaie dans un instant.",
+    "PARTAGE_IMAGE_INVALIDE": "Seule une image terminée peut être partagée.",
     # 07/10/2026, vidéo d'une animation du chat (core/rendu_animation_travaux.py).
     # Codes à garder synchronisés avec lib/erreurs.ts côté frontend.
     "RENDU_VIDEO_FORMAT_INVALIDE": "Ce format de vidéo n'existe pas.",
@@ -347,6 +350,13 @@ MESSAGES_FR: dict[str, str] = {
     "MINUTEUR_INTROUVABLE": "Ce minuteur est introuvable.",
     "MINUTEUR_DEJA_TERMINE": "Ce minuteur est déjà terminé ou arrêté.",
     "MINUTEUR_ECHEC": "Impossible de mettre à jour ce minuteur pour le moment.",
+    "LISTE_ATTENTE_PALIER_INVALIDE": "Choisis un des paliers proposés.",
+    "LISTE_ATTENTE_PROFIL_INVALIDE": "Choisis ton profil dans la liste.",
+    "LISTE_ATTENTE_CONSENTEMENT_REQUIS": "Coche la case de consentement pour rejoindre la liste.",
+    "LISTE_ATTENTE_MODELE_INVALIDE": "Ce modèle n'est pas valide.",
+    "LISTE_ATTENTE_MOYEN_PAIEMENT_INVALIDE": "Choisis un des moyens de paiement proposés.",
+    "LISTE_ATTENTE_ETAPE_INVALIDE": "Cette étape n'est pas valide.",
+    "LISTE_ATTENTE_ECHEC": "Impossible d'enregistrer ton inscription pour le moment. Réessaie dans un instant.",
     # Skills autonomes (23/10/2026), gestionnaire de skills avec fichiers.
     "CHEMIN_FICHIER_INVALIDE": "Ce chemin de fichier n'est pas valide. Utilise par exemple dossier/fichier.md.",
     "CHEMIN_FICHIER_DUPLIQUE": "Deux fichiers ont le même chemin dans ce skill.",
@@ -392,11 +402,21 @@ MESSAGES_FR: dict[str, str] = {
     "MARKETING_INDISPONIBLE": "La génération Marketing Studio n'est pas disponible pour le moment. Réessaie plus tard.",
     "MARKETING_LIMITE_JOUR": "Limite du jour atteinte ({limite} générations par jour). Tu pourras en refaire demain.",
     "MARKETING_LIMITE_INDISPONIBLE": "Impossible de vérifier ta limite du jour, réessaie dans un instant.",
+    # 09/11/2026, crédits d'images (core/credits_images.py). Codes à garder synchronisés avec lib/erreurs.ts côté frontend.
+    "CREDITS_IMAGES_EPUISES": "Tu n'as plus de crédits d'images. Invite tes amis pour en gagner d'autres.",
+    "CREDITS_IMAGES_INDISPONIBLE": "Impossible de vérifier ton solde de crédits d'images, réessaie dans un instant.",
+    # 09/11/2026, parrainage (core/parrainage.py). Codes à garder synchronisés avec lib/erreurs.ts côté frontend.
+    "PARRAINAGE_CODE_INVALIDE": "Ce lien de parrainage n'est pas valide.",
+    "PARRAINAGE_INDISPONIBLE": "Le parrainage n'est pas disponible pour le moment, réessaie dans un instant.",
     # 13/11/2026, voix bambara (api/voix_bambara.py). Codes à garder synchronisés avec lib/erreurs.ts côté frontend.
     "VOIX_BAMBARA_NON_CONFIGUREE": "La voix bambara n'est pas branchée pour le moment.",
     "VOIX_BAMBARA_INDISPONIBLE": "La voix bambara ne répond pas pour le moment, réessaie dans un instant.",
     "VOIX_BAMBARA_AUDIO_INVALIDE": "L'enregistrement est vide ou trop gros, réessaie en parlant un peu moins longtemps.",
     "VOIX_BAMBARA_TEXTE_INVALIDE": "Il n'y a rien à lire à voix haute.",
+    # 16/11/2026, avatar Napster du mode vocal (api/avatar_napster.py). Codes à garder synchronisés avec lib/erreurs.ts côté frontend.
+    "AVATAR_NAPSTER_NON_CONFIGURE": "L'avatar n'est pas branché pour le moment.",
+    "AVATAR_NAPSTER_INDISPONIBLE": "L'avatar ne répond pas pour le moment, réessaie dans un instant.",
+    "AVATAR_NAPSTER_TROP_RAPIDE": "Patiente quelques secondes avant de relancer l'avatar.",
 }
 
 
@@ -436,6 +456,9 @@ MESSAGES_EN: dict[str, str] = {
     "IMPOSSIBLE_STATUT_HIGGSFIELD": "Unable to read the status of this generation right now.",
     "IMPOSSIBLE_ANNULER_HIGGSFIELD": "Unable to cancel this generation right now.",
     "IMPOSSIBLE_ESTIMER_HIGGSFIELD": "Unable to estimate the cost of this generation right now.",
+    "TELECHARGEMENT_PARTAGE_REQUIS": "Share your image to download it.",
+    "IMPOSSIBLE_TELECHARGER_HIGGSFIELD": "Unable to download this file right now. Try again in a moment.",
+    "PARTAGE_IMAGE_INVALIDE": "Only a finished image can be shared.",
     "NOM_DEJA_UTILISE_BIBLIOTHEQUE_PERSO": "You already have a file named \"{nom}\" in your library. Rename it or replace the existing one.",
     "NOM_DEJA_UTILISE_BIBLIOTHEQUE_PUBLIQUE": "A document named \"{nom}\" already exists in the public library. Choose a different name.",
     "FICHIER_AUDIO_VIDE": "Empty audio file.",
@@ -704,6 +727,13 @@ MESSAGES_EN: dict[str, str] = {
     "MINUTEUR_INTROUVABLE": "Timer not found.",
     "MINUTEUR_DEJA_TERMINE": "This timer has already ended or been stopped.",
     "MINUTEUR_ECHEC": "Unable to update this timer right now.",
+    "LISTE_ATTENTE_PALIER_INVALIDE": "Choose one of the plans shown.",
+    "LISTE_ATTENTE_PROFIL_INVALIDE": "Choose your profile from the list.",
+    "LISTE_ATTENTE_CONSENTEMENT_REQUIS": "Tick the consent box to join the list.",
+    "LISTE_ATTENTE_MODELE_INVALIDE": "This model is not valid.",
+    "LISTE_ATTENTE_MOYEN_PAIEMENT_INVALIDE": "Choose one of the payment methods shown.",
+    "LISTE_ATTENTE_ETAPE_INVALIDE": "This step is not valid.",
+    "LISTE_ATTENTE_ECHEC": "Unable to save your sign up right now. Try again in a moment.",
     "TYPE_DE_SIGNALEMENT_INVALIDE": "Invalid report type.",
     "CE_MODELE_N_EST_PAS_DEBLOQUE_POUR": "This model is not enabled for your account.",
     "URL_MANQUANTE": "A URL is required.",
@@ -790,10 +820,17 @@ MESSAGES_EN: dict[str, str] = {
     "MARKETING_INDISPONIBLE": "Marketing Studio generation is not available right now. Try again later.",
     "MARKETING_LIMITE_JOUR": "Daily limit reached ({limite} generations per day). You can generate more tomorrow.",
     "MARKETING_LIMITE_INDISPONIBLE": "Could not check your daily limit, try again in a moment.",
+    "CREDITS_IMAGES_EPUISES": "You have no image credits left. Invite your friends to earn more.",
+    "CREDITS_IMAGES_INDISPONIBLE": "Could not check your image credit balance, try again in a moment.",
+    "PARRAINAGE_CODE_INVALIDE": "This referral link is not valid.",
+    "PARRAINAGE_INDISPONIBLE": "Referrals are not available right now, try again in a moment.",
     "VOIX_BAMBARA_NON_CONFIGUREE": "The Bambara voice is not connected right now.",
     "VOIX_BAMBARA_INDISPONIBLE": "The Bambara voice is not responding right now, try again in a moment.",
     "VOIX_BAMBARA_AUDIO_INVALIDE": "The recording is empty or too large, try again with a shorter message.",
     "VOIX_BAMBARA_TEXTE_INVALIDE": "There is nothing to read aloud.",
+    "AVATAR_NAPSTER_NON_CONFIGURE": "The avatar is not connected right now.",
+    "AVATAR_NAPSTER_INDISPONIBLE": "The avatar is not responding right now, try again in a moment.",
+    "AVATAR_NAPSTER_TROP_RAPIDE": "Wait a few seconds before starting the avatar again.",
 }
 
 def erreur_api(status_code: int, code: str, message: str | None = None, **kwargs) -> HTTPException:

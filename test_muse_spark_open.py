@@ -77,7 +77,7 @@ class DansLaListe(BaseTest):
         # Depuis le 04/11/2026 Muse Spark Open est au niveau intermediaire (le niveau essentiel
         # est Muse Glimmer, qui demande la cle Vultr absente ici) : un agent debloque a
         # essentiel ne le voit donc pas, un agent debloque a intermediaire ou plus le voit.
-        for distributeur, palier in (("claude", "pro"), ("deepseek", "intermediaire"), ("grok", "avance")):
+        for distributeur, palier in (("claude", "max"), ("deepseek", "pro"), ("grok", "premium")):
             disponibles = fournisseurs_llm.modeles_disponibles_pour_agent(distributeur, palier)
             ids_meta = [m["modele_id"] for m in disponibles if m["distributeur"] == "meta"]
             self.assertEqual(ids_meta, [OPEN_ID], (distributeur, palier))
@@ -86,25 +86,25 @@ class DansLaListe(BaseTest):
 
     def test_spark_et_wonder_restent_bientot_et_open_n_y_est_pas(self):
         self.env({**CLES_AUTRES, "BASETEN_API_KEY": "b"})
-        bientot = fournisseurs_llm.modeles_bientot_pour_agent("claude", "pro")
+        bientot = fournisseurs_llm.modeles_bientot_pour_agent("claude", "max")
         ids_meta = [m["modele_id"] for m in bientot if m["distributeur"] == "meta"]
         self.assertEqual(ids_meta, ["muse-wonder-1.0", "muse-spark-1.3"])
 
     def test_open_est_choix_valide_cote_serveur(self):
         self.env({**CLES_AUTRES, "BASETEN_API_KEY": "b"})
-        self.assertTrue(fournisseurs_llm.modele_id_est_autorise(OPEN_ID, "claude", "pro"))
-        self.assertFalse(fournisseurs_llm.modele_id_est_autorise("muse-spark-1.3", "claude", "pro"))
+        self.assertTrue(fournisseurs_llm.modele_id_est_autorise(OPEN_ID, "claude", "max"))
+        self.assertFalse(fournisseurs_llm.modele_id_est_autorise("muse-spark-1.3", "claude", "max"))
 
     def test_sans_cle_baseten_open_n_apparait_nulle_part(self):
         self.env(CLES_AUTRES)
-        disponibles = fournisseurs_llm.modeles_disponibles_pour_agent("claude", "pro")
-        bientot = fournisseurs_llm.modeles_bientot_pour_agent("claude", "pro")
+        disponibles = fournisseurs_llm.modeles_disponibles_pour_agent("claude", "max")
+        bientot = fournisseurs_llm.modeles_bientot_pour_agent("claude", "max")
         self.assertNotIn(OPEN_ID, [m["modele_id"] for m in disponibles + bientot])
-        self.assertFalse(fournisseurs_llm.modele_id_est_autorise(OPEN_ID, "claude", "pro"))
+        self.assertFalse(fournisseurs_llm.modele_id_est_autorise(OPEN_ID, "claude", "max"))
 
     def test_agent_sans_selecteur_ne_voit_rien(self):
         self.env({**CLES_AUTRES, "BASETEN_API_KEY": "b"})
-        self.assertEqual(fournisseurs_llm.modeles_disponibles_pour_agent("aucun", "pro"), [])
+        self.assertEqual(fournisseurs_llm.modeles_disponibles_pour_agent("aucun", "max"), [])
 
     def test_reglage_d_effort_branche_pour_open(self):
         # Doc Baseten (13/11/2026) : low, medium, high, xhigh, defaut xhigh chez eux, donc on envoie
@@ -218,7 +218,7 @@ class FauxSupabase:
         elif nom == "modeles_llm":
             lignes = [
                 {"distributeur": "deepseek", "palier": "essentiel", "niveau": 1, "modele_id": "deepseek-v4-flash", "label": "DeepSeek V4 Flash", "actif": True, "modele_id_baseten": "deepseek-ai/DeepSeek-V4-Flash-0731"},
-                {"distributeur": "meta", "palier": "avance", "niveau": 2, "modele_id": "muse-spark-1.3", "label": "Muse Spark 1.3", "actif": True, "modele_id_baseten": None},
+                {"distributeur": "meta", "palier": "premium", "niveau": 2, "modele_id": "muse-spark-1.3", "label": "Muse Spark 1.3", "actif": True, "modele_id_baseten": None},
                 {"distributeur": "meta", "palier": "essentiel", "niveau": 1, "modele_id": OPEN_ID, "label": "Muse Spark Open", "actif": True, "modele_id_baseten": OPEN_SLUG, "baseten_seul": True},
             ]
         elif nom == "textes_modeles_llm":
@@ -241,7 +241,7 @@ class LectureSupabase(BaseTest):
         open_ = config["modeles"]["meta"]["essentiel"]
         self.assertTrue(open_["baseten_seul"])
         self.assertEqual(open_["baseten"], OPEN_SLUG)
-        self.assertNotIn("baseten_seul", config["modeles"]["meta"]["avance"])
+        self.assertNotIn("baseten_seul", config["modeles"]["meta"]["premium"])
 
     def test_colonne_absente_deepseek_garde_ses_slugs_et_open_n_est_pas_ouvert(self):
         config = self.lire(False)

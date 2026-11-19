@@ -31,6 +31,16 @@ The exact set of mounted routers is listed in the application assembly section o
 
 MCP services are exposed on paths separate from the REST API. Their list and authentication modes are described in [MCP and connectors](MCP_ET_CONNECTEURS.md).
 
+## Image download unlocked by sharing (Higgsfield)
+
+A generated image can only be downloaded once the app reports a finished share. Videos are never locked.
+
+- `POST /api/higgsfield/partage-termine/{request_id}`: the app reports the finished share of a finished image. Records `partage_termine_a` on the generation row.
+- `GET /api/higgsfield/telecharger/{request_id}`: returns the file as an attachment. An image that was not shared gets `403 TELECHARGEMENT_PARTAGE_REQUIS`.
+- `GET /api/higgsfield/statut/{request_id}` and `GET /api/higgsfield/generations` now include `telechargement_debloque`.
+
+The signal comes from the app: it pushes people to share, it does not protect a secret. Logic lives in `core/higgsfield_telechargement.py`; migration `migrations/2026_11_09_higgsfield_partage_telechargement.sql`.
+
 ## Add or modify a route
 
 1. Identify the functional domain and existing router in `api/`.
