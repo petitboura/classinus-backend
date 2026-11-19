@@ -17,7 +17,7 @@ recherche pour l'étudiant :
    supplémentaire, il faut en faire la demande.
 3. Google Videos via Serper, SerpApi et SearchApi : complète les résultats
    YouTube, avec des vidéos provenant de plusieurs plateformes.
-4. Tavily en dernier recours, avec un filtrage de domaines vidéo.
+4. Tavily en dernier recours, limité à YouTube.
 Les fournisseurs payants ne sont appelés que si les précédents ne remplissent
 le nombre demandé.
 
@@ -292,7 +292,7 @@ def _chercher_via_tavily(requete, nombre, cle, page=1):
         headers={"Authorization": f"Bearer {cle}"},
         json={
             "query": f"{requete} youtube",
-            "include_domains": ["youtube.com", "youtu.be", "vimeo.com", "dailymotion.com", "tiktok.com", "facebook.com"],
+            "include_domains": ["youtube.com", "youtu.be"],
             "max_results": min(20, nombre),
         },
         timeout=20,
