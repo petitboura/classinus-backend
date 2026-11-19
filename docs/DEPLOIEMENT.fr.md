@@ -2,6 +2,8 @@
 
 # Déploiement du backend
 
+> **Raccordement Coolify actuel :** consulter le [guide des trois services Classinus](./deployment/COOLIFY_SERVICES.fr.md). La checklist Railway ci-dessous est conservée comme référence historique et ne décrit pas les domaines Coolify fournis pour Class-Tech, le montage vidéo et Docker Vultr.
+
 ## Déploiement de l’API
 
 La configuration de production documentée dans ce dépôt utilise Railway et Railpack :

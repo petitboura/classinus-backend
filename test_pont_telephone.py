@@ -21,7 +21,7 @@ from registre_outils import SERVEURS_MCP
 
 
 def _route_telephone(**extra):
-    route = {"url": "https://class-tech.up.railway.app/mcp/diagnostic",
+    route = {"url": "https://classtech.classinus.com/mcp/diagnostic",
              "headers": None, "via_app_telephone": True, "user_id": "u1"}
     route.update(extra)
     return route
@@ -157,7 +157,7 @@ def test_diffusion_telephone_exclut_connexion_native_sans_relais():
 
 
 def test_url_diagnostic_par_defaut_et_surcharge_par_variable(monkeypatch):
-    """L'adresse du serveur class-tech vient de CLASSTECH_URL_MCP, sinon du defaut Railway."""
+    """L'adresse du serveur class-tech vient de CLASSTECH_URL_MCP, sinon du domaine Class-Tech de production."""
     import registre_outils
     entree = _entree_diagnostic()
     monkeypatch.delenv("CLASSTECH_URL_MCP", raising=False)
@@ -170,11 +170,11 @@ def test_url_diagnostic_par_defaut_et_surcharge_par_variable(monkeypatch):
     assert entree["url_builder"](lambda nom: None, "u1", "a1") == registre_outils.URL_DIAGNOSTIC_CLASSTECH_DEFAUT
 
 
-def test_reveil_derive_de_l_hote_railway():
-    """Le /health de reveil suit l'hote de l'URL, jamais une adresse en dur."""
+def test_reveil_derive_de_l_hote_classinus():
+    """Le /health de reveil suit l'hote de l'URL Classinus, jamais une adresse en dur."""
     entree = _entree_diagnostic()
-    url = "https://class-tech.up.railway.app/mcp/diagnostic"
-    assert mcp_tools._url_reveil(entree, url) == "https://class-tech.up.railway.app/health"
+    url = "https://classtech.classinus.com/mcp/diagnostic"
+    assert mcp_tools._url_reveil(entree, url) == "https://classtech.classinus.com/health"
 
 
 PROFONDS = (

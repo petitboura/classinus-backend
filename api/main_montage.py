@@ -1,7 +1,7 @@
 """Serveur de montage vidéo séparé (demande de Bourama, 03/11/2026).
 
 Même dépôt, même code de montage (core/serveur_mcp_video.py), mais un service
-Railway à part, construit par Dockerfile.montage avec tout déjà installé. Il ne
+Coolify indépendant, construit par Dockerfile.montage avec tout déjà installé. Il ne
 fait que le montage : le chat principal n'est plus ralenti par ffmpeg ni Remotion.
 
 Le service principal l'appelle quand sa variable MONTAGE_VIDEO_URL est définie

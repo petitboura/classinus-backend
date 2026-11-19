@@ -1,5 +1,5 @@
 # Serveur de montage vidéo séparé (demande de Bourama, 03/11/2026).
-# Service Railway à part : variable RAILWAY_DOCKERFILE_PATH=Dockerfile.montage.
+# Service Coolify indépendant : sélectionner ce fichier comme Dockerfile de construction.
 # Tout ce qui est lent à installer l'est ici, une fois, à la construction de
 # l'image : ffmpeg, Node, paquets Remotion et navigateur de rendu Remotion.
 # Les outils d'IA lourds (Whisper, Demucs, Real-ESRGAN) ne sont pas inclus.
