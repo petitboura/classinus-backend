@@ -51,6 +51,9 @@ import requests
 _URL_YOUTUBE_RECHERCHE = "https://www.googleapis.com/youtube/v3/search"
 _URL_YOUTUBE_VIDEOS = "https://www.googleapis.com/youtube/v3/videos"
 _URL_TAVILY = "https://api.tavily.com/search"
+_URL_SERPER_VIDEO = "https://google.serper.dev/videos"
+_URL_SERPAPI = "https://serpapi.com/search.json"
+_URL_SEARCHAPI = "https://www.searchapi.io/api/v1/search"
 
 _REGEX_ID_VIDEO = re.compile(r"(?:youtu\.be/|youtube\.com/watch\?(?:[^#]*&)?v=|youtube\.com/shorts/)([\w-]{11})")
 _REGEX_DUREE_ISO = re.compile(r"^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$")
@@ -78,8 +81,8 @@ def _entier_env(nom, defaut):
         return defaut
 
 
-def _cle_memoire(requete, nombre):
-    return (" ".join(requete.lower().split()), nombre)
+def _cle_memoire(requete, nombre, page=1):
+    return (" ".join(requete.lower().split()), nombre, page)
 
 
 def _lire_memoire(cle):
@@ -196,14 +199,98 @@ def _chercher_via_youtube(requete, nombre, cle):
     return resultats[:nombre]
 
 
-def _chercher_via_tavily(requete, nombre, cle):
+
+def _normaliser_video(item, requete, source_api):
+    """Normalise un résultat de moteur vidéo sans inventer son URL."""
+    url = item.get("link") or item.get("url")
+    if not isinstance(url, str) or not url.startswith(("https://", "http://")):
+        return None
+    titre = html.unescape(str(item.get("title") or item.get("name") or requete)).strip()
+    miniature = item.get("imageUrl") or item.get("thumbnail") or item.get("thumbnail_url")
+    if not isinstance(miniature, str) or not miniature.startswith("https://"):
+        miniature = None
+    source = item.get("source") or item.get("platform") or item.get("domain")
+    chaine = item.get("channel") or item.get("channel_name") or item.get("author")
+    duree = item.get("duration") or item.get("length")
+    try:
+        domaine = re.sub(r"^www\\.", "", __import__("urllib.parse", fromlist=["urlparse"]).urlparse(url).hostname or "")
+    except Exception:
+        domaine = ""
+    return {
+        "titre": titre or requete,
+        "url": url,
+        "miniature": miniature,
+        "chaine": html.unescape(str(chaine)).strip() if chaine else None,
+        "duree": str(duree).strip() if duree else None,
+        "id_video": None,
+        "source": html.unescape(str(source)).strip() if source else domaine or source_api,
+        "source_url": f"https://{domaine}" if domaine else None,
+        "fournisseur_recherche": source_api,
+    }
+
+
+def _chercher_via_serper_video(requete, nombre, cle, page=1):
+    reponse = requests.post(
+        _URL_SERPER_VIDEO,
+        headers={"X-API-KEY": cle, "Content-Type": "application/json"},
+        json={"q": requete, "num": min(nombre, 100), "page": max(1, page), "gl": "fr", "hl": "fr"},
+        timeout=20,
+    )
+    reponse.raise_for_status()
+    return [
+        video for video in (
+            _normaliser_video(item, requete, "Serper")
+            for item in reponse.json().get("videos", [])
+        ) if video
+    ]
+
+
+def _chercher_via_serpapi_video(requete, nombre, cle, page=1):
+    reponse = requests.get(
+        _URL_SERPAPI,
+        params={"engine": "google_videos", "q": requete, "api_key": cle,
+                "num": min(nombre, 100), "start": max(0, (page - 1) * nombre),
+                "hl": "fr", "gl": "fr"},
+        timeout=25,
+    )
+    reponse.raise_for_status()
+    donnees = reponse.json()
+    elements = donnees.get("video_results") or donnees.get("videos_results") or []
+    return [
+        video for video in (
+            _normaliser_video(item, requete, "SerpApi")
+            for item in elements
+        ) if video
+    ]
+
+
+def _chercher_via_searchapi_video(requete, nombre, cle, page=1):
+    reponse = requests.get(
+        _URL_SEARCHAPI,
+        headers={"Authorization": f"Bearer {cle}"},
+        params={"engine": "google_videos", "q": requete, "page": max(1, page),
+                "hl": "fr", "gl": "fr", "link": "resolved", "safe": "active"},
+        timeout=25,
+    )
+    reponse.raise_for_status()
+    donnees = reponse.json()
+    elements = donnees.get("videos") or donnees.get("videos_carousel") or []
+    return [
+        video for video in (
+            _normaliser_video(item, requete, "SearchApi")
+            for item in elements
+        ) if video
+    ]
+
+
+def _chercher_via_tavily(requete, nombre, cle, page=1):
     reponse = requests.post(
         _URL_TAVILY,
         headers={"Authorization": f"Bearer {cle}"},
         json={
             "query": f"{requete} youtube",
-            "include_domains": ["youtube.com", "youtu.be"],
-            "max_results": 10,
+            "include_domains": ["youtube.com", "youtu.be", "vimeo.com", "dailymotion.com", "tiktok.com", "facebook.com"],
+            "max_results": min(20, nombre),
         },
         timeout=20,
     )
@@ -231,59 +318,87 @@ def _chercher_via_tavily(requete, nombre, cle):
     return resultats[:nombre]
 
 
-def rechercher_videos(requete, nombre=6):
+def rechercher_videos(requete, nombre=30, page=1):
     """
-    Cherche des vidéos YouTube. Renvoie une liste (peut être vide).
-    Ne lève jamais d'exception : une recherche de vidéos est un bonus pour
-    la réponse, jamais un prérequis.
+    Recherche des vidéos sur YouTube et sur le web (Google Videos).
+    30 résultats par défaut, jusqu'à 50 par page. Les fournisseurs payants
+    ne sont appelés que si les sources précédentes n'ont pas rempli la page.
     """
     global _pause_youtube_jusqu_a
-
     requete = (requete or "").strip()
     if not requete:
         return []
+    try:
+        nombre = max(1, min(int(nombre), 50))
+        page = max(1, int(page))
+    except (TypeError, ValueError):
+        nombre, page = 30, 1
 
-    cle_m = _cle_memoire(requete, nombre)
+    cle_m = _cle_memoire(requete, nombre, page)
     en_memoire = _lire_memoire(cle_m)
     if en_memoire is not None:
         return en_memoire
 
+    resultats = []
+    deja_vus = set()
+
+    def ajouter(elements):
+        for video in elements or []:
+            url = video.get("url")
+            if not url or url in deja_vus:
+                continue
+            deja_vus.add(url)
+            resultats.append(video)
+            if len(resultats) >= nombre:
+                break
+
+    # YouTube officiel en premier : les liens sont directement lisibles dans Classinus.
     cle_youtube = os.environ.get("YOUTUBE_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if cle_youtube and time.time() >= _pause_youtube_jusqu_a:
+    if page == 1 and cle_youtube and time.time() >= _pause_youtube_jusqu_a:
         try:
-            resultats = _chercher_via_youtube(requete, nombre, cle_youtube)
-            if resultats:
-                _ecrire_memoire(cle_m, resultats)
-                return resultats
+            ajouter(_chercher_via_youtube(requete, min(nombre, 20), cle_youtube))
+            for video in resultats:
+                video.setdefault("source", "YouTube")
+                video.setdefault("source_url", "https://www.youtube.com")
+                video.setdefault("fournisseur_recherche", "YouTube Data API")
         except _LimiteYoutubeAtteinte:
             pause = _entier_env("RECHERCHE_VIDEO_PAUSE_QUOTA_SECONDES", 3600)
             _pause_youtube_jusqu_a = time.time() + pause
-            logging.error(
-                f"RECHERCHE VIDEO : limite du jour de YouTube atteinte, passage par Tavily pendant {pause} secondes."
-            )
+            logging.warning("RECHERCHE VIDEO : quota YouTube atteint, bascule vers les moteurs web.")
         except _CleYoutubeRefusee as e:
             pause = _entier_env("RECHERCHE_VIDEO_PAUSE_CLE_SECONDES", 600)
             _pause_youtube_jusqu_a = time.time() + pause
-            logging.error(
-                f"RECHERCHE VIDEO : clé refusée par YouTube ({_masquer_cle(e)}). Service YouTube non activé ou clé limitée "
-                f"à un autre service. Passage par Tavily pendant {pause} secondes."
-            )
+            logging.warning(f"RECHERCHE VIDEO : clé YouTube refusée, bascule vers les moteurs web ({_masquer_cle(e)}).")
         except Exception as e:
-            logging.error(f"ERREUR RECHERCHE VIDEO (YouTube, requête {requete!r}) : {_masquer_cle(e)}")
-    elif not cle_youtube:
-        logging.warning("Aucune clé YouTube (YOUTUBE_API_KEY ou GOOGLE_API_KEY) : recherche de vidéos tentée via Tavily.")
+            logging.warning(f"RECHERCHE VIDEO : YouTube indisponible ({_masquer_cle(e)}).")
 
-    cle_tavily = os.environ.get("TAVILY_API_KEY")
-    if not cle_tavily:
-        logging.error("TAVILY_API_KEY manquante : aucun fournisseur de recherche de vidéos disponible.")
-        return []
+    # Moteurs de vidéos Google : même clé que les recherches d'images déjà configurées.
+    fournisseurs = [
+        ("Serper", "SERPER_API_KEY", _chercher_via_serper_video),
+        ("SerpApi", "SERPAPI_API_KEY", _chercher_via_serpapi_video),
+        ("SearchApi", "SEARCHAPI_API_KEY", _chercher_via_searchapi_video),
+    ]
+    for nom, variable, fonction in fournisseurs:
+        if len(resultats) >= nombre:
+            break
+        cle = os.environ.get(variable)
+        if not cle:
+            continue
+        try:
+            ajouter(fonction(requete, nombre - len(resultats), cle, page))
+        except Exception as e:
+            logging.warning(f"RECHERCHE VIDEO : {nom} indisponible ({_masquer_cle(e)}).")
 
-    try:
-        resultats = _chercher_via_tavily(requete, nombre, cle_tavily)
-    except Exception as e:
-        logging.error(f"ERREUR RECHERCHE VIDEO (Tavily, requête {requete!r}) : {_masquer_cle(e)}")
-        return []
+    # Tavily reste le dernier recours et peut trouver des vidéos hors YouTube.
+    if len(resultats) < nombre:
+        cle_tavily = os.environ.get("TAVILY_API_KEY")
+        if cle_tavily:
+            try:
+                ajouter(_chercher_via_tavily(requete, nombre - len(resultats), cle_tavily, page))
+            except Exception as e:
+                logging.warning(f"RECHERCHE VIDEO : Tavily indisponible ({_masquer_cle(e)}).")
 
+    resultats = resultats[:nombre]
     if resultats:
         _ecrire_memoire(cle_m, resultats)
     return resultats
