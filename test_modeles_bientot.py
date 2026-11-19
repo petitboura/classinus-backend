@@ -34,12 +34,12 @@ class ModelesBientot(unittest.TestCase):
 
     def test_deepseek_seul_utilisable_les_autres_bientot(self):
         with patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True):
-            disponibles = modeles_disponibles_pour_agent("claude", "max")
-            bientot = modeles_bientot_pour_agent("claude", "max")
+            disponibles = modeles_disponibles_pour_agent("claude", "ultra")
+            bientot = modeles_bientot_pour_agent("claude", "ultra")
         self.assertEqual({m["distributeur"] for m in disponibles}, {"deepseek"})
         self.assertEqual({m["distributeur"] for m in bientot}, set(DISTRIBUTEURS_BIENTOT))
         # 3 niveaux pour Claude, GPT et Gemini, 3 modèles pour Grok (grok-4.3 sert deux niveaux, plus grok-build-0.1), 2 pour Meta (avance et pro).
-        self.assertEqual(len(bientot), 14)
+        self.assertEqual(len(bientot), 17)
 
     def test_nom_du_fournisseur_vient_de_supabase(self):
         def modifier(config):
@@ -47,34 +47,34 @@ class ModelesBientot(unittest.TestCase):
             config["fournisseurs"]["claude"]["nom_affiche"] = "Anthropic"
 
         with _avec_config_supabase(modifier), patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True):
-            disponibles = modeles_disponibles_pour_agent("claude", "max")
-            bientot = modeles_bientot_pour_agent("claude", "max")
+            disponibles = modeles_disponibles_pour_agent("claude", "ultra")
+            bientot = modeles_bientot_pour_agent("claude", "ultra")
         self.assertTrue(disponibles)
         self.assertEqual({m["nom_distributeur"] for m in disponibles}, {"DeepSeek"})
         self.assertEqual({m["nom_distributeur"] for m in bientot if m["distributeur"] == "claude"}, {"Anthropic"})
 
     def test_nom_du_fournisseur_vide_dans_le_repli_du_code(self):
         with patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True):
-            disponibles = modeles_disponibles_pour_agent("claude", "max")
-            bientot = modeles_bientot_pour_agent("claude", "max")
+            disponibles = modeles_disponibles_pour_agent("claude", "ultra")
+            bientot = modeles_bientot_pour_agent("claude", "ultra")
         self.assertTrue(all(m["nom_distributeur"] is None for m in disponibles + bientot))
 
     def test_aucun_modele_en_double(self):
         with patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True):
-            disponibles = modeles_disponibles_pour_agent("claude", "max")
-            bientot = modeles_bientot_pour_agent("claude", "max")
+            disponibles = modeles_disponibles_pour_agent("claude", "ultra")
+            bientot = modeles_bientot_pour_agent("claude", "ultra")
         ids = [m["modele_id"] for m in disponibles + bientot]
         self.assertEqual(len(ids), len(set(ids)))
 
     def test_cle_presente_ne_rend_pas_un_fournisseur_bientot_utilisable(self):
         cles = {"DEEPSEEK_API_KEY": "x", "OPENAI_API_KEY": "x", "ANTHROPIC_API_KEY": "x", "GOOGLE_API_KEY": "x"}
         with patch.dict(os.environ, cles, clear=True):
-            disponibles = modeles_disponibles_pour_agent("claude", "max")
-            bientot = modeles_bientot_pour_agent("claude", "max")
+            disponibles = modeles_disponibles_pour_agent("claude", "ultra")
+            bientot = modeles_bientot_pour_agent("claude", "ultra")
             self.assertTrue(all(m["distributeur"] == "deepseek" for m in disponibles))
             self.assertEqual({m["distributeur"] for m in bientot}, set(DISTRIBUTEURS_BIENTOT))
             for m in bientot:
-                self.assertFalse(modele_id_est_autorise(m["modele_id"], "claude", "max"))
+                self.assertFalse(modele_id_est_autorise(m["modele_id"], "claude", "ultra"))
 
     def test_fournisseur_non_bientot_dans_supabase_devient_utilisable(self):
         cles = {"DEEPSEEK_API_KEY": "x", "OPENAI_API_KEY": "x"}
@@ -83,8 +83,8 @@ class ModelesBientot(unittest.TestCase):
             config["fournisseurs"]["gpt"]["bientot"] = False
 
         with patch.dict(os.environ, cles, clear=True), _avec_config_supabase(ouvrir_gpt):
-            disponibles = modeles_disponibles_pour_agent("claude", "max")
-            bientot = modeles_bientot_pour_agent("claude", "max")
+            disponibles = modeles_disponibles_pour_agent("claude", "ultra")
+            bientot = modeles_bientot_pour_agent("claude", "ultra")
         self.assertIn("gpt", {m["distributeur"] for m in disponibles})
         self.assertNotIn("gpt", {m["distributeur"] for m in bientot})
 
@@ -93,19 +93,19 @@ class ModelesBientot(unittest.TestCase):
             config["fournisseurs"]["deepseek"]["cle_api_requise"] = False
 
         with patch.dict(os.environ, {}, clear=True), _avec_config_supabase(sans_regle_de_cle):
-            disponibles = modeles_disponibles_pour_agent("claude", "max")
+            disponibles = modeles_disponibles_pour_agent("claude", "ultra")
         self.assertEqual({m["distributeur"] for m in disponibles}, {"deepseek"})
 
     def test_cle_api_requise_masque_le_fournisseur_sans_cle(self):
         with patch.dict(os.environ, {}, clear=True):
-            self.assertEqual(modeles_disponibles_pour_agent("claude", "max"), [])
+            self.assertEqual(modeles_disponibles_pour_agent("claude", "ultra"), [])
 
     def test_modele_inactif_dans_supabase_disparait(self):
         def retirer_pro(config):
             del config["modeles"]["deepseek"]["max"]
 
         with patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True), _avec_config_supabase(retirer_pro):
-            ids = [m["modele_id"] for m in modeles_disponibles_pour_agent("claude", "max")]
+            ids = [m["modele_id"] for m in modeles_disponibles_pour_agent("claude", "ultra")]
         self.assertEqual(ids, ["deepseek-v4-flash"])
 
     def test_mot_bientot_vient_de_la_configuration(self):
@@ -113,7 +113,7 @@ class ModelesBientot(unittest.TestCase):
             config["textes"]["bientot"] = {"fr": "Très vite", "en": "Coming soon"}
 
         with patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True), _avec_config_supabase(autre_mot):
-            bientot = modeles_bientot_pour_agent("claude", "max")
+            bientot = modeles_bientot_pour_agent("claude", "ultra")
             self.assertEqual(libelles_bientot()["en"], "Coming soon")
         self.assertTrue(bientot)
         for m in bientot:
@@ -133,7 +133,7 @@ class ModelesBientot(unittest.TestCase):
                 info["groupe"] = 1 if info["id"] == "claude-opus-5-5" else 3
 
         with patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True), _avec_config_supabase(avec_groupes):
-            par_id = {m["modele_id"]: m for m in modeles_bientot_pour_agent("claude", "max")}
+            par_id = {m["modele_id"]: m for m in modeles_bientot_pour_agent("claude", "ultra")}
         frontiere = par_id["claude-opus-5-5"]
         self.assertEqual(frontiere["groupe"], 1)
         self.assertEqual(frontiere["libelles_badge"], {"fr": "Max", "en": "Max"})
@@ -145,10 +145,10 @@ class ModelesBientot(unittest.TestCase):
         with patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True), patch.object(
             fournisseurs_llm, "_lire_config_modeles_supabase", side_effect=RuntimeError("panne")
         ):
-            disponibles = modeles_disponibles_pour_agent("claude", "max")
-            bientot = modeles_bientot_pour_agent("claude", "max")
+            disponibles = modeles_disponibles_pour_agent("claude", "ultra")
+            bientot = modeles_bientot_pour_agent("claude", "ultra")
         self.assertEqual({m["distributeur"] for m in disponibles}, {"deepseek"})
-        self.assertEqual(len(bientot), 14)
+        self.assertEqual(len(bientot), 17)
 
     def test_supabase_en_panne_garde_la_derniere_configuration_connue(self):
         def ouvrir_gpt(config):
@@ -157,11 +157,11 @@ class ModelesBientot(unittest.TestCase):
         cles = {"DEEPSEEK_API_KEY": "x", "OPENAI_API_KEY": "x"}
         with patch.dict(os.environ, cles, clear=True):
             with _avec_config_supabase(ouvrir_gpt):
-                modeles_disponibles_pour_agent("claude", "max")
+                modeles_disponibles_pour_agent("claude", "ultra")
             reinitialiser_cache_config_modeles_expire = fournisseurs_llm._cache_config_modeles
             reinitialiser_cache_config_modeles_expire["expire_a"] = 0
             with patch.object(fournisseurs_llm, "_lire_config_modeles_supabase", side_effect=RuntimeError("panne")):
-                disponibles = modeles_disponibles_pour_agent("claude", "max")
+                disponibles = modeles_disponibles_pour_agent("claude", "ultra")
         self.assertIn("gpt", {m["distributeur"] for m in disponibles})
 
     def test_agent_sans_modele_debloque_n_a_rien(self):
@@ -171,9 +171,9 @@ class ModelesBientot(unittest.TestCase):
 
     def test_un_modele_bientot_n_est_jamais_autorise(self):
         with patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True):
-            bientot = modeles_bientot_pour_agent("claude", "max")
+            bientot = modeles_bientot_pour_agent("claude", "ultra")
             for m in bientot:
-                self.assertFalse(modele_id_est_autorise(m["modele_id"], "claude", "max"))
+                self.assertFalse(modele_id_est_autorise(m["modele_id"], "claude", "ultra"))
 
 
 class ModelesGrok(unittest.TestCase):
@@ -189,9 +189,9 @@ class ModelesGrok(unittest.TestCase):
         self.assertEqual(ORDRE_DISTRIBUTEURS[:6], ["claude", "gpt", "gemini", "deepseek", "grok", "meta"])
         self.assertEqual(ORDRE_DISTRIBUTEURS[6:], ["zai", "alibaba", "nvidia"])
 
-    def test_grok_deux_modeles_trois_niveaux_et_bientot(self):
+    def test_grok_trois_modeles_trois_niveaux_et_bientot(self):
         config = _config_modeles_de_repli()
-        self.assertEqual(config["modeles"]["grok"]["essentiel"]["id"], "grok-4.3")
+        self.assertEqual(config["modeles"]["grok"]["pro"]["id"], "grok-build-0.1")
         self.assertEqual(config["modeles"]["grok"]["premium"]["id"], "grok-4.3")
         self.assertEqual(config["modeles"]["grok"]["max"]["id"], "grok-4.7")
         self.assertTrue(config["fournisseurs"]["grok"]["bientot"])
@@ -199,34 +199,35 @@ class ModelesGrok(unittest.TestCase):
 
     def test_grok_bientot_sans_doublon_et_jamais_autorise(self):
         with patch.dict(os.environ, {"XAI_API_KEY": "x", "DEEPSEEK_API_KEY": "x"}, clear=True):
-            bientot = modeles_bientot_pour_agent("claude", "max")
+            bientot = modeles_bientot_pour_agent("claude", "ultra")
             grok = [m["modele_id"] for m in bientot if m["distributeur"] == "grok"]
-            self.assertEqual(grok, ["grok-build-0.1", "grok-4.7", "grok-4.3"])
-            self.assertFalse(modele_id_est_autorise("grok-4.7", "claude", "max"))
+            self.assertEqual(grok, ["grok-4.7", "grok-4.3", "grok-build-0.1"])
+            self.assertFalse(modele_id_est_autorise("grok-4.7", "claude", "ultra"))
 
     def test_grok_utilisable_quand_bientot_retire_et_cle_presente(self):
         with _avec_config_supabase(lambda config: config["fournisseurs"]["grok"].update(bientot=False)):
             with patch.dict(os.environ, {"XAI_API_KEY": "x"}, clear=True):
-                disponibles = modeles_disponibles_pour_agent("gemini", "max")
+                disponibles = modeles_disponibles_pour_agent("gemini", "ultra")
                 ids = [m["modele_id"] for m in disponibles]
-                self.assertEqual(ids, ["grok-4.7", "grok-4.3"])
-                self.assertTrue(modele_id_est_autorise("grok-4.7", "gemini", "max"))
+                self.assertEqual(ids, ["grok-4.7", "grok-4.3", "grok-build-0.1"])
+                self.assertTrue(modele_id_est_autorise("grok-4.7", "gemini", "ultra"))
                 # Grok est le dernier de la hierarchie : un agent debloque a DeepSeek le voit aussi.
-                self.assertIn("grok-4.7", [m["modele_id"] for m in modeles_disponibles_pour_agent("deepseek", "max")])
+                self.assertIn("grok-4.7", [m["modele_id"] for m in modeles_disponibles_pour_agent("deepseek", "ultra")])
                 # Un agent debloque a Grok seul ne voit que Grok.
-                self.assertEqual({m["distributeur"] for m in modeles_disponibles_pour_agent("grok", "max")}, {"grok"})
+                self.assertEqual({m["distributeur"] for m in modeles_disponibles_pour_agent("grok", "ultra")}, {"grok"})
 
-    def test_grok_build_jamais_choisissable_meme_sans_bientot(self):
+    def test_grok_build_choisissable_des_le_palier_pro_sans_bientot(self):
+        # 19/11/2026, demande de Bourama : Grok Build n'est plus "specialise", il est au palier pro.
         with _avec_config_supabase(lambda config: config["fournisseurs"]["grok"].update(bientot=False)):
             with patch.dict(os.environ, {"XAI_API_KEY": "x"}, clear=True):
-                for palier in ("essentiel", "premium", "max"):
-                    self.assertFalse(modele_id_est_autorise("grok-build-0.1", "claude", palier))
-                self.assertTrue(modele_id_est_autorise("grok-build-0.1", "claude", "specialise"))
+                self.assertFalse(modele_id_est_autorise("grok-build-0.1", "claude", "essentiel"))
+                for palier in ("pro", "premium", "max", "ultra"):
+                    self.assertTrue(modele_id_est_autorise("grok-build-0.1", "claude", palier))
 
     def test_grok_sans_cle_invisible(self):
         with _avec_config_supabase(lambda config: config["fournisseurs"]["grok"].update(bientot=False)):
             with patch.dict(os.environ, {}, clear=True):
-                self.assertEqual(modeles_disponibles_pour_agent("gemini", "max"), [])
+                self.assertEqual(modeles_disponibles_pour_agent("gemini", "ultra"), [])
 
     def test_modele_grok_reconnu_et_connexion_prevue(self):
         from core.fournisseurs_llm import distributeur_pour_modele_id, _STREAMERS_PAR_DISTRIBUTEUR
@@ -280,33 +281,33 @@ class ModelesMeta(unittest.TestCase):
         self.assertEqual(intermediaire["id"], "muse-spark-open")
         self.assertTrue(intermediaire["baseten_seul"])
         self.assertEqual(config["modeles"]["meta"]["premium"]["id"], "muse-spark-1.3")
-        self.assertEqual(config["modeles"]["meta"]["max"]["id"], "muse-wonder-1.0")
+        self.assertEqual(config["modeles"]["meta"]["ultra"]["id"], "muse-wonder-1.0")
         self.assertTrue(config["fournisseurs"]["meta"]["bientot"])
         self.assertEqual(config["fournisseurs"]["meta"]["variable_cle_api"], "MODEL_API_KEY")
 
     def test_meta_bientot_wonder_en_premier_sans_doublon_et_jamais_autorise(self):
         with patch.dict(os.environ, {"MODEL_API_KEY": "x", "DEEPSEEK_API_KEY": "x"}, clear=True):
-            bientot = modeles_bientot_pour_agent("claude", "max")
+            bientot = modeles_bientot_pour_agent("claude", "ultra")
             meta = [m["modele_id"] for m in bientot if m["distributeur"] == "meta"]
             self.assertEqual(meta, ["muse-wonder-1.0", "muse-spark-1.3"])
-            self.assertFalse(modele_id_est_autorise("muse-wonder-1.0", "claude", "max"))
+            self.assertFalse(modele_id_est_autorise("muse-wonder-1.0", "claude", "ultra"))
 
     def test_meta_utilisable_quand_bientot_retire_et_cle_presente(self):
         with _avec_config_supabase(lambda config: config["fournisseurs"]["meta"].update(bientot=False)):
             with patch.dict(os.environ, {"MODEL_API_KEY": "x"}, clear=True):
-                disponibles = modeles_disponibles_pour_agent("gemini", "max")
+                disponibles = modeles_disponibles_pour_agent("gemini", "ultra")
                 ids = [m["modele_id"] for m in disponibles]
                 self.assertEqual(ids, ["muse-wonder-1.0", "muse-spark-1.3"])
-                self.assertTrue(modele_id_est_autorise("muse-wonder-1.0", "gemini", "max"))
+                self.assertTrue(modele_id_est_autorise("muse-wonder-1.0", "gemini", "ultra"))
                 # Meta est le dernier de la hierarchie : un agent debloque a Grok le voit aussi.
-                self.assertIn("muse-wonder-1.0", [m["modele_id"] for m in modeles_disponibles_pour_agent("grok", "max")])
+                self.assertIn("muse-wonder-1.0", [m["modele_id"] for m in modeles_disponibles_pour_agent("grok", "ultra")])
                 # Un agent debloque a Meta seul ne voit que Meta.
-                self.assertEqual({m["distributeur"] for m in modeles_disponibles_pour_agent("meta", "max")}, {"meta"})
+                self.assertEqual({m["distributeur"] for m in modeles_disponibles_pour_agent("meta", "ultra")}, {"meta"})
 
     def test_meta_sans_cle_invisible(self):
         with _avec_config_supabase(lambda config: config["fournisseurs"]["meta"].update(bientot=False)):
             with patch.dict(os.environ, {}, clear=True):
-                self.assertEqual(modeles_disponibles_pour_agent("gemini", "max"), [])
+                self.assertEqual(modeles_disponibles_pour_agent("gemini", "ultra"), [])
 
     def test_modele_meta_reconnu_et_connexion_prevue(self):
         from core.fournisseurs_llm import distributeur_pour_modele_id, _STREAMERS_PAR_DISTRIBUTEUR
@@ -359,9 +360,9 @@ class AccesAnticipe(unittest.TestCase):
 
     def test_adresse_autorisee_voit_et_peut_utiliser_meta(self):
         with patch.dict(os.environ, CLES_DEEPSEEK_ET_META, clear=True), _avec_acces_meta(["petitboura26@gmail.com"]):
-            disponibles = modeles_disponibles_pour_agent("claude", "max", "petitboura26@gmail.com")
-            bientot = modeles_bientot_pour_agent("claude", "max", "petitboura26@gmail.com")
-            autorise = modele_id_est_autorise("muse-spark-1.3", "claude", "max", "petitboura26@gmail.com")
+            disponibles = modeles_disponibles_pour_agent("claude", "ultra", "petitboura26@gmail.com")
+            bientot = modeles_bientot_pour_agent("claude", "ultra", "petitboura26@gmail.com")
+            autorise = modele_id_est_autorise("muse-spark-1.3", "claude", "ultra", "petitboura26@gmail.com")
         self.assertIn("meta", {m["distributeur"] for m in disponibles})
         self.assertNotIn("meta", {m["distributeur"] for m in bientot})
         self.assertTrue(autorise)
@@ -369,21 +370,21 @@ class AccesAnticipe(unittest.TestCase):
     def test_autre_adresse_ne_voit_meta_que_grise_et_ne_peut_pas_l_imposer(self):
         with patch.dict(os.environ, CLES_DEEPSEEK_ET_META, clear=True), _avec_acces_meta(["petitboura26@gmail.com"]):
             for email in ("autre@exemple.com", None, ""):
-                disponibles = modeles_disponibles_pour_agent("claude", "max", email)
-                bientot = modeles_bientot_pour_agent("claude", "max", email)
+                disponibles = modeles_disponibles_pour_agent("claude", "ultra", email)
+                bientot = modeles_bientot_pour_agent("claude", "ultra", email)
                 self.assertNotIn("meta", {m["distributeur"] for m in disponibles})
                 self.assertIn("meta", {m["distributeur"] for m in bientot})
-                self.assertFalse(modele_id_est_autorise("muse-spark-1.3", "claude", "max", email))
-                self.assertFalse(modele_id_est_autorise("muse-wonder-1.0", "claude", "max", email))
+                self.assertFalse(modele_id_est_autorise("muse-spark-1.3", "claude", "ultra", email))
+                self.assertFalse(modele_id_est_autorise("muse-wonder-1.0", "claude", "ultra", email))
 
     def test_adresse_comparee_sans_tenir_compte_des_majuscules(self):
         with patch.dict(os.environ, CLES_DEEPSEEK_ET_META, clear=True), _avec_acces_meta(["petitboura26@gmail.com"]):
-            self.assertTrue(modele_id_est_autorise("muse-wonder-1.0", "claude", "max", "  PetitBoura26@Gmail.com "))
+            self.assertTrue(modele_id_est_autorise("muse-wonder-1.0", "claude", "ultra", "  PetitBoura26@Gmail.com "))
 
     def test_sans_cle_api_meme_une_adresse_autorisee_ne_peut_pas_utiliser_meta(self):
         with patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True), _avec_acces_meta(["petitboura26@gmail.com"]):
-            disponibles = modeles_disponibles_pour_agent("claude", "max", "petitboura26@gmail.com")
-            bientot = modeles_bientot_pour_agent("claude", "max", "petitboura26@gmail.com")
+            disponibles = modeles_disponibles_pour_agent("claude", "ultra", "petitboura26@gmail.com")
+            bientot = modeles_bientot_pour_agent("claude", "ultra", "petitboura26@gmail.com")
         self.assertNotIn("meta", {m["distributeur"] for m in disponibles})
         # Sans clé, Meta reste affiché grisé : jamais en double, jamais choisissable.
         self.assertIn("meta", {m["distributeur"] for m in bientot})
