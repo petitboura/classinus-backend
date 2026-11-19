@@ -354,6 +354,7 @@ MESSAGES_FR: dict[str, str] = {
     "LISTE_ATTENTE_PROFIL_INVALIDE": "Choisis ton profil dans la liste.",
     "LISTE_ATTENTE_CONSENTEMENT_REQUIS": "Coche la case de consentement pour rejoindre la liste.",
     "LISTE_ATTENTE_MODELE_INVALIDE": "Ce modèle n'est pas valide.",
+    "LISTE_ATTENTE_MOYEN_PAIEMENT_INVALIDE": "Choisis un des moyens de paiement proposés.",
     "LISTE_ATTENTE_ETAPE_INVALIDE": "Cette étape n'est pas valide.",
     "LISTE_ATTENTE_ECHEC": "Impossible d'enregistrer ton inscription pour le moment. Réessaie dans un instant.",
     # Skills autonomes (23/10/2026), gestionnaire de skills avec fichiers.
@@ -730,6 +731,7 @@ MESSAGES_EN: dict[str, str] = {
     "LISTE_ATTENTE_PROFIL_INVALIDE": "Choose your profile from the list.",
     "LISTE_ATTENTE_CONSENTEMENT_REQUIS": "Tick the consent box to join the list.",
     "LISTE_ATTENTE_MODELE_INVALIDE": "This model is not valid.",
+    "LISTE_ATTENTE_MOYEN_PAIEMENT_INVALIDE": "Choose one of the payment methods shown.",
     "LISTE_ATTENTE_ETAPE_INVALIDE": "This step is not valid.",
     "LISTE_ATTENTE_ECHEC": "Unable to save your sign up right now. Try again in a moment.",
     "TYPE_DE_SIGNALEMENT_INVALIDE": "Invalid report type.",

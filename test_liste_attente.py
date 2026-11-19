@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 from core import liste_attente
 
 
-def faux_supabase(paliers=None, existant=None):
+def faux_supabase(paliers=None, existant=None, moyens=None):
     """Faux client Supabase : memorise les ecritures par table et sert les paliers demandes."""
     paliers = paliers if paliers is not None else [{"prix_usd": 10, "credit_usd": 8, "ordre": 1},
                                                     {"prix_usd": 17, "credit_usd": 15, "ordre": 2},
@@ -21,7 +21,11 @@ def faux_supabase(paliers=None, existant=None):
     def table(nom):
         t = MagicMock()
         chaine = t.select.return_value.eq.return_value.order.return_value
-        chaine.execute.return_value = MagicMock(data=paliers)
+        chaine.execute.return_value = MagicMock(
+            data=(moyens if moyens is not None else [{"id": "carte", "ordre": 1}])
+            if nom == "moyens_paiement_liste_attente"
+            else paliers
+        )
         # Inscription deja presente de l'utilisateur (liste d'attente unique).
         t.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(
             data=existant or []
@@ -88,6 +92,20 @@ class TestInscription(unittest.TestCase):
         with self.assertRaises(liste_attente.ErreurListeAttente) as c:
             self.inscrire(client, profil="autre")
         self.assertEqual(c.exception.code, "LISTE_ATTENTE_PROFIL_INVALIDE")
+
+    def test_profil_facultatif_et_moyen_de_paiement_enregistre(self):
+        client, ecritures = faux_supabase()
+        self.inscrire(client, profil=None, moyen_paiement=" carte ")
+        ligne = ecritures[("liste_attente_modeles", "insert")][0]
+        self.assertIsNone(ligne["profil"])
+        self.assertEqual(ligne["moyen_paiement"], "carte")
+
+    def test_moyen_de_paiement_inconnu_refuse(self):
+        client, ecritures = faux_supabase()
+        with self.assertRaises(liste_attente.ErreurListeAttente) as c:
+            self.inscrire(client, profil=None, moyen_paiement="troc")
+        self.assertEqual(c.exception.code, "LISTE_ATTENTE_MOYEN_PAIEMENT_INVALIDE")
+        self.assertNotIn(("liste_attente_modeles", "insert"), ecritures)
 
     def test_sans_consentement_refuse(self):
         client, ecritures = faux_supabase()

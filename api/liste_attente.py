@@ -25,12 +25,14 @@ def _lever(e: liste_attente.ErreurListeAttente):
 class InscriptionPayload(BaseModel):
     modele_id: str
     palier_prix: int
-    profil: str
+    # Facultatif depuis le parcours de paiement (19/11/2026) ; refuse s'il est fourni et inconnu.
+    profil: Optional[str] = None
     consentement: bool
     pays: Optional[str] = None
     whatsapp: Optional[str] = None
     langue: Optional[str] = None
     source: Optional[str] = None
+    moyen_paiement: Optional[str] = None
 
 
 class EvenementPayload(BaseModel):
@@ -70,6 +72,7 @@ def s_inscrire(request: Request, payload: InscriptionPayload, utilisateur=Depend
             whatsapp=payload.whatsapp,
             langue=payload.langue,
             source=payload.source,
+            moyen_paiement=payload.moyen_paiement,
         )
     except liste_attente.ErreurListeAttente as e:
         _lever(e)

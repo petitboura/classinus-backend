@@ -31,6 +31,7 @@ SOURCES = ("web", "android", "ios", "pc")
 LONGUEUR_MAX_MODELE_ID = 120
 LONGUEUR_MAX_PAYS = 80
 LONGUEUR_MAX_WHATSAPP = 32
+LONGUEUR_MAX_MOYEN_PAIEMENT = 40
 PREFIXE_TEXTES = "attente_"
 
 
@@ -78,6 +79,26 @@ def lister_paliers() -> list[dict]:
         logging.error(f"ERREUR SUPABASE (lecture paliers liste d'attente) : {e}")
         raise ErreurListeAttente("LISTE_ATTENTE_ECHEC", 500)
     return res.data or []
+
+
+def lister_moyens_paiement() -> list[str]:
+    """
+    Identifiants des moyens de paiement proposes apres le clic sur Payer (19/11/2026, demande de Bourama).
+    La liste vit dans la table moyens_paiement_liste_attente, modifiable sans code. Un echec de lecture ne
+    doit jamais empecher la page de s'afficher : on logue et on renvoie une liste vide.
+    """
+    try:
+        res = (
+            supabase.table("moyens_paiement_liste_attente")
+            .select("id, ordre")
+            .eq("actif", True)
+            .order("ordre")
+            .execute()
+        )
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (lecture moyens de paiement liste d'attente) : {e}")
+        return []
+    return [ligne["id"] for ligne in (res.data or []) if ligne.get("id")]
 
 
 def lire_textes() -> dict:
@@ -159,6 +180,7 @@ def charger_config(user_id: str | None) -> dict:
         "textes": lire_textes(),
         "inscription": lire_inscription(user_id) if user_id else None,
         "profils": list(PROFILS),
+        "moyens_paiement": lister_moyens_paiement(),
         "modeles": lister_modeles_publics(),
     }
 
@@ -174,16 +196,21 @@ def inscrire(
     whatsapp=None,
     langue=None,
     source=None,
+    moyen_paiement=None,
 ) -> dict:
     """Cree ou met a jour l'unique inscription de l'utilisateur ; modele_id est le modele clique."""
     modele = _modele_id_valide(modele_id)
-    if profil not in PROFILS:
+    # Le profil est facultatif depuis le parcours de paiement (19/11/2026) : absent, on n'en garde pas.
+    if profil is not None and profil not in PROFILS:
         raise ErreurListeAttente("LISTE_ATTENTE_PROFIL_INVALIDE")
     if consentement is not True:
         raise ErreurListeAttente("LISTE_ATTENTE_CONSENTEMENT_REQUIS")
     prix_valides = {p["prix_usd"] for p in lister_paliers()}
     if palier_prix not in prix_valides:
         raise ErreurListeAttente("LISTE_ATTENTE_PALIER_INVALIDE")
+    moyen = _nettoyer(moyen_paiement, LONGUEUR_MAX_MOYEN_PAIEMENT)
+    if moyen is not None and moyen not in lister_moyens_paiement():
+        raise ErreurListeAttente("LISTE_ATTENTE_MOYEN_PAIEMENT_INVALIDE")
 
     maintenant = datetime.now(timezone.utc).isoformat()
     ligne = {
@@ -192,6 +219,7 @@ def inscrire(
         "palier_prix": palier_prix,
         "profil": profil,
         "pays": _nettoyer(pays, LONGUEUR_MAX_PAYS),
+        "moyen_paiement": moyen,
         "whatsapp": _nettoyer(whatsapp, LONGUEUR_MAX_WHATSAPP),
         "langue": _langue(langue),
         "source": _source(source),
