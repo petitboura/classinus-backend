@@ -310,29 +310,49 @@ if sam_disponible():
 # (retour de Bourama, 08/11/2026). Ici c'est le modèle qui choisit lesquelles
 # s'affichent et où, en les écrivant en markdown dans son message : rien ne
 # s'affiche automatiquement. Ne PAS renommer la clé en "images".
+# Recherche d'images existantes sur plusieurs sources web.
+# La clé images_trouvees reste volontairement distincte de "images" :
+# l'IA choisit les images qui s'affichent, au lieu d'afficher tous les résultats.
 @mcp_generation.tool()
-def rechercher_image(requete: str) -> str:
+def rechercher_image(requete: str, nombre: int = 40, page: int = 1) -> str:
     """
-    Cherche des images déjà existantes sur le web à partir de mots-clés
-    (photos, illustrations, schémas...). Renvoie un JSON listant les images
-    trouvées (titre, url, credit). RIEN ne s'affiche automatiquement : seules
-    les images que tu écris dans ta réponse sont vues par l'utilisateur. Les
-    résultats peuvent être sans rapport avec la demande : lis chaque titre et
-    garde UNIQUEMENT celles qui correspondent vraiment à ce que l'utilisateur
-    a demandé. Si aucune ne convient, n'en place aucune et dis-le simplement,
-    sans en montrer une au hasard. Pour afficher une image, écris-la en
-    markdown ![titre](url) avec l'url exacte du résultat, à l'endroit de ton
-    texte où tu en parles. Plusieurs images écrites à la suite, sur des lignes
-    consécutives sans ligne vide entre elles, s'affichent côte à côte dans une
-    rangée que l'utilisateur peut faire défiler ; sépare-les par une ligne
-    vide pour les mettre l'une sous l'autre. N'écris JAMAIS
-    "[Image jointe : ...]" : ce format ne s'affiche pas.
+    Recherche des images existantes sur plusieurs sources du web, interrogées
+    en parallèle. Par défaut, renvoie jusqu'à 40 résultats. nombre accepte
+    une valeur de 1 à 100 et page commence à 1. Pour découvrir davantage de
+    résultats, rappelle cet outil avec page=2, puis page=3, etc.
+
+    Chaque résultat fournit titre, url, miniature, credit et, si disponible,
+    source_url/source_name/source_domain. source_url est la page web d'origine
+    de l'image, pas le moteur de recherche ni le service qui a interrogé l'API.
+
+    RIEN ne s'affiche automatiquement. Lis les titres et les informations de
+    chaque résultat, puis garde UNIQUEMENT les images qui correspondent
+    réellement à la demande. Si aucune ne convient, n'en place aucune et
+    explique qu'aucun résultat pertinent n'a été trouvé.
+
+    Pour afficher une image, utilise exactement son URL et transmets aussi
+    sa page d'origine dans le titre Markdown :
+    ![titre](url "source_url")
+    Le petit icône affiché sur l'image ouvrira cette page d'origine. Ne remplace
+    jamais source_url par le nom du moteur, du fournisseur ou de l'API.
     """
     try:
-        images = _rechercher_images(requete)
+        nombre = max(1, min(int(nombre), 100))
+        page = max(1, int(page))
+        images = _rechercher_images(requete, nombre=nombre, page=page)
         if not images:
             return "Aucune image trouvée pour cette recherche."
-        return json.dumps({"images_trouvees": images}, ensure_ascii=False)
+        return json.dumps(
+            {
+                "images_trouvees": images,
+                "page": page,
+                "nombre": nombre,
+                "page_suivante_suggeree": page + 1 if len(images) >= nombre else None,
+            },
+            ensure_ascii=False,
+        )
+    except (TypeError, ValueError):
+        return "Erreur : nombre ou page invalide."
     except Exception as e:
         logging.error(f"ERREUR outil recherche image : {e}")
         return "Erreur : la recherche d'image a échoué, réessaie."
