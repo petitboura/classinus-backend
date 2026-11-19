@@ -317,6 +317,9 @@ def _chercher_via_tavily(requete, nombre, cle, page=1):
             "chaine": None,
             "duree": None,
             "id_video": id_video,
+            "source": "YouTube",
+            "source_url": "https://www.youtube.com",
+            "fournisseur_recherche": "Tavily",
         })
     return resultats[:nombre]
 
@@ -393,7 +396,7 @@ def rechercher_videos(requete, nombre=30, page=1):
             logging.warning(f"RECHERCHE VIDEO : {nom} indisponible ({_masquer_cle(e)}).")
 
     # Tavily reste le dernier recours et peut trouver des vidéos hors YouTube.
-    if len(resultats) < nombre:
+    if len(resultats) < nombre and page == 1:
         cle_tavily = os.environ.get("TAVILY_API_KEY")
         if cle_tavily:
             try:
