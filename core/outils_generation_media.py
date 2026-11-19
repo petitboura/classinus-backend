@@ -373,28 +373,22 @@ def rechercher_image(requete: str, nombre: int = 40, page: int = 1) -> str:
 # renommer la clé en "videos". Les vidéos ne sont pas enregistrées en
 # bibliothèque (ce sont des liens trouvés, pas un contenu créé).
 @mcp_generation.tool()
-def rechercher_video(requete: str) -> str:
+def rechercher_video(requete: str, nombre: int = 30, page: int = 1) -> str:
     """
-    Cherche des vidéos YouTube à partir de mots-clés (cours, tutoriels,
-    explications, conférences...). À utiliser quand l'utilisateur demande
-    une vidéo, un tuto ou quelque chose à regarder. Renvoie un JSON listant
-    les vidéos trouvées (titre, url, chaîne, durée). Pour savoir ce qui est
-    DIT dans une vidéo (résumer, répondre à une question dessus), appelle
-    ensuite lire_video avec son url. RIEN ne s'affiche automatiquement :
-    seules les vidéos dont tu écris le lien dans ta réponse sont vues par
-    l'utilisateur. Les résultats peuvent être sans rapport avec la demande :
-    lis chaque titre et chaque chaîne, et garde UNIQUEMENT les vidéos qui
-    correspondent vraiment à ce que l'utilisateur a demandé. Si aucune ne
-    convient, n'en place aucune et dis-le simplement. Pour en afficher une,
-    écris son lien en markdown [titre](url) avec l'url exacte du résultat, à
-    l'endroit de ton texte où tu en parles : il s'affiche en grande carte
-    lisible sur place. Plusieurs liens écrits à la suite, sur des lignes
-    consécutives sans ligne vide entre elles, s'affichent côte à côte dans
-    une rangée que l'utilisateur peut faire défiler ; sépare-les par une
-    ligne vide pour les mettre l'un sous l'autre.
+    Recherche des vidéos sur YouTube et plusieurs moteurs vidéo du web.
+    30 résultats par défaut, jusqu'à 50 par page. Sources possibles :
+    YouTube, Vimeo, Dailymotion, TikTok et autres plateformes indexées.
+    Les moteurs payants ne sont appelés que si les sources précédentes
+    ne remplissent pas la page. La pagination est disponible via page.
+
+    Renvoie un JSON {"videos_trouvees": [...]} : rien ne s'affiche automatiquement.
+    Lis les titres, chaînes et plateformes puis garde seulement les vidéos
+    pertinentes. Affiche-les avec [titre — plateforme](url), en utilisant
+    l'URL exacte. Plusieurs liens consécutifs s'affichent dans une rangée.
+    Pour comprendre le contenu d'une vidéo YouTube, appelle lire_video.
     """
     try:
-        videos = _rechercher_videos(requete)
+        videos = _rechercher_videos(requete, nombre=nombre, page=page)
         if not videos:
             return "Aucune vidéo trouvée pour cette recherche."
         return json.dumps({"videos_trouvees": videos}, ensure_ascii=False)
