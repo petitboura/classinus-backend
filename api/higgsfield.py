@@ -8,7 +8,6 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from api.auth import utilisateur_courant
@@ -19,7 +18,6 @@ from core.higgsfield_requetes import ErreurHiggsfield, construire_requete_genjut
 from core.generation_video_higgsfield import annuler_generation, estimer_cout, higgsfield_api_disponible, lancer_generation
 from core.limitation_debit import limiteur
 from core import higgsfield_suivi
-from core import higgsfield_telechargement
 from core import higgsfield_marketing_studio as marketing_studio
 from core.outils_generation_commun import _supabase_memoire
 
@@ -106,6 +104,7 @@ def lancer_image(request: Request, demande: DemandeImage, utilisateur=Depends(ut
     _verifier_disponible()
     try:
         adresse, corps = construire_requete_image(demande.modele, demande.prompt, demande.format_image, demande.qualite, demande.images_reference, demande.style_id)
+        reserver_generation(_supabase_memoire, utilisateur.id, "image")
         resultat = lancer_generation(adresse, corps)
         higgsfield_suivi.enregistrer(utilisateur.id, resultat["request_id"], demande.titre, "image")
         return {"request_id": resultat["request_id"], "titre": demande.titre}
@@ -165,19 +164,16 @@ def lancer_marketing_studio(request: Request, demande: DemandeMarketingStudio, u
             demande.preset_id, demande.preset_type, demande.preset_nom, media_produit, media_avatar,
             demande.url_marque, demande.prompt, demande.format_image,
         )
-        media = marketing_studio.media_du_type(demande.preset_type)
-        if media != "image":
-            # Les images n'ont pas de limite par jour ; les videos gardent celle du compte partage.
-            try:
-                reserver_generation(_supabase_memoire, utilisateur.id, "mcp")
-            except ErreurHiggsfield as e:
-                if "Limite du jour" in str(e):
-                    from core.higgsfield_limites import limite_du_jour
-                    raise marketing_studio.ErreurMarketingStudio("MARKETING_LIMITE_JOUR", limite=limite_du_jour("mcp")) from e
-                raise marketing_studio.ErreurMarketingStudio("MARKETING_LIMITE_INDISPONIBLE") from e
+        try:
+            reserver_generation(_supabase_memoire, utilisateur.id, "mcp")
+        except ErreurHiggsfield as e:
+            if "Limite du jour" in str(e):
+                from core.higgsfield_limites import limite_du_jour
+                raise marketing_studio.ErreurMarketingStudio("MARKETING_LIMITE_JOUR", limite=limite_du_jour("mcp")) from e
+            raise marketing_studio.ErreurMarketingStudio("MARKETING_LIMITE_INDISPONIBLE") from e
         job_id = marketing_studio.creer(arguments)
         request_id = marketing_studio.PREFIXE_SUIVI + job_id
-        higgsfield_suivi.enregistrer(utilisateur.id, request_id, demande.titre, media)
+        higgsfield_suivi.enregistrer(utilisateur.id, request_id, demande.titre, "video")
         return {"request_id": request_id, "titre": demande.titre}
     except marketing_studio.ErreurMarketingStudio as e:
         raise erreur_api(400, e.code, **e.params)
@@ -202,10 +198,7 @@ def statut(request_id: str, utilisateur=Depends(utilisateur_courant)):
         if ligne["etat"] == "en_cours":
             higgsfield_suivi.traiter_une_generation(utilisateur.id, request_id)
             ligne = higgsfield_suivi.obtenir(utilisateur.id, request_id) or ligne
-        return {
-            "etat": ligne["etat"], "etape": ligne.get("etape", "creation"), "url": ligne["url"], "erreur": ligne["erreur"],
-            "telechargement_debloque": higgsfield_telechargement.est_debloque(ligne),
-        }
+        return {"etat": ligne["etat"], "etape": ligne.get("etape", "creation"), "url": ligne["url"], "erreur": ligne["erreur"]}
     except HTTPException:
         raise
     except Exception as e:
@@ -217,51 +210,10 @@ def statut(request_id: str, utilisateur=Depends(utilisateur_courant)):
 def generations(limite: int = 20, utilisateur=Depends(utilisateur_courant)):
     """Générations récentes de l'utilisateur (en cours et terminées), pour retrouver ce qui a tourné app fermée."""
     try:
-        lignes = higgsfield_suivi.lister(utilisateur.id, limite)
-        for ligne in lignes:
-            ligne["telechargement_debloque"] = higgsfield_telechargement.est_debloque(ligne)
-        return {"generations": lignes}
+        return {"generations": higgsfield_suivi.lister(utilisateur.id, limite)}
     except Exception as e:
         logging.error(f"ERREUR Higgsfield liste generations user {utilisateur.id}: {e}")
         raise erreur_api(500, "IMPOSSIBLE_STATUT_HIGGSFIELD")
-
-
-@router.post("/partage-termine/{request_id}")
-@limiteur.limit("30/minute")
-def partage_termine(request: Request, request_id: str, utilisateur=Depends(utilisateur_courant)):
-    """L'appli signale que l'utilisateur a terminé le partage de son image : le téléchargement se débloque."""
-    try:
-        if higgsfield_suivi.obtenir(utilisateur.id, request_id) is None:
-            raise erreur_api(404, "GENERATION_HIGGSFIELD_INTROUVABLE")
-        if not higgsfield_telechargement.marquer_partage_termine(utilisateur.id, request_id):
-            raise erreur_api(400, "PARTAGE_IMAGE_INVALIDE")
-        return {"telechargement_debloque": True}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.error(f"ERREUR Higgsfield partage termine {request_id}: {e}")
-        raise erreur_api(500, "IMPOSSIBLE_STATUT_HIGGSFIELD")
-
-
-@router.get("/telecharger/{request_id}")
-@limiteur.limit("30/minute")
-def telecharger(request: Request, request_id: str, utilisateur=Depends(utilisateur_courant)):
-    """Télécharge le résultat d'une génération. Une image exige un partage terminé, la vidéo non."""
-    try:
-        ligne = higgsfield_suivi.obtenir(utilisateur.id, request_id)
-        if ligne is None:
-            raise erreur_api(404, "GENERATION_HIGGSFIELD_INTROUVABLE")
-        if ligne["etat"] != "terminee" or not ligne.get("url"):
-            raise erreur_api(409, "IMPOSSIBLE_TELECHARGER_HIGGSFIELD")
-        if not higgsfield_telechargement.est_debloque(ligne):
-            raise erreur_api(403, "TELECHARGEMENT_PARTAGE_REQUIS")
-        contenu, type_mime, nom = higgsfield_telechargement.lire_fichier(ligne)
-        return Response(content=contenu, media_type=type_mime, headers={"Content-Disposition": f'attachment; filename="{nom}"'})
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.error(f"ERREUR Higgsfield telecharger {request_id}: {e}")
-        raise erreur_api(500, "IMPOSSIBLE_TELECHARGER_HIGGSFIELD")
 
 
 @router.post("/annuler/{request_id}")
