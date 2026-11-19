@@ -17,8 +17,24 @@ doublons et conserve une provenance distincte pour chaque image.
 | Europeana | `EUROPEANA_API_KEY` | Collections culturelles et historiques |
 | Google Images via Serper | `SERPER_API_KEY` | Images indexées sur le Web |
 | Google Images via SerpApi | `SERPAPI_API_KEY` | Images indexées sur le Web |
+| Google Images via SearchApi.io | `SEARCHAPI_API_KEY` | Images indexées sur le Web, sources éditeurs et pagination |
 | Pixabay | `PIXABAY_API_KEY` | Banque d'images et illustrations |
 | Pexels | `PEXELS_API_KEY` | Banque de photographies |
+
+Variables de clés prises en charge :
+
+- `SERPER_API_KEY` : Serper
+- `SERPAPI_API_KEY` : SerpApi
+- `SEARCHAPI_API_KEY` : SearchApi.io
+- `SMITHSONIAN_API_KEY` : Smithsonian Open Access
+- `EUROPEANA_API_KEY` : Europeana (envoyée dans le header recommandé `X-Api-Key`)
+- `FLICKR_API_KEY` : Flickr
+- `PIXABAY_API_KEY` et `PEXELS_API_KEY` : banques d'images, si activées
+
+NASA est interrogé via `images-api.nasa.gov`, l'API publique NASA Image and
+Video Library : cette recherche ne demande pas de clé et n'utilise pas
+`NASA_API_KEY`. La clé du portail `api.nasa.gov` concerne d'autres API NASA,
+pas cet endpoint de recherche d'images.
 
 Une source qui nécessite une clé absente est ignorée. Une panne ou un quota
 dépassé sur une source ne bloque pas les autres.
