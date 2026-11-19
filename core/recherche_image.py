@@ -27,6 +27,7 @@ _URL_WIKIMEDIA = "https://commons.wikimedia.org/w/api.php"
 _URL_OPENVERSE = "https://api.openverse.org/v1/images/"
 _URL_SERPER = "https://google.serper.dev/images"
 _URL_SERPAPI = "https://serpapi.com/search.json"
+_URL_SEARCHAPI = "https://www.searchapi.io/api/v1/search"
 _URL_FLICKR = "https://www.flickr.com/services/rest/"
 _URL_SMITHSONIAN = "https://api.si.edu/openaccess/api/v1.0/search"
 _URL_EUROPEANA = "https://api.europeana.eu/record/v2/search.json"
@@ -42,7 +43,7 @@ _MAX_WORKERS = 8
 
 _ORDRE_PAR_DEFAUT = (
     "wikimedia,openverse,loc,flickr,smithsonian,europeana,nasa,"
-    "serper,serpapi,pixabay,pexels"
+    "serper,serpapi,searchapi,pixabay,pexels"
 )
 _CACHE_SECONDES_PAR_DEFAUT = 259200
 _CACHE_MAX_PAR_DEFAUT = 500
@@ -333,9 +334,8 @@ def _chercher_via_europeana(requete: str, nombre: int, cle: str, page: int = 1) 
     taille = min(nombre, 100)
     reponse = requests.get(
         _URL_EUROPEANA,
-        headers={"User-Agent": _AGENT_UTILISATEUR},
+        headers={"User-Agent": _AGENT_UTILISATEUR, "X-Api-Key": cle},
         params={
-            "wskey": cle,
             "query": requete,
             "rows": taille,
             "start": (page - 1) * taille + 1,
@@ -497,6 +497,41 @@ def _chercher_via_serpapi(requete: str, nombre: int, cle: str, page: int = 1) ->
     return sortie
 
 
+def _chercher_via_searchapi(requete: str, nombre: int, cle: str, page: int = 1) -> list[dict]:
+    """Google Images via SearchApi.io : source.link = page réellement publiée."""
+    reponse = requests.get(
+        _URL_SEARCHAPI,
+        headers={
+            "Authorization": f"Bearer {cle}",
+            "User-Agent": _AGENT_UTILISATEUR,
+        },
+        params={
+            "engine": "google_images",
+            "q": requete,
+            "page": page,
+            "safe": "active",
+        },
+        timeout=_DELAI_NOUVEAUX_FOURNISSEURS,
+    )
+    reponse.raise_for_status()
+    sortie = []
+    for item in reponse.json().get("images", []):
+        source = item.get("source") or {}
+        original = item.get("original") or {}
+        resultat = _resultat(
+            item.get("title") or requete,
+            original.get("link"),
+            item.get("thumbnail"),
+            source.get("name"),
+            source.get("link"),
+        )
+        if resultat:
+            sortie.append(resultat)
+        if len(sortie) >= nombre:
+            break
+    return sortie
+
+
 # nom -> (fonction, variable d'environnement de la clé, ou None si sans clé)
 _FOURNISSEURS = {
     "wikimedia": (_chercher_via_wikimedia, None),
@@ -508,6 +543,7 @@ _FOURNISSEURS = {
     "nasa": (_chercher_via_nasa, None),
     "serper": (_chercher_via_serper, "SERPER_API_KEY"),
     "serpapi": (_chercher_via_serpapi, "SERPAPI_API_KEY"),
+    "searchapi": (_chercher_via_searchapi, "SEARCHAPI_API_KEY"),
     "pixabay": (_chercher_via_pixabay, "PIXABAY_API_KEY"),
     "pexels": (_chercher_via_pexels, "PEXELS_API_KEY"),
 }
