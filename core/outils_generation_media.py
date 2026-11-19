@@ -330,6 +330,10 @@ def rechercher_image(requete: str, nombre: int = 40, page: int = 1) -> str:
     réellement à la demande. Si aucune ne convient, n'en place aucune et
     explique qu'aucun résultat pertinent n'a été trouvé.
 
+    Lorsque l'utilisateur demande beaucoup d'images, affiche un ensemble
+    généreux de résultats pertinents, jusqu'à 30 ou 40 si la demande le justifie,
+    plutôt que de limiter arbitrairement la sélection à quelques images.
+
     Pour afficher une image, utilise exactement son URL et transmets aussi
     sa page d'origine dans le titre Markdown :
     ![titre](url "source_url")
@@ -347,7 +351,7 @@ def rechercher_image(requete: str, nombre: int = 40, page: int = 1) -> str:
                 "images_trouvees": images,
                 "page": page,
                 "nombre": nombre,
-                "page_suivante_suggeree": page + 1 if len(images) >= nombre else None,
+                "page_suivante_suggeree": page + 1,
             },
             ensure_ascii=False,
         )
