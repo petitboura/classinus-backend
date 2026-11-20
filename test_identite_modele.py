@@ -54,9 +54,9 @@ class TestBlocIdentite(unittest.TestCase):
         config = _config_modeles_de_repli()
         config["fournisseurs"]["gpt"]["nom_affiche"] = None
         with patch.object(_fournisseurs_llm_utilise(), "_config_modeles", return_value=config):
-            bloc = identite_modele.bloc_identite("gpt-6.1-sol")
+            bloc = identite_modele.bloc_identite("gpt-6.2-sol")
 
-        self.assertIn("propulsé par OpenAI, modèle GPT-6.1 Sol", bloc)
+        self.assertIn("propulsé par OpenAI, modèle GPT-6.2 Sol", bloc)
 
     def test_classinus_est_le_nom_de_l_application(self):
         bloc = identite_modele.bloc_identite("openai/gpt-oss-120b")

@@ -65,6 +65,9 @@ class Efforts(unittest.TestCase):
     def test_chaque_fournisseur_a_ses_niveaux(self):
         self.assertEqual(efforts_pour_modele("claude-sonnet-5-5", "claude"), ["low", "medium", "high", "xhigh", "max"])
         self.assertEqual(efforts_pour_modele("gpt-6-astra", "gpt"), ["low", "medium", "high", "xhigh", "max"])
+        for modele in ("gpt-6.2-astra", "gpt-6.2-sol"):
+            self.assertEqual(efforts_pour_modele(modele, "gpt"), ["low", "medium", "high", "xhigh", "max"])
+            self.assertEqual(effort_valide_pour_modele(modele, "none", "gpt"), "low")
         self.assertEqual(efforts_pour_modele("gpt-6-luna", "gpt")[0], "none")
         self.assertEqual(efforts_pour_modele("grok-4.7", "grok"), ["low", "medium", "high", "xhigh"])
         self.assertEqual(efforts_pour_modele("grok-4.3", "grok")[0], "none")
