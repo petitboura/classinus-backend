@@ -54,6 +54,10 @@ EFFORTS_PAR_FOURNISSEUR = {
 EFFORTS_PAR_PREFIXE_MODELE = (
     ("claude-sonnet-5-5", ("low", "medium", "high", "xhigh", "max")),
     ("claude-opus-5-5", ("low", "medium", "high", "xhigh", "max")),
+    # GPT-6.2 Astra et Sol (sortis le 17/11/2026, doc OpenAI verifiee le 21/11/2026) : low a max,
+    # "none" refuse par l'API (erreur 400). Les anciennes regles gpt-6-astra et gpt-6.1-sol restent plus bas.
+    ("gpt-6.2-astra", ("low", "medium", "high", "xhigh", "max")),
+    ("gpt-6.2-sol", ("low", "medium", "high", "xhigh", "max")),
     ("gpt-6-luna", ("none", "low", "medium", "high", "xhigh", "max")),
     ("gpt-6-astra", ("low", "medium", "high", "xhigh", "max")),
     ("gpt-6.1-sol", ("low", "medium", "high", "xhigh", "max")),

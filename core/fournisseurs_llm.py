@@ -64,11 +64,12 @@ HIERARCHIE_MODELES = {
     "gpt": {
         "pro": {"id": "gpt-6-luna", "label": "GPT-6 Luna"},
         "premium": {"id": "gpt-6.1-terra", "label": "GPT-6.1 Terra"},
-        "max": {"id": "gpt-6.1-sol", "label": "GPT-6.1 Sol"},
-        "ultra": {"id": "gpt-6-astra", "label": "GPT-6 Astra"},
+        "max": {"id": "gpt-6.2-sol", "label": "GPT-6.2 Sol"},
+        "ultra": {"id": "gpt-6.2-astra", "label": "GPT-6.2 Astra"},
     },
     "gemini": {
-        "pro": {"id": "gemini-3.5-flash-lite", "label": "Gemini 3.5 Flash-Lite"},
+        # 21/11/2026, demande de Bourama : Gemini 3.5 Flash-Lite masque du panneau (actif = false dans
+        # Supabase, la ligne reste), donc plus de modele au palier pro pour Gemini.
         "premium": {"id": "gemini-4-hydrogen", "label": "Gemini 4 Hydrogen"},
         "max": {"id": "gemini-4-argon", "label": "Gemini 4 Argon"},
         "ultra": {"id": "gemini-4-carbon", "label": "Gemini 4 Carbon"},
