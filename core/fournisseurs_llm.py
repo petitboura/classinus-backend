@@ -68,10 +68,12 @@ HIERARCHIE_MODELES = {
         "ultra": {"id": "gpt-6.2-astra", "label": "GPT-6.2 Astra"},
     },
     "gemini": {
-        # 21/11/2026, demande de Bourama : Gemini 3.5 Flash-Lite masque du panneau (actif = false dans
-        # Supabase, la ligne reste), donc plus de modele au palier pro pour Gemini.
-        "premium": {"id": "gemini-4-hydrogen", "label": "Gemini 4 Hydrogen"},
-        "max": {"id": "gemini-4-argon", "label": "Gemini 4 Argon"},
+        # 21/11/2026, demande de Bourama : Gemini 4 Neon prend le palier max, Argon descend au palier
+        # premium, Hydrogen au palier pro. Gemini 3.5 Flash-Lite est masque (actif = false dans Supabase,
+        # la ligne reste, rangee au palier essentiel pour liberer la place de Hydrogen).
+        "pro": {"id": "gemini-4-hydrogen", "label": "Gemini 4 Hydrogen"},
+        "premium": {"id": "gemini-4-argon", "label": "Gemini 4 Argon"},
+        "max": {"id": "gemini-4-neon", "label": "Gemini 4 Neon"},
         "ultra": {"id": "gemini-4-carbon", "label": "Gemini 4 Carbon"},
     },
     "grok": {
