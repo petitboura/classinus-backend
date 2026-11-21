@@ -51,8 +51,8 @@ class TestMessagesEn(unittest.TestCase):
 
     def test_limites_et_libelles(self):
         self.assertEqual(
-            message_en("Limite du jour atteinte (3 vidéos par jour). Dis-le à l'utilisateur : il pourra en refaire demain."),
-            "Daily limit reached (3 videos per day). You can make more tomorrow.",
+            message_en("Tu as atteint la limite quotidienne de 3 vidéos. Le quota est compté en UTC ; tu pourras recommencer après son renouvellement."),
+            "You have reached the daily limit of 3 videos. The quota is counted in UTC; you can try again after it resets.",
         )
         self.assertEqual(message_en("Maximum 8 pour : les images de référence."), "Maximum 8 for: the reference images.")
         self.assertEqual(message_en("La vidéo source doit être une adresse publique en https."), "The source video must be a public https address.")

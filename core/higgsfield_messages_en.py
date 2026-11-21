@@ -46,6 +46,7 @@ _MOTIFS: list[tuple[str, str]] = [
     (r"Le modèle (?P<cle>.+) n'accepte pas de preset_id : utilise genjutsu-restyle pour les styles\.", "The model {cle} does not accept a preset_id: use genjutsu-restyle for styles."),
     (r"Impossible d'identifier l'utilisateur, génération refusée\.", "Unable to identify the user, generation refused."),
     (r"Impossible de vérifier ta limite du jour, réessaie dans un instant\.", "Unable to check your daily limit, try again in a moment."),
+    (r"Tu as atteint la limite quotidienne de (?P<limite>\d+) (?P<nom>.+)\. Le quota est compté en UTC ; tu pourras recommencer après son renouvellement\.", "You have reached the daily limit of {limite} {nom}. The quota is counted in UTC; you can try again after it resets."),
     (r"Limite du jour atteinte \((?P<limite>\d+) (?P<nom>.+) par jour\)\. Dis-le à l'utilisateur : il pourra en refaire demain\.", "Daily limit reached ({limite} {nom} per day). You can make more tomorrow."),
 ]
 _COMPILES = [(re.compile(f"^{motif}$", re.DOTALL), modele) for motif, modele in _MOTIFS]
