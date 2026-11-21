@@ -100,5 +100,6 @@ def gestionnaire_limite_depassee(request: Request, exc):
     nom = next((libelle for prefixe, libelle in fonctionnalites if chemin.startswith(prefixe)), "cette fonctionnalité")
     plafond = str(getattr(exc, "detail", "") or "").strip()
     precision = f" ({plafond})" if plafond else ""
-    message = f"Tu as atteint la limite de demandes autorisées pour {nom}{precision}. Attends avant de réessayer."
-    return JSONResponse(status_code=429, content={"detail": {"code": "LIMITE_DEBIT_ATTEINTE", "message": message}})
+    params = {"fonctionnalite": nom, "plafond": precision}
+    message = "Tu as atteint la limite de demandes autorisées pour {fonctionnalite}{plafond}. Attends avant de réessayer.".format(**params)
+    return JSONResponse(status_code=429, content={"detail": {"code": "LIMITE_DEBIT_ATTEINTE", "message": message, "params": params}})
