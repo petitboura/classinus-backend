@@ -909,7 +909,12 @@ def sonder_serveur(url: str, site_officiel: str | None, user_id: str, lien_jeton
         resultat = dict(en_memoire[1]) if en_memoire and en_memoire[0] > maintenant else None
     if resultat is None:
         if not _sondage_autorise(user_id):
-            _erreur("MCP_SONDAGE_LIMITE", "Trop de vérifications de serveurs en peu de temps. Réessaie dans quelques minutes.", 429)
+            _erreur(
+                "MCP_SONDAGE_LIMITE",
+                f"Tu as atteint la limite de {SONDAGES_MAX_PAR_FENETRE} vérifications de serveurs sur "
+                f"{FENETRE_SONDAGES_SECONDES} secondes. Réessaie après le renouvellement de cette fenêtre.",
+                429,
+            )
         resultat = _sonder_reseau(cible)
         if resultat["joignable"]:
             with _VERROU_SONDAGES:
