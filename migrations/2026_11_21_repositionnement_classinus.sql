@@ -4,8 +4,9 @@
   de la présentation. Les outils pédagogiques restent disponibles comme usage
   spécifique, sans définir l'identité globale du produit.
 
-  Cette mise à jour de données a été appliquée au projet Supabase Classinus Staging
-  (prchrczmcoqngesbzzfi) le 21/11/2026. Ne pas appliquer à la production sans validation.
+  Cette mise à jour de données a été appliquée le 21/11/2026 au projet Supabase
+  Classinus Staging (prchrczmcoqngesbzzfi) et à la production (ljrbwwmiainrjirymmak),
+  sur demande de Bourama.
 */
 insert into public.textes_modeles_llm (cle, langue, texte) values
   ('attente_cap_titre', 'fr', 'L''IA et tes outils, réunis dans un même espace'),
