@@ -1,6 +1,6 @@
 """
 Outil MCP lire_media_conversation : lecture, À LA DEMANDE DU MODÈLE, d'une vidéo ou
-d'un audio joint par l'étudiant à la conversation (26/10/2026, demande Bourama).
+d'un audio joint par l'utilisateur à la conversation (26/10/2026, demande Bourama).
 
 La logique est dans core/lecture_media_conversation.py. Ce fichier ne fait que
 déclarer l'outil sur `mcp_generation`, comme lire_video (core/outils_lecture_video.py),
@@ -26,7 +26,7 @@ def lire_media_conversation(
     langue: str = "",
 ) -> str:
     """
-    Lit une VIDÉO ou un AUDIO que l'étudiant a joint à la conversation. Ces
+    Lit une VIDÉO ou un AUDIO que l'utilisateur a joint à la conversation. Ces
     fichiers ne sont PAS lus automatiquement : le message ne contient que leur
     nom, leur durée, leur taille, leur résolution et si la vidéo a du son, avec
     leur lien réel entre crochets. C'est à toi de décider si tu as besoin de
@@ -58,7 +58,7 @@ def lire_media_conversation(
     important d'abord le fichier avec video_importer_fichier_conversation.
 
     Si le fichier est illisible ou sans son exploitable, dis-le clairement à
-    l'étudiant sans rien inventer.
+    l'utilisateur sans rien inventer.
     """
     if ctx is None:
         return "Erreur : contexte manquant."

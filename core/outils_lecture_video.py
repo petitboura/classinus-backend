@@ -30,7 +30,7 @@ def lire_video(url: str, a_partir_de_minute: int = 0) -> str:
     fais-le. Une vidéo longue est lue par tranches : si la réponse
     indique de rappeler l'outil, fais-le avec a_partir_de_minute pour lire la
     suite avant de conclure. Si même Tavily ne donne rien, ou si la vidéo est
-    privée ou supprimée, dis-le clairement à l'étudiant sans rien inventer. Paramètres : url (adresse de la vidéo), a_partir_de_minute
+    privée ou supprimée, dis-le clairement à l'utilisateur sans rien inventer. Paramètres : url (adresse de la vidéo), a_partir_de_minute
     (0 pour commencer au début).
     """
     try:

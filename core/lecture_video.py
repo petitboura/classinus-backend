@@ -22,7 +22,7 @@ reprendre pour lire la suite (paramètre a_partir_de_minute).
 
 Le retour est toujours un texte destiné au modèle, jamais une exception :
 une vidéo illisible n'est pas une erreur de l'application, le modèle doit
-simplement le dire à l'étudiant sans inventer.
+simplement le dire à l'utilisateur sans inventer.
 
 Réglages par variables d'environnement :
 - LECTURE_VIDEO_LONGUEUR_MAX : caractères lus par tranche (20000 par défaut)
@@ -271,12 +271,12 @@ def lire_contenu_video(url_ou_id, a_partir_de_minute=0):
             f"https://www.youtube.com/watch?v={id_video} . Si tavily_extract est disponible ce tour-ci, appelle-le "
             f"d'abord (extract_depth advanced) ; s'il ne donne pas le contenu parlé de la vidéo, ou s'il n'est pas "
             f"disponible, appelle tavily_research en lui demandant le contenu détaillé de cette vidéo. Si aucun "
-            f"des deux n'est disponible ou ne donne rien d'exploitable, dis-le clairement à l'étudiant : ne devine "
+            f"des deux n'est disponible ou ne donne rien d'exploitable, dis-le clairement à l'utilisateur : ne devine "
             f"ni ne résume ce qui est dit dans la vidéo, et propose-lui de coller ici le passage qui l'intéresse."
         )
     else:
         message += (
-            "Dis-le clairement à l'étudiant : ne devine ni ne résume ce qui est dit dans la vidéo, "
+            "Dis-le clairement à l'utilisateur : ne devine ni ne résume ce qui est dit dans la vidéo, "
             "et propose-lui de coller ici le passage qui l'intéresse."
         )
     return message

@@ -1,5 +1,5 @@
 """
-Outil MCP dédié aux fichiers UPLOADÉS PAR L'ÉTUDIANT en pièce jointe de
+Outil MCP dédié aux fichiers TRANSMIS PAR L'UTILISATEUR en pièce jointe de
 conversation (document, image, audio, vidéo -- origine="chat"), SÉPARÉ
 de gerer_document_bibliotheque (core/outils_bibliotheque.py) qui couvre
 la bibliothèque "officielle" (ajouts manuels + générations IA).
@@ -37,7 +37,7 @@ from core.zip_chat import lire_element as _lire_element_zip
 @mcp_generation.tool()
 def gerer_fichier_conversation(action: str, ctx: Context, url_fichier: str = "", nom: str = "", recherche: str = "", reference: str = "") -> str:
     """
-    Gère les fichiers UPLOADÉS PAR L'ÉTUDIANT en pièce jointe de cette
+    Gère les fichiers TRANSMIS PAR L'UTILISATEUR en pièce jointe de cette
     conversation (document, image, audio, vidéo -- n'importe quel type
     qui passe par la case upload en chat), séparé de
     gerer_document_bibliotheque qui couvre la bibliothèque
@@ -47,7 +47,7 @@ def gerer_fichier_conversation(action: str, ctx: Context, url_fichier: str = "",
 
     `action` doit être l'une de :
     - "nommer" : à faire JUSTE APRÈS chaque upload d'un fichier en
-      conversation, AVANT même que l'étudiant ne demande quoi que ce
+      conversation, AVANT même que l'utilisateur ne demande quoi que ce
       soit -- tu vois déjà le nom d'origine ET le contenu (texte
       extrait, transcription, ou description de l'image) dans le même
       message. Si le nom d'origine décrit déjà bien le contenu,
@@ -68,7 +68,7 @@ def gerer_fichier_conversation(action: str, ctx: Context, url_fichier: str = "",
       Paramètre : `reference` (le jeton donné juste après chaque nom de
       fichier dans le sommaire de l'archive, jamais inventé). Si le
       fichier est listé comme illisible dans ce sommaire, dis-le
-      explicitement à l'étudiant (avec la raison si utile) plutôt que
+      explicitement à l'utilisateur (avec la raison si utile) plutôt que
       d'appeler "lire" dessus.
     """
     if ctx is None:
