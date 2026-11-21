@@ -89,10 +89,10 @@ def gerer_minuteur(
     ajuster_secondes: int = 0,
 ) -> str:
     """
-    Minuteur affiché sur tous les écrans de l'étudiant (pastille ou carte).
-    Il ne bloque rien : il continue pendant que l'étudiant discute ou change
+    Minuteur affiché sur tous les écrans de l'utilisateur (pastille ou carte).
+    Il ne bloque rien : il continue pendant que l'utilisateur discute ou change
     de page. Lance-en un de ta propre initiative quand c'est pertinent
-    (révision chronométrée, pause, exercice minuté), sans attendre qu'on te
+    (session de travail, pause, tâche chronométrée), sans attendre qu'on te
     le demande. Aucune limite de durée ni de nombre de minuteurs.
 
     `action` :
@@ -102,7 +102,7 @@ def gerer_minuteur(
       seconde au total. `titre` court optionnel, `action_a_la_fin` = ce que
       tu feras quand il sonnera (ex : proposer un quiz de 5 questions).
       Déduis-le de la conversation ; si ce n'est pas clair, demande-le à
-      l'étudiant avant de lancer.
+      l'utilisateur avant de lancer.
     - "modifier" : `ajuster_minutes` et/ou `ajuster_secondes` (positif pour
       ajouter, négatif pour retirer) et/ou `titre`.
     - "arreter" : arrête le minuteur.
@@ -137,7 +137,7 @@ def gerer_minuteur(
             )
             minuteur = serialiser(ligne)
             return (
-                f"Minuteur lancé : {_decrire(minuteur)}. Il est affiché sur l'écran de l'étudiant et ne "
+                f"Minuteur lancé : {_decrire(minuteur)}. Il est affiché sur l'écran de l'utilisateur et ne "
                 "bloque rien. Ne dis pas qu'il est terminé : l'appli t'enverra un message automatique à la fin."
             )
 

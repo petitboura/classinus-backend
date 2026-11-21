@@ -138,12 +138,12 @@ DESCRIPTION_OUTIL_MINI_PAR_DEFAUT = (
 # Quand Classinus met du temps, la voix ne reste jamais muette : toutes les
 # DELAI_RELANCE_PAR_DEFAUT secondes (au plus RELANCES_MAX_PAR_DEFAUT fois, et
 # jamais pendant qu'elle parle déjà), ce message lui rappelle de donner un mot
-# de patience à l'étudiant.
+# de patience à l'utilisateur.
 RELANCE_ATTENTE_PAR_DEFAUT = (
     "Classinus travaille encore sur la demande de l'utilisateur. Dis une très courte phrase pour le "
     "faire patienter, sans répéter ce que tu as déjà dit et sans rappeler l'outil."
 )
-# Quand l'étudiant tape un message dans le chat alors que la voix est active,
+# Quand l'utilisateur tape un message dans le chat alors que la voix est active,
 # la réponse écrite de Classinus s'affiche dans le chat et la voix la lit en
 # entier. Ce message précède le texte de la réponse envoyé à la voix.
 ANNONCE_REPONSE_PAR_DEFAUT = (
@@ -162,7 +162,7 @@ ANNONCE_BULLE_PAR_DEFAUT = (
     "Pour ce qui ne peut pas se lire à voix haute (code, tableau, lien, image, carte, "
     "fichier), dis seulement en une phrase de quoi il s'agit. Voici le message :"
 )
-# Quand l'étudiant coupe la voix en pleine lecture sans lui parler (il parle à quelqu'un
+# Quand l'utilisateur coupe la voix en pleine lecture sans lui parler (il parle à quelqu'un
 # d'autre), la lecture reprend toute seule là où elle s'est arrêtée, une fois qu'il s'est
 # tu. Ce message précède la suite du texte envoyée à la voix.
 ANNONCE_REPRISE_PAR_DEFAUT = (
@@ -171,9 +171,9 @@ ANNONCE_REPRISE_PAR_DEFAUT = (
     "ajouter. Pour ce qui ne peut pas se lire à voix haute (code, tableau, lien, image, carte, "
     "fichier), dis seulement en une phrase de quoi il s'agit. Voici la suite du texte à lire :"
 )
-# Silence de l'étudiant (en millisecondes) avant que la lecture interrompue reprenne.
+# Silence de l'utilisateur (en millisecondes) avant que la lecture interrompue reprenne.
 DELAI_REPRISE_MS_PAR_DEFAUT = 1800
-# Niveau du micro (entre 0 et 1) à partir duquel l'étudiant est considéré comme en train de parler.
+# Niveau du micro (entre 0 et 1) à partir duquel l'utilisateur est considéré comme en train de parler.
 SEUIL_VOIX_MICRO_PAR_DEFAUT = 0.08
 DELAI_RELANCE_PAR_DEFAUT = 20
 PROACTIVITE_PAR_DEFAUT = True

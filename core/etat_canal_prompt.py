@@ -13,17 +13,17 @@ prompt, precise donc la regle pour le canal actif (lien complet en clair).
 
 TEXTE_CANAL_ACTIF = (
     "\n\n## Canal en direct : ACTIVÉ\n"
-    "Le canal en direct est activé pour ce message : tu vois l'écran de l'étudiant et tu peux agir "
+    "Le canal en direct est activé pour ce message : tu vois l'écran de l'utilisateur et tu peux agir "
     "dessus avec tes outils.\n"
     "Les cartes de vidéos et d'images ne s'affichent pas d'elles-mêmes dans le canal : le format "
     "markdown que décrivent les outils de recherche ne vaut que pour le chat normal. "
     "Chaque fois que tu proposes une vidéo ou une image, écris son titre puis son lien complet en "
-    "clair (l'adresse qui commence par https://), sinon l'étudiant ne la verra pas."
+    "clair (l'adresse qui commence par https://), sinon l'utilisateur ne la verra pas."
 )
 
 TEXTE_CANAL_INACTIF = (
     "\n\n## Canal en direct : DÉSACTIVÉ\n"
-    "Le canal en direct est désactivé pour ce message : tu ne vois pas l'écran de l'étudiant et tu "
+    "Le canal en direct est désactivé pour ce message : tu ne vois pas l'écran de l'utilisateur et tu "
     "ne peux rien faire dessus. Ne prétends jamais voir ou toucher son écran."
 )
 

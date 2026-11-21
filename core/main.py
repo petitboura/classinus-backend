@@ -1638,7 +1638,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         if description_generee:
             message_pour_modele = (
                 f"{message_pour_modele}\n\n"
-                "[Contenu de l'image ou de la vidéo jointe par l'élève, "
+                "[Contenu de l'image ou de la vidéo jointe par l'utilisateur, "
                 "décrit/transcrit par un outil de vision]\n"
                 f"{description_generee}"
             )
@@ -1658,10 +1658,10 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # comme un message texte ordinaire.
             message_pour_modele = (
                 f"{message_pour_modele}\n\n"
-                "[L'élève a joint une image ou une vidéo à ce message, mais "
+                "[L'utilisateur a joint une image ou une vidéo à ce message, mais "
                 "la lecture automatique de son contenu a échoué : tu n'as "
                 "donc pas accès à ce qu'elle contient. Si c'est nécessaire "
-                "pour répondre, dis-le à l'élève et demande-lui de "
+                "pour répondre, dis-le à l'utilisateur et demande-lui de "
                 "redécrire ce que montre l'image/la vidéo, ou de la "
                 "renvoyer.]"
             )
