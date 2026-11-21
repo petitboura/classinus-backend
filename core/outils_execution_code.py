@@ -1033,7 +1033,7 @@ def _message_refus(reservation: dict) -> str:
             "reprendront après le renouvellement mensuel du quota."
         )
     if raison == "budget_limit":
-        return "Le budget mensuel du service d'exécution de code est atteint. Les nouvelles exécutions sont bloquées jusqu'au renouvellement du budget."
+        return (f"Le budget mensuel du service d'exécution de code est atteint : {reservation.get('spent_usd', 0)} USD utilisés sur {reservation.get('limit_usd', 0)} USD. " "Les nouvelles exécutions sont bloquées jusqu'au renouvellement du budget.")
     if raison == "concurrency_limit":
         return "Toutes les places d'exécution de code sont actuellement occupées. Ferme un workspace inutilisé ou réessaie lorsqu'une place se libère."
     if raison == "busy":
