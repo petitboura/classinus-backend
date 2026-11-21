@@ -18,8 +18,8 @@ insert into public.textes_modeles_llm (cle, langue, texte) values
 
   ('attente_cap_connecteurs_titre', 'fr', 'Applications et intégrations'),
   ('attente_cap_connecteurs_titre', 'en', 'Connected apps and integrations'),
-  ('attente_cap_connecteurs_lignes', 'fr', 'GitHub|Notion|Google : Drive, Gmail, Docs, Sheets et Agenda|Vercel|Supabase|Tes propres outils via des serveurs MCP'),
-  ('attente_cap_connecteurs_lignes', 'en', 'GitHub|Notion|Google: Drive, Gmail, Docs, Sheets and Calendar|Vercel|Supabase|Your own tools through MCP servers'),
+  ('attente_cap_connecteurs_lignes', 'fr', 'GitHub|Notion|Vercel|Railway|Supabase|Higgsfield|Tes propres outils via des serveurs MCP'),
+  ('attente_cap_connecteurs_lignes', 'en', 'GitHub|Notion|Vercel|Railway|Supabase|Higgsfield|Your own tools through MCP servers'),
 
   ('attente_cap_agents_titre', 'fr', 'Agents et automatisation'),
   ('attente_cap_agents_titre', 'en', 'Agents and automation'),
