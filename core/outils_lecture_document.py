@@ -1,6 +1,6 @@
 """
 Outil MCP lire_document_conversation : lecture, À LA DEMANDE DU MODÈLE, d'un document
-joint par l'étudiant à la conversation (27/10/2026, demande Bourama).
+joint par l'utilisateur à la conversation (27/10/2026, demande Bourama).
 
 La logique est dans core/lecture_document_conversation.py. Ce fichier ne fait que
 déclarer l'outil sur `mcp_generation`, comme lire_media_conversation
@@ -28,7 +28,7 @@ def lire_document_conversation(
     recherche: str = "",
 ) -> str:
     """
-    Lit un DOCUMENT que l'étudiant a joint à la conversation (PDF, Word, Excel,
+    Lit un DOCUMENT que l'utilisateur a joint à la conversation (PDF, Word, Excel,
     PowerPoint, texte, code, ancien format Office). Ces fichiers ne sont PAS lus
     automatiquement : le message ne contient que leur nom, leur type, leur taille et
     leur nombre de pages, avec leur lien réel entre crochets. C'est à toi de décider
@@ -56,7 +56,7 @@ def lire_document_conversation(
     gerer_execution_code, action importer_fichier. Pour une vidéo ou un audio, utilise
     lire_media_conversation.
 
-    Si le fichier est illisible, dis-le clairement à l'étudiant sans rien inventer.
+    Si le fichier est illisible, dis-le clairement à l'utilisateur sans rien inventer.
     """
     if ctx is None:
         return "Erreur : contexte manquant."

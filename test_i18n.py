@@ -9,6 +9,10 @@ from core.localisation import MiddlewareLangueErreurs, _prefer_anglais, _traduir
 from core.libelles_outils_anglais import traduire_libelle_outil
 
 
+def parametres_message(message):
+    return set(re.findall(r"(?<!\{)\{([A-Za-z_]\w*)\}(?!\})", message))
+
+
 class TestLocalisation(unittest.TestCase):
     def test_chaque_code_erreur_a_une_traduction_anglaise(self):
         self.assertTrue(set(MESSAGES_FR).issubset(MESSAGES_EN))
@@ -18,15 +22,29 @@ class TestLocalisation(unittest.TestCase):
             return set(re.findall(r"(?<!\{)\{([A-Za-z_]\w*)\}(?!\})", message))
             return set(re.findall(r"(?<!\{)\{([A-Za-z_]\w*)\}(?!\})", message))
 
+        # Ces deux erreurs Higgsfield reçoivent volontairement deux paramètres :
+        # l'API fournit le détail français dans {detail} et le détail anglais dans
+        # {detail_en}. Toutes les autres traductions doivent conserver les mêmes
+        # noms de paramètres dans les deux langues.
+        parametres_specifiques_par_langue = {
+            "HIGGSFIELD_REQUETE_INVALIDE",
+            "HIGGSFIELD_ID_INVALIDE",
+        }
         divergences = {
             code: {
                 "fr": sorted(parametres(message_fr)),
                 "en": sorted(parametres(MESSAGES_EN[code])),
             }
             for code, message_fr in MESSAGES_FR.items()
-            if parametres(message_fr) != parametres(MESSAGES_EN[code])
+            if code not in parametres_specifiques_par_langue
+            and parametres(message_fr) != parametres(MESSAGES_EN[code])
         }
         self.assertEqual(divergences, {})
+
+    def test_messages_higgsfield_ont_un_parametre_par_langue(self):
+        for code in ("HIGGSFIELD_REQUETE_INVALIDE", "HIGGSFIELD_ID_INVALIDE"):
+            self.assertEqual(parametres_message(MESSAGES_FR[code]), {"detail"})
+            self.assertEqual(parametres_message(MESSAGES_EN[code]), {"detail_en"})
 
     def test_entete_anglais_simple(self):
         self.assertTrue(_prefer_anglais({"headers": [(b"accept-language", b"en")]}))
