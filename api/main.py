@@ -11,6 +11,8 @@ from typing import List, Optional
 
 from anyio import to_thread
 from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi.exceptions import RequestValidationError
+from starlette.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from slowapi.errors import RateLimitExceeded
@@ -507,6 +509,40 @@ async def _lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Classinus API", version="0.1.0", lifespan=_lifespan)
+
+
+# Les validations Pydantic ne doivent pas masquer un plafond atteint derrière
+# un message technique générique. On transforme les dépassements de quantité
+# et de taille en consignes directement exploitables par l'utilisateur.
+_CHAMPS_LIMITES_CHAT = {
+    "image_urls": ("images jointes au message", "images"),
+    "images_base64": ("images extraites de la vidéo", "images"),
+    "outils": ("outils conservés dans un message", "éléments"),
+    "zips_en_attente": ("archives ZIP jointes au message", "archives"),
+}
+
+
+@app.exception_handler(RequestValidationError)
+async def gerer_erreur_validation(request, exc: RequestValidationError):
+    for erreur in exc.errors():
+        if erreur.get("type") not in ("too_long", "string_too_long"):
+            continue
+        emplacement = erreur.get("loc") or ()
+        champ = str(emplacement[-1]) if emplacement else "champ"
+        maximum = (erreur.get("ctx") or {}).get("max_length")
+        libelle, unite = _CHAMPS_LIMITES_CHAT.get(champ, (f"champ « {champ} »", "caractères ou éléments"))
+        if champ in _CHAMPS_LIMITES_CHAT and maximum is not None:
+            message = f"Tu as dépassé la limite de {maximum} {unite} pour les {libelle}. Retire des éléments puis réessaie."
+        elif maximum is not None:
+            message = f"Le {libelle} dépasse la limite autorisée de {maximum} {unite}. Réduis son contenu puis réessaie."
+        else:
+            message = f"Le {libelle} dépasse la limite autorisée. Réduis son contenu puis réessaie."
+        return JSONResponse(status_code=422, content={"detail": {"code": "LIMITE_CHAMP_ATTEINTE", "message": message}})
+
+    return JSONResponse(
+        status_code=422,
+        content={"detail": {"code": "REQUETE_INVALIDE", "message": "Les informations envoyées ne respectent pas le format attendu. Vérifie les champs puis réessaie."}},
+    )
 
 # Plafond de taille totale d'une requete du chat (core/plafond_taille_requete.py) : protege la
 # memoire du serveur, ne touche pas au contenu. Ajoute AVANT les middlewares ci-dessous pour
