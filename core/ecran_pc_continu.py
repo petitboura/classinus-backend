@@ -86,19 +86,19 @@ def bloc_etat_ecran_pc(user_id, conversation_id, table_routage) -> str:
     if lecture_legere:
         return (
             "\n\n## Fenêtre au premier plan du PC (lue automatiquement à l'instant, titres seulement)\n"
-            "Voici quelle fenêtre est au premier plan sur le PC de l'étudiant et quelles autres sont ouvertes. "
+            "Voici quelle fenêtre est au premier plan sur le PC de l'utilisateur et quelles autres sont ouvertes. "
             "Le contenu n'a pas encore été lu : avant d'agir sur le PC, appelle lire_ecran. Le bureau compte "
             "comme une fenêtre : lire_ecran avec fenetre=\"Bureau\" (ou zone=\"bureau\") le lit, "
             "zone=\"barre_des_taches\" lit la barre des tâches, fenetre=\"son titre\" lit une autre fenêtre.\n\n" + texte
         )
     return (
         "\n\n## État actuel de l'écran du PC (lu automatiquement à l'instant)\n"
-        "Cette lecture est complète et à jour pour ce message de l'étudiant (fenêtre au premier plan et "
+        "Cette lecture est complète et à jour pour ce message de l'utilisateur (fenêtre au premier plan et "
         "menus ouverts), et chaque action que tu fais te renvoie l'écran qui suit. N'appelle pas lire_ecran "
         "parce que tu penses que l'écran a changé, ni pour la refaire : agis directement à partir de ce qui suit. Elle ne montre que la "
         "fenêtre au premier plan : pour voir la barre des tâches ou le bureau, appelle "
         "lire_ecran avec zone=\"barre_des_taches\" ou zone=\"bureau\" ; pour lire une fenêtre qui est derrière, "
         "lire_ecran avec fenetre=\"son titre\". Sur le PC, n'appelle lire_page que si "
-        "l'étudiant te demande explicitement de faire quelque chose dans l'application Classinus : jamais de ta "
+        "l'utilisateur te demande explicitement de faire quelque chose dans l'application Classinus : jamais de ta "
         "propre initiative.\n\n" + texte
     )

@@ -108,7 +108,7 @@ def bloc_prompt_origine(origine):
         return ""
     texte = (
         "\n\n## Appareil utilisé pour ce message\n"
-        f"L'étudiant t'écrit depuis {_DESCRIPTIONS_ORIGINE[origine]}. "
+        f"L'utilisateur t'écrit depuis {_DESCRIPTIONS_ORIGINE[origine]}. "
     )
     if origine == ORIGINE_PC_APPLI:
         texte += (
@@ -123,7 +123,7 @@ def bloc_prompt_origine(origine):
     else:
         texte += (
             "Dans un navigateur, tu n'as aucun outil pour lire ou montrer l'écran de l'appareil : "
-            "ne prétends jamais voir son écran et n'essaie pas de le lire. Si l'étudiant veut que tu "
+            "ne prétends jamais voir son écran et n'essaie pas de le lire. Si l'utilisateur veut que tu "
             "voies ou montres quelque chose à l'écran, dis-lui simplement que cela demande "
             "l'application Classinus installée."
         )

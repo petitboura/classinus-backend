@@ -4,6 +4,7 @@ from core.etat_canal_prompt import bloc_etat_canal
 actif = bloc_etat_canal(True, True)
 assert "## Canal en direct : ACTIVÉ" in actif and "DÉSACTIVÉ" not in actif
 assert "https://" in actif and "cartes de vidéos et d'images" in actif and "lien complet" in actif
+assert "écran de l'utilisateur" in actif and "écran de l'étudiant" not in actif
 # Canal actif : dit meme si l'agent n'est pas Clovis (les outils du canal sont proposes des que le canal est actif).
 assert bloc_etat_canal(True, False) == actif
 
