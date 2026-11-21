@@ -436,3 +436,40 @@ class TestPasserelleVersLExecutionDeCode:
         resultat = code.gerer_execution_code(action="importer_fichier", ctx=object(), url_fichier="https://stockage/invente")
         assert "introuvable" in resultat
         rpc.assert_not_called()
+
+
+class TestModeTableaux:
+    """Mode tableaux (21/11/2026) : les tableaux d'un PDF en Markdown, PDF seulement."""
+
+    def _pdf_avec_tableau(self):
+        import fitz
+
+        document = fitz.open()
+        page = document.new_page()
+        page.insert_text((72, 60), "Resultats")
+        for i, ligne in enumerate([["Nom", "Note"], ["Awa", "17"]]):
+            for j, cellule in enumerate(ligne):
+                rect = fitz.Rect(72 + j * 120, 100 + i * 28, 72 + (j + 1) * 120, 128 + i * 28)
+                page.draw_rect(rect, color=(0, 0, 0), width=1)
+                page.insert_text((rect.x0 + 6, rect.y0 + 19), cellule)
+        octets = document.tobytes()
+        document.close()
+        return octets
+
+    def test_pdf_rend_le_tableau_en_markdown(self, stockage):
+        stockage["deposer"]("releve.pdf", self._pdf_avec_tableau(), "application/pdf")
+        resultat = lire(mode="tableaux")
+        assert "releve.pdf" in resultat and "| Nom | Note |" in resultat and "| Awa | 17 |" in resultat
+
+    def test_les_autres_formats_renvoient_vers_le_mode_texte(self, stockage):
+        stockage["deposer"]("notes.xlsx", _xlsx())
+        resultat = lire(mode="tableaux")
+        assert "ne concerne que les PDF" in resultat and "mode texte" in resultat
+
+    def test_pdf_illisible_ne_leve_pas(self, stockage):
+        stockage["deposer"]("faux.pdf", b"ceci n'est pas un pdf", "application/pdf")
+        assert "illisible" in lire(mode="tableaux") or "échoué" in lire(mode="tableaux")
+
+    def test_le_mode_est_annonce_dans_le_message_des_modes_possibles(self, stockage):
+        stockage["deposer"]("c.pdf", _pdf(["a"]), "application/pdf")
+        assert "tableaux" in lire(mode="inconnu")

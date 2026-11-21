@@ -33,6 +33,11 @@ Limits: each command may run for at most 60 seconds; `run_command` accepts up to
 
 ## 3. Modify an existing document
 
+Choose the simplest method that fits:
+
+- For a simple change (replace a text, add or delete a paragraph, add a heading or a table), call `modifier_document_conversation` with the real `url_fichier` link. No sandbox is needed and the original stays unchanged. Read the file first with `lire_document_conversation` to know its exact content.
+- For anything that needs fine control (styles, page layout, images, headers and footers), follow the sandbox steps below.
+
 1. Copy the attached file into the sandbox with `importer_fichier` (use the real `url_fichier` link shown after the attachment; never invent one).
 2. Open it with `Document(path)` and change only what was requested. Preserve existing styles, headers, and footers.
 3. Save under a new name. Leave the original unchanged.

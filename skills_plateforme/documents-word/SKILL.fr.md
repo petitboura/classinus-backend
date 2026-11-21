@@ -33,6 +33,11 @@ Limites à respecter : une commande dure 60 secondes au plus, run_command accept
 
 ## 3. Modifier un document existant
 
+Choisis la méthode la plus simple qui convient :
+
+- Pour un changement simple (remplacer un texte, ajouter ou supprimer un paragraphe, ajouter un titre ou un tableau), appelle `modifier_document_conversation` avec le lien réel `url_fichier`. Aucun bac à sable n'est nécessaire et l'original reste intact. Lis d'abord le fichier avec `lire_document_conversation` pour connaître son contenu exact.
+- Pour tout ce qui demande un contrôle fin (styles, mise en page, images, en-têtes et pieds de page), suis les étapes du bac à sable ci-dessous.
+
 1. Copie le fichier joint dans le bac à sable avec l'action importer_fichier (url_fichier : le lien réel indiqué après le fichier, jamais inventé).
 2. Ouvre-le avec `Document(chemin)` et modifie seulement ce qui est demandé : les styles, en-têtes et pieds de page existants restent.
 3. Enregistre sous un nouveau nom. L'original reste intact.

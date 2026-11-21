@@ -45,6 +45,10 @@ def lire_document_conversation(
     - "recherche" : les passages qui contiennent le mot ou l'expression donnée dans
       `recherche`, avec leur page. À utiliser sur un long document pour trouver
       un passage avant de le lire, plutôt que de tout lire.
+    - "tableaux" : les tableaux d'un PDF, rendus en tableaux Markdown, avec `debut_page` et
+      `fin_page`. À utiliser quand l'utilisateur veut des chiffres ou des données en tableau
+      d'un PDF (relevé, bulletin, facture). Seules les pages à texte natif sont analysées :
+      sur un scan, aucun tableau n'est reconnu, lis alors la page avec le mode pages.
 
     Un long document est lu par tranches : si la réponse t'indique de rappeler l'outil
     (avec un nouveau `debut_page` ou `debut_caractere`), fais-le avant de conclure si tu
