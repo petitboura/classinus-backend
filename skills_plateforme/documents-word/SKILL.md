@@ -15,7 +15,7 @@ Use the `gerer_execution_code` tool.
 
 1. Check the library: `python -c "import docx; print(docx.__version__ if hasattr(docx, '__version__') else 'ok')"`.
 2. If it is missing, install it: `pip install python-docx`. If installation fails because there is no network, call the network action, then use `demander_acces_reseau` for `pypi.org` if needed. If pip refuses because the environment is managed, create a virtual environment: `python -m venv /home/user/venv`, then `/home/user/venv/bin/pip install python-docx`.
-3. If nothing works, explain that and offer the simple `generer_document_word` tool (headings and paragraphs only).
+3. If nothing works, explain that and offer the simple `generer_document_word` tool (headings, lists, tables, bold and italic, no images).
 
 Limits: each command may run for at most 60 seconds; `run_command` accepts up to 10,000 characters; a file or script must not exceed 1 MB. For a long document, write the content to a data file (for example, `contenu.json` using `write_file`) and keep the script that reads it short.
 
