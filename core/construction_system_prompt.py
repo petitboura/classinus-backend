@@ -622,7 +622,7 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
             "contenir aucun outil inventé ni pseudo-syntaxe d'appel (TOOL_CODE, "
             "nom_outil(...), nom_outil{...}, call:nom_outil{...})."
             + ("" if client_thonny else (
-                " Les blocs d'affichage mermaid/chart/carte/widget/animation/geometrie restent disponibles : "
+                " Les blocs d'affichage mermaid/chart/carte/widget/animation/geometrie/svg restent disponibles : "
                 "ce sont des formats de sortie, pas des outils."
             ))
             + "\n"

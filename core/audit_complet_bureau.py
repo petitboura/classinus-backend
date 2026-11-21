@@ -63,6 +63,7 @@ TYPES_VISUELS: dict[str, str] = {
     "chart": "Graphique de données",
     "carte": "Carte interactive",
     "geometrie": "Schéma géométrique",
+    "svg": "Dessin vectoriel",
     "qcm": "QCM interactif",
     "question": "Question interactive",
     "fiche": "Fiche de révision",
