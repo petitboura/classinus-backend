@@ -515,10 +515,11 @@ app = FastAPI(title="Classinus API", version="0.1.0", lifespan=_lifespan)
 # un message technique générique. On transforme les dépassements de quantité
 # et de taille en consignes directement exploitables par l'utilisateur.
 _CHAMPS_LIMITES_CHAT = {
-    "image_urls": ("images jointes au message", "images"),
-    "images_base64": ("images extraites de la vidéo", "images"),
-    "outils": ("outils conservés dans un message", "éléments"),
-    "zips_en_attente": ("archives ZIP jointes au message", "archives"),
+    "image_urls": ("images", "Tu peux joindre au maximum {maximum} images par message."),
+    "images_base64": ("images extraites de la vidéo", "Cette vidéo contient trop d'images à analyser (maximum : {maximum}). Réduis le nombre d'images puis réessaie."),
+    "outils": ("résultats d'outils", "Ce message contient trop de résultats d'outils dans son historique (maximum : {maximum}). L'historique doit être réduit puis renvoyé."),
+    "zips_en_attente": ("archives ZIP", "Tu peux joindre au maximum {maximum} archives ZIP à un message."),
+    "outil_force": ("outils sélectionnés", "Tu peux sélectionner au maximum {maximum} outils pour un même message."),
 }
 
 
@@ -530,14 +531,14 @@ async def gerer_erreur_validation(request, exc: RequestValidationError):
         emplacement = erreur.get("loc") or ()
         champ = str(emplacement[-1]) if emplacement else "champ"
         maximum = (erreur.get("ctx") or {}).get("max_length")
-        libelle, unite = _CHAMPS_LIMITES_CHAT.get(champ, (f"champ « {champ} »", "caractères ou éléments"))
-        if champ in _CHAMPS_LIMITES_CHAT and maximum is not None:
-            message = f"Tu as dépassé la limite de {maximum} {unite} pour les {libelle}. Retire des éléments puis réessaie."
-        elif maximum is not None:
-            message = f"Le {libelle} dépasse la limite autorisée de {maximum} {unite}. Réduis son contenu puis réessaie."
+        libelle, modele = _CHAMPS_LIMITES_CHAT.get(champ, (f"champ « {champ} »", "Le champ « {champ} » dépasse la limite autorisée ({maximum}). Réduis son contenu puis réessaie."))
+        if maximum is not None:
+            explication = modele.format(maximum=maximum) if champ in _CHAMPS_LIMITES_CHAT else modele
         else:
-            message = f"Le {libelle} dépasse la limite autorisée. Réduis son contenu puis réessaie."
-        return JSONResponse(status_code=422, content={"detail": {"code": "LIMITE_CHAMP_ATTEINTE", "message": message}})
+            explication = f"Le champ « {libelle} » dépasse la limite autorisée. Réduis son contenu puis réessaie."
+        params = {"explication": explication}
+        message = "La limite est atteinte : {explication}".format(**params)
+        return JSONResponse(status_code=422, content={"detail": {"code": "LIMITE_CHAMP_ATTEINTE", "message": message, "params": params}})
 
     return JSONResponse(
         status_code=422,
