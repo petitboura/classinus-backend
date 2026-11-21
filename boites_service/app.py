@@ -120,7 +120,7 @@ def lister():
 def creer(_corps: CreationBoite):
     maximum = int(os.environ.get("BOITES_MAX", "20"))
     if len(docker.lister()) >= maximum:
-        raise HTTPException(status_code=429, detail="capacité atteinte")
+        raise HTTPException(status_code=429, detail=f"Le service d'exécution de code est saturé : {maximum} boîtes peuvent fonctionner simultanément. Ferme une boîte inutilisée ou réessaie plus tard.")
     boite_id = uuid.uuid4().hex
     docker.creer(boite_id)
     # Sans règle, la boîte n'a aucun accès au réseau : le proxy refuse toute adresse inconnue.
@@ -138,9 +138,11 @@ def ouvrir_navigateur(corps: OuvertureNavigateur):
     etat = docker.etat(boite_id)
     if etat is None:
         if len(docker.lister_navigateurs()) >= int(os.environ.get("BOITES_NAV_MAX", "3")):
-            raise HTTPException(status_code=429, detail="capacité atteinte")
+            maximum_navigateurs = int(os.environ.get("BOITES_NAV_MAX", "3"))
+            raise HTTPException(status_code=429, detail=f"La capacité des navigateurs est atteinte : {maximum_navigateurs} navigateurs peuvent fonctionner simultanément. Ferme un navigateur inutilisé ou réessaie plus tard.")
         if len(docker.lister()) >= int(os.environ.get("BOITES_MAX", "20")):
-            raise HTTPException(status_code=429, detail="capacité atteinte")
+            maximum_boites = int(os.environ.get("BOITES_MAX", "20"))
+            raise HTTPException(status_code=429, detail=f"Le service d'exécution de code est saturé : {maximum_boites} boîtes peuvent fonctionner simultanément. Ferme une boîte inutilisée ou réessaie plus tard.")
         docker.creer(boite_id, navigateur=True, utilisateur=utilisateur)
     elif etat != "running":
         docker.demarrer(boite_id)
