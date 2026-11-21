@@ -33,6 +33,11 @@ Limits: each command may run for at most 60 seconds; `run_command` accepts up to
 
 ## 3. Modify an existing presentation
 
+Choose the simplest method that fits:
+
+- For a simple change (replace a text, add or delete a slide, change the speaker notes), call `modifier_document_conversation` with the real `url_fichier` link. No sandbox is needed and the original stays unchanged. Read the file first with `lire_document_conversation` to know its exact content.
+- For anything that needs fine control (layouts, images, charts, positioning of shapes), follow the sandbox steps below.
+
 1. Copy the attached file into the sandbox with `importer_fichier` (use the real `url_fichier` link shown after the attachment; never invent one).
 2. Open it with `Presentation(path)`, preserve its layouts and theme, and change only what was requested.
 3. Save under a new name. Leave the original unchanged.

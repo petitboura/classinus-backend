@@ -943,6 +943,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # le modèle qui décide. Le message ne contient que ses informations ; l'outil pour
         # le lire doit donc être réellement branché.
         outils_forces_contexte.append("lire_document_conversation")
+        # 21/11/2026, demande de Bourama : le modèle doit aussi pouvoir modifier ce document, ou travailler
+        # sur ses PDF. Même raison : sans cette ligne, rien ne garantit que ces outils soient proposés ce tour-ci.
+        outils_forces_contexte.extend(n for n in CATEGORIES_OUTILS["document_joint"] if n != "lire_document_conversation")
     if code_id_actif:
         # 12/09/2026, demande explicite Bourama, obligation d'appel : si
         # l'outil n'est pas dans outils_forces_contexte, rien ne garantit

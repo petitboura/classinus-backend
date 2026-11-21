@@ -843,6 +843,12 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "generer_document_excel": {"label": "Génération d'un Excel", "icone": "FileSpreadsheet", "onglet": "generer"},
     "generer_document_powerpoint": {"label": "Génération d'un PowerPoint", "icone": "Presentation", "onglet": "generer"},
     "generer_document_latex": {"label": "Génération d'un document LaTeX", "icone": "FileDigit", "onglet": "generer"},
+    # 21/11/2026 (demande Bourama) : travail sur les documents joints. Icônes déjà utilisées plus bas, aucune nouvelle icône côté interface.
+    "modifier_document_conversation": {"label": "Modification d'un fichier", "icone": "Edit3", "onglet": "generer"},
+    "fusionner_pdf": {"label": "Fusion de PDF", "icone": "Files", "onglet": "generer"},
+    "decouper_pdf": {"label": "Découpage d'un PDF", "icone": "Scissors", "onglet": "generer"},
+    "tourner_pages_pdf": {"label": "Rotation de pages PDF", "icone": "RotateCcw", "onglet": "generer"},
+    "remplir_formulaire_pdf": {"label": "Remplissage d'un PDF", "icone": "ClipboardList", "onglet": "generer"},
     "generer_code": {"label": "Génération de code", "icone": "Code", "onglet": "generer"},
     "gerer_execution_code": {"label": "Exécution de code", "icone": "Play", "onglet": "generer"},
     "gerer_navigateur": {"label": "Navigateur", "icone": "Globe", "onglet": "utilitaires"},
@@ -1502,6 +1508,8 @@ CATEGORIES_OUTILS = {
         "generer_document_powerpoint", "generer_document_latex", "generer_code",
         "generer_site_zip", "generer_bundle", "generer_image", "detourer_objet_image", "deployer_site",
         "exporter_donnees", "calculer_symbolique",
+        # 21/11/2026 : travail sur les documents joints (modifier un fichier, fusionner, couper, tourner, remplir un PDF)
+        "modifier_document_conversation", "fusionner_pdf", "decouper_pdf", "tourner_pages_pdf", "remplir_formulaire_pdf",
     ],
     # Exécution de code (24/10/2026, demande Bourama) : catégorie à part, retiré
     # de generation_documents où il ne créait aucun document. Il lance du code
@@ -1532,7 +1540,11 @@ CATEGORIES_OUTILS = {
     # tirer les trois gros outils de la bibliothèque quand on veut seulement lire un média.
     "media_joint": ["lire_media_conversation"],
     # Document joint par l'étudiant (27/10/2026) : catégorie à part, même raison que media_joint.
-    "document_joint": ["lire_document_conversation"],
+    # 21/11/2026 : les outils qui travaillent sur ce document (modifier, fusionner, couper, tourner, remplir) sont donnés avec.
+    "document_joint": [
+        "lire_document_conversation", "modifier_document_conversation", "fusionner_pdf", "decouper_pdf",
+        "tourner_pages_pdf", "remplir_formulaire_pdf",
+    ],
     "catalogue_public": [
         "gerer_entree_catalogue_public", "gerer_dossier_catalogue_public",
         "gerer_programme_catalogue_public",  # 22/09/2026
