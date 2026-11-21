@@ -533,7 +533,7 @@ async def gerer_erreur_validation(request, exc: RequestValidationError):
         maximum = (erreur.get("ctx") or {}).get("max_length")
         libelle, modele = _CHAMPS_LIMITES_CHAT.get(champ, (f"champ « {champ} »", "Le champ « {champ} » dépasse la limite autorisée ({maximum}). Réduis son contenu puis réessaie."))
         if maximum is not None:
-            explication = modele.format(maximum=maximum)
+            explication = modele.format(maximum=maximum, champ=champ)
         else:
             explication = f"Le champ « {libelle} » dépasse la limite autorisée. Réduis son contenu puis réessaie."
         params = {"explication": explication}
