@@ -146,34 +146,14 @@ def _uploader_avec_apercu(contenu_bytes: bytes, extension: str, content_type: st
 
 def generer_docx(titre: str, contenu_markdown: str) -> dict:
     """
-    Génère un document Word simple à partir de markdown. Ne gère QUE
-    titres (#, ##, ###) et paragraphes -- pas de gras/italique/listes
-    imbriquées pour cette première version (contrairement au PDF qui
-    passe par un vrai moteur HTML/CSS). À enrichir si Bourama en a besoin
-    en usage réel.
+    Génère un document Word à partir de markdown : titres, gras, italique, liens, listes
+    (puces et numérotées, avec sous-niveaux), tableaux, citations, blocs de code, séparateurs,
+    page A4 avec numéros de page. La construction est dans core/generation_word_riche.py.
     """
-    import io
-    import docx as docx_lib
+    from core.generation_word_riche import construire_document_word
 
-    document = docx_lib.Document()
-    document.add_heading(titre, level=0)
-
-    for ligne in contenu_markdown.split("\n"):
-        ligne_nettoyee = ligne.strip()
-        if not ligne_nettoyee:
-            continue
-        if ligne_nettoyee.startswith("### "):
-            document.add_heading(ligne_nettoyee[4:], level=3)
-        elif ligne_nettoyee.startswith("## "):
-            document.add_heading(ligne_nettoyee[3:], level=2)
-        elif ligne_nettoyee.startswith("# "):
-            document.add_heading(ligne_nettoyee[2:], level=1)
-        else:
-            document.add_paragraph(ligne_nettoyee)
-
-    tampon = io.BytesIO()
-    document.save(tampon)
-    return _uploader_avec_apercu(tampon.getvalue(), "docx", MIME_DOCX, f"{titre}.docx")
+    contenu = construire_document_word(titre, contenu_markdown)
+    return _uploader_avec_apercu(contenu, "docx", MIME_DOCX, f"{titre}.docx")
 
 
 def generer_xlsx(titre: str, en_tetes: list, lignes: list) -> dict:
@@ -200,27 +180,16 @@ def generer_xlsx(titre: str, en_tetes: list, lignes: list) -> dict:
     return _uploader_avec_apercu(tampon.getvalue(), "xlsx", MIME_XLSX, f"{titre}.xlsx")
 
 
-def generer_pptx(titre: str, diapositives: list) -> dict:
+def generer_pptx(titre: str, diapositives: list, sous_titre: str = "", couleur_principale: str = "") -> dict:
     """
-    Génère une présentation PowerPoint. `diapositives` : liste de dicts
-    {"titre": str, "contenu": str} -- une diapositive titre+texte par
-    élément, mise en page "Titre et contenu" standard (layout index 1 du
-    template par défaut python-pptx).
+    Génère une présentation PowerPoint 16:9 : page de couverture, pages de section, puces,
+    notes de l'orateur, tableaux et graphiques modifiables. Les clés reconnues pour chaque
+    diapositive sont décrites dans core/generation_pptx_riche.py.
+    Renvoie {"url", "url_apercu", "avertissements"} ; avertissements liste ce qui n'a pas pu être ajouté.
     """
-    import io
-    from pptx import Presentation
+    from core.generation_pptx_riche import construire_presentation
 
-    presentation = Presentation()
-
-    diapo_titre = presentation.slides.add_slide(presentation.slide_layouts[0])
-    diapo_titre.shapes.title.text = titre
-
-    for diapo_info in diapositives:
-        diapo = presentation.slides.add_slide(presentation.slide_layouts[1])
-        diapo.shapes.title.text = diapo_info.get("titre", "")
-        corps = diapo.placeholders[1].text_frame
-        corps.text = diapo_info.get("contenu", "")
-
-    tampon = io.BytesIO()
-    presentation.save(tampon)
-    return _uploader_avec_apercu(tampon.getvalue(), "pptx", MIME_PPTX, f"{titre}.pptx")
+    contenu, avertissements = construire_presentation(titre, diapositives, sous_titre, couleur_principale)
+    resultat = _uploader_avec_apercu(contenu, "pptx", MIME_PPTX, f"{titre}.pptx")
+    resultat["avertissements"] = avertissements
+    return resultat

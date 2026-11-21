@@ -15,7 +15,7 @@ Travaille avec l'outil gerer_execution_code.
 
 1. Vérifie la bibliothèque : `python -c "import pptx; print(pptx.__version__)"`.
 2. Si elle manque : `pip install python-pptx`. Si l'installation échoue faute de réseau, appelle l'action network, puis demander_acces_reseau pour pypi.org si besoin. Si pip refuse à cause d'un environnement géré, crée un environnement virtuel : `python -m venv /home/user/venv` puis `/home/user/venv/bin/pip install python-pptx`.
-3. Si rien ne marche, dis-le et propose l'outil simple generer_document_powerpoint (titre et texte seulement).
+3. Si rien ne marche, dis-le et propose l'outil simple generer_document_powerpoint (puces, notes de l'orateur, tableaux et graphiques, sans images).
 
 Limites : une commande dure 60 secondes au plus, run_command accepte 10000 caractères, un fichier ou un script ne dépasse pas 1 Mo. Les images embarquées comptent dans cette taille : réduis-les (Pillow, largeur 1600 px au plus, JPEG) avant de les insérer.
 
