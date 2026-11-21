@@ -46,6 +46,5 @@ def reserver_generation(client_base, user_id, genre: str) -> None:
     if reponse.data is not True:
         nom = _REGLAGES[genre][2]
         raise ErreurHiggsfield(
-            f"Limite du jour atteinte ({limite} {nom} par jour). Dis-le à l'utilisateur : "
-            "il pourra en refaire demain."
+            f"Tu as atteint la limite quotidienne de {limite} {nom}. Le quota est compté en UTC ; tu pourras recommencer après son renouvellement."
         )
