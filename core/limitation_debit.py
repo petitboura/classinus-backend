@@ -21,7 +21,7 @@ import os
 
 from fastapi import Request
 from starlette.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 
