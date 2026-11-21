@@ -20,6 +20,7 @@ import logging
 import os
 
 from fastapi import Request
+from starlette.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 
@@ -84,11 +85,20 @@ limiteur = Limiter(
 
 
 def gestionnaire_limite_depassee(request: Request, exc):
-    """
-    Journalise les depassements puis renvoie la reponse 429 standard.
-    """
-    logging.warning(
-        f"RATE LIMIT depasse -- cle={_cle_limitation(request)} "
-        f"chemin={request.url.path}"
+    """Renvoie une explication lisible avec la fonctionnalité et le plafond appliqué."""
+    chemin = request.url.path
+    logging.warning(f"RATE LIMIT depasse -- cle={_cle_limitation(request)} chemin={chemin}")
+    fonctionnalites = (
+        ("/api/chat", "le chat"),
+        ("/api/generation", "la génération de contenu"),
+        ("/api/higgsfield", "les générations Higgsfield"),
+        ("/api/profiles", "les opérations de profil"),
+        ("/api/rendu-animation", "le rendu d'animation"),
+        ("/api/widgets-outils", "les actions des widgets"),
+        ("/api/bibliotheque", "la bibliothèque"),
     )
-    return _rate_limit_exceeded_handler(request, exc)
+    nom = next((libelle for prefixe, libelle in fonctionnalites if chemin.startswith(prefixe)), "cette fonctionnalité")
+    plafond = str(getattr(exc, "detail", "") or "").strip()
+    precision = f" ({plafond})" if plafond else ""
+    message = f"Tu as atteint la limite de demandes autorisées pour {nom}{precision}. Attends avant de réessayer."
+    return JSONResponse(status_code=429, content={"detail": {"code": "LIMITE_DEBIT_ATTEINTE", "message": message}})
