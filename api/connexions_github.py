@@ -69,5 +69,8 @@ def depots_github(utilisateur=Depends(utilisateur_courant)):
             }
             for d in reponse.json()
             if d.get("full_name")
-        ]
+        ],
+        # GitHub fournit un lien rel="next" uniquement lorsqu'il reste des dépôts.
+        "plus_de_depots": bool(reponse.links.get("next")),
+        "maximum_affiche": NOMBRE_MAX_DEPOTS,
     }
