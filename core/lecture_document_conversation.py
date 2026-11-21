@@ -15,6 +15,8 @@ lire_document_conversation (core/outils_lecture_document.py) :
   par caractères pour les autres formats)
 - mode "pages" : un intervalle de pages ou de diapositives précis
 - mode "recherche" : les passages qui contiennent un mot ou une expression
+- mode "tableaux" : les tableaux d'un PDF, en tableaux Markdown (21/11/2026, PDF seulement,
+  pages à texte natif seulement, la logique est dans core/travail_pdf.py)
 
 L'original n'est jamais modifié : on relit seulement ses octets. Le retour est
 toujours un TEXTE destiné au modèle, jamais une exception : un document
@@ -43,7 +45,7 @@ from core.limites_media import (
     tranche_document_caracteres,
 )
 
-MODES = ("infos", "texte", "pages", "recherche")
+MODES = ("infos", "texte", "pages", "recherche", "tableaux")
 
 LIBELLES_FAMILLES = {
     "pdf": "PDF",
@@ -370,7 +372,7 @@ def lire_document(
     """
     mode = (mode or "infos").strip().lower()
     if mode not in MODES:
-        return f"Mode inconnu : « {mode} ». Modes possibles : infos, texte, pages, recherche."
+        return f"Mode inconnu : « {mode} ». Modes possibles : infos, texte, pages, recherche, tableaux."
     url_fichier = (url_fichier or "").strip()
     if not url_fichier:
         return "url_fichier manquant (le lien réel indiqué juste après le fichier joint)."
@@ -394,6 +396,25 @@ def lire_document(
         return entete
 
     famille = infos["famille"]
+    if mode == "tableaux":
+        if famille != "pdf":
+            return entete + (
+                "\n\nLe mode tableaux ne concerne que les PDF. Les tableaux d'un Word, d'un Excel ou d'un "
+                "PowerPoint sont déjà dans le texte : lis-le avec le mode texte."
+            )
+        from core import travail_pdf
+
+        try:
+            corps = travail_pdf.lire_tableaux(
+                contenu, debut_page, fin_page, tranche_document_caracteres(), pages_max_par_appel_document()
+            )
+        except travail_pdf.ErreurPdf as e:
+            return entete + f"\n\n{e}. Dis-le à l'étudiant, sans rien inventer sur son contenu."
+        except Exception as e:
+            logging.error(f"ERREUR lecture des tableaux du document joint ({nom}) : {e}")
+            return entete + "\n" + MESSAGES_RAISONS["ECHEC_EXTRACTION"]
+        return entete + "\n\n" + corps
+
     lecteur = None
     try:
         if famille in ("pdf", "pptx"):

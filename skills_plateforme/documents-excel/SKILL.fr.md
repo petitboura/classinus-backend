@@ -33,6 +33,11 @@ Limites : une commande dure 60 secondes au plus, run_command accepte 10000 carac
 
 ## 3. Modifier un classeur existant
 
+Choisis la méthode la plus simple qui convient :
+
+- Pour un changement simple (définir une cellule ou une formule, ajouter une ligne ou une colonne, supprimer une ligne, ajouter ou renommer une feuille), appelle `modifier_document_conversation` avec le lien réel `url_fichier`. Aucun bac à sable n'est nécessaire et l'original reste intact. Lis d'abord le fichier avec `lire_document_conversation` pour connaître son contenu exact.
+- Pour tout ce qui demande un contrôle fin (formats de nombre, mise en forme des cellules, largeurs de colonnes, graphiques, mise en forme conditionnelle), suis les étapes du bac à sable ci-dessous.
+
 1. Copie le fichier joint dans le bac à sable avec importer_fichier (url_fichier : le lien réel indiqué après le fichier, jamais inventé).
 2. Ouvre-le avec `load_workbook(chemin)` pour le modifier. Pour seulement lire les valeurs calculées, utilise `load_workbook(chemin, data_only=True)` et n'enregistre JAMAIS ce classeur : il aurait perdu toutes ses formules.
 3. Enregistre sous un nouveau nom. L'original reste intact.

@@ -77,3 +77,11 @@ def resultats_max_recherche_document() -> int:
 
 def taille_max_import_code_octets() -> int:
     return _entier_env("EXECUTION_CODE_IMPORT_TAILLE_MAX_MO", 15) * 1024 * 1024
+
+
+# Modification de documents joints et travail sur les PDF (21/11/2026, demande Bourama) :
+# - DOCUMENT_TRAVAIL_TAILLE_MAX_MO : taille maximale d'un fichier que modifier_document_conversation,
+#   fusionner_pdf, decouper_pdf, tourner_pages_pdf et remplir_formulaire_pdf acceptent
+#   (25 par défaut, valeur absente ou invalide = défaut)
+def taille_max_document_travail_octets() -> int:
+    return _entier_env("DOCUMENT_TRAVAIL_TAILLE_MAX_MO", 25) * 1024 * 1024

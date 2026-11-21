@@ -33,6 +33,11 @@ Limites : une commande dure 60 secondes au plus, run_command accepte 10000 carac
 
 ## 3. Modifier une présentation existante
 
+Choisis la méthode la plus simple qui convient :
+
+- Pour un changement simple (remplacer un texte, ajouter ou supprimer une diapositive, changer les notes de l'orateur), appelle `modifier_document_conversation` avec le lien réel `url_fichier`. Aucun bac à sable n'est nécessaire et l'original reste intact. Lis d'abord le fichier avec `lire_document_conversation` pour connaître son contenu exact.
+- Pour tout ce qui demande un contrôle fin (mises en page, images, graphiques, position des formes), suis les étapes du bac à sable ci-dessous.
+
 1. Copie le fichier joint dans le bac à sable avec importer_fichier (url_fichier : le lien réel indiqué après le fichier, jamais inventé).
 2. Ouvre-le avec `Presentation(chemin)`, garde ses mises en page et son thème, et modifie seulement ce qui est demandé.
 3. Enregistre sous un nouveau nom. L'original reste intact.

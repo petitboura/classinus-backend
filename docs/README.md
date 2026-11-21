@@ -21,6 +21,7 @@ Central entry point for all Classinus backend documentation. English is the defa
 - [Railway deployment checklist](./deployment/RAILWAY_DEPLOY.md)
 - [Higgsfield backend status](./status/HIGGSFIELD_TODO.md)
 - [Waiting list for "Coming soon" models](./chantiers/LISTE_ATTENTE_MODELES.md)
+- [Working on attached documents (edit a file, work on PDFs)](./chantiers/OUTILS_DOCUMENTS_JOINTS.md)
 
 ## Project history and archived work
 
