@@ -76,3 +76,14 @@ Ordre de Bourama du 7 novembre 2026. C'est une règle, pas une question : ne jam
 - Les textes de catalogue et de données portent leur version anglaise à côté du français (par exemple `descriptionEn`), et l'écran choisit selon la langue réglée dans les paramètres. Les erreurs du serveur passent par un code stable avec un message français et un message anglais (`core/erreurs.py` et `lib/erreurs.ts`).
 - Si un texte vit dans Supabase, ajouter aussi sa version anglaise là-bas.
 - Une tâche qui ajoute ou change un texte visible sans sa version anglaise n'est pas terminée.
+
+## Tout modèle doit avoir son réglage d'effort branché, sans exception
+
+Ordre de Bourama du 13 novembre 2026. C'est une règle qu'on ne saute jamais, pas une question : ne jamais demander s'il faut le brancher.
+
+- Tout modèle du sélecteur suit la même règle que Claude, GPT, Gemini, Grok, DeepSeek et Meta, quel que soit le fournisseur qui le sert (API directe, Vultr, Baseten ou toute future route) et quelle que soit la personne qui l'ajoute.
+- À l'ajout d'un modèle, dans la même livraison : lire la documentation du fournisseur pour connaître les niveaux acceptés et le défaut, les ajouter dans `core/efforts_modeles.py` (règle précise par préfixe, ou liste du fournisseur), et vérifier que l'adaptateur envoie bien l'effort choisi à l'API. Un adaptateur ne doit jamais retirer l'effort en silence.
+- Un modèle qui réfléchit par défaut ne doit jamais tourner au niveau maximal par accident : quand rien de valide n'est demandé, on envoie le niveau le plus léger que le modèle accepte (voir `effort_defaut`).
+- Seul un modèle dont le fournisseur ne documente aucun réglage d'effort peut avoir une liste vide, et la documentation consultée avec sa date est notée en commentaire à côté de cette liste vide.
+- Les modèles existants sont couverts aussi : après toute modification du catalogue, vérifier qu'aucun modèle n'est resté sans son branchement d'effort, et lister les exceptions.
+- Une tâche qui ajoute ou change un modèle sans son branchement d'effort n'est pas terminée.

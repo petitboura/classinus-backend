@@ -59,6 +59,24 @@ class ModelesBientot(unittest.TestCase):
             bientot = modeles_bientot_pour_agent("claude", "ultra")
         self.assertTrue(all(m["nom_distributeur"] is None for m in disponibles + bientot))
 
+    def test_nom_du_fournisseur_vient_de_supabase(self):
+        def modifier(config):
+            config["fournisseurs"]["deepseek"]["nom_affiche"] = "DeepSeek"
+            config["fournisseurs"]["claude"]["nom_affiche"] = "Anthropic"
+
+        with _avec_config_supabase(modifier), patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True):
+            disponibles = modeles_disponibles_pour_agent("claude", "pro")
+            bientot = modeles_bientot_pour_agent("claude", "pro")
+        self.assertTrue(disponibles)
+        self.assertEqual({m["nom_distributeur"] for m in disponibles}, {"DeepSeek"})
+        self.assertEqual({m["nom_distributeur"] for m in bientot if m["distributeur"] == "claude"}, {"Anthropic"})
+
+    def test_nom_du_fournisseur_vide_dans_le_repli_du_code(self):
+        with patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True):
+            disponibles = modeles_disponibles_pour_agent("claude", "pro")
+            bientot = modeles_bientot_pour_agent("claude", "pro")
+        self.assertTrue(all(m["nom_distributeur"] is None for m in disponibles + bientot))
+
     def test_aucun_modele_en_double(self):
         with patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True):
             disponibles = modeles_disponibles_pour_agent("claude", "ultra")

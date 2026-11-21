@@ -21,6 +21,8 @@ Variables de base relevées dans le dépôt :
 
 Les fournisseurs supplémentaires utilisent leurs propres variables. Voir [RAILWAY_DEPLOY.md](./deployment/RAILWAY_DEPLOY.md) pour la liste opérationnelle recensée.
 
+**Effort de réflexion (tous les modèles, sans exception)** : chaque modèle du sélecteur a ses niveaux d’effort dans `core/efforts_modeles.py`, tirés de la documentation de son fournisseur (vérifiée le 13/11/2026), et l’adaptateur envoie le niveau choisi à l’API (`reasoning_effort`). Quand rien de valide n’est demandé, le niveau le plus léger que le modèle accepte est envoyé : un modèle qui réfléchit par défaut (GLM 5.3 réfléchit par défaut à son niveau maximal, Muse Spark Open à `xhigh`) ne réfléchit donc jamais à pleine profondeur par accident. Un test (`test_adaptateurs_llm.py`, `test_aucun_modele_du_catalogue_sans_effort_branche`) échoue dès qu’un modèle du catalogue n’a pas son branchement d’effort. La règle est dans `CLAUDE.md`.
+
 ## Cache de prompt et mesure des tokens
 
 Chaque étape d'outil renvoie au modèle tout le contexte (prompt système, outils, historique, résultats d'outils) : l'entrée est le poste de coût dominant. Les fournisseurs ne relisent depuis leur cache que le **début identique** d'une requête, facturé bien moins cher. Le premier octet qui change fait refacturer tout ce qui suit.

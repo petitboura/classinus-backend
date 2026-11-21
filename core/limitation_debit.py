@@ -18,10 +18,14 @@ reste le mode de repli pour préserver les déploiements existants.
 
 import logging
 import os
+import re
 
 from fastapi import Request
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from starlette.responses import JSONResponse
+from slowapi import Limiter
 from slowapi.util import get_remote_address
+
+from core.erreurs import erreur_api
 
 
 def _cle_limitation(request: Request) -> str:
@@ -83,12 +87,30 @@ limiteur = Limiter(
 )
 
 
+# Plafond tel que slowapi le décrit (ex. "10 per 1 minute"). Converti en
+# valeurs brutes pour que le front écrive la phrase dans la langue active.
+_MOTIF_PLAFOND = re.compile(r"(\d+) per (\d+) (second|minute|hour|day)", re.IGNORECASE)
+_SECONDES_PAR_UNITE = {"second": 1, "minute": 60, "hour": 3600, "day": 86400}
+_CODES_FONCTIONNALITES = (
+    ("/api/chat", "LIMITE_DEBIT_CHAT"),
+    ("/api/generation", "LIMITE_DEBIT_GENERATION"),
+    ("/api/higgsfield", "LIMITE_DEBIT_HIGGSFIELD"),
+    ("/api/profiles", "LIMITE_DEBIT_PROFIL"),
+    ("/api/rendu-animation", "LIMITE_DEBIT_RENDU_ANIMATION"),
+    ("/api/widgets-outils", "LIMITE_DEBIT_WIDGETS"),
+    ("/api/bibliotheque", "LIMITE_DEBIT_BIBLIOTHEQUE"),
+)
+
+
 def gestionnaire_limite_depassee(request: Request, exc):
-    """
-    Journalise les depassements puis renvoie la reponse 429 standard.
-    """
-    logging.warning(
-        f"RATE LIMIT depasse -- cle={_cle_limitation(request)} "
-        f"chemin={request.url.path}"
-    )
-    return _rate_limit_exceeded_handler(request, exc)
+    """Renvoie une explication traduisible avec la fonctionnalité et le plafond appliqué."""
+    chemin = request.url.path
+    logging.warning(f"RATE LIMIT depasse : cle={_cle_limitation(request)} chemin={chemin}")
+    plafond = _MOTIF_PLAFOND.search(str(getattr(exc, "detail", "") or ""))
+    if plafond is None:
+        erreur = erreur_api(429, "LIMITE_DEBIT_SANS_PLAFOND")
+    else:
+        code = next((c for prefixe, c in _CODES_FONCTIONNALITES if chemin.startswith(prefixe)), "LIMITE_DEBIT_GENERIQUE")
+        secondes = int(plafond.group(2)) * _SECONDES_PAR_UNITE[plafond.group(3).lower()]
+        erreur = erreur_api(429, code, maximum=int(plafond.group(1)), secondes=secondes)
+    return JSONResponse(status_code=429, content={"detail": erreur.detail})

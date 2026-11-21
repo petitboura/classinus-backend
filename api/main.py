@@ -11,6 +11,8 @@ from typing import List, Optional
 
 from anyio import to_thread
 from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi.exceptions import RequestValidationError
+from starlette.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from slowapi.errors import RateLimitExceeded
@@ -33,7 +35,6 @@ from api.memoire_eleve import router as memoire_eleve_router
 from api.autorisations_outils import router as autorisations_outils_router
 from api.widgets_outils import router as widgets_outils_router
 from api.higgsfield import router as higgsfield_router
-from api.parrainage import router as parrainage_router  # 09/11/2026
 from core import higgsfield_suivi
 from api.bibliotheque_utilisateur import router as bibliotheque_utilisateur_router
 from api.dossiers_bibliotheque import router as dossiers_bibliotheque_router
@@ -509,6 +510,47 @@ async def _lifespan(app: FastAPI):
 
 app = FastAPI(title="Classinus API", version="0.1.0", lifespan=_lifespan)
 
+
+# Les validations Pydantic ne doivent pas masquer un plafond atteint derrière
+# un message technique générique. Chaque dépassement de quantité ou de taille
+# reçoit un code stable et sa valeur maximale brute : le front reconstruit le
+# texte dans la langue active (voir lib/erreurs.ts).
+_CODES_CHAMPS_LIMITES_CHAT = {
+    "image_urls": "LIMITE_CHAMP_IMAGES",
+    "images_base64": "LIMITE_CHAMP_IMAGES_VIDEO",
+    "outils": "LIMITE_CHAMP_OUTILS",
+    "zips_en_attente": "LIMITE_CHAMP_ZIPS",
+    "outil_force": "LIMITE_CHAMP_OUTILS_CHOISIS",
+}
+
+
+@app.exception_handler(RequestValidationError)
+async def gerer_erreur_validation(request, exc: RequestValidationError):
+    erreurs = exc.errors()
+    # Seuls l'emplacement et le type sont journalisés : jamais la valeur envoyée.
+    logging.warning(
+        "REQUETE_INVALIDE chemin=%s erreurs=%s",
+        request.url.path,
+        [(".".join(str(p) for p in e.get("loc", ())), e.get("type")) for e in erreurs],
+    )
+    for erreur in erreurs:
+        if erreur.get("type") not in ("too_long", "string_too_long"):
+            continue
+        emplacement = erreur.get("loc") or ()
+        champ = str(emplacement[-1]) if emplacement else "champ"
+        maximum = (erreur.get("ctx") or {}).get("max_length")
+        code = _CODES_CHAMPS_LIMITES_CHAT.get(champ)
+        if code is not None and maximum is not None:
+            corps = erreur_api(422, code, maximum=maximum)
+        elif maximum is not None:
+            corps = erreur_api(422, "LIMITE_CHAMP_DEPASSEE", champ=champ, maximum=maximum)
+        else:
+            corps = erreur_api(422, "LIMITE_CHAMP_DEPASSEE_SANS_MAXIMUM", champ=champ)
+        return JSONResponse(status_code=422, content={"detail": corps.detail})
+
+    return JSONResponse(status_code=422, content={"detail": erreur_api(422, "REQUETE_INVALIDE").detail})
+
+
 # Plafond de taille totale d'une requete du chat (core/plafond_taille_requete.py) : protege la
 # memoire du serveur, ne touche pas au contenu. Ajoute AVANT les middlewares ci-dessous pour
 # rester plus interne qu'eux : sa reponse 413 recoit ainsi les en-tetes CORS (sinon le navigateur
@@ -898,7 +940,6 @@ app.include_router(memoire_eleve_router)
 app.include_router(autorisations_outils_router)
 app.include_router(widgets_outils_router)
 app.include_router(higgsfield_router)
-app.include_router(parrainage_router)
 app.include_router(bibliotheque_utilisateur_router)
 app.include_router(dossiers_bibliotheque_router)
 # roles_router (ancien systeme etablissement/enseignant/etudiant) retire
