@@ -165,7 +165,7 @@ LIBELLES_OUTILS_EN: dict[str, str] = {
     "Lecture de l'éditeur de code": "Read the code editor",
     "Montrer dans l'éditeur": "Show in the editor",
     "Écrire dans l'éditeur": "Write in the editor",
-    "Message en direct à l'utilisateur": "Live message to the student",
+    "Message en direct à l'utilisateur": "Live message to the user",
     "Ouverture du canal en direct": "Open the live channel",
     "Activation du canal en direct": "Enable the live channel",
     "Couper le canal en direct": "Disable the live channel",
