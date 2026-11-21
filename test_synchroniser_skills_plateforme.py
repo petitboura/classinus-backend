@@ -1,6 +1,7 @@
 """Tests du script de synchronisation des skills officiels (dossier skills_plateforme/ vers base et R2)."""
 import logging
 import os
+import re
 import shutil
 import tempfile
 import unittest
@@ -20,8 +21,15 @@ from core import skills_catalogue as C, skills_actions as A  # noqa: E402
 from scripts import synchroniser_skills_plateforme as SYNC  # noqa: E402
 
 DEPOT = Path(__file__).resolve().parent / "skills_plateforme"
-SLUGS = ["documents-excel", "documents-powerpoint", "documents-word"]
+SLUGS = sorted(p.name for p in DEPOT.iterdir() if p.is_dir())  # tous les skills du dépôt, quel que soit leur nombre
 U1 = "user-1"
+
+
+def _nom_de_fiche(dossier: Path) -> str:
+    return re.search(r'^name: "(.*)"$', (dossier / "SKILL.md").read_text(encoding="utf-8"), re.M).group(1)
+
+
+NOMS_DU_DEPOT = {p.name: _nom_de_fiche(p) for p in DEPOT.iterdir() if p.is_dir()}
 
 
 class TestSynchronisation(unittest.TestCase):
@@ -41,7 +49,7 @@ class TestSynchronisation(unittest.TestCase):
         self.dossier = self.tmp / "skills_plateforme"
         shutil.copytree(DEPOT, self.dossier)
 
-    def test_les_trois_fiches_du_depot_sont_valides(self):
+    def test_les_fiches_du_depot_sont_valides(self):
         bilan = SYNC.synchroniser(False, DEPOT)
         self.assertEqual(bilan["erreurs"], [])
         self.assertEqual(sorted(bilan["crees"]), SLUGS)
@@ -55,18 +63,18 @@ class TestSynchronisation(unittest.TestCase):
         bilan = SYNC.synchroniser(True, self.dossier)
         self.assertEqual(sorted(bilan["crees"]), SLUGS)
         lignes = base.tables["skills"]
-        self.assertEqual(len(lignes), 3)
+        self.assertEqual(len(lignes), len(SLUGS))
         for l in lignes:
             self.assertIsNone(l["owner_id"])
             self.assertEqual(l["portee"], "plateforme")
             self.assertTrue(l["actif"])
         self.assertTrue(all(k.startswith("plateforme/") for k in r2.objets))
         officiels = C.lister_skills_officiels()
-        self.assertEqual(sorted(o["nom"] for o in officiels), ["Documents Excel", "Documents PowerPoint", "Documents Word"])
-        sid = next(o["id"] for o in officiels if o["nom"] == "Documents Word")
+        self.assertEqual(sorted(o["nom"] for o in officiels), sorted(NOMS_DU_DEPOT.values()))
+        sid = next(o["id"] for o in officiels if o["nom"] == NOMS_DU_DEPOT["documents-word"])
         texte = A.executer(U1, "consulter", skill_id=sid)
         self.assertFalse(texte.startswith("Erreur"))
-        self.assertIn("# Documents Word (.docx)", texte)
+        self.assertIn("# Word documents (.docx)", texte)
 
     def test_relancer_sans_changement_ne_touche_a_rien(self):
         SYNC.synchroniser(True, self.dossier)
@@ -85,26 +93,26 @@ class TestSynchronisation(unittest.TestCase):
         (self.dossier / "documents-word" / "references" / "exemple.md").write_text("Exemple", encoding="utf-8")
         bilan = SYNC.synchroniser(True, self.dossier)
         self.assertEqual(bilan["mis_a_jour"], ["documents-word"])
-        self.assertEqual(sorted(bilan["inchanges"]), ["documents-excel", "documents-powerpoint"])
+        self.assertEqual(sorted(bilan["inchanges"]), [s for s in SLUGS if s != "documents-word"])
         nouvelles = set(r2.objets) - anciennes
-        self.assertEqual(len(nouvelles), 2)
+        self.assertEqual(len(nouvelles), 3)  # SKILL.md, SKILL.fr.md et references/exemple.md
         self.assertFalse(any("documents" in k for k in r2.objets))  # clés par identifiant, jamais par nom
         sid = next(l["id"] for l in base.tables["skills"] if l["slug"] == "documents-word")
         self.assertIn("Nouvelle règle.", A.executer(U1, "consulter", skill_id=sid))
         self.assertIn("Exemple", A.executer(U1, "consulter", skill_id=sid, chemin="references/exemple.md"))
-        self.assertEqual(len(base.tables["skills"]), 3, "pas de doublon")
+        self.assertEqual(len(base.tables["skills"]), len(SLUGS), "pas de doublon")
 
     def test_le_cache_est_vide_apres_une_synchronisation(self):
         self.assertEqual(C.lister_skills_officiels(), [])
         SYNC.synchroniser(True, self.dossier)
-        self.assertEqual(len(C.lister_skills_officiels()), 3)
+        self.assertEqual(len(C.lister_skills_officiels()), len(SLUGS))
 
     def test_un_skill_absent_du_dossier_est_signale_jamais_supprime(self):
         SYNC.synchroniser(True, self.dossier)
         shutil.rmtree(self.dossier / "documents-excel")
         bilan = SYNC.synchroniser(True, self.dossier)
         self.assertEqual(bilan["absents"], ["documents-excel"])
-        self.assertEqual(len(base.tables["skills"]), 3)
+        self.assertEqual(len(base.tables["skills"]), len(SLUGS))
         self.assertTrue(all(l["actif"] for l in base.tables["skills"]))
 
     def test_un_dossier_invalide_est_signale_sans_bloquer_les_autres(self):
@@ -126,7 +134,7 @@ class TestSynchronisation(unittest.TestCase):
     def test_un_echec_d_ecriture_est_signale_et_nettoie_r2(self):
         base.echec_sur = ("skills", "insert")
         bilan = SYNC.synchroniser(True, self.dossier)
-        self.assertEqual(len(bilan["erreurs"]), 3)
+        self.assertEqual(len(bilan["erreurs"]), len(SLUGS))
         self.assertEqual(r2.objets, {}, "aucun objet orphelin dans R2")
 
     def test_le_mode_par_defaut_est_la_simulation(self):
@@ -140,3 +148,32 @@ class TestSynchronisation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestContenuDuDepot(unittest.TestCase):
+    """Garde-fous sur les fichiers eux-mêmes : deux langues, en-têtes lisibles, aucun tiret long (règle de Bourama)."""
+
+    def test_chaque_skill_a_une_version_anglaise_et_une_version_francaise(self):
+        for slug in SLUGS:
+            for nom in ("SKILL.md", "SKILL.fr.md"):
+                self.assertTrue((DEPOT / slug / nom).is_file(), f"{slug}/{nom} manque")
+
+    def test_chaque_en_tete_a_un_nom_et_une_description_dans_la_limite_du_prompt(self):
+        for slug in SLUGS:
+            for nom in ("SKILL.md", "SKILL.fr.md"):
+                texte = (DEPOT / slug / nom).read_text(encoding="utf-8")
+                m = re.search(r'^name: "(.+)"\ndescription: "(.+)"$', texte, re.M)
+                self.assertIsNotNone(m, f"{slug}/{nom} : en-tête illisible")
+                self.assertLessEqual(len(m.group(2)), 400, f"{slug}/{nom} : description trop longue pour le prompt")
+
+    def test_la_version_francaise_renvoie_vers_l_anglaise_et_inversement(self):
+        for slug in SLUGS:
+            self.assertIn("(./SKILL.md)", (DEPOT / slug / "SKILL.fr.md").read_text(encoding="utf-8").splitlines()[0], slug)
+            self.assertIn("(SKILL.fr.md)", (DEPOT / slug / "SKILL.md").read_text(encoding="utf-8"), slug)
+
+    def test_aucun_tiret_long_dans_les_textes(self):
+        for slug in SLUGS:
+            for nom in ("SKILL.md", "SKILL.fr.md"):
+                for numero, ligne in enumerate((DEPOT / slug / nom).read_text(encoding="utf-8").splitlines(), 1):
+                    self.assertNotIn("\u2014", ligne, f"{slug}/{nom} ligne {numero}")
+                    self.assertNotIn(" -- ", ligne, f"{slug}/{nom} ligne {numero}")

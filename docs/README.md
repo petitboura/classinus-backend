@@ -34,8 +34,14 @@ Central entry point for all Classinus backend documentation. English is the defa
 
 These are not general project guides. Their locations are required by the skill synchronizer or keep warnings next to the disabled code they protect. Do not move them into this documentation folder.
 
+- [Interface design skill](../skills_plateforme/conception-interface/SKILL.md)
+- [Skill creation skill](../skills_plateforme/creation-skills/SKILL.md)
 - [Excel document skill](../skills_plateforme/documents-excel/SKILL.md)
+- [PDF document skill](../skills_plateforme/documents-pdf/SKILL.md)
 - [PowerPoint document skill](../skills_plateforme/documents-powerpoint/SKILL.md)
 - [Word document skill](../skills_plateforme/documents-word/SKILL.md)
+- [Google Workspace skill](../skills_plateforme/google-workspace/SKILL.md)
+- [Attached files skill](../skills_plateforme/lecture-fichiers/SKILL.md)
+- [PDF reading skill](../skills_plateforme/lecture-pdf/SKILL.md)
 - [Disabled Programme code warning](../_desactive_programme/LISEZ_MOI_NE_JAMAIS_REUTILISER.md)
 - [Disabled role hierarchy warning](../_desactive_roles_hierarchie/LISEZ_MOI_NE_JAMAIS_REUTILISER.md)

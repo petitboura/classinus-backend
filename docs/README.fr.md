@@ -34,8 +34,14 @@ Point d'entrée central de toute la documentation du backend Classinus. L'anglai
 
 Ce ne sont pas des guides généraux. Leur emplacement est requis par le synchroniseur de compétences ou permet de conserver les avertissements près du code désactivé qu'ils protègent. Ne pas les déplacer dans ce dossier de documentation.
 
+- [Compétence Conception d'interface](../skills_plateforme/conception-interface/SKILL.fr.md)
+- [Compétence Création de skills](../skills_plateforme/creation-skills/SKILL.fr.md)
 - [Compétence Documents Excel](../skills_plateforme/documents-excel/SKILL.fr.md)
+- [Compétence Documents PDF](../skills_plateforme/documents-pdf/SKILL.fr.md)
 - [Compétence Documents PowerPoint](../skills_plateforme/documents-powerpoint/SKILL.fr.md)
 - [Compétence Documents Word](../skills_plateforme/documents-word/SKILL.fr.md)
+- [Compétence Google Workspace](../skills_plateforme/google-workspace/SKILL.fr.md)
+- [Compétence Fichiers joints](../skills_plateforme/lecture-fichiers/SKILL.fr.md)
+- [Compétence Lecture de PDF](../skills_plateforme/lecture-pdf/SKILL.fr.md)
 - [Avertissement du code Programme désactivé](../_desactive_programme/LISEZ_MOI_NE_JAMAIS_REUTILISER.fr.md)
 - [Avertissement de la hiérarchie des rôles désactivée](../_desactive_roles_hierarchie/LISEZ_MOI_NE_JAMAIS_REUTILISER.fr.md)
