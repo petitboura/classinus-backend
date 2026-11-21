@@ -50,10 +50,12 @@ CODE_SORTIE_INDISPONIBLE = 4  # voir core/rendu_animation_processus.py
 
 
 class ErreurRendu(Exception):
-    def __init__(self, statut_http: int, code: str):
+    def __init__(self, statut_http: int, code: str, params: dict | None = None):
         super().__init__(code)
         self.statut_http = statut_http
         self.code = code
+        # Valeurs brutes du message (ex. maximum) : le front reconstruit le texte dans la langue active.
+        self.params = params or {}
 
 
 @dataclass
@@ -125,7 +127,7 @@ def creer_travail(utilisateur_id: str, format_video: str, document_html: str) ->
         if any(t.utilisateur_id == utilisateur_id and _actif(t) for t in _travaux.values()):
             raise ErreurRendu(409, "RENDU_VIDEO_DEJA_EN_COURS")
         if sum(1 for t in _travaux.values() if t.statut == "attente") >= ATTENTE_MAX:
-            raise ErreurRendu(503, "RENDU_VIDEO_OCCUPE")
+            raise ErreurRendu(503, "RENDU_VIDEO_OCCUPE", {"maximum": ATTENTE_MAX})
         travail = Travail(id=uuid.uuid4().hex, utilisateur_id=utilisateur_id, format=format_video)
         _travaux[travail.id] = travail
 

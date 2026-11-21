@@ -512,38 +512,44 @@ app = FastAPI(title="Classinus API", version="0.1.0", lifespan=_lifespan)
 
 
 # Les validations Pydantic ne doivent pas masquer un plafond atteint derrière
-# un message technique générique. On transforme les dépassements de quantité
-# et de taille en consignes directement exploitables par l'utilisateur.
-_CHAMPS_LIMITES_CHAT = {
-    "image_urls": ("images", "Tu peux joindre au maximum {maximum} images par message."),
-    "images_base64": ("images extraites de la vidéo", "Cette vidéo contient trop d'images à analyser (maximum : {maximum}). Réduis le nombre d'images puis réessaie."),
-    "outils": ("résultats d'outils", "Ce message contient trop de résultats d'outils dans son historique (maximum : {maximum}). L'historique doit être réduit puis renvoyé."),
-    "zips_en_attente": ("archives ZIP", "Tu peux joindre au maximum {maximum} archives ZIP à un message."),
-    "outil_force": ("outils sélectionnés", "Tu peux sélectionner au maximum {maximum} outils pour un même message."),
+# un message technique générique. Chaque dépassement de quantité ou de taille
+# reçoit un code stable et sa valeur maximale brute : le front reconstruit le
+# texte dans la langue active (voir lib/erreurs.ts).
+_CODES_CHAMPS_LIMITES_CHAT = {
+    "image_urls": "LIMITE_CHAMP_IMAGES",
+    "images_base64": "LIMITE_CHAMP_IMAGES_VIDEO",
+    "outils": "LIMITE_CHAMP_OUTILS",
+    "zips_en_attente": "LIMITE_CHAMP_ZIPS",
+    "outil_force": "LIMITE_CHAMP_OUTILS_CHOISIS",
 }
 
 
 @app.exception_handler(RequestValidationError)
 async def gerer_erreur_validation(request, exc: RequestValidationError):
-    for erreur in exc.errors():
+    erreurs = exc.errors()
+    # Seuls l'emplacement et le type sont journalisés : jamais la valeur envoyée.
+    logging.warning(
+        "REQUETE_INVALIDE chemin=%s erreurs=%s",
+        request.url.path,
+        [(".".join(str(p) for p in e.get("loc", ())), e.get("type")) for e in erreurs],
+    )
+    for erreur in erreurs:
         if erreur.get("type") not in ("too_long", "string_too_long"):
             continue
         emplacement = erreur.get("loc") or ()
         champ = str(emplacement[-1]) if emplacement else "champ"
         maximum = (erreur.get("ctx") or {}).get("max_length")
-        libelle, modele = _CHAMPS_LIMITES_CHAT.get(champ, (f"champ « {champ} »", "Le champ « {champ} » dépasse la limite autorisée ({maximum}). Réduis son contenu puis réessaie."))
-        if maximum is not None:
-            explication = modele.format(maximum=maximum, champ=champ)
+        code = _CODES_CHAMPS_LIMITES_CHAT.get(champ)
+        if code is not None and maximum is not None:
+            corps = erreur_api(422, code, maximum=maximum)
+        elif maximum is not None:
+            corps = erreur_api(422, "LIMITE_CHAMP_DEPASSEE", champ=champ, maximum=maximum)
         else:
-            explication = f"Le champ « {libelle} » dépasse la limite autorisée. Réduis son contenu puis réessaie."
-        params = {"explication": explication}
-        message = "La limite est atteinte : {explication}".format(**params)
-        return JSONResponse(status_code=422, content={"detail": {"code": "LIMITE_CHAMP_ATTEINTE", "message": message, "params": params}})
+            corps = erreur_api(422, "LIMITE_CHAMP_DEPASSEE_SANS_MAXIMUM", champ=champ)
+        return JSONResponse(status_code=422, content={"detail": corps.detail})
 
-    return JSONResponse(
-        status_code=422,
-        content={"detail": {"code": "REQUETE_INVALIDE", "message": "Les informations envoyées ne respectent pas le format attendu. Vérifie les champs puis réessaie."}},
-    )
+    return JSONResponse(status_code=422, content={"detail": erreur_api(422, "REQUETE_INVALIDE").detail})
+
 
 # Plafond de taille totale d'une requete du chat (core/plafond_taille_requete.py) : protege la
 # memoire du serveur, ne touche pas au contenu. Ajoute AVANT les middlewares ci-dessous pour

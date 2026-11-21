@@ -285,7 +285,7 @@ def _autoriser_domaine(user_id: str, conversation_id: str, valeur) -> str:
         )
     except Exception as e:
         logging.error("ERREUR enregistrement du domaine autorisé: %s", type(e).__name__)
-        return "EXECUTION_CODE_UNAVAILABLE: impossible d'enregistrer l'autorisation. Aucun accès n'a été ajouté."
+        return "Impossible d'enregistrer l'autorisation. Aucun accès n'a été ajouté."
     return (
         f"Accès autorisé par l'utilisateur pour cette conversation : {domaine}. "
         "Il est joignable dès la prochaine action dans le workspace, même s'il est déjà ouvert. "
@@ -1109,7 +1109,7 @@ def gerer_execution_code(
             domaines = _domaines_reseau_configures()
         except Exception as e:
             logging.error("ERREUR lecture des domaines autorisés: %s", type(e).__name__)
-            return "EXECUTION_CODE_UNAVAILABLE: impossible de lire la liste des domaines autorisés."
+            return "Impossible de lire la liste des domaines autorisés."
         return _message_reseau(domaines, _domaines_conversation_ou_vide(user_id, conversation_id))
     if action == "demander_acces_reseau":
         return _autoriser_domaine(user_id, conversation_id, domain)
@@ -1117,7 +1117,7 @@ def gerer_execution_code(
     # bloquait toutes les actions en mode docker.
     from core import boites_isolees
     if not boites_isolees.configuree():
-        return "EXECUTION_CODE_NOT_CONFIGURED: le service d'exécution de code n'est pas configuré sur le serveur."
+        return "Le service d'exécution de code n'est pas configuré sur le serveur."
 
     if action == "run_code" and not code.strip():
         return "Aucun code fourni. Envoie le code à exécuter."
@@ -1163,7 +1163,7 @@ def gerer_execution_code(
         )
     except Exception as e:
         logging.error("ERREUR réservation exécution code: %s", type(e).__name__)
-        return "EXECUTION_CODE_UNAVAILABLE: impossible de vérifier les quotas. Aucune commande n'a été exécutée."
+        return "Impossible de vérifier les quotas. Aucune commande n'a été exécutée."
 
     if not reservation.get("allowed"):
         return _message_refus(reservation)

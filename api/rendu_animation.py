@@ -37,7 +37,7 @@ class DemandeRenduVideo(BaseModel):
 
 
 def _lever(e: ErreurRendu):
-    raise erreur_api(e.statut_http, e.code)
+    raise erreur_api(e.statut_http, e.code, **e.params)
 
 
 @router.post("", status_code=202)
