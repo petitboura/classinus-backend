@@ -326,17 +326,13 @@ def rechercher_image(requete: str, nombre: int = 40, page: int = 1) -> str:
     de l'image, pas le moteur de recherche ni le service qui a interrogé l'API.
 
     RIEN ne s'affiche automatiquement. Lis les titres et les informations de
-    chaque résultat. Le tri sert UNIQUEMENT à écarter ce qui ne correspond pas
-    à la demande, pas à choisir les plus belles ou les plus pertinentes : la
-    quantité compte autant que la qualité. Dès qu'une image correspond, même si
-    elle est moyenne, affiche-la, plutôt que de n'en garder que quelques-unes.
-    S'il en reste peu après le tri, rappelle l'outil avec page=2 pour en
-    trouver davantage. Si aucune ne convient, n'en place aucune et explique
-    qu'aucun résultat pertinent n'a été trouvé.
+    chaque résultat, puis garde UNIQUEMENT les images qui correspondent
+    réellement à la demande. Si aucune ne convient, n'en place aucune et
+    explique qu'aucun résultat pertinent n'a été trouvé.
 
-    Cela vaut pour toute demande, même ordinaire : ne limite jamais
-    arbitrairement la sélection à quelques images. Si l'utilisateur demande
-    beaucoup d'images, affiche jusqu'à 30 ou 40 résultats.
+    Lorsque l'utilisateur demande beaucoup d'images, affiche un ensemble
+    généreux de résultats pertinents, jusqu'à 30 ou 40 si la demande le justifie,
+    plutôt que de limiter arbitrairement la sélection à quelques images.
 
     Pour afficher une image, utilise exactement son URL et transmets aussi
     sa page d'origine dans le titre Markdown :
@@ -387,12 +383,8 @@ def rechercher_video(requete: str, nombre: int = 30, page: int = 1) -> str:
 
     Renvoie un JSON {"videos_trouvees": [...]}.
     RIEN ne s'affiche automatiquement : seules les vidéos dont tu écris le
-    lien dans ta réponse sont vues par l'utilisateur. Lis les titres, chaînes
-    et plateformes. Le tri sert UNIQUEMENT à écarter ce qui ne correspond pas
-    à la demande, pas à choisir les meilleures : la quantité compte autant que
-    la qualité. Dès qu'une vidéo correspond, même si elle est moyenne,
-    affiche-la, plutôt que de n'en garder que quelques-unes. S'il en reste peu
-    après le tri, rappelle l'outil avec page=2 pour en trouver davantage. Si
+    lien dans ta réponse sont vues par l'utilisateur. Lis les titres, chaînes et plateformes, puis
+    garde UNIQUEMENT les vidéos qui correspondent vraiment à la demande. Si
     aucune ne convient, n'en place aucune et dis-le simplement. Pour en
     afficher une, écris [titre (plateforme)](url) avec l'URL exacte du
     résultat. Plusieurs liens écrits à la suite, sur des lignes consécutives
