@@ -381,10 +381,14 @@ def rechercher_video(requete: str, nombre: int = 30, page: int = 1) -> str:
     Les moteurs payants ne sont appelés que si les sources précédentes
     ne remplissent pas la page. La pagination est disponible via page.
 
-    Renvoie un JSON {"videos_trouvees": [...]} : rien ne s'affiche automatiquement.
-    Lis les titres, chaînes et plateformes puis garde seulement les vidéos
-    pertinentes. Affiche-les avec [titre — plateforme](url), en utilisant
-    l'URL exacte. Plusieurs liens consécutifs s'affichent dans une rangée.
+    Renvoie un JSON {"videos_trouvees": [...]}.
+    RIEN ne s'affiche automatiquement : seules les vidéos dont tu écris le
+    lien dans ta réponse sont vues par l'utilisateur. Lis les titres, chaînes et plateformes, puis
+    garde UNIQUEMENT les vidéos qui correspondent vraiment à la demande. Si
+    aucune ne convient, n'en place aucune et dis-le simplement. Pour en
+    afficher une, écris [titre (plateforme)](url) avec l'URL exacte du
+    résultat. Plusieurs liens écrits à la suite, sur des lignes consécutives
+    sans ligne vide, s'affichent côte à côte dans une même rangée.
     Pour comprendre le contenu d'une vidéo YouTube, appelle lire_video.
     """
     try:
