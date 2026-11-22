@@ -20,6 +20,7 @@ Start with `lire_document_conversation` in `infos` mode: type, size, number of p
 - **Short document (a few pages)**: `texte` mode.
 - **Long document, question about a topic**: `recherche` mode with the word or expression. It returns the passages with their page. Then use `pages` mode with `debut_page` and `fin_page` around the best hits.
 - **User names a page, a chapter or a section**: `pages` mode on that range.
+- **User wants the data of a table (statement, report card, invoice)**: `tableaux` mode with `debut_page` and `fin_page`. It returns Markdown tables.
 - **Summary of a whole long document**: read it in order, slice by slice. When a reply tells you to call the tool again with a new `debut_page` or `debut_caractere`, do it before concluding. If you stop early, say exactly which pages you read.
 
 ## 3. Scanned pages
@@ -28,7 +29,7 @@ A page without native text is read by text recognition, only when you ask for it
 
 ## 4. Tables, figures and numbers
 
-Text extraction flattens tables. Quote numbers exactly as written and give the page. To compute, convert or plot from a table, import the file into the sandbox (`gerer_execution_code`, action `importer_fichier`) and extract it with `pdfplumber`, after checking that it is installed.
+Plain text extraction flattens tables: use the `tableaux` mode to get them as tables. It only works on pages with native text, never on a scan; for a scanned page, read it with the `pages` mode and say that the table structure may be lost. Quote numbers exactly as written and give the page. To compute, convert or plot from a table, import the file into the sandbox (`gerer_execution_code`, action `importer_fichier`) and extract it with `pdfplumber`, after checking that it is installed.
 
 ## 5. PDF on the web
 

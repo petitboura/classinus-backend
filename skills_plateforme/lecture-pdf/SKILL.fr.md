@@ -20,6 +20,7 @@ Commence par `lire_document_conversation` en mode `infos` : type, taille, nombre
 - **Document court (quelques pages)** : mode `texte`.
 - **Document long, question sur un sujet** : mode `recherche` avec le mot ou l'expression. Il renvoie les passages avec leur page. Utilise ensuite le mode `pages` avec `debut_page` et `fin_page` autour des meilleurs résultats.
 - **L'utilisateur nomme une page, un chapitre ou une section** : mode `pages` sur cette plage.
+- **L'utilisateur veut les données d'un tableau (relevé, bulletin, facture)** : mode `tableaux` avec `debut_page` et `fin_page`. Il renvoie des tableaux Markdown.
 - **Résumé d'un long document entier** : lis-le dans l'ordre, tranche par tranche. Quand une réponse t'indique de rappeler l'outil avec un nouveau `debut_page` ou `debut_caractere`, fais-le avant de conclure. Si tu t'arrêtes avant la fin, dis exactement quelles pages tu as lues.
 
 ## 3. Pages scannées
@@ -28,7 +29,7 @@ Une page sans texte natif est lue par reconnaissance de texte, seulement quand t
 
 ## 4. Tableaux, figures et chiffres
 
-L'extraction de texte aplatit les tableaux. Cite les chiffres exactement comme écrits et donne la page. Pour calculer, convertir ou tracer à partir d'un tableau, importe le fichier dans le bac à sable (`gerer_execution_code`, action `importer_fichier`) et extrais-le avec `pdfplumber`, après avoir vérifié qu'il est installé.
+L'extraction de texte simple aplatit les tableaux : utilise le mode `tableaux` pour les obtenir sous forme de tableaux. Il ne marche que sur les pages à texte natif, jamais sur un scan ; pour une page scannée, lis-la avec le mode `pages` et dis que la structure du tableau peut être perdue. Cite les chiffres exactement comme écrits et donne la page. Pour calculer, convertir ou tracer à partir d'un tableau, importe le fichier dans le bac à sable (`gerer_execution_code`, action `importer_fichier`) et extrais-le avec `pdfplumber`, après avoir vérifié qu'il est installé.
 
 ## 5. PDF sur le web
 

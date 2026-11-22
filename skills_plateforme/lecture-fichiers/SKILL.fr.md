@@ -13,7 +13,7 @@ description: "Méthode officielle Classinus pour choisir le bon outil de lecture
 
 | Le fichier est | Utiliser |
 |---|---|
-| PDF, Word, Excel, PowerPoint, texte, code, ancien format Office | `lire_document_conversation` (modes `infos`, `texte`, `pages`, `recherche`). Pour un PDF, vois Lecture de PDF |
+| PDF, Word, Excel, PowerPoint, texte, code, ancien format Office | `lire_document_conversation` (modes `infos`, `texte`, `pages`, `recherche`, et `tableaux` pour un PDF). Pour un PDF, vois Lecture de PDF |
 | Audio ou vidéo joint | `lire_media_conversation` (modes `infos`, `transcription`, `images`, `les_deux`) |
 | Image | Déjà lue à l'envoi. N'appelle aucun outil pour elle |
 | Archive zip | Son sommaire liste les fichiers, chacun suivi d'un jeton. Lis un fichier avec `gerer_fichier_conversation`, action `lire`, paramètre `reference` |

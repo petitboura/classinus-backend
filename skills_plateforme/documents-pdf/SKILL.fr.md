@@ -12,7 +12,8 @@ description: "Méthode officielle Classinus pour créer un PDF ou modifier un PD
 ## 1. Choisir le bon chemin
 
 1. Un document neuf et simple (titre, intertitres, listes, tableaux, blocs de code) sans mise en page particulière : utilise l'outil `generer_document` avec un titre et un contenu en Markdown. Il renvoie le lien public du PDF, et le fichier est aussi rangé dans la bibliothèque de l'utilisateur. C'est le chemin le plus rapide.
-2. Tout le reste (modifier un fichier existant, travail page par page, formulaires, mise en page précise, écritures non latines) : utilise le bac à sable de code, à partir de la section 2.
+2. Fusionner, couper, tourner des pages ou remplir un formulaire standard sur des PDF joints par l'utilisateur : utilise les outils dédiés, sans bac à sable. `fusionner_pdf` (2 à 20 PDF, dans l'ordre donné), `decouper_pdf` (plages de pages comme `["1-3", "4-6"]`, ou toutes les N pages), `tourner_pages_pdf` (90, 180 ou 270 degrés, toutes les pages ou certaines), `remplir_formulaire_pdf` (appelle-le d'abord sans valeurs pour lister les champs, puis une seconde fois avec les valeurs données par l'utilisateur). Chacun renvoie un nouveau fichier et laisse l'original intact. Un PDF protégé par mot de passe ne peut pas être ouvert par ces outils.
+3. Tout le reste (filigrane, protection par mot de passe, reconnaissance de texte, mise en page précise, écritures non latines, formulaire que l'outil ne sait pas remplir) : utilise le bac à sable de code, à partir de la section 2.
 
 ## 2. Préparer le bac à sable
 

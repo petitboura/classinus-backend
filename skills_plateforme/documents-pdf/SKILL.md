@@ -12,7 +12,8 @@ Use this skill when the user wants a PDF created, or an existing PDF changed. If
 ## 1. Choose the right path
 
 1. A simple new document (title, headings, lists, tables, code blocks) with no special layout: use the `generer_document` tool with a title and Markdown content. It returns the public link of the PDF, and the file is also saved in the user's library. This is the fastest path.
-2. Anything else (changing an existing file, page-level work, forms, precise layout, non-Latin scripts): use the code sandbox, from section 2.
+2. Merge, split, rotate pages or fill a standard form on PDFs the user attached: use the dedicated tools, no sandbox needed. `fusionner_pdf` (2 to 20 PDFs, in the order given), `decouper_pdf` (page ranges such as `["1-3", "4-6"]`, or every N pages), `tourner_pages_pdf` (90, 180 or 270 degrees, all pages or some), `remplir_formulaire_pdf` (call it without values first to list the fields, then again with the values the user gave). Each returns a new file and leaves the original intact. A password protected PDF cannot be opened by these tools.
+3. Anything else (watermark, password protection, OCR, precise layout, non-Latin scripts, a form the tool cannot fill): use the code sandbox, from section 2.
 
 ## 2. Prepare the sandbox
 
