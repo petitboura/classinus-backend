@@ -1,0 +1,64 @@
+# Waiting list for "Coming soon" models
+
+**English version** · [Version française](LISTE_ATTENTE_MODELES.fr.md)
+
+Added on 16 November 2026 at Bourama's request. A fake door measures real demand before Claude, GPT and Gemini are plugged in. In the model picker these models appear greyed out with the "Coming soon" label. A click opens a sign up form for a paid waiting list. **No payment is taken**, and the form says so.
+
+## What the form asks
+
+To sign up, the person must be signed in, so the email comes from the account; reading the plans is open to visitors. The form asks for a plan (Pro 10, Max 17 or Ultra 20 dollars per month, open to everyone), a profile (student, administration or developer), a consent tick, and two optional fields: country and WhatsApp. Plans and texts are not hard coded:
+
+- Plans live in the `paliers_liste_attente` table (price, monthly credit, order, active flag).
+- Form texts live in `textes_modeles_llm` under keys starting with `attente_`, in French and English.
+
+## Tables
+
+All three tables have row level security on and no policy: only the backend (Supabase secret key) reads and writes them. Rows linked to an account use `ON DELETE CASCADE` to `auth.users`, and are also listed in `core/purge_compte.py` and in the data export of `api/profiles.py`.
+
+| Table | Role |
+| --- | --- |
+| `paliers_liste_attente` | The plans shown in the form. |
+| `liste_attente_modeles` | ONE waiting list: one row per user (Bourama's decision of 17 November 2026, not one list per model). `modele_id` keeps the model clicked at sign up (the model of origin) and never changes afterwards. Unique on `user_id`. |
+| `evenements_liste_attente` | The four funnel steps, for investor figures. |
+
+The funnel steps are, in order: `selecteur_ouvert`, `modele_grise_clique`, `formulaire_ouvert`, `inscription_validee`. The last one is written only by the sign up itself, never by the client.
+
+## Routes
+
+The write routes (`POST /api/liste-attente` and `/desinscription`) need a signed in user. Since 18 November 2026, `GET /api/liste-attente/config` and `POST /api/liste-attente/evenement` are open to visitors without an account, so that the `/abonnements` page can be seen without signing in: a visitor receives the plans and the texts with a null registration, and their funnel step is ignored without an error (`/api/liste-attente`).
+
+| Route | What it does |
+| --- | --- |
+| `GET /config` | Plans, texts (French and English) and the user's active sign up (`inscription`, or null). |
+| `POST /` | Creates the user's sign up, or updates it if there is one already (the model of origin is kept). |
+| `POST /desinscription` | Marks the user's sign up as `desinscrit` and erases the WhatsApp number. No body needed. |
+| `POST /evenement` | Records one funnel step. |
+
+Errors use stable codes (`LISTE_ATTENTE_*` in `core/erreurs.py`) with a French and an English message.
+
+## Code
+
+- `core/liste_attente.py`: all the logic.
+- `api/liste_attente.py`: the HTTP layer.
+- `migrations/2026_11_16_liste_attente_modeles.sql`: tables, plans and texts.
+- `migrations/2026_11_17_liste_attente_unique.sql`: one row per user, plan names (Pro, Max, Ultra), plan points and the texts rewritten for a single list.
+- `test_liste_attente.py`: tests without network access.
+
+## Model groups, lock and Max badge
+
+Added on 17 November 2026 at Bourama's request. The word "Coming soon" is gone from the picker: a model that costs credit shows a **lock**, and the frontier models (group 1) also carry a **Max** badge.
+
+- `modeles_llm.groupe` (1 to 5): 1 frontier, 2 to 4 other credit models, 5 very cheap and outside the credit. It is read apart in `core/fournisseurs_llm.py`, so a missing column breaks nothing (no group, no badge). Muse Spark Open has no group yet.
+- Both model lists (`modeles_disponibles_pour_agent`, `modeles_bientot_pour_agent`) send `groupe` and `libelles_badge` (the badge by language, from the texts `badge_groupe_<n>`).
+- The text under the key `bientot` now says "Available with a plan": it is only the tooltip and accessible name of the lock.
+- Placements still to confirm: Muse Spark 1.3, GPT-6 Luna, Gemini 4 Hydrogen and Grok 4.3. Migration: `migrations/2026_11_17_groupe_modeles.sql`.
+
+## Reading the figures
+
+Bourama reads the data from the Supabase dashboard (the backend key bypasses the row security). The most convincing figure is the conversion rate at each step, split by model clicked, plan chosen, profile and country.
+
+## Known limits
+
+- The model identifier is not checked against the catalogue: anyone signed in could send an unknown model name. It only creates a row for that person.
+- The 30 addresses of `acces_anticipe_modeles` already see the models, so they never get a greyed out model and never reach the form.
+- A legal check is still needed before a public launch, because the rules differ by country.

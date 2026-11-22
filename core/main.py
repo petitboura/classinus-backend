@@ -943,6 +943,9 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # le modèle qui décide. Le message ne contient que ses informations ; l'outil pour
         # le lire doit donc être réellement branché.
         outils_forces_contexte.append("lire_document_conversation")
+        # 21/11/2026, demande de Bourama : le modèle doit aussi pouvoir modifier ce document, ou travailler
+        # sur ses PDF. Même raison : sans cette ligne, rien ne garantit que ces outils soient proposés ce tour-ci.
+        outils_forces_contexte.extend(n for n in CATEGORIES_OUTILS["document_joint"] if n != "lire_document_conversation")
     if code_id_actif:
         # 12/09/2026, demande explicite Bourama, obligation d'appel : si
         # l'outil n'est pas dans outils_forces_contexte, rien ne garantit
@@ -1144,7 +1147,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     routeur_auto = False
     if not contexte_video and not ROUTEUR_OUTILS_AUTO_DESACTIVE and not outil_force and not ignorer_suggestion_outils and message_utilisateur and not toutes_les_urls_images and not images_base64:
         def _tache_routeur():
-            outils_disponibles_agent, _ = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id, origine=origine, contexte_video=bool(contexte_video))
+            outils_disponibles_agent, _ = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id, origine=origine, contexte_video=bool(contexte_video), client=client)
             # Notion + GitHub exclus du CATALOGUE envoyé au routeur automatique
             # (14/08, demande Bourama : "enlève le catalogue que ce ne soit
             # plus suggéré, comme s'il ne fonctionne plus"). Ces deux serveurs
@@ -1181,7 +1184,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # renvoye avec le reste -- reutilise plus bas pour
             # demander_outils au lieu d'etre redemande.
             outil_force_contexte_seul = _fusionner_outils(None, outils_forces_contexte + outils_retenus_precedents)
-            catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id, origine=origine, contexte_video=bool(contexte_video))
+            catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id, origine=origine, contexte_video=bool(contexte_video), client=client)
             if canal_en_direct and user_id and lecture_ecran_pc_autorisee(origine):
                 lecture_ecran_anticipee.append(lancer_lecture_anticipee(user_id, conversation_id, table_routage_complet))
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force_contexte_seul)
@@ -1298,7 +1301,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # FOIS ici, reutilise plus bas pour demander_outils au lieu
             # d'etre redemande (11/09/2026, meme correctif que la branche
             # routeur juste au-dessus).
-            catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id, origine=origine, contexte_video=bool(contexte_video))
+            catalogue_complet, table_routage_complet = lister_outils_autorises_pour_agent(get_secret, user_id, agent_id, conversation_id, origine=origine, contexte_video=bool(contexte_video), client=client)
             outils_mcp, table_routage = filtrer_catalogue_par_outil_force(catalogue_complet, table_routage_complet, outil_force)
             outil_force_verifie = [o["function"]["name"] for o in outils_mcp] if outil_force else outil_force
         system_final = _construire_system_prompt(message_utilisateur, agent_id, user_id, longueur_reponse, fuseau_horaire, recherche_forcee, outil_force_verifie, sans_enseignant, mes_programmes, notions_programme_pertinentes, signalements_pertinents, code_id_actif is not None, persona_pedagogique, guide_actif, mode_source, actions_ecran, reponses_qcm_recentes, etat_editeur, configuration_etudiant, sommaire_memoire, client=client, libelles_client=libelles_client, origine=origine, langue_interface=langue_interface, skills_catalogue=skills_catalogue, bloc_connexions=bloc_connexions)
@@ -1601,7 +1604,10 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 # Les etapes suivantes ("reflechit" puis le texte de reponse)
                 # sont deja couvertes par l'existant (IndicateurReflexion,
                 # streaming normal) une fois cette bulle disparue.
-                client_google = genai.Client(api_key=get_secret("GOOGLE_API_KEY"))
+                client_google = genai.Client(
+                api_key=get_secret("GOOGLE_API_KEY"),
+                http_options=types.HttpOptions(api_version="v1beta"),
+            )
                 response = client_google.models.generate_content_stream(
                     model=GOOGLE_MODEL,
                     contents=gemini_messages,
@@ -1635,7 +1641,7 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         if description_generee:
             message_pour_modele = (
                 f"{message_pour_modele}\n\n"
-                "[Contenu de l'image ou de la vidéo jointe par l'élève, "
+                "[Contenu de l'image ou de la vidéo jointe par l'utilisateur, "
                 "décrit/transcrit par un outil de vision]\n"
                 f"{description_generee}"
             )
@@ -1655,10 +1661,10 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
             # comme un message texte ordinaire.
             message_pour_modele = (
                 f"{message_pour_modele}\n\n"
-                "[L'élève a joint une image ou une vidéo à ce message, mais "
+                "[L'utilisateur a joint une image ou une vidéo à ce message, mais "
                 "la lecture automatique de son contenu a échoué : tu n'as "
                 "donc pas accès à ce qu'elle contient. Si c'est nécessaire "
-                "pour répondre, dis-le à l'élève et demande-lui de "
+                "pour répondre, dis-le à l'utilisateur et demande-lui de "
                 "redécrire ce que montre l'image/la vidéo, ou de la "
                 "renvoyer.]"
             )
@@ -1996,7 +2002,10 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
         # (indisponibilite technique temporaire) plutot que de se presenter
         # comme une IA incapable de faire des recherches par nature.
         try:
-            client_google = genai.Client(api_key=get_secret("GOOGLE_API_KEY"))
+            client_google = genai.Client(
+                api_key=get_secret("GOOGLE_API_KEY"),
+                http_options=types.HttpOptions(api_version="v1beta"),
+            )
             outil_deja_execute = any(m.get("role") == "tool" for m in messages_agent)
             gemini_messages = []
             for m in messages_agent:

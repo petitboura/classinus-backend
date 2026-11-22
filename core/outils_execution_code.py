@@ -285,7 +285,7 @@ def _autoriser_domaine(user_id: str, conversation_id: str, valeur) -> str:
         )
     except Exception as e:
         logging.error("ERREUR enregistrement du domaine autorisé: %s", type(e).__name__)
-        return "EXECUTION_CODE_UNAVAILABLE: impossible d'enregistrer l'autorisation. Aucun accès n'a été ajouté."
+        return "Impossible d'enregistrer l'autorisation. Aucun accès n'a été ajouté."
     return (
         f"Accès autorisé par l'utilisateur pour cette conversation : {domaine}. "
         "Il est joignable dès la prochaine action dans le workspace, même s'il est déjà ouvert. "
@@ -1020,25 +1020,27 @@ def _message_refus(reservation: dict) -> str:
     raison = reservation.get("reason")
     if raison == "daily_limit":
         return (
-            "EXECUTION_CODE_DAILY_LIMIT: la limite quotidienne est atteinte. "
-            f"Usage estimé : {reservation.get('used_seconds', 0)} secondes, "
-            f"limite : {reservation.get('limit_seconds', 0)} secondes."
+            "La limite quotidienne de temps d'exécution de code est atteinte. "
+            f"Usage estimé : {reservation.get('used_seconds', 0)} secondes sur "
+            f"{reservation.get('limit_seconds', 0)} secondes. Les nouvelles exécutions "
+            "reprendront après le renouvellement quotidien du quota."
         )
     if raison == "monthly_limit":
         return (
-            "EXECUTION_CODE_MONTHLY_LIMIT: la limite mensuelle est atteinte. "
-            f"Usage estimé : {reservation.get('used_seconds', 0)} secondes, "
-            f"limite : {reservation.get('limit_seconds', 0)} secondes."
+            "La limite mensuelle de temps d'exécution de code est atteinte. "
+            f"Usage estimé : {reservation.get('used_seconds', 0)} secondes sur "
+            f"{reservation.get('limit_seconds', 0)} secondes. Les nouvelles exécutions "
+            "reprendront après le renouvellement mensuel du quota."
         )
     if raison == "budget_limit":
-        return "EXECUTION_CODE_BUDGET_LIMIT: le plafond mensuel estimé d'E2B est atteint. Les nouvelles exécutions sont bloquées."
+        return (f"Le budget mensuel du service d'exécution de code est atteint : {reservation.get('spent_usd', 0)} USD utilisés sur {reservation.get('limit_usd', 0)} USD. " "Les nouvelles exécutions sont bloquées jusqu'au renouvellement du budget.")
     if raison == "concurrency_limit":
-        return "EXECUTION_CODE_CONCURRENCY_LIMIT: le nombre maximal de sandboxes simultanées est atteint. Réessaie plus tard."
+        return "Toutes les places d'exécution de code sont actuellement occupées. Ferme un workspace inutilisé ou réessaie lorsqu'une place se libère."
     if raison == "busy":
-        return "EXECUTION_CODE_BUSY: une autre action utilise déjà le workspace de cette conversation. Réessaie après sa fin."
+        return "Une autre action utilise déjà le workspace de cette conversation. Attends sa fin avant de lancer une nouvelle action."
     if raison == "invalid_action":
-        return "EXECUTION_CODE_INVALID_ACTION: cette action n'est pas autorisée."
-    return "EXECUTION_CODE_UNAVAILABLE: la configuration ou les quotas du sandbox ne sont pas accessibles. Aucune exécution n'a été lancée."
+        return "Cette action n'est pas autorisée dans l'espace d'exécution de code."
+    return "Le service d'exécution de code ne peut pas vérifier sa configuration ou ses quotas. Aucune exécution n'a été lancée. Réessaie dans un instant."
 
 
 @mcp_execution_code.tool()
@@ -1107,7 +1109,7 @@ def gerer_execution_code(
             domaines = _domaines_reseau_configures()
         except Exception as e:
             logging.error("ERREUR lecture des domaines autorisés: %s", type(e).__name__)
-            return "EXECUTION_CODE_UNAVAILABLE: impossible de lire la liste des domaines autorisés."
+            return "Impossible de lire la liste des domaines autorisés."
         return _message_reseau(domaines, _domaines_conversation_ou_vide(user_id, conversation_id))
     if action == "demander_acces_reseau":
         return _autoriser_domaine(user_id, conversation_id, domain)
@@ -1115,7 +1117,7 @@ def gerer_execution_code(
     # bloquait toutes les actions en mode docker.
     from core import boites_isolees
     if not boites_isolees.configuree():
-        return "EXECUTION_CODE_NOT_CONFIGURED: le service d'exécution de code n'est pas configuré sur le serveur."
+        return "Le service d'exécution de code n'est pas configuré sur le serveur."
 
     if action == "run_code" and not code.strip():
         return "Aucun code fourni. Envoie le code à exécuter."
@@ -1161,7 +1163,7 @@ def gerer_execution_code(
         )
     except Exception as e:
         logging.error("ERREUR réservation exécution code: %s", type(e).__name__)
-        return "EXECUTION_CODE_UNAVAILABLE: impossible de vérifier les quotas. Aucune commande n'a été exécutée."
+        return "Impossible de vérifier les quotas. Aucune commande n'a été exécutée."
 
     if not reservation.get("allowed"):
         return _message_refus(reservation)

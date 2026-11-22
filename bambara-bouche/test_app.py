@@ -314,6 +314,133 @@ class GeminiTests(unittest.TestCase):
         self.assertIn("hors ligne", ctx.exception.message)
 
 
+class _FausseReponseBrute:
+    """Réponse HTTP dont le corps est du son brut (comme ElevenLabs), pas du JSON."""
+
+    def __init__(self, octets: bytes):
+        self._octets = octets
+
+    def read(self):
+        return self._octets
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+
+ENV_ELEVENLABS = {"ELEVENLABS_API_KEY": "cle-de-test", "ELEVENLABS_VOICE_ID": "voix-de-test"}
+
+
+class ElevenLabsTests(unittest.TestCase):
+    def test_voix_au_catalogue_avec_modele_de_la_variable(self):
+        statuts = {v["id"]: v for v in voix.lister_voix()}
+        self.assertEqual(statuts["elevenlabs_tts"]["licence"], "service_elevenlabs")
+        self.assertEqual(statuts["elevenlabs_tts"]["locuteurs"], 1)
+        self.assertEqual(statuts["elevenlabs_tts"]["depot"], "eleven_v3")
+        with mock.patch.dict(os.environ, {"ELEVENLABS_MODELE": "eleven_v4_turbo"}):
+            self.assertEqual({v["id"]: v for v in voix.lister_voix()}["elevenlabs_tts"]["depot"], "eleven_v4_turbo")
+
+    def test_charger_sans_cle_ou_sans_voix_garde_l_erreur(self):
+        attendus = {
+            "ELEVENLABS_API_KEY": {"ELEVENLABS_API_KEY": "", "ELEVENLABS_VOICE_ID": "voix-de-test"},
+            "ELEVENLABS_VOICE_ID": {"ELEVENLABS_API_KEY": "cle-de-test", "ELEVENLABS_VOICE_ID": ""},
+        }
+        for nom, environnement in attendus.items():
+            etats = {i: {"pret": False, "chargement": False, "erreur": None} for i in voix.VOIX}
+            with self.subTest(nom=nom), mock.patch.object(voix, "_etat", etats), mock.patch.dict(os.environ, environnement):
+                voix.charger("elevenlabs_tts")
+            self.assertFalse(etats["elevenlabs_tts"]["pret"])
+            self.assertIn(nom, etats["elevenlabs_tts"]["erreur"])
+
+    def test_charger_avec_cle_et_voix_est_pret_sans_telechargement(self):
+        etats = {i: {"pret": False, "chargement": False, "erreur": None} for i in voix.VOIX}
+        with mock.patch.object(voix, "_etat", etats), mock.patch.dict(os.environ, ENV_ELEVENLABS):
+            voix.charger("elevenlabs_tts")
+        self.assertTrue(etats["elevenlabs_tts"]["pret"])
+
+    def test_synthese_envoie_texte_voix_modele_format_et_cle(self):
+        pcm = np.array([0, 1000, -1000], dtype="<i2").tobytes()
+        with _voix_pretes(), mock.patch.dict(os.environ, ENV_ELEVENLABS), \
+                mock.patch.object(voix.urllib.request, "urlopen", return_value=_FausseReponseBrute(pcm)) as appel:
+            audio = voix.synthetiser("elevenlabs_tts", "  An ka taa  ", 0)
+        requete = appel.call_args.args[0]
+        self.assertTrue(requete.full_url.startswith("https://api.elevenlabs.io/v1/text-to-speech/voix-de-test?"))
+        self.assertIn("output_format=pcm_24000", requete.full_url)
+        self.assertEqual(requete.get_header("Xi-api-key"), "cle-de-test")
+        corps = json.loads(requete.data.decode("utf-8"))
+        self.assertEqual(corps, {"text": "An ka taa", "model_id": "eleven_v3"})
+        with wave.open(io.BytesIO(audio)) as f:
+            self.assertEqual((f.getnchannels(), f.getsampwidth(), f.getframerate(), f.getnframes()), (1, 2, 24000, 3))
+
+    def test_modele_et_format_viennent_des_variables(self):
+        pcm = np.array([0, 1], dtype="<i2").tobytes()
+        environnement = {**ENV_ELEVENLABS, "ELEVENLABS_MODELE": "eleven_v4_turbo", "ELEVENLABS_FORMAT": "pcm_16000"}
+        with _voix_pretes(), mock.patch.dict(os.environ, environnement), \
+                mock.patch.object(voix.urllib.request, "urlopen", return_value=_FausseReponseBrute(pcm)) as appel:
+            audio = voix.synthetiser("elevenlabs_tts", "An ka taa", 0)
+        requete = appel.call_args.args[0]
+        self.assertIn("output_format=pcm_16000", requete.full_url)
+        self.assertEqual(json.loads(requete.data.decode("utf-8"))["model_id"], "eleven_v4_turbo")
+        with wave.open(io.BytesIO(audio)) as f:
+            self.assertEqual(f.getframerate(), 16000)
+
+    def test_format_invalide_revient_au_defaut(self):
+        for brut in ("mp3_44100_128", "n'importe quoi", ""):
+            with self.subTest(brut=brut), mock.patch.dict(os.environ, {"ELEVENLABS_FORMAT": brut}):
+                self.assertEqual(voix.format_elevenlabs(), ("pcm_24000", 24000))
+
+    def test_wav_deja_complet_est_rendu_tel_quel(self):
+        wav = voix.encoder_wav([0.0, 0.5], 24000)
+        with _voix_pretes(), mock.patch.dict(os.environ, ENV_ELEVENLABS), \
+                mock.patch.object(voix.urllib.request, "urlopen", return_value=_FausseReponseBrute(wav)):
+            self.assertEqual(voix.synthetiser("elevenlabs_tts", "An ka taa", 0), wav)
+
+    def test_cle_ou_voix_absente_donne_500(self):
+        attendus = {
+            "ELEVENLABS_API_KEY": {"ELEVENLABS_API_KEY": "", "ELEVENLABS_VOICE_ID": "voix-de-test"},
+            "ELEVENLABS_VOICE_ID": {"ELEVENLABS_API_KEY": "cle-de-test", "ELEVENLABS_VOICE_ID": ""},
+        }
+        for nom, environnement in attendus.items():
+            with self.subTest(nom=nom), _voix_pretes(), mock.patch.dict(os.environ, environnement):
+                with self.assertRaises(voix.ErreurVoix) as ctx:
+                    voix.synthetiser("elevenlabs_tts", "An ka taa", 0)
+            self.assertEqual(ctx.exception.statut, 500)
+            self.assertIn(nom, ctx.exception.message)
+
+    def test_erreurs_elevenlabs_en_messages_lisibles(self):
+        attendus = {
+            429: "quota", 401: "refusé la clé", 402: "abonnement", 403: "abonnement",
+            404: "ne connaît pas cette voix", 422: "n'a pas accepté", 500: "erreur (500)",
+        }
+        for code, extrait in attendus.items():
+            with self.subTest(code=code), _voix_pretes(), mock.patch.dict(os.environ, ENV_ELEVENLABS), \
+                    mock.patch.object(voix.urllib.request, "urlopen", side_effect=_erreur_http(code)):
+                with self.assertRaises(voix.ErreurVoix) as ctx:
+                    voix.synthetiser("elevenlabs_tts", "An ka taa", 0)
+            self.assertEqual(ctx.exception.statut, 502)
+            self.assertIn(extrait, ctx.exception.message)
+            self.assertIn("detail de test", ctx.exception.detail)
+            self.assertNotIn("cle-de-test", ctx.exception.message + ctx.exception.detail)
+
+    def test_reponse_vide_donne_502(self):
+        with _voix_pretes(), mock.patch.dict(os.environ, ENV_ELEVENLABS), \
+                mock.patch.object(voix.urllib.request, "urlopen", return_value=_FausseReponseBrute(b"")):
+            with self.assertRaises(voix.ErreurVoix) as ctx:
+                voix.synthetiser("elevenlabs_tts", "An ka taa", 0)
+        self.assertEqual(ctx.exception.statut, 502)
+        self.assertIn("aucun son", ctx.exception.message)
+
+    def test_reseau_coupe_donne_502(self):
+        with _voix_pretes(), mock.patch.dict(os.environ, ENV_ELEVENLABS), \
+                mock.patch.object(voix.urllib.request, "urlopen", side_effect=OSError("hors ligne")):
+            with self.assertRaises(voix.ErreurVoix) as ctx:
+                voix.synthetiser("elevenlabs_tts", "An ka taa", 0)
+        self.assertEqual(ctx.exception.statut, 502)
+        self.assertIn("hors ligne", ctx.exception.message)
+
+
 class ServeurTests(unittest.TestCase):
     def setUp(self):
         from fastapi.testclient import TestClient

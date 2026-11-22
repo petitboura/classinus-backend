@@ -15,7 +15,7 @@ Use the `gerer_execution_code` tool.
 
 1. Check the library: `python -c "import pptx; print(pptx.__version__)"`.
 2. If it is missing: `pip install python-pptx`. If installation fails because there is no network, call the network action, then use `demander_acces_reseau` for `pypi.org` if needed. If pip refuses because the environment is managed, create a virtual environment: `python -m venv /home/user/venv`, then `/home/user/venv/bin/pip install python-pptx`.
-3. If nothing works, explain that and offer the simple `generer_document_powerpoint` tool (titles and text only).
+3. If nothing works, explain that and offer the simple `generer_document_powerpoint` tool (bullets, speaker notes, tables and charts, no images).
 
 Limits: each command may run for at most 60 seconds; `run_command` accepts up to 10,000 characters; a file or script must not exceed 1 MB. Embedded images count toward this limit: reduce them with Pillow (maximum width 1600 px, JPEG) before inserting them.
 
@@ -32,6 +32,11 @@ Limits: each command may run for at most 60 seconds; `run_command` accepts up to
 - Add speaker notes when useful: `slide.notes_slide.notes_text_frame.text = "..."`.
 
 ## 3. Modify an existing presentation
+
+Choose the simplest method that fits:
+
+- For a simple change (replace a text, add or delete a slide, change the speaker notes), call `modifier_document_conversation` with the real `url_fichier` link. No sandbox is needed and the original stays unchanged. Read the file first with `lire_document_conversation` to know its exact content.
+- For anything that needs fine control (layouts, images, charts, positioning of shapes), follow the sandbox steps below.
 
 1. Copy the attached file into the sandbox with `importer_fichier` (use the real `url_fichier` link shown after the attachment; never invent one).
 2. Open it with `Presentation(path)`, preserve its layouts and theme, and change only what was requested.

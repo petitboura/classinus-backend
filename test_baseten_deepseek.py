@@ -186,7 +186,7 @@ class RoutageBaseten(unittest.TestCase):
         config = fournisseurs_llm._config_modeles_de_repli()
         self.assertFalse(config["fournisseurs"]["deepseek"]["baseten_actif"])
         flash = config["modeles"]["deepseek"]["essentiel"]
-        pro = config["modeles"]["deepseek"]["pro"]
+        pro = config["modeles"]["deepseek"]["max"]
         self.assertEqual(flash["baseten"], FLASH_SLUG)
         self.assertEqual(pro["baseten"], "deepseek-ai/DeepSeek-V4-Pro-0813")
 

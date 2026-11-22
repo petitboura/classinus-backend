@@ -15,7 +15,7 @@ Travaille avec l'outil gerer_execution_code.
 
 1. Vérifie la bibliothèque : `python -c "import docx; print(docx.__version__ if hasattr(docx, '__version__') else 'ok')"`.
 2. Si elle manque, installe-la : `pip install python-docx`. Si l'installation échoue faute de réseau, appelle l'action network, puis demander_acces_reseau pour pypi.org si besoin. Si pip refuse à cause d'un environnement géré, crée un environnement virtuel : `python -m venv /home/user/venv` puis `/home/user/venv/bin/pip install python-docx`.
-3. Si rien ne marche, dis-le à l'utilisateur et propose l'outil simple generer_document_word (titres et paragraphes seulement).
+3. Si rien ne marche, dis-le à l'utilisateur et propose l'outil simple generer_document_word (titres, listes, tableaux, gras et italique, sans images).
 
 Limites à respecter : une commande dure 60 secondes au plus, run_command accepte 10000 caractères, un fichier ou un script ne dépasse pas 1 Mo. Pour un long document, écris le contenu dans un fichier de données (write_file, par exemple contenu.json) et garde un script court qui le lit.
 
@@ -32,6 +32,11 @@ Limites à respecter : une commande dure 60 secondes au plus, run_command accept
 - Langue : écris le document dans la langue de l'utilisateur, avec la typographie de cette langue.
 
 ## 3. Modifier un document existant
+
+Choisis la méthode la plus simple qui convient :
+
+- Pour un changement simple (remplacer un texte, ajouter ou supprimer un paragraphe, ajouter un titre ou un tableau), appelle `modifier_document_conversation` avec le lien réel `url_fichier`. Aucun bac à sable n'est nécessaire et l'original reste intact. Lis d'abord le fichier avec `lire_document_conversation` pour connaître son contenu exact.
+- Pour tout ce qui demande un contrôle fin (styles, mise en page, images, en-têtes et pieds de page), suis les étapes du bac à sable ci-dessous.
 
 1. Copie le fichier joint dans le bac à sable avec l'action importer_fichier (url_fichier : le lien réel indiqué après le fichier, jamais inventé).
 2. Ouvre-le avec `Document(chemin)` et modifie seulement ce qui est demandé : les styles, en-têtes et pieds de page existants restent.

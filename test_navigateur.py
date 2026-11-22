@@ -394,7 +394,7 @@ class ExecutionDeCodeInchangee(unittest.TestCase):
                 patch.object(outil, "_identite_interne", return_value=("u1", "c1", None)), \
                 patch.object(outil, "_rpc_objet", side_effect=RuntimeError("base absente")):
             sortie = outil.gerer_execution_code(action="list_files", ctx=None)
-        self.assertNotIn("EXECUTION_CODE_NOT_CONFIGURED", sortie)
+        self.assertNotIn("n'est pas configuré sur le serveur", sortie)
 
 
 class Categorisation(unittest.TestCase):

@@ -116,7 +116,10 @@ class ClientGemini(ClientCompatible):
         super().__init__()
         self._client = genai.Client(
             api_key=cle_api,
-            http_options=types.HttpOptions(timeout=DELAI_APPEL_FOURNISSEUR_SECONDES * 1000),
+            http_options=types.HttpOptions(
+                timeout=DELAI_APPEL_FOURNISSEUR_SECONDES * 1000,
+                api_version="v1beta",
+            ),
         )
 
     def create(self, *, model, messages, tools=None, reasoning_effort=None, **_ignores):

@@ -44,6 +44,19 @@ async def _lifespan(app: FastAPI):
         serveur.close()
 
 
+def _limite(nom: str, defaut: int) -> int:
+    """Limite lue dans l'environnement. 0 veut dire « aucune limite » ; une valeur vide ou illisible donne le défaut."""
+    try:
+        return int(os.environ.get(nom) or defaut)
+    except ValueError:
+        return defaut
+
+
+def _capacite_atteinte(nom: str, defaut: int, en_cours: int) -> bool:
+    maximum = _limite(nom, defaut)
+    return maximum > 0 and en_cours >= maximum
+
+
 def _fermer_navigateurs_perimes() -> int:
     """Détruit les boîtes navigateur plus vieilles que BOITES_NAV_DUREE_MAX secondes (jamais une boîte oubliée)."""
     limite = time.time() - int(os.environ.get("BOITES_NAV_DUREE_MAX", "900"))
@@ -56,13 +69,35 @@ def _fermer_navigateurs_perimes() -> int:
     return detruites
 
 
+def _supprimer_arretees_perimees() -> int:
+    """Détruit les boîtes arrêtées depuis plus de BOITES_ARRETEE_DUREE_MAX secondes (7 jours par défaut)."""
+    duree = _limite("BOITES_ARRETEE_DUREE_MAX", 604800)
+    if duree <= 0:
+        return 0
+    limite = time.time() - duree
+    detruites = 0
+    for boite_id, arret in docker.lister_arretees():
+        if arret < limite:
+            docker.supprimer(boite_id)
+            registre.oublier(boite_id)
+            detruites += 1
+    return detruites
+
+
 async def _balayer_navigateurs():
+    tours = 0
     while True:
         await asyncio.sleep(60)
         try:
             await asyncio.to_thread(_fermer_navigateurs_perimes)
         except Exception as e:
             logging.warning("balayage des boîtes navigateur : %s", type(e).__name__)
+        tours += 1
+        if tours % 60 == 0:
+            try:
+                await asyncio.to_thread(_supprimer_arretees_perimees)
+            except Exception as e:
+                logging.warning("balayage des boîtes arrêtées : %s", type(e).__name__)
 
 
 app = FastAPI(title="Classinus boîtes", lifespan=_lifespan)
@@ -118,8 +153,7 @@ def lister():
 
 @app.post("/boites", dependencies=[Depends(_authentifier)])
 def creer(_corps: CreationBoite):
-    maximum = int(os.environ.get("BOITES_MAX", "20"))
-    if len(docker.lister()) >= maximum:
+    if _capacite_atteinte("BOITES_MAX", 200, len(docker.lister_en_marche())):
         raise HTTPException(status_code=429, detail="capacité atteinte")
     boite_id = uuid.uuid4().hex
     docker.creer(boite_id)
@@ -137,12 +171,14 @@ def ouvrir_navigateur(corps: OuvertureNavigateur):
     utilisateur = id_valide(corps.utilisateur)
     etat = docker.etat(boite_id)
     if etat is None:
-        if len(docker.lister_navigateurs()) >= int(os.environ.get("BOITES_NAV_MAX", "3")):
+        if _capacite_atteinte("BOITES_NAV_MAX", 10, len(docker.lister_navigateurs())):
             raise HTTPException(status_code=429, detail="capacité atteinte")
-        if len(docker.lister()) >= int(os.environ.get("BOITES_MAX", "20")):
+        if _capacite_atteinte("BOITES_MAX", 200, len(docker.lister_en_marche())):
             raise HTTPException(status_code=429, detail="capacité atteinte")
         docker.creer(boite_id, navigateur=True, utilisateur=utilisateur)
     elif etat != "running":
+        if _capacite_atteinte("BOITES_MAX", 200, len(docker.lister_en_marche())):
+            raise HTTPException(status_code=429, detail="capacité atteinte")
         docker.demarrer(boite_id)
     # Réseau fermé tant que le backend n'a pas envoyé ses domaines autorisés (PUT /boites/{id}/reseau).
     registre.regler(boite_id, docker.adresse(boite_id), [])
@@ -164,6 +200,8 @@ def detruire_navigateurs_utilisateur(utilisateur: str = Query(...)):
 def connecter(boite_id: str, _corps: CreationBoite | None = None):
     etat = _existante(boite_id)
     if etat != "running":
+        if _capacite_atteinte("BOITES_MAX", 200, len(docker.lister_en_marche())):
+            raise HTTPException(status_code=429, detail="capacité atteinte")
         docker.demarrer(boite_id)
     # Une adresse peut changer après une reprise : le réseau est donc réglé de nouveau par le backend.
     registre.regler(boite_id, docker.adresse(boite_id), [])

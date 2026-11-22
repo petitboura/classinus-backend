@@ -469,6 +469,9 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # partagee par tous les clients (cache du prompt). Aucun autre client n'est concerne.
     if prompt_voix_bambara.est_client_voix_bambara(client):
         system_final += prompt_voix_bambara.consignes()
+    # Page bambara (16/11/2026) : meme principe, notes propres a la page (videos et images montrees).
+    elif prompt_voix_bambara.est_client_page_bambara(client):
+        system_final += prompt_voix_bambara.consignes_page()
 
     # Chantier "agent applicatif continu" (19/09/2026, decision Bourama :
     # retrait de l'outil lister_actions_disponibles, plus jamais demande
@@ -619,7 +622,7 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
             "contenir aucun outil inventé ni pseudo-syntaxe d'appel (TOOL_CODE, "
             "nom_outil(...), nom_outil{...}, call:nom_outil{...})."
             + ("" if client_thonny else (
-                " Les blocs d'affichage mermaid/chart/carte/widget/animation/geometrie restent disponibles : "
+                " Les blocs d'affichage mermaid/chart/carte/widget/animation/geometrie/svg restent disponibles : "
                 "ce sont des formats de sortie, pas des outils."
             ))
             + "\n"

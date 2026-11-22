@@ -15,7 +15,7 @@ Use the `gerer_execution_code` tool.
 
 1. Check the library: `python -c "import docx; print(docx.__version__ if hasattr(docx, '__version__') else 'ok')"`.
 2. If it is missing, install it: `pip install python-docx`. If installation fails because there is no network, call the network action, then use `demander_acces_reseau` for `pypi.org` if needed. If pip refuses because the environment is managed, create a virtual environment: `python -m venv /home/user/venv`, then `/home/user/venv/bin/pip install python-docx`.
-3. If nothing works, explain that and offer the simple `generer_document_word` tool (headings and paragraphs only).
+3. If nothing works, explain that and offer the simple `generer_document_word` tool (headings, lists, tables, bold and italic, no images).
 
 Limits: each command may run for at most 60 seconds; `run_command` accepts up to 10,000 characters; a file or script must not exceed 1 MB. For a long document, write the content to a data file (for example, `contenu.json` using `write_file`) and keep the script that reads it short.
 
@@ -32,6 +32,11 @@ Limits: each command may run for at most 60 seconds; `run_command` accepts up to
 - Language: write the document in the user's language, using that language's typography.
 
 ## 3. Modify an existing document
+
+Choose the simplest method that fits:
+
+- For a simple change (replace a text, add or delete a paragraph, add a heading or a table), call `modifier_document_conversation` with the real `url_fichier` link. No sandbox is needed and the original stays unchanged. Read the file first with `lire_document_conversation` to know its exact content.
+- For anything that needs fine control (styles, page layout, images, headers and footers), follow the sandbox steps below.
 
 1. Copy the attached file into the sandbox with `importer_fichier` (use the real `url_fichier` link shown after the attachment; never invent one).
 2. Open it with `Document(path)` and change only what was requested. Preserve existing styles, headers, and footers.

@@ -31,7 +31,7 @@ def lire_document_externe(url: str, a_partir_du_caractere: int = 0, rechercher: 
     besoin du contenu d'un document qui n'est pas sur Internet Archive : un
     document trouvé par rechercher_document_externe avec un champ url_fichier
     (utilise cette adresse exacte), ou un lien direct vers un fichier donné
-    par l'étudiant. Appelle-le avant de répondre, sans jamais deviner ce que
+    par l'utilisateur. Appelle-le avant de répondre, sans jamais deviner ce que
     le document contient. Pour un document Internet Archive, utilise plutôt
     lire_document_internet_archive. Cet outil ne lit pas une page web : si
     l'adresse mène à une page, la réponse te le dit. Un document long est lu
@@ -43,10 +43,10 @@ def lire_document_externe(url: str, a_partir_du_caractere: int = 0, rechercher: 
     de lecture, et un PDF scanné très long n'est lu qu'en partie : la réponse
     le précise. Donne toujours le lien du fichier dans ta réponse. Si le
     fichier est en accès réservé, trop gros ou illisible, la réponse te le
-    dit : dis-le clairement à l'étudiant avec le lien, sans rien inventer.
+    dit : dis-le clairement à l'utilisateur avec le lien, sans rien inventer.
     Une image, un son, une vidéo, un livre numérique ou une archive n'ont pas
     de texte à lire ici : la réponse te le dit, donne alors seulement le lien
-    à l'étudiant, sans rien affirmer sur leur contenu.
+    à l'utilisateur, sans rien affirmer sur leur contenu.
     Paramètres : url (lien direct du fichier), a_partir_du_caractere (0 pour
     commencer au début), rechercher (mot ou expression à trouver, vide pour
     lire le texte).

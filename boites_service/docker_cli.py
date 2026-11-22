@@ -96,6 +96,32 @@ class Docker:
         r = self._docker(["ps", "-a", "--filter", "label=classinus=boite", "--format", "{{.Names}}"])
         return [n.removeprefix("boite-") for n in r.stdout.decode().split() if n.startswith("boite-")]
 
+    def lister_en_marche(self) -> list[str]:
+        """Boîtes qui tournent vraiment. Une boîte en pause ne consomme presque rien : elle ne compte pas dans la limite."""
+        r = self._docker(["ps", "--filter", "label=classinus=boite", "--format", "{{.Names}}"])
+        return [n.removeprefix("boite-") for n in r.stdout.decode().split() if n.startswith("boite-")]
+
+    def lister_arretees(self) -> list[tuple[str, float]]:
+        """Boîtes arrêtées (identifiant, date d'arrêt en secondes) : sert à nettoyer celles que personne ne reprend."""
+        r = self._docker([
+            "ps", "-a", "--filter", "label=classinus=boite", "--filter", "status=exited", "--format", "{{.Names}}",
+        ])
+        noms = [n for n in r.stdout.decode().split() if n.startswith("boite-")]
+        if not noms:
+            return []
+        r = self._docker(["inspect", "-f", "{{.Name}} {{.State.FinishedAt}}", *noms])
+        trouvees = []
+        for ligne in r.stdout.decode().splitlines():
+            morceaux = ligne.split()
+            if len(morceaux) != 2:
+                continue
+            try:
+                arret = time.mktime(time.strptime(morceaux[1][:19], "%Y-%m-%dT%H:%M:%S")) - time.timezone
+            except ValueError:
+                continue
+            trouvees.append((morceaux[0].lstrip("/").removeprefix("boite-"), arret))
+        return trouvees
+
     def creer(self, boite_id: str, navigateur: bool = False, utilisateur: str = "") -> None:
         nom = self.nom(boite_id)
         volume = f"volume-{nom}"

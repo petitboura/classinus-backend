@@ -11,6 +11,8 @@ from typing import List, Optional
 
 from anyio import to_thread
 from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi.exceptions import RequestValidationError
+from starlette.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from slowapi.errors import RateLimitExceeded
@@ -34,6 +36,7 @@ from api.autorisations_outils import router as autorisations_outils_router
 from api.widgets_outils import router as widgets_outils_router
 from api.higgsfield import router as higgsfield_router
 from core import higgsfield_suivi
+from core.synchro_skills_demarrage import synchroniser_au_demarrage
 from api.bibliotheque_utilisateur import router as bibliotheque_utilisateur_router
 from api.dossiers_bibliotheque import router as dossiers_bibliotheque_router
 from api.contenu_dynamique_matiere import router_enseignant as contenu_matiere_enseignant_router
@@ -80,7 +83,10 @@ from api.canal_temps_reel import router as canal_temps_reel_router
 from api.canal_agent_applicatif import router as canal_agent_applicatif_router
 from api.gemini_live import router as gemini_live_router
 from api.voix_bambara import router as voix_bambara_router  # 13/11/2026, relais du mode vocal bambara
+from api.bambara_profils import router as bambara_profils_router  # 18/11/2026, profils, historique et gardés de la page bambara
+from api.avatar_napster import router as avatar_napster_router  # 16/11/2026, avatar Napster du mode vocal
 from api.minuteurs import router_minuteurs
+from api.liste_attente import router_liste_attente  # 16/11/2026, liste d'attente des modèles Bientôt
 from api.webhooks_github import router as webhooks_github_router
 from api.dossiers_designes import router as dossiers_designes_router
 from api.programme_notions import router as programme_notions_router
@@ -481,7 +487,9 @@ async def _lifespan(app: FastAPI):
         tache_vectorisation_documents_agent = asyncio.create_task(_boucle_vectorisation_documents_agent())
         tache_pause_sandboxes_execution_code = asyncio.create_task(_boucle_pause_sandboxes_execution_code())
         tache_suivi_higgsfield = asyncio.create_task(_boucle_suivi_higgsfield())
+        tache_synchro_skills = asyncio.create_task(synchroniser_au_demarrage())
         yield
+        tache_synchro_skills.cancel()
         tache_suivi_higgsfield.cancel()
         if tache_planificateur:
             tache_planificateur.cancel()
@@ -505,6 +513,47 @@ async def _lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Classinus API", version="0.1.0", lifespan=_lifespan)
+
+
+# Les validations Pydantic ne doivent pas masquer un plafond atteint derrière
+# un message technique générique. Chaque dépassement de quantité ou de taille
+# reçoit un code stable et sa valeur maximale brute : le front reconstruit le
+# texte dans la langue active (voir lib/erreurs.ts).
+_CODES_CHAMPS_LIMITES_CHAT = {
+    "image_urls": "LIMITE_CHAMP_IMAGES",
+    "images_base64": "LIMITE_CHAMP_IMAGES_VIDEO",
+    "outils": "LIMITE_CHAMP_OUTILS",
+    "zips_en_attente": "LIMITE_CHAMP_ZIPS",
+    "outil_force": "LIMITE_CHAMP_OUTILS_CHOISIS",
+}
+
+
+@app.exception_handler(RequestValidationError)
+async def gerer_erreur_validation(request, exc: RequestValidationError):
+    erreurs = exc.errors()
+    # Seuls l'emplacement et le type sont journalisés : jamais la valeur envoyée.
+    logging.warning(
+        "REQUETE_INVALIDE chemin=%s erreurs=%s",
+        request.url.path,
+        [(".".join(str(p) for p in e.get("loc", ())), e.get("type")) for e in erreurs],
+    )
+    for erreur in erreurs:
+        if erreur.get("type") not in ("too_long", "string_too_long"):
+            continue
+        emplacement = erreur.get("loc") or ()
+        champ = str(emplacement[-1]) if emplacement else "champ"
+        maximum = (erreur.get("ctx") or {}).get("max_length")
+        code = _CODES_CHAMPS_LIMITES_CHAT.get(champ)
+        if code is not None and maximum is not None:
+            corps = erreur_api(422, code, maximum=maximum)
+        elif maximum is not None:
+            corps = erreur_api(422, "LIMITE_CHAMP_DEPASSEE", champ=champ, maximum=maximum)
+        else:
+            corps = erreur_api(422, "LIMITE_CHAMP_DEPASSEE_SANS_MAXIMUM", champ=champ)
+        return JSONResponse(status_code=422, content={"detail": corps.detail})
+
+    return JSONResponse(status_code=422, content={"detail": erreur_api(422, "REQUETE_INVALIDE").detail})
+
 
 # Plafond de taille totale d'une requete du chat (core/plafond_taille_requete.py) : protege la
 # memoire du serveur, ne touche pas au contenu. Ajoute AVANT les middlewares ci-dessous pour
@@ -962,7 +1011,10 @@ app.include_router(canal_temps_reel_router)
 app.include_router(canal_agent_applicatif_router)
 app.include_router(gemini_live_router)
 app.include_router(voix_bambara_router)  # 13/11/2026, relais du mode vocal bambara
+app.include_router(bambara_profils_router)  # 18/11/2026, profils, historique et gardés de la page bambara
+app.include_router(avatar_napster_router)  # 16/11/2026, avatar Napster du mode vocal
 app.include_router(router_minuteurs)
+app.include_router(router_liste_attente)
 app.include_router(dossiers_designes_router)
 app.include_router(webhooks_github_router)
 app.include_router(programme_notions_router)

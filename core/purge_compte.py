@@ -42,6 +42,14 @@ _TABLES_SIMPLES = (
     ("higgsfield_oauth_connections", "user_id"),
     ("higgsfield_usage", "user_id"),
     ("higgsfield_generations", "user_id"),
+    # Liste d'attente des modèles Bientôt (16/11/2026) : ON DELETE CASCADE existe aussi, cette étape double la sécurité.
+    ("liste_attente_modeles", "user_id"),
+    ("evenements_liste_attente", "user_id"),
+    # Page bambara (18/11/2026) : ON DELETE CASCADE existe aussi. Les gardés et audios partent avant les conversations et profils.
+    ("bambara_gardes", "user_id"),
+    ("bambara_audios", "user_id"),
+    ("bambara_conversations", "user_id"),
+    ("bambara_profils", "user_id"),
     ("higgsfield_oauth_temp", "user_id"),
     ("platform_mcp_oauth_connections", "user_id"),
     ("platform_mcp_oauth_temp", "user_id"),

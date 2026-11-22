@@ -33,7 +33,8 @@ def prendre_place() -> None:
     """Attend une place libre. Lève AttenteTropLongue si l'attente dépasse le maximum."""
     if not _places.acquire(timeout=ATTENTE_MAX_S):
         raise AttenteTropLongue(
-            "Beaucoup de montages vidéo sont en cours, la file est trop longue. Réessaie dans quelques minutes."
+            f"Les {SIMULTANES} places de montage vidéo sont occupées. Ta demande n'a pas pu démarrer après "
+            f"{ATTENTE_MAX_S} secondes d'attente. Réessaie lorsque la file se libère."
         )
 
 

@@ -88,6 +88,7 @@ import core.outils_bibliotheque  # noqa: F401
 import core.outils_fichiers_conversation  # noqa: F401
 import core.outils_lecture_media  # noqa: F401  # 26/10/2026, lecture à la demande du modèle d'une vidéo ou d'un audio joint
 import core.outils_lecture_document  # noqa: F401  # 27/10/2026, lecture à la demande du modèle d'un document joint
+import core.outils_travail_documents  # noqa: F401  # 21/11/2026, modifier un document joint, fusionner, couper, tourner, remplir un PDF
 import core.outils_dossiers_catalogue_public  # noqa: F401
 import core.outils_catalogue_public_publication  # noqa: F401
 import core.outils_etoiles_catalogue_public  # noqa: F401

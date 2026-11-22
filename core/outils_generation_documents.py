@@ -55,17 +55,25 @@ def _formater_resultat_document(resultat: dict) -> str:
     original, pas d'aperçu à proposer.
     """
     if resultat.get("url_apercu"):
-        return f"Document généré : {resultat['url']} (aperçu visuel : {resultat['url_apercu']})"
-    return f"Document généré : {resultat['url']}"
+        texte = f"Document généré : {resultat['url']} (aperçu visuel : {resultat['url_apercu']})"
+    else:
+        texte = f"Document généré : {resultat['url']}"
+    for avertissement in resultat.get("avertissements") or []:
+        texte += f"\nAttention : {avertissement}"
+    return texte
 
 
 @mcp_generation.tool()
 def generer_document_word(titre: str, contenu_markdown: str, ctx: Context) -> str:
     """
     Génère un document Word (.docx) à partir d'un titre et d'un contenu
-    markdown (titres #/##/### et paragraphes supportés, pas de mise en
-    forme avancée). Renvoie l'URL publique du fichier, et si possible un
-    aperçu PDF prêt à afficher directement dans le chat.
+    markdown. Mise en forme supportée : titres #/##/###/####, **gras**,
+    *italique*, `code`, [liens](https://...), listes à puces (- ) et
+    numérotées (1. ) avec sous-niveaux par indentation, tableaux
+    (| a | b | avec ligne |---|---|), citations (> ), blocs de code (```),
+    séparateurs (---). Page A4 avec numéros de page. Pas d'images.
+    Renvoie l'URL publique du fichier, et si possible un aperçu PDF prêt
+    à afficher directement dans le chat.
     """
     try:
         resultat = _generer_docx(titre, contenu_markdown)
@@ -102,17 +110,27 @@ def generer_document_excel(titre: str, en_tetes: list, lignes: list, ctx: Contex
 
 
 @mcp_generation.tool()
-def generer_document_powerpoint(titre: str, diapositives: list, ctx: Context) -> str:
+def generer_document_powerpoint(
+    titre: str, diapositives: list, ctx: Context, sous_titre: str = "", couleur_principale: str = "",
+) -> str:
     """
-    Génère une présentation PowerPoint (.pptx). `diapositives` : liste
-    de dicts {"titre": ..., "contenu": ...}, une diapositive titre+texte
-    par élément (en plus d'une diapositive de titre générée
-    automatiquement à partir de `titre`). Renvoie l'URL publique du
-    fichier, et si possible un aperçu PDF prêt à afficher directement
-    dans le chat.
+    Génère une présentation PowerPoint (.pptx) 16:9 avec une page de
+    couverture automatique (`titre`, `sous_titre` facultatif) et une
+    diapositive par élément de `diapositives`. Chaque élément est un dict
+    avec : "titre" ; "contenu" (texte, les lignes commençant par - ou un
+    numéro deviennent des puces) ou "puces" (liste de textes) ; "notes"
+    (notes de l'orateur) ; "tableau" {"en_tetes": [...], "lignes": [[...]]} ;
+    "graphique" {"type": "colonnes|barres|ligne|camembert", "categories":
+    [...], "series": [{"nom": ..., "valeurs": [...]}]}. Un élément avec
+    seulement un "titre" devient une page de section. Un texte trop long
+    est réparti sur plusieurs diapositives. `couleur_principale` : couleur
+    hexadécimale facultative, ex. "1F4E79". Pas d'images. Renvoie l'URL
+    publique du fichier, et si possible un aperçu PDF prêt à afficher
+    directement dans le chat. Si une ligne "Attention" suit l'URL, une
+    partie demandée n'a pas pu être ajoutée : corrige-la et régénère.
     """
     try:
-        resultat = _generer_pptx(titre, diapositives)
+        resultat = _generer_pptx(titre, diapositives, sous_titre, couleur_principale)
         _sauvegarder_generation_bibliotheque(
             ctx, resultat["url"], f"{titre}.pptx",
             "application/vnd.openxmlformats-officedocument.presentationml.presentation",

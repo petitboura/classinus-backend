@@ -170,7 +170,7 @@ class TestActionReseau(unittest.TestCase):
 
     def test_erreur_de_lecture_est_claire(self):
         client = _client_base(erreur_config=RuntimeError("base injoignable"))
-        self.assertTrue(_appeler("network", client).startswith("EXECUTION_CODE_UNAVAILABLE"))
+        self.assertIn("Impossible de lire la liste des domaines autorisés", _appeler("network", client))
 
     def test_table_des_domaines_absente_ne_cache_pas_la_liste_du_serveur(self):
         client = _client_base([{"allowed_domains": ["pypi.org"]}], erreur_conversation=RuntimeError("table absente"))
@@ -225,7 +225,7 @@ class TestAutorisationParLEleve(unittest.TestCase):
         client = self._client()
         client.tables["conversation"].upsert.return_value.execute.side_effect = RuntimeError("base")
         resultat = _appeler("demander_acces_reseau", client, "gitlab.com")
-        self.assertTrue(resultat.startswith("EXECUTION_CODE_UNAVAILABLE"))
+        self.assertIn("Impossible d'enregistrer l'autorisation", resultat)
         self.assertNotIn("Accès autorisé", resultat)
 
     def test_les_regles_reseau_incluent_les_domaines_de_la_conversation(self):

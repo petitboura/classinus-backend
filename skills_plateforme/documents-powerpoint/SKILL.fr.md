@@ -15,7 +15,7 @@ Travaille avec l'outil gerer_execution_code.
 
 1. Vérifie la bibliothèque : `python -c "import pptx; print(pptx.__version__)"`.
 2. Si elle manque : `pip install python-pptx`. Si l'installation échoue faute de réseau, appelle l'action network, puis demander_acces_reseau pour pypi.org si besoin. Si pip refuse à cause d'un environnement géré, crée un environnement virtuel : `python -m venv /home/user/venv` puis `/home/user/venv/bin/pip install python-pptx`.
-3. Si rien ne marche, dis-le et propose l'outil simple generer_document_powerpoint (titre et texte seulement).
+3. Si rien ne marche, dis-le et propose l'outil simple generer_document_powerpoint (puces, notes de l'orateur, tableaux et graphiques, sans images).
 
 Limites : une commande dure 60 secondes au plus, run_command accepte 10000 caractères, un fichier ou un script ne dépasse pas 1 Mo. Les images embarquées comptent dans cette taille : réduis-les (Pillow, largeur 1600 px au plus, JPEG) avant de les insérer.
 
@@ -32,6 +32,11 @@ Limites : une commande dure 60 secondes au plus, run_command accepte 10000 carac
 - Notes de l'orateur quand c'est utile : `slide.notes_slide.notes_text_frame.text = "..."`.
 
 ## 3. Modifier une présentation existante
+
+Choisis la méthode la plus simple qui convient :
+
+- Pour un changement simple (remplacer un texte, ajouter ou supprimer une diapositive, changer les notes de l'orateur), appelle `modifier_document_conversation` avec le lien réel `url_fichier`. Aucun bac à sable n'est nécessaire et l'original reste intact. Lis d'abord le fichier avec `lire_document_conversation` pour connaître son contenu exact.
+- Pour tout ce qui demande un contrôle fin (mises en page, images, graphiques, position des formes), suis les étapes du bac à sable ci-dessous.
 
 1. Copie le fichier joint dans le bac à sable avec importer_fichier (url_fichier : le lien réel indiqué après le fichier, jamais inventé).
 2. Ouvre-le avec `Presentation(chemin)`, garde ses mises en page et son thème, et modifie seulement ce qui est demandé.

@@ -18,6 +18,7 @@ Un petit serveur avec une seule page de test. On écrit une phrase en bambara et
 | `bam_fintech` | `RobotsMali/bam-vits-fintech` | 1 | CC BY 4.0 sur la fiche. Même famille que `bam_vits`, réentraînée sur des enregistrements propres d'un seul locuteur; reste un point de contrôle de recherche très peu entraîné. |
 | `mms_sudoping01` | `sudoping01/bambara-tts` | 1 | CC BY-NC 4.0 : usage non commercial seulement, test uniquement. |
 | `gemini_tts` | `gemini-3.8-flash-tts` (Google) | 1 | Service Google payant, pas un modèle téléchargé : utilise la clé `GOOGLE_API_KEY`. Le bambara n'est pas dans la liste des langues de Gemini TTS (le dioula, proche, y est); cette voix sert à vérifier à l'oreille ce qu'il en fait. |
+| `elevenlabs_tts` | `eleven_v3` (ElevenLabs) | 1 | Service ElevenLabs payant, pas un modèle téléchargé : utilise la clé `ELEVENLABS_API_KEY` et la voix `ELEVENLABS_VOICE_ID`. Le bambara n'est dans aucune liste de langues d'ElevenLabs; comme pour Gemini, cette voix sert à vérifier à l'oreille ce qu'il en fait. |
 
 `bam_vits` reste pour comparaison mais n'est pas une voix utile après mesure : chaque enregistrement porte un motif fixe de 256 échantillons (un bourdonnement à 86 Hz et ses multiples) qui ne dépend ni du texte, ni du locuteur, ni du réglage du bruit; le défaut est dans le décodeur du modèle. Les modèles sur demande d'accès (`MALIBA-AI/bambara-tts`, `RobotsMali/Wuro`) ne sont pas au catalogue tant que l'accès n'est pas accordé. Ajouter une voix revient à ajouter une entrée dans `VOIX` de `voix.py`. Les statuts de licence sont ceux des fiches, pas un avis juridique.
 
@@ -31,6 +32,8 @@ Un petit serveur avec une seule page de test. On écrit une phrase en bambara et
 - `GOOGLE_API_KEY` : clé Google, nécessaire seulement pour la voix `gemini_tts`. Sans elle, cette carte affiche l'erreur et les autres voix marchent normalement.
 - `GEMINI_TTS_MODELE` (`gemini-3.8-flash-tts` par défaut) : modèle de voix Gemini (par exemple `gemini-3.8-flash-lite-tts`).
 - `GEMINI_TTS_VOIX` (`Kore` par défaut) : nom de la voix Gemini parmi ses 30 voix prédéfinies. `GEMINI_DELAI_S` (60 par défaut) : attente maximale de Google, en secondes.
+- `ELEVENLABS_API_KEY` : clé ElevenLabs, nécessaire seulement pour la voix `elevenlabs_tts`. `ELEVENLABS_VOICE_ID` : identifiant de la voix, à prendre dans la bibliothèque de voix du compte ElevenLabs (pas de défaut). Sans l'une des deux, cette carte affiche l'erreur et les autres voix marchent normalement.
+- `ELEVENLABS_MODELE` (`eleven_v3` par défaut) : modèle de voix ElevenLabs (par exemple `eleven_v4_turbo`). `ELEVENLABS_FORMAT` (`pcm_24000` par défaut) : format du son demandé, seul le PCM est accepté (`pcm_16000`, `pcm_22050`, `pcm_24000`; `pcm_44100` demande un abonnement ElevenLabs Pro). `ELEVENLABS_DELAI_S` (60 par défaut) : attente maximale d'ElevenLabs, en secondes.
 - `PRECHARGER` (1 par défaut) : mettre 0 pour charger chaque voix à son premier usage plutôt qu'au démarrage.
 - `TEST_ACCESS_TOKEN` : si défini, `/voix` et `/synthese` l'exigent. Ouvrir la page avec `?token=VALEUR`.
 - `HF_HOME` (fixé à `/data/hf` dans le Dockerfile) : dossier où les poids des modèles sont gardés. Monter un volume sur `/data`.

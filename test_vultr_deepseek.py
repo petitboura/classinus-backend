@@ -97,10 +97,10 @@ class RoutageVultr(unittest.TestCase):
         config["fournisseurs"]["deepseek"]["baseten_actif"] = baseten_actif
         # Identifiants Baseten posés ici, jamais lus de la configuration partagée du code : un autre
         # test (test_baseten_deepseek, sans_slug) les y supprime pour toute la suite de tests.
-        for palier, slug in (("essentiel", FLASH_BASETEN), ("avance", FLASH_BASETEN), ("pro", "deepseek-ai/DeepSeek-V4-Pro-0813")):
+        for palier, slug in (("essentiel", FLASH_BASETEN), ("premium", FLASH_BASETEN), ("max", "deepseek-ai/DeepSeek-V4-Pro-0813")):
             config["modeles"]["deepseek"][palier]["baseten"] = slug
         if not sans_identifiant:
-            for palier in ("essentiel", "avance"):
+            for palier in ("essentiel", "premium"):
                 config["modeles"]["deepseek"][palier]["vultr"] = FLASH_VULTR
         parches = [
             patch.object(fournisseurs_llm, "_lire_config_modeles_supabase", return_value=config),
@@ -280,7 +280,7 @@ class LectureSupabase(unittest.TestCase):
                 {"distributeur": "deepseek", "palier": "essentiel", "niveau": 1, "modele_id": FLASH_DIRECT,
                  "label": "DeepSeek V4 Flash", "actif": True, "modele_id_baseten": None,
                  "modele_id_vultr": FLASH_VULTR},
-                {"distributeur": "deepseek", "palier": "pro", "niveau": 3, "modele_id": PRO_DIRECT,
+                {"distributeur": "deepseek", "palier": "max", "niveau": 3, "modele_id": PRO_DIRECT,
                  "label": "DeepSeek V4 Pro", "actif": True, "modele_id_baseten": None,
                  "modele_id_vultr": None},
             ],
@@ -298,7 +298,7 @@ class LectureSupabase(unittest.TestCase):
         config = self.lire()
         self.assertTrue(config["fournisseurs"]["deepseek"]["vultr_actif"])
         self.assertEqual(fournisseurs_llm.correspondance_vultr(config), {FLASH_DIRECT: FLASH_VULTR})
-        self.assertNotIn("vultr", config["modeles"]["deepseek"]["pro"])
+        self.assertNotIn("vultr", config["modeles"]["deepseek"]["max"])
 
     def test_migration_pas_appliquee_interrupteur_eteint_rien_ne_casse(self):
         config = self.lire(colonnes_absentes=("vultr_actif", "modele_id_vultr"))
