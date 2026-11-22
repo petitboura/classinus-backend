@@ -21,6 +21,7 @@ Point d'entrée central de toute la documentation du backend Classinus. L'anglai
 - [Checklist de déploiement Railway](./deployment/RAILWAY_DEPLOY.fr.md)
 - [État backend Higgsfield](./status/HIGGSFIELD_TODO.fr.md)
 - [Liste d'attente des modèles « Bientôt »](./chantiers/LISTE_ATTENTE_MODELES.fr.md)
+- [Page bambara : profils, historique et éléments gardés](./chantiers/PAGE_BAMBARA_PROFILS.fr.md)
 
 ## Historique et travaux archivés
 
