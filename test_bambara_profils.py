@@ -232,7 +232,7 @@ class TestCodesEtCompte(unittest.TestCase):
     def test_tables_dans_la_purge_et_l_export(self):
         purge = (RACINE / "core" / "purge_compte.py").read_text(encoding="utf-8")
         export = (RACINE / "api" / "profiles.py").read_text(encoding="utf-8")
-        for table in ("bambara_gardes", "bambara_audios", "bambara_conversations", "bambara_profils"):
+        for table in ("bambara_gardes", "bambara_audios_messages", "bambara_audios", "bambara_conversations", "bambara_profils"):
             self.assertIn(f'"{table}"', purge, table)
         for table in ("bambara_profils", "bambara_conversations", "bambara_gardes"):
             self.assertIn(f'"{table}"', export, table)

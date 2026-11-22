@@ -47,6 +47,7 @@ _TABLES_SIMPLES = (
     ("evenements_liste_attente", "user_id"),
     # Page bambara (18/11/2026) : ON DELETE CASCADE existe aussi. Les gardés et audios partent avant les conversations et profils.
     ("bambara_gardes", "user_id"),
+    ("bambara_audios_messages", "user_id"),
     ("bambara_audios", "user_id"),
     ("bambara_conversations", "user_id"),
     ("bambara_profils", "user_id"),
