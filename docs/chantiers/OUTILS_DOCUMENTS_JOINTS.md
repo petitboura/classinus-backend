@@ -35,7 +35,7 @@ The Word, Excel and PowerPoint platform skills (`skills_plateforme/documents-*`)
 - **Simple change** (replace a text, add a row, delete a slide): the tool. No sandbox, no network, faster.
 - **Fine control** (styles, layout, number formats, charts, images): the sandbox method of the skill.
 
-There is no skill for PDFs: the four PDF tools are the only built in way to merge, split, rotate and fill them.
+The PDF skill (`documents-pdf`) follows the same split: the four PDF tools for merging, splitting, rotating and filling a standard form on attached PDFs, and the sandbox for everything else (watermark, password, OCR, precise layout). The reading skills (`lecture-pdf`, `lecture-fichiers`) point to the new `tableaux` mode.
 
 ## Limits
 

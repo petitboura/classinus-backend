@@ -35,7 +35,7 @@ Les skills de plateforme Word, Excel et PowerPoint (`skills_plateforme/documents
 - **Changement simple** (remplacer un texte, ajouter une ligne, supprimer une diapositive) : l'outil. Pas de bac à sable, pas de réseau, plus rapide.
 - **Contrôle fin** (styles, mise en page, formats de nombre, graphiques, images) : la méthode du bac à sable du skill.
 
-Il n'y a pas de skill pour les PDF : les quatre outils PDF sont la seule façon intégrée de les fusionner, couper, tourner et remplir.
+Le skill PDF (`documents-pdf`) suit le même partage : les quatre outils PDF pour fusionner, couper, tourner et remplir un formulaire standard sur des PDF joints, et le bac à sable pour tout le reste (filigrane, mot de passe, reconnaissance de texte, mise en page précise). Les skills de lecture (`lecture-pdf`, `lecture-fichiers`) renvoient vers le nouveau mode `tableaux`.
 
 ## Limites
 

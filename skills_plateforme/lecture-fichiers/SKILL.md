@@ -13,7 +13,7 @@ Use this skill when the user attaches or links a file and you need its content t
 
 | The file is | Use |
 |---|---|
-| PDF, Word, Excel, PowerPoint, text, code, old Office format | `lire_document_conversation` (modes `infos`, `texte`, `pages`, `recherche`). For a PDF, see PDF Reading |
+| PDF, Word, Excel, PowerPoint, text, code, old Office format | `lire_document_conversation` (modes `infos`, `texte`, `pages`, `recherche`, and `tableaux` for a PDF). For a PDF, see PDF Reading |
 | Audio or video attached | `lire_media_conversation` (modes `infos`, `transcription`, `images`, `les_deux`) |
 | Image | Already read when it is sent. Do not call a tool for it |
 | Zip archive | Its summary lists the files, each followed by a token. Read one file with `gerer_fichier_conversation`, action `lire`, parameter `reference` |
