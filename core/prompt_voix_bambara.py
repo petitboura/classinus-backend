@@ -95,6 +95,19 @@ NOTE_PAGE_OUTILS = (
     "vidéo ou une image chaque fois que cela aide à expliquer, puisque l'utilisateur ne peut pas lire."
 )
 
+# 22/11/2026, demande de Bourama : cette règle ne vaut QUE pour la page bambara, pas pour le reste de la
+# plateforme (les consignes de rechercher_image et rechercher_video restent celles de tout le monde). Sur la
+# page, l'écran ne montre que des images et des vidéos et l'utilisateur ne sait pas lire : la quantité compte
+# autant que la qualité, et le tri du modèle sert à écarter les résultats hors sujet, pas à élire les meilleurs.
+NOTE_PAGE_QUANTITE = (
+    "PAGE BAMBARA, note C : sur cette page, la quantité compte autant que la qualité. Quand tu cherches des "
+    "images ou des vidéos, ton tri sert UNIQUEMENT à écarter ce qui ne correspond pas à la demande, pas à "
+    "choisir les plus pertinentes. Dès qu'une image ou une vidéo correspond, même si elle est moyenne, montre-la "
+    "plutôt que d'en garder seulement quelques-unes. Écris-les à la suite, chacune seule sur sa ligne, sans ligne "
+    "vide entre elles : la page les range ensemble. S'il t'en reste peu après le tri, rappelle l'outil avec "
+    "page=2 pour en trouver davantage. Si aucune ne correspond, n'en montre aucune."
+)
+
 
 def est_client_page_bambara(client):
     return isinstance(client, str) and client.strip().lower() == CLIENT_PAGE_BAMBARA
@@ -102,4 +115,7 @@ def est_client_page_bambara(client):
 
 def consignes_page():
     """Les notes de la page bambara, prêtes à être ajoutées au prompt système."""
-    return "\n\n" + NOTE_PAGE_AFFICHAGE + "\n\n" + NOTE_BAMBARA_ORAL + "\n\n" + NOTE_PAGE_OUTILS
+    return (
+        "\n\n" + NOTE_PAGE_AFFICHAGE + "\n\n" + NOTE_BAMBARA_ORAL + "\n\n" + NOTE_PAGE_OUTILS
+        + "\n\n" + NOTE_PAGE_QUANTITE
+    )
