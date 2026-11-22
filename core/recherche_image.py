@@ -607,6 +607,30 @@ def _cle_deduplication(adresse: str) -> str:
         return adresse.strip().lower()
 
 
+def cle_deduplication(adresse: str) -> str:
+    """Clé qui identifie une image quelle que soit la source (domaine et chemin, sans paramètres)."""
+    return _cle_deduplication(adresse)
+
+
+def sources_disponibles(ordre=None) -> list[tuple]:
+    """
+    Sources utilisables maintenant, dans l'ordre configuré : liste de (nom, fonction, clé).
+    Une source qui demande une clé absente est sautée. Sert à la recherche complète
+    (rechercher_images) et à l'affichage progressif (core/medias_progressifs.py).
+    """
+    if ordre is None:
+        ordre = tuple(_ordre_fournisseurs())
+    disponibles = []
+    for nom in ordre:
+        fonction, variable_cle = _FOURNISSEURS[nom]
+        cle = _get_secret(variable_cle) if variable_cle else None
+        if variable_cle and not cle:
+            logging.debug("Recherche d'image : %s absente, source %s sautée.", variable_cle, nom)
+            continue
+        disponibles.append((nom, fonction, cle))
+    return disponibles
+
+
 def rechercher_images(requete: str, nombre: int = _NOMBRE_DEFAUT, page: int = 1) -> list[dict]:
     """
     Recherche sur plusieurs sources en parallèle. nombre est limité à 100
@@ -628,14 +652,7 @@ def rechercher_images(requete: str, nombre: int = _NOMBRE_DEFAUT, page: int = 1)
     if en_cache is not None:
         return en_cache
 
-    disponibles = []
-    for nom in ordre:
-        fonction, variable_cle = _FOURNISSEURS[nom]
-        cle = _get_secret(variable_cle) if variable_cle else None
-        if variable_cle and not cle:
-            logging.debug("Recherche d'image : %s absente, source %s sautée.", variable_cle, nom)
-            continue
-        disponibles.append((nom, fonction, cle))
+    disponibles = sources_disponibles(ordre)
 
     if not disponibles:
         logging.warning("Recherche d'image : aucune source disponible.")

@@ -87,6 +87,71 @@ Les miniatures sont chargées au défilement et le clic conserve l'ouverture dan
 la visionneuse intégrée. Le badge de source reste indépendant de l'image et
 ouvre directement la page où elle est publiée.
 
+## Affichage progressif (page bambara)
+
+Ajouté le 22 novembre 2026, à la demande de Bourama. Ne vaut que pour la page
+bambara (`client` = `page_bambara`) : pour tout autre client, rien ne change.
+
+L'utilisateur de cette page ne sait pas lire, il comprend ce qu'il voit. Avant,
+`rechercher_image` attendait la source la plus lente, puis le modèle principal
+triait et écrivait ses images : rien n'apparaissait avant la fin. Maintenant :
+
+1. Chaque source répond de son côté. Dès qu'une source a répondu, ses résultats,
+   sans les doublons déjà vus (même domaine et même chemin), vont à un petit LLM
+   rapide qui choisit ceux qui correspondent vraiment à la demande, par numéro.
+2. Les images gardées partent tout de suite à l'écran dans un événement SSE
+   `bloc_media`, pendant que les autres sources travaillent encore :
+   `{"type": "bloc_media", "id_appel": "...", "genre": "images", "source": "Openverse", "images": [...]}`.
+3. À la fin, le modèle principal reçoit un court résumé : combien d'images sont
+   déjà à l'écran, leurs titres, et la consigne de ne pas recopier leurs adresses.
+   Si le tri d'un lot a échoué (délai dépassé, réponse illisible), ce lot n'est
+   pas affiché : il est donné au modèle principal sous `images_trouvees`, comme
+   avant, pour qu'il choisisse lui-même.
+
+`page` et `nombre` gardent leur sens : `page` va aux sources (le modèle rappelle
+l'outil avec `page=2` pour en voir plus, et le résumé lui suggère
+`page_suivante_suggeree`), `nombre` plafonne ce qui est affiché sans jamais
+dépasser le réglage `MEDIAS_PROGRESSIFS_MAX_IMAGES`. Une valeur invalide revient
+au défaut.
+
+Le petit LLM désigne les résultats par numéro et c'est le code qui écrit les
+adresses : un LLM qui recopie une longue adresse se trompe parfois d'un caractère,
+et une image cassée ne se voit pas sur une page sans texte.
+
+Pourquoi un canal : les outils passent par un client MCP réseau, donc un fil
+d'outil ne peut pas écrire directement dans le flux de la réponse.
+`core/medias_progressifs.py` fournit une file (`CanalMedias`) que la boucle de
+`core/execution_outils.py` vide toutes les 0,05 s pendant qu'elle attend les
+outils, pour envoyer chaque bloc avant le résultat de l'outil. La page bambara
+marque les routes de `rechercher_image` et `rechercher_video` dans
+`core/outils_page_bambara.py` (clé `medias_progressifs`).
+
+Réglages, tous facultatifs (variables d'environnement du backend) :
+
+| Variable | Défaut | Rôle |
+| --- | --- | --- |
+| `MEDIAS_PROGRESSIFS_MODELE` | `openai/gpt-oss-20b` | modèle Groq du tri |
+| `MEDIAS_PROGRESSIFS_DELAI_LLM_SECONDES` | 8 | délai d'un tri |
+| `MEDIAS_PROGRESSIFS_LLM_PARALLELES` | 6 | tris simultanés au plus |
+| `MEDIAS_PROGRESSIFS_PAR_SOURCE` | 12 | images demandées à chaque source |
+| `MEDIAS_PROGRESSIFS_MAX_IMAGES` | 60 | images affichées au plus |
+| `MEDIAS_PROGRESSIFS_MAX_VIDEOS` | 30 | vidéos affichées au plus |
+| `MEDIAS_PROGRESSIFS_DELAI_SECONDES` | 25 | durée maximale de toute la recherche |
+
+Le modèle par défaut est déjà utilisé ailleurs dans le backend (profils, repli du
+routeur d'outils) : son quota de tokens par minute est donc partagé. Si le tri
+échoue souvent, c'est le premier endroit à regarder (journaux « Médias
+progressifs »).
+
+Limite connue : ce chemin ne passe pas par le cache de la recherche complète
+(`rechercher_images`). Chaque appel interroge donc toutes les sources
+disponibles, y compris celles qui sont payantes (Serper, SerpApi, SearchApi) : la
+même demande répétée coûte à chaque fois.
+
+Tests hors réseau : `test_medias_progressifs.py`. Aucun essai avec les vrais
+services n'a été fait : les clés des sources et le modèle du tri restent à
+vérifier sur le serveur.
+
 ## Configuration Railway
 
 Ajouter seulement les clés des sources souhaitées comme variables d'environnement

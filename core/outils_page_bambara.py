@@ -18,6 +18,8 @@ except ImportError:  # chargé comme module du paquet core
 
 from registre_outils import CATEGORIES_OUTILS
 
+from core import medias_progressifs
+
 # Génération visuelle de la page. Les autres outils de génération (documents, code, sites, vidéo
 # Higgsfield) n'en font pas partie pour le moment.
 OUTILS_GENERATION_VISUELLE = ("generer_image",)
@@ -40,6 +42,12 @@ def filtrer_catalogue_par_client(outils_pour_llm, table_routage, client):
     autorises = noms_outils_autorises()
     outils = [o for o in outils_pour_llm if o["function"]["name"] in autorises]
     table = {nom: route for nom, route in table_routage.items() if nom in autorises}
+    # Affichage progressif (22/11/2026, core/medias_progressifs.py) : la recherche d'images et de
+    # vidéos est marquée ici, pour cette page seulement. La boucle des outils la lance alors sans
+    # passer par le client MCP, et envoie chaque bloc à l'écran dès qu'une source a répondu.
+    for nom in medias_progressifs.OUTILS_PROGRESSIFS:
+        if nom in table:
+            table[nom] = {**table[nom], medias_progressifs.CLE_ROUTE_PROGRESSIVE: True}
     return outils, table
 
 

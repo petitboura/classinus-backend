@@ -13,7 +13,7 @@ from registre_outils import OUTILS_SENSIBLES, est_outil_sensible_serveur_personn
 from profils_agents import _nom_lisible_appel, _action_appel, _champs_domaines_appel
 from libelles_activite_ia import champs_timeline_appel
 from historique_outils import champs_historique_outil
-from core import captures_modele
+from core import captures_modele, medias_progressifs
 from core.ressources_ui import marquer_source, separer_ressources_ui, NOTE_POUR_LE_MODELE
 
 class _AttenteConfirmation(Exception):
@@ -29,7 +29,7 @@ class _AttenteConfirmation(Exception):
         self.appels_restants = appels_restants
 
 
-def _attendre_termines(futures, arret):
+def _attendre_termines(futures, arret, canal=None):
     """
     Remplace concurrent.futures.as_completed (12/10/2026, bouton Arrêter) : rend les
     appels dans l'ordre où ils finissent, mais regarde le signal d'arrêt toutes les
@@ -37,23 +37,39 @@ def _attendre_termines(futures, arret):
     demandé, on ne rend plus que ce qui est déjà fini et on s'en va : les outils encore
     en route ne sont plus attendus (un fil en cours ne peut pas être tué, son résultat
     est simplement ignoré).
+
+    `canal` (22/11/2026, affichage progressif, core/medias_progressifs.py) : quand il est donné,
+    les blocs que les outils y ont déposés sont rendus eux aussi, sous forme de dict (les appels
+    terminés, eux, sont des Future). Ils sont rendus AVANT les appels terminés du même tour, donc
+    avant le résultat de l'outil qui les a produits. L'attente se réveille alors toutes les 0,05 s
+    au lieu de 0,25 s, pour que l'écran reçoive un bloc presque dès qu'il existe.
     """
     en_attente = set(futures)
+    delai = 0.25 if canal is None else 0.05
     while en_attente:
         termines, en_attente = concurrent.futures.wait(
-            en_attente, timeout=0.25, return_when=concurrent.futures.FIRST_COMPLETED
+            en_attente, timeout=delai, return_when=concurrent.futures.FIRST_COMPLETED
         )
+        if canal is not None:
+            yield from canal.vider()
         for future in termines:
             yield future
         if arret is not None and arret.est_demande():
             return
 
 
-def _executer_un_appel(appel, table_routage, arret=None):
+def _executer_un_appel(appel, table_routage, arret=None, canal=None):
     try:
         arguments = json.loads(appel["arguments"] or "{}")
     except Exception:
         arguments = {}
+    route = table_routage.get(appel["name"]) or {}
+    # Affichage progressif (page bambara seulement) : la route de l'outil a été marquée par
+    # outils_page_bambara.filtrer_catalogue_par_client. Pour tout autre client, la clé n'existe pas
+    # et l'appel passe par le client MCP comme avant.
+    if canal is not None and route.get(medias_progressifs.CLE_ROUTE_PROGRESSIVE) \
+            and appel["name"] in medias_progressifs.OUTILS_PROGRESSIFS:
+        return medias_progressifs.executer(appel["name"], arguments, canal, appel["id"], arret=arret)
     return appeler_outil(appel["name"], arguments, table_routage, arret=arret)
 
 
@@ -538,12 +554,22 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(appels_surs))
         images_vision = []  # captures du navigateur à montrer au modèle, voir core/captures_modele.py
         try:
+            # Canal des blocs d'affichage progressif : créé seulement si un appel du lot en a besoin
+            # (route marquée pour la page bambara). Sinon None, et rien ne change.
+            canal = medias_progressifs.CanalMedias() if any(
+                (table_routage.get(appel["name"]) or {}).get(medias_progressifs.CLE_ROUTE_PROGRESSIVE)
+                for appel in appels_surs
+            ) else None
             futures = {
-                executor.submit(_executer_un_appel, appel, table_routage, arret): appel
+                executor.submit(_executer_un_appel, appel, table_routage, arret, canal): appel
                 for appel in appels_surs
             }
             finis = set()
-            for future in _attendre_termines(futures, arret):
+            for future in _attendre_termines(futures, arret, canal):
+                if isinstance(future, dict):
+                    # Bloc d'images ou de vidéos déjà trié : droit vers l'écran, sans attendre la fin de l'outil.
+                    yield future
+                    continue
                 finis.add(future)
                 appel = futures[future]
                 try:

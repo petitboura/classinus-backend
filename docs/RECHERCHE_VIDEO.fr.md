@@ -53,6 +53,17 @@ L'outil renvoie `videos_trouvees`, et non `videos` : l'IA garde donc le
 contrôle et choisit les vidéos réellement pertinentes à afficher. Aucune
 galerie automatique de tous les résultats n'est déclenchée.
 
+## Affichage progressif (page bambara)
+
+Le 22 novembre 2026, `rechercher_videos` a reçu un paramètre facultatif `sur_lot`,
+appelé avec le nom de la source et ses nouvelles vidéos dès qu'une source a
+répondu. Sur la page bambara, chaque lot part alors à un petit LLM de tri puis à
+l'écran (événement `bloc_media`, `genre` = `videos`), sans attendre les sources
+suivantes. L'ordre d'économie ne change pas : une source payante n'est toujours
+appelée que si les précédentes n'ont pas rempli la page. Le détail est dans
+`RECHERCHE_IMAGE.fr.md`, section « Affichage progressif (page bambara) ». Sans
+`sur_lot`, le comportement est exactement celui d'avant.
+
 ## État des tests
 
 Les tests unitaires hors réseau sont dans

@@ -324,11 +324,15 @@ def _chercher_via_tavily(requete, nombre, cle, page=1):
     return resultats[:nombre]
 
 
-def rechercher_videos(requete, nombre=30, page=1):
+def rechercher_videos(requete, nombre=30, page=1, sur_lot=None):
     """
     Recherche des vidéos sur YouTube et sur le web (Google Videos).
     30 résultats par défaut, jusqu'à 50 par page. Les fournisseurs payants
     ne sont appelés que si les sources précédentes n'ont pas rempli la page.
+
+    `sur_lot` (22/11/2026, affichage progressif, voir core/medias_progressifs.py) : fonction
+    facultative appelée avec (nom_de_la_source, nouvelles_vidéos) dès qu'une source a répondu,
+    sans attendre les suivantes. Sans elle, rien ne change.
     """
     global _pause_youtube_jusqu_a
     requete = (requete or "").strip()
@@ -343,30 +347,41 @@ def rechercher_videos(requete, nombre=30, page=1):
     cle_m = _cle_memoire(requete, nombre, page)
     en_memoire = _lire_memoire(cle_m)
     if en_memoire is not None:
+        if sur_lot is not None and en_memoire:
+            sur_lot("Mémoire", en_memoire)
         return en_memoire
 
     resultats = []
     deja_vus = set()
 
-    def ajouter(elements):
+    def ajouter(elements, nom_source=None):
+        ajoutes = []
         for video in elements or []:
             url = video.get("url")
             if not url or url in deja_vus:
                 continue
             deja_vus.add(url)
             resultats.append(video)
+            ajoutes.append(video)
             if len(resultats) >= nombre:
                 break
+        if sur_lot is not None and nom_source and ajoutes:
+            try:
+                sur_lot(nom_source, list(ajoutes))
+            except Exception as e:
+                logging.warning(f"RECHERCHE VIDEO : affichage progressif de {nom_source} impossible ({e}).")
 
     # YouTube officiel en premier : les liens sont directement lisibles dans Classinus.
     cle_youtube = os.environ.get("YOUTUBE_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if page == 1 and cle_youtube and time.time() >= _pause_youtube_jusqu_a:
         try:
-            ajouter(_chercher_via_youtube(requete, min(nombre, 20), cle_youtube))
-            for video in resultats:
+            videos_youtube = _chercher_via_youtube(requete, min(nombre, 20), cle_youtube)
+            # Champs posés AVANT l'ajout : l'affichage progressif lit ces vidéos tout de suite.
+            for video in videos_youtube or []:
                 video.setdefault("source", "YouTube")
                 video.setdefault("source_url", "https://www.youtube.com")
                 video.setdefault("fournisseur_recherche", "YouTube Data API")
+            ajouter(videos_youtube, "YouTube")
         except _LimiteYoutubeAtteinte:
             pause = _entier_env("RECHERCHE_VIDEO_PAUSE_QUOTA_SECONDES", 3600)
             _pause_youtube_jusqu_a = time.time() + pause
@@ -391,7 +406,7 @@ def rechercher_videos(requete, nombre=30, page=1):
         if not cle:
             continue
         try:
-            ajouter(fonction(requete, nombre - len(resultats), cle, page))
+            ajouter(fonction(requete, nombre - len(resultats), cle, page), nom)
         except Exception as e:
             logging.warning(f"RECHERCHE VIDEO : {nom} indisponible ({_masquer_cle(e)}).")
 
@@ -400,7 +415,7 @@ def rechercher_videos(requete, nombre=30, page=1):
         cle_tavily = os.environ.get("TAVILY_API_KEY")
         if cle_tavily:
             try:
-                ajouter(_chercher_via_tavily(requete, nombre - len(resultats), cle_tavily, page))
+                ajouter(_chercher_via_tavily(requete, nombre - len(resultats), cle_tavily, page), "Tavily")
             except Exception as e:
                 logging.warning(f"RECHERCHE VIDEO : Tavily indisponible ({_masquer_cle(e)}).")
 

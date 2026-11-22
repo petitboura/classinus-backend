@@ -43,6 +43,62 @@ Since November 8, 2026, nothing is shown automatically after an image search (or
 
 Do not rename these keys to `images` or `videos`: those names trigger the automatic display of every result, which other tools rely on (browser captures, Higgsfield). Test: `tests/verifier_recherche_media_choix_ia.py`.
 
+## Progressive display (bambara page)
+
+Added on 22 November 2026, at Bourama's request. It only applies to the bambara
+page (`client` = `page_bambara`): every other client is unchanged.
+
+The user of that page cannot read, they understand what they see. Before,
+`rechercher_image` waited for the slowest source, then the main model sorted and
+wrote its images: nothing showed up before the end. Now:
+
+1. Each source answers on its own. As soon as one has answered, its results,
+   without the duplicates already seen (same domain and path), go to a small fast
+   LLM that picks, by number, the ones that really match the request.
+2. The kept images go straight to the screen in an SSE event `bloc_media`, while
+   the other sources are still working:
+   `{"type": "bloc_media", "id_appel": "...", "genre": "images", "source": "Openverse", "images": [...]}`.
+3. At the end, the main model receives a short summary: how many images are
+   already on screen, their titles, and the instruction not to copy their
+   addresses. If sorting a batch failed (timeout, unreadable answer), that batch
+   is not displayed: it is given to the main model under `images_trouvees`, as
+   before, so it can choose by itself.
+
+`page` and `nombre` keep their meaning: `page` goes to the sources (the model calls
+the tool again with `page=2` to see more, and the summary suggests
+`page_suivante_suggeree`), `nombre` caps what is displayed and never goes above
+the `MEDIAS_PROGRESSIFS_MAX_IMAGES` setting. An invalid value falls back to the
+default.
+
+The small LLM points at results by number and the code writes the addresses: an
+LLM that copies a long address sometimes gets one character wrong, and a broken
+image cannot be noticed on a page without text.
+
+Why a channel: tools go through a network MCP client, so a tool thread cannot
+write directly into the reply stream. `core/medias_progressifs.py` provides a
+queue (`CanalMedias`) that the loop in `core/execution_outils.py` empties every
+0.05 s while it waits for the tools, to send each block before the tool result.
+The bambara page marks the routes of `rechercher_image` and `rechercher_video` in
+`core/outils_page_bambara.py` (key `medias_progressifs`).
+
+Settings, all optional (backend environment variables): `MEDIAS_PROGRESSIFS_MODELE`
+(Groq model used for sorting, default `openai/gpt-oss-20b`),
+`MEDIAS_PROGRESSIFS_DELAI_LLM_SECONDES` (8), `MEDIAS_PROGRESSIFS_LLM_PARALLELES`
+(6), `MEDIAS_PROGRESSIFS_PAR_SOURCE` (12), `MEDIAS_PROGRESSIFS_MAX_IMAGES` (60),
+`MEDIAS_PROGRESSIFS_MAX_VIDEOS` (30), `MEDIAS_PROGRESSIFS_DELAI_SECONDES` (25).
+
+The default model is already used elsewhere in the backend (profiles, tool router
+fallback), so its per-minute token quota is shared. If sorting often fails, look
+there first (logs "Médias progressifs").
+
+Known limit: this path does not use the cache of the full search
+(`rechercher_images`). Every call therefore queries all available sources,
+including the paid ones (Serper, SerpApi, SearchApi): the same request repeated
+costs every time.
+
+Offline tests: `test_medias_progressifs.py`. Nothing was tried against the real
+services: the source keys and the sorting model still need checking on the server.
+
 ## Behavior to know
 
 - Only `https` addresses are kept for Wikimedia, Openverse, Serper and SerpApi, because an `http` image is blocked inside an `https` page. For Serper and SerpApi, when the original image is not `https`, the thumbnail (hosted by Google) is used instead.
