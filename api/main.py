@@ -84,6 +84,7 @@ from api.canal_agent_applicatif import router as canal_agent_applicatif_router
 from api.gemini_live import router as gemini_live_router
 from api.voix_bambara import router as voix_bambara_router  # 13/11/2026, relais du mode vocal bambara
 from api.bambara_profils import router as bambara_profils_router  # 18/11/2026, profils, historique et gardés de la page bambara
+from api.bambara_phrases import router as bambara_phrases_router  # 22/11/2026, phrases proactives de la page bambara
 from api.avatar_napster import router as avatar_napster_router  # 16/11/2026, avatar Napster du mode vocal
 from api.minuteurs import router_minuteurs
 from api.liste_attente import router_liste_attente  # 16/11/2026, liste d'attente des modèles Bientôt
@@ -1012,6 +1013,7 @@ app.include_router(canal_agent_applicatif_router)
 app.include_router(gemini_live_router)
 app.include_router(voix_bambara_router)  # 13/11/2026, relais du mode vocal bambara
 app.include_router(bambara_profils_router)  # 18/11/2026, profils, historique et gardés de la page bambara
+app.include_router(bambara_phrases_router)  # 22/11/2026, phrases proactives de la page bambara
 app.include_router(avatar_napster_router)  # 16/11/2026, avatar Napster du mode vocal
 app.include_router(router_minuteurs)
 app.include_router(router_liste_attente)

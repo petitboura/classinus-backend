@@ -431,6 +431,7 @@ MESSAGES_FR: dict[str, str] = {
     "BAMBARA_AUDIO_INVALIDE": "Le message audio est vide ou trop long.",
     "BAMBARA_GARDE_INVALIDE": "Cette vidéo ou cette image ne peut pas être gardée.",
     "BAMBARA_INDISPONIBLE": "Cette page ne répond pas pour le moment, réessaie dans un instant.",
+    "BAMBARA_PHRASE_INTROUVABLE": "Cette phrase est introuvable.",
     "VOIX_BAMBARA_AUDIO_INVALIDE": "L'enregistrement est vide ou trop gros, réessaie en parlant un peu moins longtemps.",
     "VOIX_BAMBARA_TEXTE_INVALIDE": "Il n'y a rien à lire à voix haute.",
     # 16/11/2026, avatar Napster du mode vocal (api/avatar_napster.py). Codes à garder synchronisés avec lib/erreurs.ts côté frontend.
@@ -867,6 +868,7 @@ MESSAGES_EN: dict[str, str] = {
     "BAMBARA_AUDIO_INVALIDE": "The audio message is empty or too long.",
     "BAMBARA_GARDE_INVALIDE": "This video or image cannot be kept.",
     "BAMBARA_INDISPONIBLE": "This page is not responding right now, try again in a moment.",
+    "BAMBARA_PHRASE_INTROUVABLE": "This phrase could not be found.",
     "AVATAR_NAPSTER_NON_CONFIGURE": "The avatar is not connected right now.",
     "AVATAR_NAPSTER_INDISPONIBLE": "The avatar is not responding right now, try again in a moment.",
     "AVATAR_NAPSTER_TROP_RAPIDE": "Wait a few seconds before starting the avatar again.",

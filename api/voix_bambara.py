@@ -124,11 +124,20 @@ class DemandeSynthese(BaseModel):
     texte: str
 
 
-@router.post("/synthese")
-def synthese(demande: DemandeSynthese, utilisateur=Depends(utilisateur_courant)):
-    """Fait lire un morceau de texte par la voix Gemini. Renvoie un fichier WAV."""
+def voix_active() -> str:
+    """Identifiant de la voix utilisée partout sur la page bambara (variable VOIX_BAMBARA_VOIX)."""
+    return _voix()
+
+
+def bouche_branchee() -> bool:
+    """Le service de la voix a une adresse : sans elle, aucune synthèse n'est possible."""
+    return _adresse("VOIX_BAMBARA_BOUCHE_URL") is not None
+
+
+def synthetiser_texte(texte: str) -> bytes:
+    """Fait lire un texte par la voix active et rend le fichier WAV. Lève l'erreur d'API habituelle en cas d'échec."""
     base = _exige("VOIX_BAMBARA_BOUCHE_URL")
-    texte = demande.texte.strip()
+    texte = texte.strip()
     if not texte or len(texte) > texte_max():
         raise erreur_api(400, "VOIX_BAMBARA_TEXTE_INVALIDE")
     try:
@@ -144,4 +153,10 @@ def synthese(demande: DemandeSynthese, utilisateur=Depends(utilisateur_courant))
     if reponse.status_code != 200:
         logging.error("Service de la voix Gemini : statut %s", reponse.status_code)
         raise erreur_api(503, "VOIX_BAMBARA_INDISPONIBLE")
-    return Response(content=reponse.content, media_type="audio/wav")
+    return reponse.content
+
+
+@router.post("/synthese")
+def synthese(demande: DemandeSynthese, utilisateur=Depends(utilisateur_courant)):
+    """Fait lire un morceau de texte par la voix Gemini. Renvoie un fichier WAV."""
+    return Response(content=synthetiser_texte(demande.texte), media_type="audio/wav")
