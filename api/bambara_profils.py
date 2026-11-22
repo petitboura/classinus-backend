@@ -15,12 +15,15 @@ from core.bambara_profils import (
     LONGUEUR_MAX_NOM,
     ErreurBambara,
     creer_profil,
+    creer_profil_parcours,
+    LONGUEUR_MAX_PRESENTATION,
     enregistrer_premier_message,
     garder,
     lire_audio,
     lister_conversations,
     lister_gardes,
     lister_profils,
+    lister_textes_parcours,
     normaliser_profil,
     retirer_garde,
 )
@@ -32,6 +35,9 @@ router = APIRouter(prefix="/api/bambara", tags=["bambara"])
 
 _STATUT_HTTP = {
     "BAMBARA_PROFIL_NOM_INVALIDE": 400,
+    "BAMBARA_NOM_PARLE_INVALIDE": 400,
+    "BAMBARA_PROFIL_GENRE_INVALIDE": 400,
+    "BAMBARA_PRESENTATION_INVALIDE": 400,
     "BAMBARA_TROP_DE_PROFILS": 400,
     "BAMBARA_PROFIL_INTROUVABLE": 404,
     "BAMBARA_CONVERSATION_INVALIDE": 400,
@@ -50,6 +56,12 @@ def _erreur(e: ErreurBambara):
 class DemandeProfil(BaseModel):
     nom: str = Field(..., min_length=1, max_length=LONGUEUR_MAX_NOM * 2)
     prenom: str = Field(..., min_length=1, max_length=LONGUEUR_MAX_NOM * 2)
+
+
+class DemandeProfilParcours(BaseModel):
+    nom: str = Field(..., min_length=1, max_length=LONGUEUR_MAX_NOM * 2)
+    genre: str = Field(..., max_length=10)
+    presentation: Optional[str] = Field(default=None, max_length=LONGUEUR_MAX_PRESENTATION * 2)
 
 
 class AudioPremierMessage(BaseModel):
@@ -87,6 +99,24 @@ def mes_profils(request: Request, utilisateur=Depends(utilisateur_courant)):
 def nouveau_profil(request: Request, demande: DemandeProfil, utilisateur=Depends(utilisateur_courant)):
     try:
         return creer_profil(_supabase_memoire, utilisateur.id, demande.nom, demande.prenom)
+    except ErreurBambara as e:
+        raise _erreur(e)
+
+
+@router.post("/profils/parcours")
+@limiteur.limit("10/minute")
+def nouveau_profil_parcours(request: Request, demande: DemandeProfilParcours, utilisateur=Depends(utilisateur_courant)):
+    try:
+        return creer_profil_parcours(_supabase_memoire, utilisateur.id, demande.nom, demande.genre, demande.presentation)
+    except ErreurBambara as e:
+        raise _erreur(e)
+
+
+@router.get("/parcours/textes")
+@limiteur.limit("30/minute")
+def textes_parcours(request: Request, langue: Optional[str] = None, utilisateur=Depends(utilisateur_courant)):
+    try:
+        return {"textes": lister_textes_parcours(_supabase_memoire, langue)}
     except ErreurBambara as e:
         raise _erreur(e)
 

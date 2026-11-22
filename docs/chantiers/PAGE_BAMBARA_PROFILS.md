@@ -32,3 +32,27 @@ Errors use stable `BAMBARA_*` codes with French and English messages (`core/erre
 - The audio is stored in the database (base64). Moving it to object storage is the durable choice if volume grows.
 - The history only lists first messages. Reopening a past conversation is not built.
 - Tests: `test_bambara_profils.py`.
+
+## Voice sign-up journey (22 November 2026)
+
+The `+` button of the profile panel no longer opens written fields: it starts a full-screen sign-up journey made only of voices and images (frontend `components/bambara/ParcoursInscriptionBambara.tsx`, logic in `lib/useParcoursBambara.ts`).
+
+1. **Name.** A voice asks for the name, the person says it, Soloni transcribes it, and the person can replay their own voice and also the voice of Classinus saying that name (speech synthesis), to hear what it will sound like when Classinus says it.
+2. **Woman or man.** Two large pictures to touch, no text.
+3. **Introduction (optional).** The person can say a few words about themselves, or skip with an arrow.
+
+At each step a voice explains what to do. **None of those sentences is written in the code**: they are read by speech synthesis from the Supabase table `bambara_parcours_textes`, written by the team. A missing sentence is skipped and the step plays without a voice instruction.
+
+| Key | When it is read |
+| --- | --- |
+| `nom_demande` | First step, asking for the name. |
+| `nom_reecoute` | After the name is transcribed and Classinus has said it, explaining to replay, confirm or redo. |
+| `genre_demande` | Second step, asking to choose woman or man. |
+| `presentation_demande` | Third step, inviting the person to speak about themselves (optional). |
+| `fin` | After the profile is saved. |
+
+Table `bambara_parcours_textes`: `cle`, `langue` (`bm` for Bambara, the language of the voice), `texte` (what the voice reads), `texte_fr` and `texte_en` (what it means, for the team, never read), `actif`. Add or edit rows in Supabase; no deployment is needed.
+
+Storage: `bambara_profils` gets `genre` (`femme` or `homme`) and `presentation` (up to 2000 characters). The spoken name is stored in `prenom` and `nom` is left empty (the check now accepts 0 to 60 characters). Migration: `migrations/2026_11_22_bambara_parcours_inscription.sql`. The new columns follow the profile, so the account purge and the data export already cover them.
+
+Routes: `POST /api/bambara/profils/parcours` (name, `genre`, optional `presentation`) and `GET /api/bambara/parcours/textes?langue=bm`. New error codes `BAMBARA_NOM_PARLE_INVALIDE`, `BAMBARA_PROFIL_GENRE_INVALIDE`, `BAMBARA_PRESENTATION_INVALIDE`, in French and English. Tests: `test_bambara_parcours.py`.

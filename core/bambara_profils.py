@@ -25,6 +25,9 @@ LIMITE_GARDES = 200
 # Environ 1,5 Mo de son avant l'encodage : un vocal de quelques dizaines de secondes en WAV.
 LONGUEUR_MAX_AUDIO_BASE64 = 2_000_000
 GENRES_GARDES = ("video", "image")
+GENRES_PROFIL = ("femme", "homme")
+LONGUEUR_MAX_PRESENTATION = 2000
+LANGUE_PARCOURS_PAR_DEFAUT = "bm"
 _MOTIF_URL = re.compile(r"^https?://\S+$")
 
 
@@ -80,7 +83,7 @@ def _nettoyer_nom(valeur) -> str:
 def lister_profils(client, user_id) -> list:
     try:
         return (
-            client.table("bambara_profils").select("id,nom,prenom,cree_a").eq("user_id", user_id).order("cree_a").execute().data
+            client.table("bambara_profils").select("id,nom,prenom,genre,cree_a").eq("user_id", user_id).order("cree_a").execute().data
             or []
         )
     except Exception as e:
@@ -108,6 +111,60 @@ def creer_profil(client, user_id, nom, prenom) -> dict:
         raise ErreurBambara("BAMBARA_INDISPONIBLE")
     ligne = lignes[0]
     return {"id": ligne["id"], "nom": ligne["nom"], "prenom": ligne["prenom"], "cree_a": ligne["cree_a"]}
+
+
+def creer_profil_parcours(client, user_id, nom_parle, genre, presentation) -> dict:
+    """Profil créé par le parcours d'inscription vocal (22/11/2026) : un seul nom (dit à voix haute puis transcrit),
+    le genre (femme ou homme, choisi sur une image) et une présentation facultative (parole transcrite).
+    Le nom est rangé dans `prenom`, `nom` reste vide."""
+    prenom_propre = _nettoyer_nom_parle(nom_parle)
+    if genre not in GENRES_PROFIL:
+        raise ErreurBambara("BAMBARA_PROFIL_GENRE_INVALIDE")
+    texte = " ".join(str(presentation or "").split())
+    if len(texte) > LONGUEUR_MAX_PRESENTATION:
+        raise ErreurBambara("BAMBARA_PRESENTATION_INVALIDE")
+    if len(lister_profils(client, user_id)) >= MAX_PROFILS_PAR_COMPTE:
+        raise ErreurBambara("BAMBARA_TROP_DE_PROFILS")
+    ligne_a_ecrire = {"user_id": user_id, "nom": "", "prenom": prenom_propre, "genre": genre}
+    if texte:
+        ligne_a_ecrire["presentation"] = texte
+    try:
+        lignes = client.table("bambara_profils").insert(ligne_a_ecrire).execute().data
+    except Exception as e:
+        logging.error("ERREUR SUPABASE (création profil bambara par parcours pour %s) : %s", user_id, e)
+        raise ErreurBambara("BAMBARA_INDISPONIBLE")
+    if not lignes:
+        raise ErreurBambara("BAMBARA_INDISPONIBLE")
+    ligne = lignes[0]
+    return {
+        "id": ligne["id"],
+        "nom": ligne["nom"],
+        "prenom": ligne["prenom"],
+        "genre": ligne.get("genre"),
+        "cree_a": ligne["cree_a"],
+    }
+
+
+def _nettoyer_nom_parle(valeur) -> str:
+    propre = " ".join(str(valeur or "").split())
+    if not propre or len(propre) > LONGUEUR_MAX_NOM:
+        raise ErreurBambara("BAMBARA_NOM_PARLE_INVALIDE")
+    return propre
+
+
+def lister_textes_parcours(client, langue=None) -> dict:
+    """Les phrases du parcours d'inscription (clé vers texte), lues par la voix de Classinus. Elles viennent de la table
+    bambara_parcours_textes : aucune n'est écrite dans le code. Une clé absente est simplement absente du résultat."""
+    langue_propre = (langue or LANGUE_PARCOURS_PAR_DEFAUT).strip().lower()[:10] or LANGUE_PARCOURS_PAR_DEFAUT
+    try:
+        lignes = (
+            client.table("bambara_parcours_textes").select("cle,texte").eq("langue", langue_propre).eq("actif", True).execute().data
+            or []
+        )
+    except Exception as e:
+        logging.error("ERREUR SUPABASE (textes du parcours bambara, langue %s) : %s", langue_propre, e)
+        raise ErreurBambara("BAMBARA_INDISPONIBLE")
+    return {l["cle"]: l["texte"] for l in lignes if l.get("cle") and str(l.get("texte") or "").strip()}
 
 
 def lister_conversations(client, user_id, profil_id) -> list:
