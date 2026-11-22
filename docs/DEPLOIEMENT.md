@@ -33,3 +33,7 @@ The root `Dockerfile` describes a Docker build separate from the Railpack build.
 6. Test sensitive features in the destination environment.
 
 Rolling back the code does not automatically restore the database. Check migration compatibility separately.
+
+## Official skills
+
+The official skills (`skills_plateforme/`) are synchronized to the database and storage by the server itself, in the background, at every startup (`core/synchro_skills_demarrage.py`). It never blocks startup. Set `SKILLS_PLATEFORME_SYNCHRO=non` to disable it. Before, only the Railway pre-deploy command did this, so it stopped running when the server moved to Vultr.

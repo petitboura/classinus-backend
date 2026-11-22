@@ -36,6 +36,7 @@ from api.autorisations_outils import router as autorisations_outils_router
 from api.widgets_outils import router as widgets_outils_router
 from api.higgsfield import router as higgsfield_router
 from core import higgsfield_suivi
+from core.synchro_skills_demarrage import synchroniser_au_demarrage
 from api.bibliotheque_utilisateur import router as bibliotheque_utilisateur_router
 from api.dossiers_bibliotheque import router as dossiers_bibliotheque_router
 from api.contenu_dynamique_matiere import router_enseignant as contenu_matiere_enseignant_router
@@ -486,7 +487,9 @@ async def _lifespan(app: FastAPI):
         tache_vectorisation_documents_agent = asyncio.create_task(_boucle_vectorisation_documents_agent())
         tache_pause_sandboxes_execution_code = asyncio.create_task(_boucle_pause_sandboxes_execution_code())
         tache_suivi_higgsfield = asyncio.create_task(_boucle_suivi_higgsfield())
+        tache_synchro_skills = asyncio.create_task(synchroniser_au_demarrage())
         yield
+        tache_synchro_skills.cancel()
         tache_suivi_higgsfield.cancel()
         if tache_planificateur:
             tache_planificateur.cancel()

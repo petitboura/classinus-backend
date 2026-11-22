@@ -31,3 +31,7 @@ Le `Dockerfile` racine décrit une construction Docker distincte de la construct
 6. Tester les fonctionnalités sensibles sur l’environnement de destination.
 
 Un retour arrière du code ne restaure pas automatiquement la base de données. Vérifier séparément la compatibilité des migrations.
+
+## Skills officiels
+
+Les skills officiels (`skills_plateforme/`) sont synchronisés vers la base et le stockage par le serveur lui-même, en arrière-plan, à chaque démarrage (`core/synchro_skills_demarrage.py`). Cela ne bloque jamais le démarrage. `SKILLS_PLATEFORME_SYNCHRO=non` la désactive. Avant, seule la commande de pré-déploiement de Railway le faisait, donc elle s'est arrêtée quand le serveur est passé sur Vultr.
