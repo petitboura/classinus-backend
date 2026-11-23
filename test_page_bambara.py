@@ -69,6 +69,14 @@ class TestConsignesPageBambara(unittest.TestCase):
         self.assertIn("outils", texte)
         self.assertNotIn("--", texte)
 
+    def test_consignes_page_organisent_la_reponse_en_blocs(self):
+        texte = prompt_voix_bambara.consignes_page()
+        self.assertIn("note D", texte)
+        self.assertIn("paragraphe", texte)
+        # Une image créée n'est plus montrée d'office : le modèle doit écrire son lien.
+        self.assertIn("outil de génération", texte)
+        self.assertIn("écris toi-même son lien", texte)
+
 
 class TestEffortPageBambara(unittest.TestCase):
     def test_effort_au_plus_faible_sans_modele_impose(self):

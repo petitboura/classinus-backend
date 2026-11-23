@@ -14,6 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from core.bambara_audios_messages import enregistrer_audio_message, lister_audios_conversation
 from core.bambara_profils import (
     LONGUEUR_MAX_AUDIO_BASE64,
     MAX_PROFILS_PAR_COMPTE,
@@ -36,6 +37,7 @@ RACINE = Path(__file__).parent
 class _Reponse:
     def __init__(self, data):
         self.data = data
+        self.count = len(data)
 
 
 class _Requete:
@@ -47,7 +49,7 @@ class _Requete:
         self.limite = None
         self.ligne = None
 
-    def select(self, *_):
+    def select(self, *_, **__):
         self.action = "select"
         return self
 
@@ -192,6 +194,34 @@ class TestConversations(unittest.TestCase):
         enregistrer_premier_message(c, "u1", str(uuid.uuid4()), None, "commun", None)
         self.assertEqual([l["texte"] for l in lister_conversations(c, "u1", p["id"])], ["du profil"])
         self.assertEqual([l["texte"] for l in lister_conversations(c, "u1", None)], ["commun"])
+
+
+class TestAudiosParBloc(unittest.TestCase):
+    """23/11/2026 : un vocal par bloc de texte de la réponse."""
+
+    def _base(self):
+        c = _FauxClient()
+        cid = str(uuid.uuid4())
+        c.tables["historique_conversations"] = [{"id": 7, "user_id": "u1", "conversation_id": cid, "role": "assistant"}]
+        return c, cid
+
+    def test_un_son_par_bloc_et_un_second_envoi_ne_change_rien(self):
+        c, cid = self._base()
+        for bloc in (0, 1, 2):
+            self.assertFalse(enregistrer_audio_message(c, "u1", cid, 7, "reponse", _son(), bloc)["deja_enregistre"])
+        self.assertTrue(enregistrer_audio_message(c, "u1", cid, 7, "reponse", _son(), 1)["deja_enregistre"])
+        self.assertEqual([a["bloc"] for a in lister_audios_conversation(c, "u1", cid)], [0, 1, 2])
+
+    def test_sans_rang_c_est_le_bloc_zero(self):
+        c, cid = self._base()
+        enregistrer_audio_message(c, "u1", cid, 7, "reponse", _son())
+        self.assertEqual([a["bloc"] for a in lister_audios_conversation(c, "u1", cid)], [0])
+
+    def test_rang_invalide_refuse(self):
+        c, cid = self._base()
+        for bloc in (-1, 50, "x"):
+            with self.assertRaises(ErreurBambara):
+                enregistrer_audio_message(c, "u1", cid, 7, "reponse", _son(), bloc)
 
 
 class TestGardes(unittest.TestCase):

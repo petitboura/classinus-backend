@@ -29,6 +29,8 @@ def _erreur(e: ErreurBambara):
 
 class DemandeAudioMessage(BaseModel):
     sens: str = Field(..., max_length=10)
+    # Rang du bloc de texte lu par ce son (0 pour le premier), 23/11/2026.
+    bloc: int = Field(0, ge=0, le=49)
     base64: str = Field(..., min_length=1, max_length=LONGUEUR_MAX_AUDIO_BASE64)
     duree_ms: int = Field(..., ge=0, le=600_000)
     pics: List[float] = Field(default_factory=list, max_length=64)
@@ -47,6 +49,7 @@ def audio_du_message(
             message_id,
             demande.sens,
             {"base64": demande.base64, "duree_ms": demande.duree_ms, "pics": demande.pics},
+            demande.bloc,
         )
     except ErreurBambara as e:
         raise _erreur(e)

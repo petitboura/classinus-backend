@@ -14,7 +14,9 @@ import logging
 from core.bambara_profils import LONGUEUR_MAX_AUDIO_BASE64, ErreurBambara, _identifiant
 
 SENS_AUDIO = {"question": "user", "reponse": "assistant"}
-MAX_AUDIOS_PAR_CONVERSATION = 200
+# Un vocal par bloc de texte depuis le 23/11/2026 : la limite par conversation monte avec.
+MAX_AUDIOS_PAR_CONVERSATION = 600
+MAX_BLOCS_PAR_MESSAGE = 50
 
 
 def _message_du_compte(client, user_id, conversation_id, message_id, sens) -> bool:
@@ -37,13 +39,14 @@ def _message_du_compte(client, user_id, conversation_id, message_id, sens) -> bo
     return bool(lignes)
 
 
-def _audio_deja_la(client, user_id, message_id, sens) -> bool:
+def _audio_deja_la(client, user_id, message_id, sens, bloc=0) -> bool:
     lignes = (
         client.table("bambara_audios_messages")
         .select("id")
         .eq("user_id", user_id)
         .eq("message_id", message_id)
         .eq("sens", sens)
+        .eq("bloc", bloc)
         .limit(1)
         .execute()
         .data
@@ -51,16 +54,20 @@ def _audio_deja_la(client, user_id, message_id, sens) -> bool:
     return bool(lignes)
 
 
-def enregistrer_audio_message(client, user_id, conversation_id, message_id, sens, audio) -> dict:
+def enregistrer_audio_message(client, user_id, conversation_id, message_id, sens, audio, bloc=0) -> dict:
     """Garde le son d'un message. Le renvoyer une seconde fois ne change rien.
 
-    `audio` est un dict {base64, duree_ms, pics}."""
+    `audio` est un dict {base64, duree_ms, pics}. `bloc` est le rang du bloc de texte de la réponse que ce son lit
+    (0 pour le premier, et toujours 0 pour la voix de la personne)."""
     identifiant = _identifiant(conversation_id, "BAMBARA_CONVERSATION_INVALIDE")
     if sens not in SENS_AUDIO:
         raise ErreurBambara("BAMBARA_AUDIO_INVALIDE")
     try:
         numero = int(message_id)
+        rang = int(bloc)
     except (TypeError, ValueError):
+        raise ErreurBambara("BAMBARA_AUDIO_INVALIDE")
+    if rang < 0 or rang >= MAX_BLOCS_PAR_MESSAGE:
         raise ErreurBambara("BAMBARA_AUDIO_INVALIDE")
     brut = (audio or {}).get("base64") or ""
     if not brut or len(brut) > LONGUEUR_MAX_AUDIO_BASE64:
@@ -72,7 +79,7 @@ def enregistrer_audio_message(client, user_id, conversation_id, message_id, sens
     if not _message_du_compte(client, user_id, identifiant, numero, sens):
         raise ErreurBambara("BAMBARA_CONVERSATION_INTROUVABLE")
     try:
-        if _audio_deja_la(client, user_id, numero, sens):
+        if _audio_deja_la(client, user_id, numero, sens, rang):
             return {"deja_enregistre": True}
         total = (
             client.table("bambara_audios_messages")
@@ -92,6 +99,7 @@ def enregistrer_audio_message(client, user_id, conversation_id, message_id, sens
                     "conversation_id": identifiant,
                     "message_id": numero,
                     "sens": sens,
+                    "bloc": rang,
                     "audio_base64": brut,
                     "duree_ms": max(0, int((audio or {}).get("duree_ms") or 0)),
                     "pics": [round(float(p), 3) for p in ((audio or {}).get("pics") or [])][:64],
@@ -99,7 +107,7 @@ def enregistrer_audio_message(client, user_id, conversation_id, message_id, sens
             ).execute()
         except Exception:
             # Deux envois en même temps pour le même message : l'un a gagné, c'est bon.
-            if _audio_deja_la(client, user_id, numero, sens):
+            if _audio_deja_la(client, user_id, numero, sens, rang):
                 return {"deja_enregistre": True}
             raise
     except ErreurBambara:
@@ -116,10 +124,11 @@ def lister_audios_conversation(client, user_id, conversation_id) -> list:
     try:
         return (
             client.table("bambara_audios_messages")
-            .select("id,message_id,sens,duree_ms")
+            .select("id,message_id,sens,bloc,duree_ms")
             .eq("user_id", user_id)
             .eq("conversation_id", identifiant)
             .order("message_id")
+            .order("bloc")
             .limit(MAX_AUDIOS_PAR_CONVERSATION)
             .execute()
             .data

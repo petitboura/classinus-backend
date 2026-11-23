@@ -109,6 +109,22 @@ NOTE_PAGE_QUANTITE = (
 )
 
 
+# 23/11/2026, demande de Bourama : la réponse n'est plus un seul bloc. La page découpe ce que le modèle écrit en blocs
+# (un paragraphe de texte, une série d'images, une série de vidéos), dans l'ordre où il les écrit, et lit chaque bloc de
+# texte à part. C'est donc au modèle d'organiser sa réponse. Les images qu'il crée avec l'outil de génération ne sont
+# plus montrées d'office : elles n'apparaissent que s'il écrit lui-même leur lien.
+NOTE_PAGE_BLOCS = (
+    "PAGE BAMBARA, note D : la page découpe ta réponse en blocs, affichés et lus séparément dans l'ordre où tu les "
+    "écris. Chaque paragraphe de texte, séparé du suivant par une ligne vide, devient un bloc lu à part : écris des "
+    "paragraphes courts, une idée par paragraphe. Place chaque image ou vidéo exactement à l'endroit où elle doit "
+    "apparaître, entre deux paragraphes ou entre d'autres visuels, chacune seule sur sa ligne. Des images (ou des "
+    "vidéos) écrites à la suite, sans texte entre elles, forment un seul bloc : pour les séparer, mets un paragraphe "
+    "de texte entre elles, ou une vidéo entre des images. Une image que tu crées avec l'outil de génération "
+    "n'apparaît que si tu écris toi-même son lien, en markdown, ![description](lien), seule sur sa ligne : écris-le "
+    "toujours. Un même lien ne s'affiche qu'une fois."
+)
+
+
 def est_client_page_bambara(client):
     return isinstance(client, str) and client.strip().lower() == CLIENT_PAGE_BAMBARA
 
@@ -117,5 +133,5 @@ def consignes_page():
     """Les notes de la page bambara, prêtes à être ajoutées au prompt système."""
     return (
         "\n\n" + NOTE_PAGE_AFFICHAGE + "\n\n" + NOTE_BAMBARA_ORAL + "\n\n" + NOTE_PAGE_OUTILS
-        + "\n\n" + NOTE_PAGE_QUANTITE
+        + "\n\n" + NOTE_PAGE_QUANTITE + "\n\n" + NOTE_PAGE_BLOCS
     )
