@@ -840,6 +840,10 @@ ORIGINES_AUTORISEES = [
     # 24/10/2026, demande de Bourama : copie de test (staging). Sans cette ligne,
     # le navigateur bloque tout appel du site staging.classinus.com vers ce backend.
     "https://staging.classinus.com",
+    # 24/11/2026, demande de Bourama : Maame, la page bambara servie sur sa propre adresse. Sans cette ligne, le
+    # navigateur bloque tous les appels de maame.classinus.com vers ce backend (profils, historique, voix, chat) :
+    # seule la connexion anonyme a Supabase passait, la page restait sans rien enregistrer ni dire.
+    "https://maame.classinus.com",
     # Alias historique conserve comme domaine actif sur le projet Vercel
     # apres son renommage clovis-ai -> classinus (27/09/2026) -- toujours
     # appelable, mais ne correspond plus au nouveau motif ci-dessous donc
