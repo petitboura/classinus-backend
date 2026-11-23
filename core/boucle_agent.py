@@ -362,8 +362,14 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                  appels_en_cours_a_finir=None, modele=GROQ_PRIMARY, reasoning_effort=None, agent_nom=None,
                  rattrapage_tool_code_restant=1, conversation_id=None,
                  catalogue_complet=None, table_routage_complet=None, user_id=None, arret=None,
-                 user_id_autorisations=None, erreur_si_vide=False):
+                 user_id_autorisations=None, erreur_si_vide=False, delai_silence=DELAI_MAX_PAR_APPEL):
     """
+    `delai_silence` (22/11/2026, demande de Bourama) : silence maximal toleré avant de couper l'appel,
+    c'est-a-dire le temps sans AUCUNE donnee recue du modele. La reflexion qui s'affiche compte comme
+    une reponse : chaque morceau de reflexion, de texte ou d'appel d'outil remet le compteur a zero.
+    Valeur courte par defaut (cascade, qui bascule vite sur le modele suivant) ; un modele choisi par
+    l'utilisateur, sans modele de secours, recoit la patience longue des fournisseurs.
+
     Boucle d'agent generique sur le modele Groq utilise (par defaut
     GROQ_PRIMARY, mais peut recevoir n'importe quel modele Groq qui sait
     faire du tool calling -> permet de reutiliser cette meme boucle pour
@@ -546,7 +552,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
             max_completion_tokens=reserve_tokens,
             tools=outils_avec_libelle(outils_mcp) if outils_mcp else None,
             stream=True,
-            timeout=DELAI_MAX_PAR_APPEL,
+            timeout=delai_silence,
             **kwargs_reasoning,
             **kwargs_tool_choice,
         )
@@ -679,6 +685,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     client_groq, messages_agent, outils_mcp, table_routage,
                     modele=modele, reasoning_effort=reasoning_effort, agent_nom=agent_nom,
                     rattrapage_tool_code_restant=rattrapage_tool_code_restant - 1,
+                    delai_silence=delai_silence,
                     conversation_id=conversation_id,
                     catalogue_complet=catalogue_complet, table_routage_complet=table_routage_complet,
                     user_id=user_id, arret=arret,
@@ -780,7 +787,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                     "Ne retente pas cette même action telle quelle."
                 ),
             })
-            for event in _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, kwargs_reasoning, DELAI_MAX_PAR_APPEL, erreur_si_vide=erreur_si_vide):
+            for event in _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, kwargs_reasoning, delai_silence, erreur_si_vide=erreur_si_vide):
                 yield event
             yield _evenement_reprise_agent("repetition_detectee", messages_agent, outils_mcp, table_routage, modele, reasoning_effort, agent_nom)
             return
@@ -1124,7 +1131,7 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
             "poursuivre le travail."
         ),
     })
-    for event in _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, kwargs_reasoning, DELAI_MAX_PAR_APPEL, erreur_si_vide=erreur_si_vide):
+    for event in _generer_conclusion_forcee(client_groq, messages_agent, outils_mcp, modele, kwargs_reasoning, delai_silence, erreur_si_vide=erreur_si_vide):
         yield event
     yield _evenement_reprise_agent("limite_outils_atteinte", messages_agent, outils_mcp, table_routage, modele, reasoning_effort, agent_nom)
     logging.info(f"Réponse via GROQ (avec outil, plafond_absolu={plafond_absolu} atteint): {modele}")

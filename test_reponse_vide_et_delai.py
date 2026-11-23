@@ -166,3 +166,20 @@ class ErreurTypeeVide(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SilenceMaximal(unittest.TestCase):
+    """22/11/2026 (demande de Bourama) : le delai ne mesure que le silence total du modele, la
+    reflexion affichee compte comme une reponse. Un modele choisi (sans secours) recoit la
+    patience longue, la cascade garde le delai court pour basculer vite."""
+
+    def _delai_envoye(self, **options):
+        client = FauxClient([_morceau(raisonnement="Je réfléchis."), _morceau(contenu="Voilà.", fin="stop")])
+        _jouer(client, "deepseek-v4-flash", **options)
+        return client.appels[0]["timeout"]
+
+    def test_la_cascade_garde_le_delai_court(self):
+        self.assertEqual(self._delai_envoye(), boucle_agent.DELAI_MAX_PAR_APPEL)
+
+    def test_un_modele_choisi_recoit_la_patience_longue(self):
+        self.assertEqual(self._delai_envoye(delai_silence=180), 180)

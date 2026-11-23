@@ -22,10 +22,12 @@ Deux points communs à tous les adaptateurs :
 import json
 import types
 
-# Délai par appel pour les modèles Claude, GPT, Gemini et Grok. Le délai court de la cascade
-# (DELAI_MAX_PAR_APPEL, 10 s, voir core/constantes_agent.py) sert à basculer vite d'un modèle
-# gratuit à l'autre ; ici il n'y a pas de modèle de secours, et un modèle qui réfléchit peut
-# mettre bien plus de 10 s avant son premier mot.
+# Silence maximal par appel pour les modèles Claude, GPT, Gemini et Grok, et pour tout modèle
+# choisi par la personne (22/11/2026, demande de Bourama). Ce délai ne mesure pas la durée de la
+# réponse : il ne coupe que si le modèle n'émet plus rien du tout. La réflexion affichée compte
+# comme une réponse, chaque morceau reçu (réflexion, texte, appel d'outil) remet le compteur à
+# zéro. Le délai court de la cascade (DELAI_MAX_PAR_APPEL, 10 s, voir core/constantes_agent.py)
+# sert à basculer vite d'un modèle gratuit à l'autre ; ici il n'y a pas de modèle de secours.
 DELAI_APPEL_FOURNISSEUR_SECONDES = 180
 
 CLE_ETAT_FOURNISSEUR = "fournisseur_etat"
