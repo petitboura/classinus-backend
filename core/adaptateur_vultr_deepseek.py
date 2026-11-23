@@ -68,11 +68,28 @@ _MOTS_CLE_REPLI_VULTR = (
     "balance", "funds", "unpaid", "limit exceeded", "model not found",
 )
 
-# Niveaux d'effort que Vultr a acceptes lors du test reel du 04/11/2026 (none, low, medium, high).
-# DeepSeek en direct accepte aussi "max", jamais essaye chez Vultr : on l'envoie comme "high",
-# le niveau le plus proche deja verifie, plutot que de risquer un refus au premier message.
-_EFFORT_MAX_DEEPSEEK = "max"
-_EFFORT_VULTR_POUR_MAX = "high"
+# Effort de reflexion (22/11/2026) : le niveau choisi par la personne part TOUJOURS tel quel chez
+# Vultr. Jusqu'ici "max" etait remplace par "high" sans rien dire (Vultr n'avait accepte que none,
+# low, medium et high lors du test reel du 04/11/2026, "max" n'y avait jamais ete essaye, et la page
+# Vultr du modele ne liste aucun niveau) : l'ecran affichait Maximum alors que le modele tournait
+# au niveau en dessous. Si Vultr refuse un niveau (erreur 400 ou 422 qui parle d'effort), l'appel
+# repart par la route habituelle, qui accepte le niveau choisi, sans mettre Vultr a l'ecart (Vultr
+# n'est pas en panne, il ne connait seulement pas ce niveau). Sans route habituelle, l'erreur
+# remonte : mieux vaut un refus visible qu'un effort modifie en silence.
+_STATUTS_REFUS_EFFORT_VULTR = (400, 422)
+
+
+def est_refus_effort_vultr(erreur):
+    """True si Vultr refuse le niveau d'effort envoye (erreur 400 ou 422 dont le message parle d'effort)."""
+    statut = getattr(erreur, "status_code", None)
+    if statut is None:
+        reponse = getattr(erreur, "response", None)
+        statut = getattr(reponse, "status_code", None)
+    try:
+        statut = int(statut) if statut is not None else None
+    except (TypeError, ValueError):
+        statut = None
+    return statut in _STATUTS_REFUS_EFFORT_VULTR and "effort" in str(erreur).lower()
 
 
 def est_erreur_repli_vultr(erreur):
@@ -115,10 +132,10 @@ class ClientVultrDeepseek(ClientCompatible):
     def create(self, **arguments):
         modele_id = arguments.get("model")
         identifiant = self._identifiant_pour(modele_id)
+        refus_effort = False
         if identifiant is not None:
+            # L'effort choisi part tel quel : jamais modifie en silence (voir plus haut).
             arguments_vultr = {**arguments, "model": identifiant}
-            if arguments_vultr.get("reasoning_effort") == _EFFORT_MAX_DEEPSEEK:
-                arguments_vultr["reasoning_effort"] = _EFFORT_VULTR_POUR_MAX
             # Sans autre route, le delai court de la cascade (10 s) couperait la reponse net
             # quand le premier mot tarde : meme patience que les fournisseurs sans repli.
             if self._client_habituel is None:
@@ -129,13 +146,25 @@ class ClientVultrDeepseek(ClientCompatible):
                 logging.warning(f"[ROUTE DEEPSEEK] Vultr a repondu ({modele_id}, identifiant {identifiant})")
                 return reponse
             except Exception as erreur:
-                if self._client_habituel is None or not est_erreur_repli_vultr(erreur):
+                if self._client_habituel is None:
                     raise
-                noter_vultr_ecarte()
-                logging.warning(f"Vultr refuse DeepSeek ({modele_id}), repli sur la route habituelle : {erreur}")
+                if est_erreur_repli_vultr(erreur):
+                    noter_vultr_ecarte()
+                    logging.warning(f"Vultr refuse DeepSeek ({modele_id}), repli sur la route habituelle : {erreur}")
+                elif est_refus_effort_vultr(erreur):
+                    # Pas de mise a l'ecart : Vultr fonctionne, il ne connait pas ce niveau d'effort.
+                    refus_effort = True
+                    logging.warning(
+                        f"Vultr refuse l'effort {arguments.get('reasoning_effort')} pour DeepSeek ({modele_id}), "
+                        f"repli sur la route habituelle avec le meme effort : {erreur}"
+                    )
+                else:
+                    raise
         if self._client_habituel is None:
             raise RuntimeError(f"{modele_id} : ni Vultr ni une autre route ne sont disponibles")
-        if identifiant is not None:
+        if refus_effort:
+            motif = "niveau d'effort refuse par Vultr"
+        elif identifiant is not None:
             motif = "repli apres refus Vultr"
         elif vultr_circuit_ouvert():
             motif = "Vultr mis de cote (refus recent)"

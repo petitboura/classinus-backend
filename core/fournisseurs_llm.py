@@ -682,6 +682,20 @@ def effort_defaut(efforts):
     return _defaut(efforts)
 
 
+def effort_a_envoyer(modele_id, effort, distributeur=None):
+    """
+    Effort a envoyer a l'API pour ce modele (22/11/2026) : celui demande s'il existe pour ce modele,
+    sinon son niveau par defaut, sinon None (modele sans reglage, rien n'est envoye). Meme regle que
+    la boucle d'agent (core/boucle_agent.py:_effort_reflexion), pour que le chemin texte seul
+    ci-dessous ne laisse jamais tomber l'effort choisi.
+    """
+    try:
+        from efforts_modeles import effort_valide_pour_modele as _valide
+    except ImportError:
+        from core.efforts_modeles import effort_valide_pour_modele as _valide
+    return _valide(modele_id, effort, distributeur)
+
+
 def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque, email=None):
     """
     Calcule la liste des modeles reellement choisissables pour un agent,
@@ -853,27 +867,36 @@ def distributeur_pour_modele_id(modele_id):
     return None
 
 
-def _stream_claude(modele_id, system_prompt, messages):
+def _stream_claude(modele_id, system_prompt, messages, effort=None):
     from anthropic import Anthropic
     client = Anthropic(api_key=get_secret("ANTHROPIC_API_KEY"))
-    with client.messages.stream(
-        model=modele_id,
-        max_tokens=4096,
-        system=system_prompt or "",
-        messages=messages,
-    ) as stream:
+    arguments = {
+        "model": modele_id,
+        "max_tokens": 4096,
+        "system": system_prompt or "",
+        "messages": messages,
+    }
+    # Effort choisi (22/11/2026) : meme champ que core/adaptateur_claude.py (output_config.effort,
+    # par extra_body pour fonctionner quelle que soit la version du SDK installee).
+    effort_envoye = effort_a_envoyer(modele_id, effort, "claude")
+    if effort_envoye:
+        arguments["extra_body"] = {"output_config": {"effort": effort_envoye}}
+    with client.messages.stream(**arguments) as stream:
         for texte in stream.text_stream:
             yield texte
 
 
-def _stream_gpt(modele_id, system_prompt, messages):
+def _stream_gpt(modele_id, system_prompt, messages, effort=None):
     from openai import OpenAI
     client = OpenAI(api_key=get_secret("OPENAI_API_KEY"))
     messages_openai = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + messages
+    # Effort choisi (22/11/2026) : reasoning_effort de Chat Completions, jamais laisse tomber.
+    effort_envoye = effort_a_envoyer(modele_id, effort, "gpt")
     flux = client.chat.completions.create(
         model=modele_id,
         messages=messages_openai,
         stream=True,
+        **({"reasoning_effort": effort_envoye} if effort_envoye else {}),
     )
     for morceau in flux:
         delta = morceau.choices[0].delta.content if morceau.choices else None
@@ -952,18 +975,21 @@ def _stream_deepseek(modele_id, system_prompt, messages, effort=None):
             yield delta.content
 
 
-def _stream_grok(modele_id, system_prompt, messages):
+def _stream_grok(modele_id, system_prompt, messages, effort=None):
     # Grok (xAI) : API compatible OpenAI, seule la base_url change
     # (https://api.x.ai/v1, docs.x.ai/developers/pricing). Texte seul, comme
-    # Claude, GPT et Gemini : pas d'outils sur ce chemin. Aucun reglage
-    # d'effort envoye : la page xAI ne le documente pas pour ces modeles.
+    # Claude, GPT et Gemini : pas d'outils sur ce chemin. L'effort choisi part
+    # (22/11/2026, niveaux de core/efforts_modeles.py) ; ce commentaire disait avant que
+    # la page xAI ne le documentait pas, ce qui n'est plus vrai depuis le 20/10/2026.
     from openai import OpenAI
     client = OpenAI(api_key=get_secret("XAI_API_KEY"), base_url="https://api.x.ai/v1")
     messages_openai = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + messages
+    effort_envoye = effort_a_envoyer(modele_id, effort, "grok")
     flux = client.chat.completions.create(
         model=modele_id,
         messages=messages_openai,
         stream=True,
+        **({"reasoning_effort": effort_envoye} if effort_envoye else {}),
     )
     for morceau in flux:
         delta = morceau.choices[0].delta.content if morceau.choices else None
@@ -971,7 +997,7 @@ def _stream_grok(modele_id, system_prompt, messages):
             yield delta
 
 
-def _stream_meta(modele_id, system_prompt, messages):
+def _stream_meta(modele_id, system_prompt, messages, effort=None):
     # Meta : API compatible OpenAI, seule la base_url change
     # (https://api.meta.ai/v1, clé MODEL_API_KEY). Texte seul, comme les
     # autres : pas d'outils sur ce chemin (la boucle avec outils passe par
@@ -983,10 +1009,13 @@ def _stream_meta(modele_id, system_prompt, messages):
     from openai import OpenAI
     client = OpenAI(api_key=get_secret("MODEL_API_KEY"), base_url="https://api.meta.ai/v1")
     messages_openai = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + messages
+    # Effort choisi (22/11/2026), niveaux de core/efforts_modeles.py : jamais laisse tomber.
+    effort_envoye = effort_a_envoyer(modele_id, effort, "meta")
     flux = client.chat.completions.create(
         model=modele_id,
         messages=messages_openai,
         stream=True,
+        **({"reasoning_effort": effort_envoye} if effort_envoye else {}),
     )
     for morceau in flux:
         delta = morceau.choices[0].delta.content if morceau.choices else None
@@ -994,7 +1023,7 @@ def _stream_meta(modele_id, system_prompt, messages):
             yield delta
 
 
-def _stream_baseten_seul(modele_id, system_prompt, messages):
+def _stream_baseten_seul(modele_id, system_prompt, messages, effort=None):
     # Modele servi uniquement par Baseten (Muse Spark Open, 30/10/2026) : chemin texte seul,
     # meme principe que DeepSeek (API compatible OpenAI). La reflexion du modele, si Baseten
     # l'envoie, est remontee comme evenement et jamais ajoutee a la reponse.
@@ -1002,7 +1031,14 @@ def _stream_baseten_seul(modele_id, system_prompt, messages):
     if client is None:
         raise RuntimeError(f"{modele_id} : cle Baseten absente ou modele sans slug Baseten")
     messages_openai = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + messages
-    flux = client.chat.completions.create(model=modele_id, messages=messages_openai, stream=True)
+    # Effort choisi (22/11/2026) : sans lui, Baseten reflechit au niveau le plus profond par defaut.
+    effort_envoye = effort_a_envoyer(modele_id, effort)
+    flux = client.chat.completions.create(
+        model=modele_id,
+        messages=messages_openai,
+        stream=True,
+        **({"reasoning_effort": effort_envoye} if effort_envoye else {}),
+    )
     for morceau in flux:
         if not morceau.choices:
             continue
@@ -1014,7 +1050,7 @@ def _stream_baseten_seul(modele_id, system_prompt, messages):
             yield delta.content
 
 
-def _stream_vultr(modele_id, system_prompt, messages, distributeur=None):
+def _stream_vultr(modele_id, system_prompt, messages, distributeur=None, effort=None):
     # Modele servi uniquement par Vultr Serverless Inference (Z.ai, Alibaba, NVIDIA, Muse Glimmer,
     # 04/11/2026) : chemin texte seul, API compatible OpenAI. La reflexion du modele, si Vultr
     # l'envoie, est remontee comme evenement et jamais ajoutee a la reponse.
@@ -1022,7 +1058,14 @@ def _stream_vultr(modele_id, system_prompt, messages, distributeur=None):
     if client is None:
         raise RuntimeError(f"{modele_id} : cle Vultr absente ou modele non servi par Vultr")
     messages_openai = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + messages
-    flux = client.chat.completions.create(model=modele_id, messages=messages_openai, stream=True)
+    # Effort choisi (22/11/2026) : GLM 5.3 reflechit sinon au niveau maximal par defaut.
+    effort_envoye = effort_a_envoyer(modele_id, effort, distributeur)
+    flux = client.chat.completions.create(
+        model=modele_id,
+        messages=messages_openai,
+        stream=True,
+        **({"reasoning_effort": effort_envoye} if effort_envoye else {}),
+    )
     for morceau in flux:
         if not morceau.choices:
             continue
@@ -1034,21 +1077,32 @@ def _stream_vultr(modele_id, system_prompt, messages, distributeur=None):
             yield delta.content
 
 
-def _stream_gemini(modele_id, system_prompt, messages):
+def _stream_gemini(modele_id, system_prompt, messages, effort=None):
     # Reutilise le client google-genai deja initialise ailleurs dans le
     # projet (voir core/main.py) -- instancie ici localement pour garder
     # ce module independant, cout negligeable (pas d'appel reseau a la
     # construction du client).
     from google import genai
+    from google.genai import types
     client = genai.Client(api_key=get_secret("GOOGLE_API_KEY"))
     contenu = []
     for m in messages:
         role = "model" if m["role"] == "assistant" else "user"
         contenu.append({"role": role, "parts": [{"text": m["content"]}]})
+    # Effort choisi (22/11/2026) : thinking_level, meme correspondance que core/adaptateur_gemini.py
+    # (low, medium, high ; Gemini 3 et 4 reflechissent toujours, pas de "aucun").
+    niveaux = {"low": types.ThinkingLevel.LOW, "medium": types.ThinkingLevel.MEDIUM, "high": types.ThinkingLevel.HIGH}
+    niveau = niveaux.get(effort_a_envoyer(modele_id, effort, "gemini"))
+    configuration = None
+    if system_prompt or niveau:
+        configuration = types.GenerateContentConfig(
+            system_instruction=system_prompt or None,
+            thinking_config=types.ThinkingConfig(thinking_level=niveau) if niveau else None,
+        )
     flux = client.models.generate_content_stream(
         model=modele_id,
         contents=contenu,
-        config={"system_instruction": system_prompt} if system_prompt else None,
+        config=configuration,
     )
     for morceau in flux:
         if morceau.text:
@@ -1089,15 +1143,12 @@ def generer_reponse_premium(modele_id, system_prompt, messages, effort=None):
     if distributeur is None:
         raise ValueError(f"modele_id inconnu : {modele_id}")
     if info_baseten_seul(modele_id):
-        yield from _stream_baseten_seul(modele_id, system_prompt, messages)
+        yield from _stream_baseten_seul(modele_id, system_prompt, messages, effort=effort)
         return
     if info_vultr_seul(modele_id):
-        yield from _stream_vultr(modele_id, system_prompt, messages, distributeur=distributeur)
+        yield from _stream_vultr(modele_id, system_prompt, messages, distributeur=distributeur, effort=effort)
         return
     streamer = _STREAMERS_PAR_DISTRIBUTEUR[distributeur]
-    if distributeur == "deepseek":
-        # Seul DeepSeek a un reglage d'effort aujourd'hui (les autres
-        # fournisseurs n'en recoivent pas, leur flux ne change pas).
-        yield from streamer(modele_id, system_prompt, messages, effort=effort)
-        return
-    yield from streamer(modele_id, system_prompt, messages)
+    # Chaque fournisseur recoit l'effort choisi (22/11/2026, regle "tout modele a son effort",
+    # voir CLAUDE.md) : avant, seul DeepSeek le recevait sur ce chemin texte seul.
+    yield from streamer(modele_id, system_prompt, messages, effort=effort)
