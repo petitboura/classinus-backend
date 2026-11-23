@@ -96,3 +96,10 @@ CONSERVATION_TOURS_PERSISTES = timedelta(days=_entier_positif_env("CLASSINUS_TOU
 PLAFOND_WIDGET_UI_OCTETS = _entier_positif_env("CLASSINUS_MCP_UI_HTML_MAX_OCTETS", 500000)
 PLAFOND_WIDGETS_UI_PAR_RESULTAT = _entier_positif_env("CLASSINUS_MCP_UI_MAX_PAR_RESULTAT", 4)
 DELAI_LECTURE_RESSOURCE_UI_SECONDES = _entier_positif_env("CLASSINUS_MCP_UI_DELAI_LECTURE_SECONDES", 20)
+
+
+# Reponse maximale d'un modele Claude, reflexion comprise (max_tokens est obligatoire chez
+# Anthropic et compte la reflexion). Decision de Bourama (22/11/2026) : 16000 coupait la reponse a
+# un effort eleve. 64000 est la moitie de la limite publiee de 128K pour Opus 5.5, Sonnet 5.5 et
+# Haiku 5.5, donc aucun modele ne refuse l'appel. Seuls les tokens reellement generes sont factures.
+MAX_TOKENS_SORTIE_CLAUDE = _entier_positif_env("CLASSINUS_CLAUDE_MAX_TOKENS_SORTIE", 64000)

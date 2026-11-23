@@ -27,8 +27,11 @@ except ImportError:
     )
 
 # max_tokens est obligatoire chez Anthropic et compte aussi la réflexion : assez large pour
-# qu'un effort élevé ne coupe pas la réponse.
-MAX_TOKENS_SORTIE_CLAUDE = 16000
+# qu'un effort élevé ne coupe pas la réponse. La valeur se règle dans core/plafonds_reglables.py.
+try:
+    from plafonds_reglables import MAX_TOKENS_SORTIE_CLAUDE
+except ImportError:
+    from core.plafonds_reglables import MAX_TOKENS_SORTIE_CLAUDE
 
 FINS_CLAUDE = {"end_turn": "stop", "tool_use": "tool_calls", "max_tokens": "length"}
 

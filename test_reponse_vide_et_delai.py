@@ -183,3 +183,12 @@ class SilenceMaximal(unittest.TestCase):
 
     def test_un_modele_choisi_recoit_la_patience_longue(self):
         self.assertEqual(self._delai_envoye(delai_silence=180), 180)
+
+
+class PlafondSortieClaude(unittest.TestCase):
+    """22/11/2026 (demande de Bourama) : 16000 coupait la reponse de Claude a un effort eleve."""
+
+    def test_le_plafond_est_assez_large_et_reste_sous_la_limite_publiee(self):
+        import adaptateur_claude
+        self.assertGreaterEqual(adaptateur_claude.MAX_TOKENS_SORTIE_CLAUDE, 64000)
+        self.assertLessEqual(adaptateur_claude.MAX_TOKENS_SORTIE_CLAUDE, 128000)
