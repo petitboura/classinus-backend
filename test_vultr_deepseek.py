@@ -20,6 +20,7 @@ from core.adaptateur_baseten import BASE_URL_BASETEN, BASE_URL_DEEPSEEK_DIRECT, 
 from core.adaptateur_vultr_deepseek import (
     ClientVultrDeepseek,
     est_erreur_repli_vultr,
+    est_refus_effort_vultr,
     reinitialiser_circuit_vultr,
     vultr_circuit_ouvert,
 )
@@ -97,10 +98,11 @@ class RoutageVultr(unittest.TestCase):
         config["fournisseurs"]["deepseek"]["baseten_actif"] = baseten_actif
         # Identifiants Baseten posés ici, jamais lus de la configuration partagée du code : un autre
         # test (test_baseten_deepseek, sans_slug) les y supprime pour toute la suite de tests.
-        for palier, slug in (("essentiel", FLASH_BASETEN), ("premium", FLASH_BASETEN), ("max", "deepseek-ai/DeepSeek-V4-Pro-0813")):
+        # Paliers DeepSeek du repli depuis le 19/11/2026 : pro (V4.1 Flash) et max (V4 Pro).
+        for palier, slug in (("pro", FLASH_BASETEN), ("max", "deepseek-ai/DeepSeek-V4-Pro-0813")):
             config["modeles"]["deepseek"][palier]["baseten"] = slug
         if not sans_identifiant:
-            for palier in ("essentiel", "premium"):
+            for palier in ("pro",):
                 config["modeles"]["deepseek"][palier]["vultr"] = FLASH_VULTR
         parches = [
             patch.object(fournisseurs_llm, "_lire_config_modeles_supabase", return_value=config),
@@ -209,13 +211,53 @@ class RoutageVultr(unittest.TestCase):
         with self.assertRaises(ErreurStatut):
             client.chat.completions.create(model=FLASH_DIRECT, messages=[])
 
-    def test_effort_max_de_deepseek_part_en_high_chez_vultr(self):
+    def test_l_effort_choisi_part_tel_quel_chez_vultr_max_compris(self):
+        # 22/11/2026 : "max" n'est plus remplace en silence par "high" (l'ecran affichait Maximum
+        # alors que le modele tournait au niveau en dessous).
         client = self.client_avec(True, CLES_TOUTES)
-        client.chat.completions.create(model=FLASH_DIRECT, messages=[], reasoning_effort="max")
-        client.chat.completions.create(model=FLASH_DIRECT, messages=[], reasoning_effort="low")
+        for effort in ("max", "high", "low", "none"):
+            client.chat.completions.create(model=FLASH_DIRECT, messages=[], reasoning_effort=effort)
         appels = faux_client(URL_VULTR).chat.completions.appels
-        self.assertEqual(appels[0]["reasoning_effort"], "high")
-        self.assertEqual(appels[1]["reasoning_effort"], "low")
+        self.assertEqual([a["reasoning_effort"] for a in appels], ["max", "high", "low", "none"])
+        self.assertEqual(clients_a(BASE_URL_DEEPSEEK_DIRECT)[0].chat.completions.appels, [])
+
+    def test_niveau_refuse_par_vultr_repart_par_la_route_habituelle_avec_le_meme_effort(self):
+        client = self.client_avec(True, CLES_TOUTES)
+        vultr = faux_client(URL_VULTR)
+        direct = faux_client(BASE_URL_DEEPSEEK_DIRECT)
+        vultr.chat.completions.effet = refuse(400, "Invalid value for reasoning_effort: max")
+        reponse = client.chat.completions.create(model=FLASH_DIRECT, messages=[], reasoning_effort="max")
+        self.assertEqual(reponse["route"], BASE_URL_DEEPSEEK_DIRECT)
+        self.assertEqual(direct.chat.completions.appels[0]["reasoning_effort"], "max")
+        self.assertEqual(direct.chat.completions.appels[0]["model"], FLASH_DIRECT)
+        # Vultr n'est pas en panne : pas de mise a l'ecart, le niveau suivant y retourne.
+        self.assertFalse(vultr_circuit_ouvert())
+        vultr.chat.completions.effet = lambda **kw: {"route": URL_VULTR, "model": kw.get("model")}
+        reponse = client.chat.completions.create(model=FLASH_DIRECT, messages=[], reasoning_effort="low")
+        self.assertEqual(reponse["route"], URL_VULTR)
+
+    def test_niveau_refuse_sans_route_habituelle_l_erreur_remonte_sans_modifier_l_effort(self):
+        client = self.client_avec(True, {"VULTR_INFERENCE_API_KEY": "v"})
+        vultr = faux_client(URL_VULTR)
+        vultr.chat.completions.effet = refuse(400, "Invalid value for reasoning_effort: max")
+        with self.assertRaises(ErreurStatut):
+            client.chat.completions.create(model=FLASH_DIRECT, messages=[], reasoning_effort="max")
+        # Un seul essai, avec le niveau choisi : jamais retente en douce avec un autre niveau.
+        self.assertEqual([a["reasoning_effort"] for a in vultr.chat.completions.appels], ["max"])
+
+    def test_un_refus_400_sans_rapport_avec_l_effort_remonte_comme_avant(self):
+        client = self.client_avec(True, CLES_TOUTES)
+        faux_client(URL_VULTR).chat.completions.effet = refuse(400, "messages must not be empty")
+        with self.assertRaises(ErreurStatut):
+            client.chat.completions.create(model=FLASH_DIRECT, messages=[], reasoning_effort="max")
+        self.assertEqual(faux_client(BASE_URL_DEEPSEEK_DIRECT).chat.completions.appels, [])
+
+    def test_le_classifieur_de_refus_d_effort(self):
+        self.assertTrue(est_refus_effort_vultr(ErreurStatut(400, "Invalid reasoning_effort value")))
+        self.assertTrue(est_refus_effort_vultr(ErreurStatut(422, "unsupported effort level")))
+        self.assertFalse(est_refus_effort_vultr(ErreurStatut(400, "messages must not be empty")))
+        self.assertFalse(est_refus_effort_vultr(ErreurStatut(500, "effort backend crashed")))
+        self.assertFalse(est_refus_effort_vultr(Exception("effort sans statut")))
 
     def test_sans_aucune_cle_pas_de_client(self):
         self.assertIsNone(self.client_avec(True, {}))

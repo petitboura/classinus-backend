@@ -180,7 +180,9 @@ class RouteBaseten(BaseTest):
         self.assertEqual(appel["model"], OPEN_SLUG)
         self.assertTrue(appel["stream"])
         self.assertEqual(appel["messages"][0], {"role": "system", "content": "Sois bref"})
-        self.assertNotIn("reasoning_effort", appel)
+        # 22/11/2026 : l'effort ne tombe plus sur ce chemin. Sans choix valide, c'est le niveau le
+        # plus leger du modele (low) : Baseten reflechit sinon au plus profond (xhigh) par defaut.
+        self.assertEqual(appel["reasoning_effort"], "low")
 
 
 class FauxSupabase:
