@@ -78,11 +78,24 @@ def charger_autorisations(user_id):
         ).data or []
         # Une autorisation déjà en base pour une action qui exige toujours la confirmation est
         # ignorée : la personne sera de nouveau interrogée à chaque fois.
-        return frozenset(
+        cles = frozenset(
             ligne["cle"] for ligne in lignes if ligne["cle"] not in AUTORISATION_PERMANENTE_INTERDITE
         )
     except Exception as e:
         logging.error(f"ERREUR SUPABASE (lecture {TABLE} user={user_id}) : {e}")
+        return frozenset()
+    return cles | _serveurs_autorises_en_bloc(user_id)
+
+
+def _serveurs_autorises_en_bloc(user_id):
+    """Repères des serveurs perso dont les outils non sensibles sont autorisés d'un coup (17/11/2026).
+
+    Ne lève jamais d'exception : en cas de problème, la confirmation est demandée comme avant."""
+    try:
+        from connexions.mcp_personnalises import autorisations_serveurs_pour_utilisateur
+        return autorisations_serveurs_pour_utilisateur(user_id)
+    except Exception as e:
+        logging.warning(f"Autorisations en bloc des MCP personnels indisponibles : {type(e).__name__}")
         return frozenset()
 
 

@@ -460,6 +460,15 @@ def _est_outil_sensible(appel, autorisations=None):
     cle = cle_autorisation_appel(appel)
     if cle is None:
         return False
+    # Serveur personnalisé dont la personne a autorisé d'un coup les outils non sensibles (17/11/2026).
+    # Un outil sensible, ou inconnu de ce processus, continue de demander confirmation.
+    if autorisations and appel["name"].startswith("custommcp_"):
+        try:
+            from connexions.mcp_personnalises import autorise_en_bloc
+            if autorise_en_bloc(appel["name"], autorisations):
+                return False
+        except Exception:
+            pass
     # "Toujours autoriser" : cette action précise a déjà été autorisée pour de bon.
     return not (autorisations and cle in autorisations)
 

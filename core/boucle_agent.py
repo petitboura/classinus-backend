@@ -69,6 +69,17 @@ def _nom_affiche(nom_outil):
     return nom_outil
 
 
+def _serveur_pour_case_non_sensibles(nom_outil):
+    """Nom du serveur perso à afficher dans la case "autoriser les outils non sensibles", ou None."""
+    if not isinstance(nom_outil, str) or not nom_outil.startswith("custommcp_"):
+        return None
+    try:
+        from connexions.mcp_personnalises import est_outil_non_sensible, nom_serveur_pour_outil
+        return (nom_serveur_pour_outil(nom_outil) or "") if est_outil_non_sensible(nom_outil) else None
+    except Exception:
+        return None
+
+
 def _evenement_confirmation(attente, messages_agent, outils_mcp, table_routage, modele=GROQ_PRIMARY, reasoning_effort=None, agent_nom=None):
     appel = attente.appel
     try:
@@ -96,6 +107,9 @@ def _evenement_confirmation(attente, messages_agent, outils_mcp, table_routage, 
             None if cle_autorisation_appel(appel) in AUTORISATION_PERMANENTE_INTERDITE
             else cle_autorisation_appel(appel)
         ),
+        # Outil non sensible d'un serveur perso : la carte propose la case "autoriser tous les outils
+        # non sensibles de ce serveur" (nom du serveur ; None sinon).
+        "serveur_non_sensibles": _serveur_pour_case_non_sensibles(appel["name"]),
         "agent_nom": agent_nom,
         "arguments": arguments_dict,
         "etat_reprise": {

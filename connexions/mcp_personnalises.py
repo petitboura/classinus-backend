@@ -93,6 +93,9 @@ _NOMS_SERVEURS_PAR_OUTIL: dict[str, str] = {}
 _URLS_SERVEURS_PAR_OUTIL: dict[str, str] = {}
 _CATEGORIES_PAR_OUTIL: dict[str, str] = {}
 _NOMS_REELS_PAR_OUTIL: dict[str, str] = {}
+# Outil jugé non sensible (lecture seule) et serveur d'origine, remplis à la découverte (17/11/2026).
+_NON_SENSIBLE_PAR_OUTIL: dict[str, bool] = {}
+_SERVEUR_ID_PAR_OUTIL: dict[str, str] = {}
 _VERROU_CATALOGUE = threading.Lock()
 _POOL_DECOUVERTE = ThreadPoolExecutor(max_workers=int(_nombre_env("MCP_PERSO_TACHES_DECOUVERTE", 8)), thread_name_prefix="mcp-perso")
 
@@ -103,10 +106,16 @@ class ServeurPayload(BaseModel):
     auth_type: Literal["none", "bearer", "oauth"]
     # Token accepté en entrée seulement ; jamais renvoyé par l'API.
     token: str | None = Field(default=None, max_length=4096)
+    # Autoriser d'un coup les outils non sensibles de ce serveur (17/11/2026). None : ne rien changer.
+    autoriser_non_sensibles: bool | None = None
 
 
 class ActifPayload(BaseModel):
     actif: bool
+
+
+class AutorisationNonSensiblesPayload(BaseModel):
+    autoriser: bool
 
 
 class SondagePayload(BaseModel):
@@ -295,6 +304,81 @@ def _lecture_seule_declaree(outil) -> bool | None:
     return None
 
 
+# Verbes qui désignent une simple lecture. "query" et "check" n'y sont pas : un outil qui exécute une
+# requête ou une vérification peut modifier des données, il reste sensible quand le serveur ne dit rien.
+_VERBES_NON_SENSIBLES = {
+    "get", "list", "search", "fetch", "read", "describe", "find", "show", "view",
+    "lookup", "count", "lister", "consulter", "rechercher", "lire", "obtenir",
+}
+_MOTIF_PREFIXE_SERVEUR = re.compile(r"^custommcp_[a-z]{0,8}_([0-9a-f]{6})_")
+_PREFIXE_AUTORISATION_SERVEUR = "custommcp_auto:"
+
+
+def _est_non_sensible(outil, nom_reel: str) -> bool:
+    """Outil non sensible : le serveur le déclare en lecture seule ou, sans indication du serveur,
+    son nom commence par un verbe de lecture. Une indication "pas en lecture seule" l'emporte toujours."""
+    declare = _lecture_seule_declaree(outil)
+    if declare is not None:
+        return declare
+    premier = re.split(r"[^a-zA-Z]+", re.sub(r"([a-z])([A-Z])", r"\1_\2", nom_reel or ""))[0].lower()
+    return premier in _VERBES_NON_SENSIBLES
+
+
+def est_outil_non_sensible(nom_outil: str) -> bool:
+    """True seulement si l'outil a été découvert dans ce processus et jugé non sensible : inconnu, donc sensible."""
+    return bool(_NON_SENSIBLE_PAR_OUTIL.get(nom_outil))
+
+
+def serveur_id_pour_outil(nom_outil: str) -> str | None:
+    """Identifiant du serveur qui propose cet outil (None si inconnu)."""
+    return _SERVEUR_ID_PAR_OUTIL.get(nom_outil)
+
+
+def cle_autorisation_serveur(serveur_id: str) -> str:
+    """Repère "tous les outils non sensibles de ce serveur sont autorisés", jamais enregistré en base."""
+    return f"{_PREFIXE_AUTORISATION_SERVEUR}{serveur_id.replace('-', '')[:6]}"
+
+
+def autorisations_serveurs_pour_utilisateur(user_id: str) -> frozenset:
+    """Repères des serveurs actifs dont la personne a autorisé les outils non sensibles.
+
+    Vide en cas de panne ou de colonne absente : la confirmation est alors demandée comme avant."""
+    if not user_id:
+        return frozenset()
+    try:
+        lignes = (
+            _SUPABASE.table("mcp_personnalises").select("id")
+            .eq("user_id", user_id).eq("actif", True).eq("autoriser_non_sensibles", True).execute().data or []
+        )
+        return frozenset(cle_autorisation_serveur(ligne["id"]) for ligne in lignes)
+    except Exception as exc:
+        logging.warning("Autorisations des MCP personnels illisibles (%s).", type(exc).__name__)
+        return frozenset()
+
+
+def autorise_en_bloc(nom_outil: str, autorisations) -> bool:
+    """True si cet outil est non sensible et que son serveur est autorisé en bloc par la personne."""
+    if not autorisations or not nom_outil.startswith(_PREFIXE_OUTILS) or not est_outil_non_sensible(nom_outil):
+        return False
+    trouve = _MOTIF_PREFIXE_SERVEUR.match(nom_outil)
+    return bool(trouve) and f"{_PREFIXE_AUTORISATION_SERVEUR}{trouve.group(1)}" in autorisations
+
+
+def definir_autorisation_non_sensibles(user_id: str, serveur_id: str, autoriser: bool) -> bool:
+    """Enregistre le réglage pour un serveur de cette personne. False si le serveur n'est pas le sien ou si la base échoue."""
+    if not user_id or not serveur_id:
+        return False
+    try:
+        lignes = (
+            _SUPABASE.table("mcp_personnalises").update({"autoriser_non_sensibles": bool(autoriser)})
+            .eq("id", serveur_id).eq("user_id", user_id).execute().data or []
+        )
+        return bool(lignes)
+    except Exception as exc:
+        logging.error("Réglage d'autorisation d'un MCP personnalisé impossible (%s).", type(exc).__name__)
+        return False
+
+
 def _onglet_pour_outil(outil, nom_reel: str) -> str:
     """Catégorie d'affichage : lecture (rechercher) ou action, d'après le serveur puis d'après le nom."""
     declare = _lecture_seule_declaree(outil)
@@ -411,6 +495,7 @@ def _construire_outils(serveur: dict, outils_reseau: list) -> list[dict]:
         description = str(getattr(outil, "description", "") or "")
         libelle = _libelle_lisible(nom_reel)
         _LIBELLES_PAR_OUTIL[nom_expose] = libelle
+        _NON_SENSIBLE_PAR_OUTIL[nom_expose] = _est_non_sensible(outil, nom_reel)
         resultat.append({
             "nom": nom_expose,
             "nom_reel": nom_reel,
@@ -506,6 +591,7 @@ def _avec_routes(serveur: dict, user_id: str, outils: list[dict]) -> list[dict]:
         _URLS_SERVEURS_PAR_OUTIL[outil["nom"]] = serveur["url"]
         _CATEGORIES_PAR_OUTIL[outil["nom"]] = categorie_du_serveur(serveur["nom"])
         _NOMS_REELS_PAR_OUTIL[outil["nom"]] = outil["nom_reel"]
+        _SERVEUR_ID_PAR_OUTIL[outil["nom"]] = serveur["id"]
         resultat.append({
             **outil,
             "route": {
@@ -943,6 +1029,7 @@ def _config_publique(ligne: dict, user_id: str) -> dict:
         "id": ligne["id"], "nom": ligne["nom"], "url": ligne["url"],
         "auth_type": ligne["auth_type"], "actif": bool(ligne.get("actif", True)),
         "connecte": connecte, "created_at": ligne.get("created_at"), "updated_at": ligne.get("updated_at"),
+        "autoriser_non_sensibles": bool(ligne.get("autoriser_non_sensibles", False)),
     }
 
 
@@ -950,7 +1037,7 @@ def _config_publique(ligne: dict, user_id: str) -> dict:
 def lister_serveurs(utilisateur=Depends(utilisateur_courant)):
     try:
         lignes = (
-            _SUPABASE.table("mcp_personnalises").select("id,nom,url,auth_type,actif,created_at,updated_at")
+            _SUPABASE.table("mcp_personnalises").select("id,nom,url,auth_type,actif,created_at,updated_at,autoriser_non_sensibles")
             .eq("user_id", utilisateur.id).order("created_at", desc=False).execute().data or []
         )
         return {"serveurs": [_config_publique(ligne, utilisateur.id) for ligne in lignes]}
@@ -985,6 +1072,7 @@ def ajouter_serveur(payload: ServeurPayload, utilisateur=Depends(utilisateur_cou
         lignes = _SUPABASE.table("mcp_personnalises").insert({
             "user_id": utilisateur.id, "nom": nom, "url": url, "auth_type": payload.auth_type,
             "bearer_token": token, "actif": True, "updated_at": datetime.now(timezone.utc).isoformat(),
+            "autoriser_non_sensibles": bool(payload.autoriser_non_sensibles),
         }).execute().data or []
         if not lignes:
             _erreur("MCP_ENREGISTREMENT_ECHOUE", "Le serveur MCP n’a pas pu être enregistré.", 503)
@@ -1039,10 +1127,13 @@ def modifier_serveur(serveur_id: str, payload: ServeurPayload, utilisateur=Depen
         except ValueError as exc:
             _erreur("MCP_INACCESSIBLE", str(exc))
     try:
-        _SUPABASE.table("mcp_personnalises").update({
+        modifications = {
             "nom": nom, "url": url, "auth_type": payload.auth_type, "bearer_token": token,
             "updated_at": datetime.now(timezone.utc).isoformat(),
-        }).eq("id", serveur_id).eq("user_id", utilisateur.id).execute()
+        }
+        if payload.autoriser_non_sensibles is not None:
+            modifications["autoriser_non_sensibles"] = payload.autoriser_non_sensibles
+        _SUPABASE.table("mcp_personnalises").update(modifications).eq("id", serveur_id).eq("user_id", utilisateur.id).execute()
         if url != precedent.get("url") or payload.auth_type != precedent.get("auth_type"):
             _SUPABASE.table("mcp_personnalises_oauth_connections").delete().eq("server_id", serveur_id).eq("user_id", utilisateur.id).execute()
         _invalider_cache_serveur(serveur_id)
@@ -1067,6 +1158,15 @@ def definir_actif(serveur_id: str, payload: ActifPayload, utilisateur=Depends(ut
     except Exception as exc:
         logging.error("Modification de l’état d’un MCP impossible (%s).", type(exc).__name__)
         _erreur("MCP_MODIFICATION_ECHOUEE", "L’état du serveur MCP n’a pas pu être modifié.", 503)
+
+
+@router.post("/{serveur_id}/autorisation-non-sensibles")
+def definir_autorisation_non_sensibles_route(serveur_id: str, payload: AutorisationNonSensiblesPayload, utilisateur=Depends(utilisateur_courant)):
+    """Autorise (ou non) d'un coup les outils non sensibles de ce serveur (17/11/2026)."""
+    _serveur_pour_utilisateur(serveur_id, utilisateur.id)
+    if not definir_autorisation_non_sensibles(utilisateur.id, serveur_id, payload.autoriser):
+        _erreur("MCP_MODIFICATION_ECHOUEE", "Le réglage d’autorisation n’a pas pu être modifié.", 503)
+    return {"autoriser_non_sensibles": payload.autoriser}
 
 
 @router.post("/{serveur_id}/deconnecter")
