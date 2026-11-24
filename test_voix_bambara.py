@@ -97,6 +97,23 @@ def test_transcrire_envoie_a_soloni_seulement_et_renvoie_le_texte(client, monkey
     assert faux.call_args.kwargs["files"]["fichier"][1] == b"RIFFaudio"
 
 
+def test_transcrire_utilise_soloba_si_le_reglage_le_demande(client, monkeypatch):
+    _brancher(monkeypatch)
+    monkeypatch.setenv("VOIX_BAMBARA_ECOUTE_MOTEUR", "soloba")
+    with patch.object(voix_bambara.httpx, "post", return_value=_reponse(json={"texte": "i ni ce", "moteur": "soloba"})) as faux:
+        r = _envoyer_audio(client)
+    assert r.status_code == 200
+    assert faux.call_args.kwargs["params"] == {"moteur": "soloba"}
+
+
+def test_transcrire_moteur_inconnu_retombe_sur_soloni(client, monkeypatch):
+    _brancher(monkeypatch)
+    monkeypatch.setenv("VOIX_BAMBARA_ECOUTE_MOTEUR", "inconnu")
+    with patch.object(voix_bambara.httpx, "post", return_value=_reponse(json={"texte": "i ni ce"})) as faux:
+        _envoyer_audio(client)
+    assert faux.call_args.kwargs["params"] == {"moteur": "soloni"}
+
+
 def test_transcrire_audio_vide_refuse_sans_appeler_soloni(client, monkeypatch):
     _brancher(monkeypatch)
     with patch.object(voix_bambara.httpx, "post") as faux:

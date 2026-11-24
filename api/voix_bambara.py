@@ -9,6 +9,8 @@ Rien n'est écrit en dur : tout vient de variables d'environnement.
   VOIX_BAMBARA_ECOUTE_URL    adresse du service Soloni, sans chemin.
   VOIX_BAMBARA_BOUCHE_URL    adresse du service de la voix Gemini, sans chemin.
   VOIX_BAMBARA_BOUCHE_TOKEN  (facultatif) jeton envoyé dans X-Test-Token, comme TEST_ACCESS_TOKEN du service.
+  VOIX_BAMBARA_ECOUTE_MOTEUR (facultatif) moteur d'écoute du service : `soloni` par défaut, ou `soloba`
+                             (modèle plus gros, ajouté le 24/11/2026 pour Maame). Valeur inconnue : `soloni`.
   VOIX_BAMBARA_VOIX          (facultatif) identifiant de la voix, `gemini_tts` par défaut.
   VOIX_BAMBARA_TEXTE_MAX     (facultatif) longueur maximale d'un morceau de texte lu, 600 par défaut
                              (la même que TEXTE_MAX du service de voix).
@@ -67,6 +69,14 @@ def _voix() -> str:
     return (get_secret("VOIX_BAMBARA_VOIX") or "").strip() or VOIX_DEFAUT
 
 
+MOTEURS_ECOUTE = ("soloni", "soloba")
+
+
+def _moteur_ecoute() -> str:
+    moteur = (get_secret("VOIX_BAMBARA_ECOUTE_MOTEUR") or "").strip().lower()
+    return moteur if moteur in MOTEURS_ECOUTE else "soloni"
+
+
 def _entetes_bouche() -> dict:
     jeton = (get_secret("VOIX_BAMBARA_BOUCHE_TOKEN") or "").strip()
     return {"X-Test-Token": jeton} if jeton else {}
@@ -98,7 +108,7 @@ def transcrire(fichier: UploadFile = File(...), utilisateur=Depends(utilisateur_
     try:
         reponse = httpx.post(
             f"{base}/transcrire",
-            params={"moteur": "soloni"},
+            params={"moteur": _moteur_ecoute()},
             files={"fichier": (fichier.filename or "voix", contenu, fichier.content_type or "application/octet-stream")},
             timeout=_delai_s(),
         )
