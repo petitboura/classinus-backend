@@ -130,6 +130,8 @@ class RepriseConfirmation(BaseModel):
     approuve: Optional[bool] = None
     # Bouton "Toujours autoriser" : approuve ET ne plus jamais redemander cette action.
     toujours_autoriser: Optional[bool] = None
+    # Case "autoriser tous les outils non sensibles de ce serveur" (17/11/2026).
+    toujours_autoriser_serveur: Optional[bool] = None
     type: Optional[Literal["continuer_agent"]] = None
     message_utilisateur: Optional[str] = None
 
@@ -384,7 +386,7 @@ def _reprise_pour_chat(reprise: RepriseConfirmation) -> dict:
             "type": "continuer_agent",
             "message_utilisateur": reprise.message_utilisateur,
         }
-    return {"etat_reprise": reprise.etat_reprise, "approuve": reprise.approuve, "toujours_autoriser": bool(reprise.toujours_autoriser)}
+    return {"etat_reprise": reprise.etat_reprise, "approuve": reprise.approuve, "toujours_autoriser": bool(reprise.toujours_autoriser), "toujours_autoriser_serveur": bool(reprise.toujours_autoriser_serveur)}
 
 
 def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], langue_interface: str = "fr", email_utilisateur: Optional[str] = None):

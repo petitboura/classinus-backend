@@ -32,6 +32,16 @@ Connection routes are organized in `connexions/` and `api/connexions*`. The back
 
 Providers referenced by the code and migrations include Notion, GitHub, Higgsfield, Vercel, Railway, and Supabase. Availability depends on OAuth configuration and applied migrations.
 
+## Custom servers: authorizing non-sensitive tools at once
+
+Every tool of a server added by the user (`custommcp_` prefix) asks for confirmation, because an arbitrary external tool has no reliable read-only convention. Since 17 November 2026 the user can authorize, once per server, all of its **non-sensitive** tools, instead of clicking "Always allow" on each one (a server can expose dozens).
+
+- **Setting.** Column `autoriser_non_sensibles` (boolean, default `false`) of `mcp_personnalises` (migration `2026_11_17_mcp_perso_autoriser_non_sensibles.sql`). Set from three places: a checkbox when adding a server (`autoriser_non_sensibles` in `POST /api/mcp-personnalises`), a checkbox on the confirmation card of a non-sensitive tool (`toujours_autoriser_serveur` in the resume body of the chat), and a switch in the server panel (`POST /api/mcp-personnalises/{id}/autorisation-non-sensibles`). The server must belong to the user.
+- **What is non sensitive.** The server declares the tool read-only (`readOnlyHint: true`), or, when the server says nothing, the tool name starts with a reading verb (`get`, `list`, `search`, `fetch`, `read`, `describe`, `find`, `show`, `view`, `lookup`, `count`, and their French equivalents). `query` and `check` are not in the list. A server that declares `readOnlyHint: false` always wins over the name. A tool unknown to the running process is treated as sensitive. The decision is made at discovery (`_est_non_sensible` in `connexions/mcp_personnalises.py`).
+- **Effect.** `charger_autorisations` adds one marker per authorized active server (`custommcp_auto:<6 characters of the server id>`, never stored in `autorisations_outils_permanentes`). `_est_outil_sensible` skips the confirmation only for a non-sensitive tool of such a server. Sensitive tools keep the per-tool "Always allow" button.
+- **Failure mode.** If the setting cannot be read (outage, column missing), confirmation is asked as before.
+- Tests: `test_mcp_perso_autorisation_non_sensibles.py`.
+
 ## Interactive widgets (MCP-UI and MCP Apps)
 
 An MCP tool can come with an interactive widget (Higgsfield, for example). The backend reads it in `core/ressources_ui.py` and sends it to the frontend as a `ressources_ui` event, separately from the text result, which stays as the fallback. The frontend shows it in an isolated iframe.

@@ -32,6 +32,16 @@ Les routes de connexion sont organisées dans `connexions/` et `api/connexions*`
 
 Les fournisseurs référencés dans le code et les migrations comprennent notamment Notion, GitHub, Higgsfield, Vercel, Railway et Supabase. Leur disponibilité dépend de la configuration OAuth et des migrations appliquées.
 
+## Serveurs personnalisés : autoriser d’un coup les outils non sensibles
+
+Tous les outils d’un serveur ajouté par l’utilisateur (préfixe `custommcp_`) demandent une confirmation, car un outil externe quelconque n’a pas de convention fiable de lecture seule. Depuis le 17 novembre 2026, la personne peut autoriser, une seule fois par serveur, tous ses outils **non sensibles**, au lieu de cliquer sur « Toujours autoriser » outil par outil (un serveur peut en exposer des dizaines).
+
+- **Réglage.** Colonne `autoriser_non_sensibles` (booléen, `false` par défaut) de `mcp_personnalises` (migration `2026_11_17_mcp_perso_autoriser_non_sensibles.sql`). Il se règle à trois endroits : une case à l’ajout d’un serveur (`autoriser_non_sensibles` dans `POST /api/mcp-personnalises`), une case sur la carte de confirmation d’un outil non sensible (`toujours_autoriser_serveur` dans le corps de reprise du chat) et un interrupteur dans le panneau du serveur (`POST /api/mcp-personnalises/{id}/autorisation-non-sensibles`). Le serveur doit appartenir à la personne.
+- **Ce qui est non sensible.** Le serveur déclare l’outil en lecture seule (`readOnlyHint: true`) ou, quand le serveur ne dit rien, le nom de l’outil commence par un verbe de lecture (`get`, `list`, `search`, `fetch`, `read`, `describe`, `find`, `show`, `view`, `lookup`, `count`, et leurs équivalents français). `query` et `check` n’y sont pas. Un serveur qui déclare `readOnlyHint: false` l’emporte toujours sur le nom. Un outil inconnu du processus en cours est traité comme sensible. La décision est prise à la découverte (`_est_non_sensible` dans `connexions/mcp_personnalises.py`).
+- **Effet.** `charger_autorisations` ajoute un repère par serveur actif autorisé (`custommcp_auto:<6 caractères de l’identifiant du serveur>`, jamais enregistré dans `autorisations_outils_permanentes`). `_est_outil_sensible` saute la confirmation seulement pour un outil non sensible d’un tel serveur. Les outils sensibles gardent le bouton « Toujours autoriser » outil par outil.
+- **En cas de panne.** Si le réglage ne peut pas être lu (panne, colonne absente), la confirmation est demandée comme avant.
+- Tests : `test_mcp_perso_autorisation_non_sensibles.py`.
+
 ## Widgets interactifs (MCP-UI et MCP Apps)
 
 Un outil MCP peut venir avec un widget interactif (Higgsfield, par exemple). Le backend le lit dans `core/ressources_ui.py` et l’envoie au frontend par un événement `ressources_ui`, séparément du résultat texte, qui reste le repli. Le frontend l’affiche dans une iframe isolée.

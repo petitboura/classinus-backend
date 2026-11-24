@@ -573,6 +573,18 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 cle_toujours = cle_autorisation_appel(appel)
                 if cle_toujours:
                     enregistrer_autorisation(utilisateur_autorisations, cle_toujours, _nom_lisible_appel(appel))
+            # Case "autoriser tous les outils non sensibles de ce serveur" (17/11/2026) : refusée
+            # si l'outil est sensible ou inconnu, et le serveur doit appartenir à la personne.
+            if reprise.get("toujours_autoriser_serveur") and utilisateur_autorisations:
+                try:
+                    from connexions.mcp_personnalises import (
+                        definir_autorisation_non_sensibles, est_outil_non_sensible, serveur_id_pour_outil,
+                    )
+                    serveur_cible = serveur_id_pour_outil(appel["name"])
+                    if serveur_cible and est_outil_non_sensible(appel["name"]):
+                        definir_autorisation_non_sensibles(utilisateur_autorisations, serveur_cible, True)
+                except Exception as e:
+                    logging.error(f"ERREUR (autorisation en bloc d'un MCP personnalisé) : {type(e).__name__}")
             # 24/09/2026 (bug remonté par Bourama : après un clic sur Confirmer,
             # la suite était mal branchée et bloquait) : l'appel confirmé
             # doit porter les MÊMES identifiants que dans _traiter_appels

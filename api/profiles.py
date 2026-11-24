@@ -774,7 +774,7 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
     try:
         res = (
             supabase.table("mcp_personnalises")
-            .select("nom, url, auth_type, actif, created_at, updated_at")
+            .select("nom, url, auth_type, actif, autoriser_non_sensibles, created_at, updated_at")
             .eq("user_id", user_id).execute()
         )
         export["serveurs_mcp_personnalises"] = res.data or []
