@@ -154,7 +154,7 @@ async def uploader_image_chat(
             niveau="utilisateur",
             uploade_par=utilisateur.id,
             user_id=utilisateur.id,
-            description="Image envoyée en conversation",
+            description=fichier.filename or "image.jpg",
             origine="chat",
             taille_octets=len(contenu),
         )
@@ -348,7 +348,7 @@ async def uploader_document_chat(
             niveau="utilisateur",
             uploade_par=utilisateur.id,
             user_id=utilisateur.id,
-            description="Document envoyé en conversation",
+            description=nom_fichier,
             origine="chat",
         )
         url_document = ligne["url_publique"]
@@ -423,7 +423,7 @@ async def uploader_fichier_chat(
             niveau="utilisateur",
             uploade_par=utilisateur.id,
             user_id=utilisateur.id,
-            description="Document envoyé en conversation",
+            description=nom_fichier,
             origine="chat",
         )
     except Exception as e:
@@ -610,7 +610,7 @@ async def uploader_audio_chat(
             niveau="utilisateur",
             uploade_par=utilisateur.id,
             user_id=utilisateur.id,
-            description="Audio envoyé en conversation",
+            description=nom_fichier,
             origine="chat",
         )
         url_audio = ligne["url_publique"]
@@ -687,7 +687,7 @@ async def uploader_media_chat(
             niveau="utilisateur",
             uploade_par=utilisateur.id,
             user_id=utilisateur.id,
-            description="Vidéo envoyée en conversation" if est_video else "Audio envoyé en conversation",
+            description=nom_fichier,
             origine="chat",
         )
     except Exception as e:
@@ -936,7 +936,7 @@ async def uploader_video_chat(
                 niveau="utilisateur",
                 uploade_par=utilisateur.id,
                 user_id=utilisateur.id,
-                description="Vidéo envoyée en conversation",
+                description=fichier.filename or f"video.{extension}",
                 origine="chat",
             )
             url_video = ligne["url_publique"]
