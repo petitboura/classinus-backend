@@ -31,8 +31,9 @@
   <label for="moteur">Moteur :</label>
   <select id="moteur">
     <option value="soloni">Soloni (fait pour le bambara)</option>
+    <option value="soloba">Soloba (plus gros, fait pour le bambara)</option>
     <option value="gemini">Gemini (Google)</option>
-    <option value="les_deux">Les deux, pour comparer</option>
+    <option value="tous">Tous, pour comparer</option>
   </select>
 </div>
 <div id="infoGemini"></div>
@@ -49,7 +50,7 @@ const resultat = document.getElementById('resultat');
 const btnRec = document.getElementById('btnRec');
 const infoGemini = document.getElementById('infoGemini');
 const choixMoteur = document.getElementById('moteur');
-const nomsMoteurs = { soloni: 'Soloni', gemini: 'Gemini' };
+const nomsMoteurs = { soloni: 'Soloni', soloba: 'Soloba', gemini: 'Gemini' };
 function echapper(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 let recorder = null, morceaux = [];
 
@@ -62,8 +63,10 @@ async function verifierEtat() {
     const r = await (await fetch('/etat')).json();
     infoGemini.textContent = r.gemini && r.gemini.disponible ? 'Gemini prêt (' + r.gemini.modele + ').' : 'Gemini : clé Google absente dans ce service.';
     if (r.erreur) { montrer(statut, 'Erreur de chargement du modèle : ' + r.erreur); return; }
-    if (!r.pret) { montrer(statut, 'Le modèle charge ' + points); setTimeout(verifierEtat, 3000); return; }
-    montrer(statut, 'Modèle prêt.');
+    if (r.soloba && r.soloba.erreur) { montrer(statut, 'Soloba : erreur de chargement : ' + r.soloba.erreur); }
+    const attendSoloba = r.soloba && !r.soloba.pret && !r.soloba.erreur;
+    if (!r.pret || attendSoloba) { montrer(statut, (r.pret ? 'Soloba charge ' : 'Les modèles chargent ') + points); setTimeout(verifierEtat, 3000); return; }
+    montrer(statut, 'Modèles prêts.');
   } catch (e) { setTimeout(verifierEtat, 3000); }
 }
 
@@ -80,8 +83,8 @@ async function transcrireAvec(moteur, blob) {
 
 async function envoyer(blob) {
   cacher(resultat);
-  const moteurs = choixMoteur.value === 'les_deux' ? ['soloni', 'gemini'] : [choixMoteur.value];
-  montrer(statut, (moteurs.length > 1 ? 'Les deux écoutent ' : (nomsMoteurs[moteurs[0]] + ' écoute ')) + points);
+  const moteurs = choixMoteur.value === 'tous' ? ['soloni', 'soloba', 'gemini'] : [choixMoteur.value];
+  montrer(statut, (moteurs.length > 1 ? 'Tous écoutent ' : (nomsMoteurs[moteurs[0]] + ' écoute ')) + points);
   const reponses = await Promise.all(moteurs.map((m) => transcrireAvec(m, blob)));
   const blocs = reponses.map((r) => {
     const titre = '<b>' + nomsMoteurs[r.moteur] + '</b>';

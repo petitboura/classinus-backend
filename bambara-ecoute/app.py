@@ -13,6 +13,8 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse
 
 MODEL_NAME = os.environ.get("MODEL_NAME", "RobotsMali/soloni-114m-tdt-ctc-v3")
+# Soloba (RobotsMali, 600M, CTC) : modèle bambara plus gros, ajouté le 24/11/2026 pour le comparer à Soloni.
+MODEL_SOLOBA = os.environ.get("MODEL_SOLOBA", "RobotsMali/soloba-ctc-0.6b-v3")
 
 # Transcripteur Gemini : appel direct à l'API Google, sans bibliothèque en plus.
 # Clé : GOOGLE_API_KEY (la même que Classinus). Modèle réglable par GEMINI_STT_MODELE.
@@ -22,6 +24,7 @@ GEMINI_STT_DELAI_DEFAUT = 120
 
 app = FastAPI()
 etat = {"modele": None, "pret": False, "erreur": None}
+etat_soloba = {"modele": None, "pret": False, "erreur": None}
 
 
 def cle_google() -> str:
@@ -50,6 +53,18 @@ def charger_modele():
 
 
 threading.Thread(target=charger_modele, daemon=True).start()
+
+
+def charger_soloba():
+    try:
+        import nemo.collections.asr as nemo_asr
+        etat_soloba["modele"] = nemo_asr.models.ASRModel.from_pretrained(model_name=MODEL_SOLOBA)
+        etat_soloba["pret"] = True
+    except Exception as e:
+        etat_soloba["erreur"] = str(e)
+
+
+threading.Thread(target=charger_soloba, daemon=True).start()
 
 
 class ErreurTranscription(Exception):
@@ -118,11 +133,11 @@ def transcrire_gemini(wav: bytes) -> str:
     return "".join(morceaux).strip()
 
 
-def transcrire_soloni(chemin_wav: str) -> str:
-    if not etat["pret"]:
+def transcrire_nemo(chemin_wav: str, st: dict) -> str:
+    if not st["pret"]:
         raise ErreurTranscription(503, "Le modèle charge encore, réessaie dans une minute.")
     try:
-        resultat = etat["modele"].transcribe([chemin_wav])
+        resultat = st["modele"].transcribe([chemin_wav])
         if isinstance(resultat, tuple):
             resultat = resultat[0]
         premier = resultat[0]
@@ -145,15 +160,19 @@ def etat_modele():
         "erreur": etat["erreur"],
         "modele": MODEL_NAME,
         "gemini": {"disponible": bool(cle_google()), "modele": modele_gemini()},
+        "soloba": {"pret": etat_soloba["pret"], "erreur": etat_soloba["erreur"], "modele": MODEL_SOLOBA},
     }
 
 
 @app.post("/transcrire")
 async def transcrire(moteur: str = "soloni", fichier: UploadFile = File(...)):
-    if moteur not in ("soloni", "gemini"):
+    if moteur not in ("soloni", "soloba", "gemini"):
         return JSONResponse({"erreur": "Moteur inconnu."}, status_code=400)
     if moteur == "soloni" and not etat["pret"]:
         return JSONResponse({"erreur": "Le modèle charge encore, réessaie dans une minute."}, status_code=503)
+    if moteur == "soloba" and not etat_soloba["pret"]:
+        message = etat_soloba["erreur"] or "Le modèle charge encore, réessaie dans une minute."
+        return JSONResponse({"erreur": message}, status_code=503)
     if moteur == "gemini" and not cle_google():
         return JSONResponse(
             {"erreur": "La clé Google n'est pas configurée dans ce service (variable GOOGLE_API_KEY)."},
@@ -175,8 +194,10 @@ async def transcrire(moteur: str = "soloni", fichier: UploadFile = File(...)):
                 with open(wav, "rb") as f:
                     contenu = f.read()
                 texte = await run_in_threadpool(transcrire_gemini, contenu)
+            elif moteur == "soloba":
+                texte = transcrire_nemo(wav, etat_soloba)
             else:
-                texte = transcrire_soloni(wav)
+                texte = transcrire_nemo(wav, etat)
         except ErreurTranscription as e:
             return JSONResponse({"erreur": e.message, "detail": e.detail}, status_code=e.statut)
     return {"texte": texte, "moteur": moteur}
