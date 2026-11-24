@@ -30,4 +30,6 @@ Un travail fini, fusionné et vérifié n'est plus un chantier : on le retire de
 
 ## Liste des chantiers en cours
 
-Aucun chantier n'est encore inscrit. Les ajouter ici au fur et à mesure, une ligne chacun, avec le lien vers son sous-dossier.
+Les ajouter ici au fur et à mesure, une ligne chacun, avec le lien vers son sous-dossier.
+
+- [Coût d'entrée du modèle : cache de prompt](cache-prompt-cout-entree/RESUME.md) : deux correctifs prêts sur des branches du backend, à essayer sur le staging.
