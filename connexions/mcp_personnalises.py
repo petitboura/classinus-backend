@@ -75,7 +75,8 @@ TAILLE_MAX_OUTILS_PAR_SERVEUR = max(1, int(_nombre_env("MCP_PERSO_TAILLE_MAX_OUT
 PAGES_MAX_DECOUVERTE = max(1, int(_nombre_env("MCP_PERSO_PAGES_MAX_DECOUVERTE", 20)))
 # Nombre d'outils montrés dans l'aperçu du test d'un serveur (la réponse reste légère).
 APERCU_MAX_OUTILS_TEST = max(1, int(_nombre_env("MCP_PERSO_APERCU_MAX_OUTILS_TEST", 50)))
-NOMBRE_MAX_SERVEURS_PAR_COMPTE = 10
+# Nombre maximal de serveurs MCP par compte (25/11/2026 : 1000). Doit rester identique à la limite du déclencheur de la base (migration 2026_11_25).
+NOMBRE_MAX_SERVEURS_PAR_COMPTE = max(1, int(_nombre_env("MCP_PERSO_NOMBRE_MAX_SERVEURS_PAR_COMPTE", 1000)))
 # Sondage d'une adresse proposée par l'IA (27/10/2026) : délai d'attente, mémoire du résultat
 # et nombre de sondages par compte, pour qu'un compte ne serve pas à interroger le web en masse.
 DELAI_SONDAGE = _nombre_env("MCP_PERSO_DELAI_SONDAGE_SECONDES", 10)
