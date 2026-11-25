@@ -42,6 +42,23 @@ class TestMigration(unittest.TestCase):
         self.assertEqual(list(bucket.objets), ["u1/c1/Mon cours/SKILL.md"])
         self.assertEqual(db.tables["skill_files"][0]["chemin"], "SKILL.md")
 
+    def test_les_ajouts_existants_sont_relies_sans_doublon(self):
+        db = FausseBase()
+        db.tables["comportement_public_activations"] = [
+            {"comportement_public_id": "p1", "active_par": "u9", "comportement_etudiant_id": "c9"},
+            {"comportement_public_id": "p1", "active_par": "u8", "comportement_etudiant_id": "absent"},
+            {"comportement_public_id": "p1", "active_par": "u7", "comportement_etudiant_id": None},
+        ]
+        db.tables["skills"] = [{"id": "p1"}, {"id": "s9", "legacy_behavior_id": "c9"}]
+        db.tables["skill_activations"] = []
+        self.assertEqual(M.lier_activations(db, executer=False), {"a_lier": 1, "deja_lies": 0, "ignores": 2, "lies": 0})
+        self.assertEqual(db.tables["skill_activations"], [])
+        self.assertEqual(M.lier_activations(db, executer=True)["lies"], 1)
+        lien = db.tables["skill_activations"][0]
+        self.assertEqual((lien["skill_source_id"], lien["copie_id"], lien["active_par"], lien["version_copiee"]), ("p1", "s9", "u9", 1))
+        self.assertEqual(M.lier_activations(db, executer=True), {"a_lier": 0, "deja_lies": 1, "ignores": 2, "lies": 0})
+        self.assertEqual(len(db.tables["skill_activations"]), 1)
+
     def test_sans_proprietaire_est_ignore(self):
         self.assertIsNone(M.preparer({"id": "x", "etudiant_id": None, "nom": "n"}, False))
 

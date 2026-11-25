@@ -122,11 +122,10 @@ from core.comportements_etudiants import (
     modifier_comportement as _modifier_comportement,
     supprimer_comportement as _supprimer_comportement,
     obtenir_comportement_skill as _obtenir_comportement_skill,
-    lister_comportements_publics as _lister_comportements_publics,
-    publier_comportement_public as _publier_comportement_public,
-    activer_comportement_public as _activer_comportement_public,
-    retirer_skill_public as _retirer_skill_public,
 )
+# 24/11/2026 : le catalogue public des skills travaille sur la table skills (core/skills_publics.py).
+from core import skills_publics as _skills_publics
+from fastapi import HTTPException as _HTTPException
 # Le rattachement d'un comportement/document à un emplacement du programme
 # dépendait de core/bibliotheque_programme.py, retiré du code actif.
 # Stub volontaire : plus aucun type de lien/emplacement n'est autorisé,
@@ -1888,20 +1887,20 @@ def supprimer_comportement_espace(comportement_id: str, ctx: Context) -> str:
     annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=True),
 )
 def chercher_comportements_publics(ctx: Context, mot_cle: str = "") -> str:
-    """Cherche/liste les skills du catalogue public (nom, description, nombre d'activations). Laisse `mot_cle` vide pour lister les plus populaires sans filtre."""
+    """Cherche/liste les skills du catalogue public (nom, description, nombre d'ajouts). Laisse `mot_cle` vide pour lister les plus ajoutés sans filtre."""
     user_id = _user_id_authentifie(ctx)
     if not user_id:
         return "Erreur : utilisateur non authentifié."
     try:
-        resultats = _lister_comportements_publics(mot_cle)
+        resultats = _skills_publics.chercher(mot_cle)
     except Exception as e:
         logging.error(f"ERREUR outil chercher_comportements_publics : {e}")
         return "Erreur : impossible de chercher dans le catalogue public de skills, réessaie."
     if not resultats:
         return "Aucun skill public trouvé."
     return "\n".join(
-        f"- {r['nom']} [id: {r['id']}] ({r.get('activations_count', 0)} activation(s))"
-        + (f" -- {r['description']}" if r.get("description") else "")
+        f"- {r['nom']} [id: {r['id']}] ({r.get('activations_count', 0)} ajout(s))"
+        + (f" : {r['description']}" if r.get("description") else "")
         for r in resultats
     )
 
@@ -1912,17 +1911,17 @@ def chercher_comportements_publics(ctx: Context, mot_cle: str = "") -> str:
     annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=True),
 )
 def publier_comportement_public_espace(comportement_id: str, ctx: Context) -> str:
-    """Publie une copie figée d'un skill PERSONNEL de cet utilisateur (voir clovis_lister_comportements) dans le catalogue public. La copie publiée est indépendante."""
+    """Publie un skill de cet utilisateur dans le catalogue public : `comportement_id` est l'id du skill. Une modification ensuite est visible par tous et prévient ceux qui l'ont ajouté. Le skill doit avoir une description."""
     user_id = _user_id_authentifie(ctx)
     if not user_id:
         return "Erreur : utilisateur non authentifié."
     try:
-        entree = _publier_comportement_public(AGENT_ID_ESPACE, user_id, comportement_id)
+        entree = _skills_publics.publier(comportement_id, user_id)
+    except _HTTPException as e:
+        return f"Erreur : {(e.detail or {}).get('message') if isinstance(e.detail, dict) else e.detail}"
     except Exception as e:
         logging.error(f"ERREUR outil publier_comportement_public_espace : {e}")
         return "Erreur : impossible de publier ce skill, réessaie."
-    if entree is None:
-        return "Erreur : ce skill est introuvable, ou ne t'appartient pas."
     return f"Skill publié dans le catalogue public (id {entree['id']})."
 
 
@@ -1932,18 +1931,18 @@ def publier_comportement_public_espace(comportement_id: str, ctx: Context) -> st
     annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=True),
 )
 def activer_comportement_public_espace(comportement_public_id: str, ctx: Context) -> str:
-    """Active un skill du catalogue public chez cet utilisateur -- crée une copie indépendante dans ses skills personnels, déjà active. Renvoie sa copie existante si déjà activé."""
+    """Ajoute un skill du catalogue public aux skills de cet utilisateur : copie indépendante, déjà active. Renvoie sa copie existante si déjà ajouté. Seulement avec l'accord de l'utilisateur."""
     user_id = _user_id_authentifie(ctx)
     if not user_id:
         return "Erreur : utilisateur non authentifié."
     try:
-        copie = _activer_comportement_public(comportement_public_id, user_id)
+        resultat = _skills_publics.activer(comportement_public_id, user_id)
+    except _HTTPException as e:
+        return f"Erreur : {(e.detail or {}).get('message') if isinstance(e.detail, dict) else e.detail}"
     except Exception as e:
         logging.error(f"ERREUR outil activer_comportement_public_espace : {e}")
-        return "Erreur : impossible d'activer ce skill, réessaie."
-    if copie is None:
-        return "Erreur : ce skill public est introuvable."
-    return f"Skill « {copie.get('nom') or ''} » activé dans tes skills personnels."
+        return "Erreur : impossible d'ajouter ce skill, réessaie."
+    return f"Skill « {resultat['copie'].get('nom') or ''} » ajouté à tes skills."
 
 
 @mcp_espace.tool(
@@ -1957,12 +1956,12 @@ def retirer_comportement_public_espace(comportement_public_id: str, ctx: Context
     if not user_id:
         return "Erreur : utilisateur non authentifié."
     try:
-        ok = _retirer_skill_public(comportement_public_id, user_id)
+        _skills_publics.retirer(comportement_public_id, user_id)
+    except _HTTPException as e:
+        return f"Erreur : {(e.detail or {}).get('message') if isinstance(e.detail, dict) else e.detail}"
     except Exception as e:
         logging.error(f"ERREUR outil retirer_comportement_public_espace : {e}")
         return "Erreur : impossible de retirer ce skill, réessaie."
-    if not ok:
-        return "Erreur : ce skill public est introuvable, ou tu n'en es pas l'auteur."
     return "Skill retiré du catalogue public."
 
 

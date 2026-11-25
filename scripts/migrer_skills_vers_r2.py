@@ -68,6 +68,7 @@ def preparer(row: dict, public: bool) -> dict | None:
         donnees.update({
             "visibilite": "public" if publie else "retire",
             "actif": publie,
+            "publie_le": row.get("created_at"),
             "retire_le": row.get("retire_le"),
             "activations_count": row.get("activations_count") or 0,
             "etoiles_count": row.get("etoiles_count") or 0,
@@ -104,6 +105,40 @@ def ecrire(db, bucket, plan: dict) -> None:
         except Exception:
             pass
         raise
+
+
+def lier_activations(db, executer: bool) -> dict:
+    """Recrée dans skill_activations le lien des ajouts faits avant la migration.
+
+    Source : comportement_public_activations (jamais modifiée). Une activation relie le skill public
+    (même id avant et après migration) à la copie de l'utilisateur, qui est un skill migré dont
+    legacy_behavior_id vaut l'ancien comportement. Sans ce lien, l'IA ne saurait pas que la copie vient
+    du catalogue et ne préviendrait pas d'une mise à jour. Une activation dont la source ou la copie n'est
+    pas (encore) dans skills est ignorée et comptée : relancer le script après les avoir migrées les relie.
+    Relançable : une copie déjà reliée est ignorée.
+    """
+    bilan = {"a_lier": 0, "deja_lies": 0, "ignores": 0, "lies": 0}
+    for a in db.table("comportement_public_activations").select("*").execute().data or []:
+        if not a.get("comportement_etudiant_id") or not a.get("comportement_public_id") or not a.get("active_par"):
+            bilan["ignores"] += 1
+            continue
+        copie = db.table("skills").select("id").eq("legacy_behavior_id", a["comportement_etudiant_id"]).maybe_single().execute()
+        source = db.table("skills").select("id").eq("id", a["comportement_public_id"]).maybe_single().execute()
+        if not (copie and copie.data) or not (source and source.data):
+            bilan["ignores"] += 1
+            continue
+        if db.table("skill_activations").select("id").eq("copie_id", copie.data["id"]).maybe_single().execute().data:
+            bilan["deja_lies"] += 1
+            continue
+        bilan["a_lier"] += 1
+        if executer:
+            maintenant = datetime.now(timezone.utc).isoformat()
+            db.table("skill_activations").insert({
+                "skill_source_id": source.data["id"], "copie_id": copie.data["id"], "active_par": a["active_par"],
+                "version_copiee": 1, "synchronise_le": maintenant,
+            }).execute()
+            bilan["lies"] += 1
+    return bilan
 
 
 def main() -> int:
@@ -146,6 +181,8 @@ def main() -> int:
         logging.info("A vérifier : %d skill(s) public(s) ont le même nom qu'un skill privé de leur auteur (ids : %s). Ils sont migrés tous les deux, sans fusion.", len(doublons), ", ".join(doublons))
 
     if not args.executer:
+        nb_ajouts = len(db.table("comportement_public_activations").select("id").execute().data or [])
+        logging.info("Ajouts existants qui seront reliés une fois les skills migrés : %d.", nb_ajouts)
         logging.info("SIMULATION : rien n'a été écrit. Relance avec --executer pour migrer.")
         return 0
 
@@ -164,6 +201,11 @@ def main() -> int:
             logging.error("Echec pour le skill %s : %s", plan["skill"]["id"], e)
     apres = db.table("skills").select("id", count="exact").limit(1).execute().count or 0
     logging.info("Bilan : %s. Table skills : %d avant, %d après (attendu %d).", bilan, avant, apres, avant + bilan["ecrits"])
+    try:
+        logging.info("Ajouts reliés : %s.", lier_activations(db, executer=True))
+    except Exception as e:
+        logging.error("Echec du lien des ajouts (relancer le script, il est sans risque) : %s", e)
+        return 1
     return 0 if bilan["erreurs"] == 0 and apres == avant + bilan["ecrits"] else 1
 
 

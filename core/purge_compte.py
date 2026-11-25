@@ -92,6 +92,10 @@ _TABLES_SIMPLES = (
     # Contenu partagé ou publié par le compte (décision de Bourama du
     # 12/10/2026 : tout supprimer, sinon il reste attaché à un compte supprimé).
     ("codes_partage", "proprietaire_id"),
+    # 24/11/2026 : suivi des skills publics ajoutés. Déjà supprimé en cascade avec le compte, listé ici
+    # pour que la purge soit lisible. Les skills du compte (publics compris) sont purgés avec leurs
+    # fichiers R2 dans purger_donnees_compte ; les copies des autres gardent leur contenu (skill_source_id passe à null).
+    ("skill_activations", "active_par"),
     ("comportements_publics", "auteur_id"),
     ("programmes_catalogue_public", "publie_par"),
     ("demandes_dossiers_catalogue_public", "createur_id"),

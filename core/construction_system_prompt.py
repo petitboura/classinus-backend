@@ -383,6 +383,31 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
             "Ne crée, ne modifie et ne supprime un skill que sur demande claire de l'utilisateur."
         )
 
+    # 24/11/2026, demande Bourama : l'IA doit savoir quand l'auteur d'un skill public que l'utilisateur
+    # a ajouté en a publié une nouvelle version. La copie de l'utilisateur ne change jamais toute seule :
+    # l'IA prévient, propose, et ne remplace qu'avec son accord (le texte d'un skill devient des consignes
+    # pour l'IA, personne ne doit pouvoir le changer chez un autre sans son accord). Lecture dans
+    # core/skills_publics.py::mises_a_jour_disponibles, via core/skills_catalogue.py.
+    mises_a_jour = (skills_catalogue or {}).get("mises_a_jour") or []
+    if mises_a_jour:
+        lignes_maj = "\n".join(
+            f"- id={m['copie_id']} : {m.get('nom') or '(sans nom)'}"
+            + (" (l'utilisateur a modifié sa copie depuis son ajout)" if m.get("modifiee_localement") else "")
+            for m in mises_a_jour
+        )
+        system_final += (
+            "\n\nMISES À JOUR DE SKILLS PUBLICS DISPONIBLES (l'auteur a publié une nouvelle version d'un skill que "
+            "l'utilisateur a ajouté depuis le catalogue public) :\n"
+            f"{lignes_maj}\n"
+            "Garde sa version actuelle pour répondre. Signale-lui en une phrase, une seule fois dans la conversation "
+            "et au moment qui s'y prête, qu'une nouvelle version existe, et propose de la mettre à jour. Pour une copie "
+            "qu'il a modifiée, dis que la mise à jour remplacerait ses changements. Tu peux comparer les deux versions "
+            "si cela l'aide à décider : lis sa copie avec gerer_skill (action \"consulter\") et la version publique avec "
+            "gerer_comportement_public (action \"chercher\" puis \"consulter\"). Ne mets JAMAIS à jour sans son accord "
+            "clair : appelle gerer_comportement_public avec l'action \"mettre_a_jour\" et skill_id seulement après. "
+            "S'il refuse, n'insiste pas."
+        )
+
     # 26/10/2026, demande de Bourama : l'IA doit savoir ce qui est connecté, quels MCP personnels
     # sont actifs et quels outils sont ceux de Classinus. Calculé dans chat() (core/main.py).
     if bloc_connexions:

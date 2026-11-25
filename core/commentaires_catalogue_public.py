@@ -30,7 +30,7 @@ from api.auth import supabase
 TABLES_PAR_TYPE = {
     "fichier": "bibliotheque_publique",
     "dossier": "dossiers_catalogue_public",
-    "skill": "comportements_publics",
+    "skill": "skills",  # 24/11/2026 : les skills publics sont dans la table skills (même id qu'avant pour les anciens)
     "clovis": "classinus_infos",
     "programme": "programmes_catalogue_public",  # 22/09/2026, catalogue public du Programme
 }

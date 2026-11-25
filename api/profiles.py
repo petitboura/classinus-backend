@@ -640,6 +640,8 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
         ("invitations_crees", "invitations_classinus", "proprietaire_id"),
         ("comportements_etudiant", "comportements_etudiants", "etudiant_id"),
         ("skills_independants", "skills", "owner_id"),
+        # 24/11/2026 : skills ajoutés depuis le catalogue public (lien copie, version copiée).
+        ("skills_publics_ajoutes", "skill_activations", "active_par"),
         ("liste_attente_modeles", "liste_attente_modeles", "user_id"),
         ("evenements_liste_attente", "evenements_liste_attente", "user_id"),
         ("bambara_profils", "bambara_profils", "user_id"),

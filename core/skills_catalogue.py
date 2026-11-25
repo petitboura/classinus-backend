@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from api.auth import supabase
 from core import config_skills
+from core.skills_publics import mises_a_jour_disponibles
 
 
 def lister_catalogue_skills(user_id: str | None) -> dict:
@@ -127,11 +128,14 @@ def lister_catalogue_complet(user_id: str | None) -> dict:
     vide = {"skills": [], "total": 0, "officiels": [], "ne_plus_proposer": False}
     if not user_id:
         return vide
-    with ThreadPoolExecutor(max_workers=3) as pool:
+    with ThreadPoolExecutor(max_workers=4) as pool:
         f_compte = pool.submit(lister_catalogue_skills, user_id)
         f_officiels = pool.submit(lister_skills_officiels)
         f_preference = pool.submit(ne_plus_proposer_officiels, user_id)
+        # 24/11/2026 : copies de skills publics dont l'auteur a publié une nouvelle version.
+        f_mises_a_jour = pool.submit(mises_a_jour_disponibles, user_id)
         catalogue = dict(f_compte.result())
         catalogue["officiels"] = f_officiels.result()
         catalogue["ne_plus_proposer"] = f_preference.result()
+        catalogue["mises_a_jour"] = f_mises_a_jour.result()
     return catalogue

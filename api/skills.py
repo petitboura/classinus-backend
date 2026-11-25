@@ -175,7 +175,7 @@ def _resume(files: list[dict]) -> list[dict]:
 @router.get("")
 def lister(utilisateur=Depends(utilisateur_courant)):
     try:
-        rows = supabase.table("skills").select("id,nom,description,actif,created_at,updated_at").eq("owner_id", utilisateur.id).order("updated_at", desc=True).execute()
+        rows = supabase.table("skills").select("id,nom,description,actif,created_at,updated_at,visibilite,version_publique,activations_count,etoiles_count").eq("owner_id", utilisateur.id).order("updated_at", desc=True).execute()
     except Exception as e:
         logging.error(f"ERREUR SUPABASE (liste skills {utilisateur.id}) : {e}")
         raise erreur_api(500, "IMPOSSIBLE_DE_LISTER_SKILLS")
@@ -271,6 +271,11 @@ def modifier(skill_id: str, payload: SkillPayload, utilisateur=Depends(utilisate
         raise erreur_api(500, "IMPOSSIBLE_DE_MODIFIER_SKILL")
     # À partir d'ici la base pointe vers les nouvelles clés : on ne les supprime plus jamais.
     changes = {"nom": payload.nom.strip(), "description": payload.description.strip(), "actif": payload.actif, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if old.get("visibilite") == "public":
+        # 24/11/2026 : un skill public modifié change de version. Les copies déjà ajoutées par d'autres
+        # ne bougent pas, mais l'IA de leurs propriétaires voit qu'une nouvelle version existe
+        # (voir core/skills_publics.py::mises_a_jour_disponibles).
+        changes["version_publique"] = (old.get("version_publique") or 1) + 1
     try:
         retires = [r["chemin"] for r in old_rows if r["chemin"] not in nouveaux_chemins]
         if retires:

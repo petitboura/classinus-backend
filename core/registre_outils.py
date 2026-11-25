@@ -740,6 +740,11 @@ OUTILS_SENSIBLES = {
     # Skills avec dossier et fichiers (25/10/2026) : deux actions destructives.
     "gerer_skill:supprimer",
     "gerer_skill:supprimer_fichier",
+    # Catalogue public des skills (24/11/2026) : publier rend un skill visible par tout le monde, retirer
+    # le cache aux autres, mettre_a_jour remplace le contenu d'une copie. Toujours confirmé par la plateforme.
+    "gerer_comportement_public:publier",
+    "gerer_comportement_public:retirer",
+    "gerer_comportement_public:mettre_a_jour",
     # Portés depuis core/serveur_mcp_espace.py le 17/08 (demande Bourama :
     # "ajoute à Clovis tout ce que Claude peut faire") -- mêmes garanties
     # que côté MCP externe (destructive_hint=True là-bas), transposées
