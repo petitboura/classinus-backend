@@ -1,9 +1,9 @@
 # Permissions des outils : autoriser, demander, bloquer
 
-- **Statut** : en cours. Le backend est complet sur la branche (réglages, blocage dans le chat et les widgets, routes de la page, suppression de compte, docs). Il reste l'interface (frontend), l'essai sur staging et la validation de Bourama : la branche n'est pas encore à fusionner.
+- **Statut** : en cours, presque terminé. Backend et frontend sont écrits sur deux branches. Reste : essai sur staging (rien n'a encore tourné en vrai), vérification du build frontend, validation de Bourama, fusion.
 - **Dernière mise à jour** : 2026-11-25
-- **Dépôts concernés** : classinus-backend (branche), Supabase (table créée sur staging et production), classinus-frontend (rien de fait pour cette page, voir plus bas)
-- **Branche(s)** : `feat/permissions-outils` (dernier commit 98f1e5d). Aucune branche côté frontend pour l'instant.
+- **Dépôts concernés** : classinus-backend (branche), classinus-frontend (branche), Supabase (table créée sur staging et production)
+- **Branche(s)** : backend `feat/permissions-outils` (dernier commit 98f1e5d) ; frontend `feat/permissions-outils` (créée à partir de main au commit 0c3fcbb, un commit : section Permissions des outils). Vercel ne construit pas cette branche : le build n'a pas été vérifié (pas de node_modules ici, seuls les garde-fous `verifier-composants-natifs` et `verifier-couleurs-theme` ont tourné et passent).
 
 ## Le but, en langage clair
 Bourama veut une page de réglages pour les outils, comme chez Claude : pour chaque outil, trois choix (Autoriser, Demander, Bloquer), regroupés en deux catégories par application (outils en lecture seule, outils qui écrivent ou suppriment). On règle la catégorie entière, puis on peut faire une exception outil par outil. Cela s'ouvre dans le panneau de chaque application (en cliquant sur l'application elle-même) et couvre les serveurs MCP personnalisés et les applications connectées.
@@ -22,12 +22,14 @@ Vérifié dans le dépôt et dans Supabase :
 ## Fait depuis (25/11, backend, commit 98f1e5d)
 Serveurs perso reliés à la catégorie « lecture » ; `api/widgets_outils.py` applique bloquer et les catégories (`OUTIL_BLOQUE`, 403) ; routes `GET` et `PUT /api/permissions-outils/{groupe}` (`api/permissions_outils.py`, liste des outils dans `core/catalogue_permissions.py`) ; codes d'erreur en français et anglais dans `core/erreurs.py` ; `permissions_outils` dans la purge du compte et l'export ; anciens tests réécrits (ils ne tournent pas ici faute de `fastapi`, `httpx`, `supabase` : à lancer dans un environnement complet) ; documentation `docs/PERMISSIONS_OUTILS.md` et `.fr.md`. 52 tests hors ligne passent.
 
+## Fait depuis (25/11, frontend)
+`components/connexions/PermissionsOutils.tsx` : section dans le panneau de chaque application connectée et de chaque serveur perso, trois choix (Autoriser, Demander, Bloquer) par catégorie et par outil, exception outil par outil, avertissement avant d'autoriser toute l'écriture, changement instantané avec retour en arrière si l'enregistrement échoue. Elle remplace la liste « Actions toujours autorisées » et la case « Autoriser d'un coup les outils non sensibles » (panneau et formulaire des serveurs perso). La carte de confirmation du chat et le formulaire d'ajout dans le chat (`FormulaireServeurMcpCarte.tsx`) gardent leur case, qui fonctionne toujours via l'ancienne route. Textes français et anglais, codes d'erreur dans `lib/erreurs.ts`, page publique `/decouvrir/personnaliser/applications-connectees`, docs `docs/PERMISSIONS_OUTILS.md` et `.fr.md`.
+
 ## Ce qui reste à faire
-Dans l'ordre :
-1. Frontend : ajouter les codes d'erreur dans `lib/erreurs.ts` (`OUTIL_BLOQUE`, `PERMISSIONS_OUTILS_*`, français et anglais, voir `core/erreurs.py`), les appels dans `lib/api.ts`, puis la section « Permissions des outils » dans le panneau de chaque application et de chaque serveur perso (remplace `ActionsToujoursAutorisees`) : trois états par catégorie et par outil, avertissement avant d'autoriser toute l'écriture en bloc, changement instantané, français et anglais, mobile et PC.
-2. Pages FAQ/AEO du frontend.
-3. Lancer les anciens tests dans un environnement complet (`test_autorisation_permanente_interdite.py`, `test_mcp_perso_autorisation_non_sensibles.py`, `test_widgets_appel_outil.py`).
-4. Essai sur le staging (appliquer la branche), puis fusion après la validation de Bourama.
+1. Vérifier le build du frontend (`npm run build`) dans un environnement complet, et lancer les anciens tests du backend (`test_autorisation_permanente_interdite.py`, `test_mcp_perso_autorisation_non_sensibles.py`, `test_widgets_appel_outil.py`).
+2. Essai sur staging : mettre la branche backend et la branche frontend sur staging (Railway et Vercel), ouvrir une application connectée (ex. Notion, Vercel) et un serveur perso, régler, bloquer un outil et vérifier le refus dans le chat et dans un widget.
+3. Retouche éventuelle de l'écran selon l'avis de Bourama (voir points ouverts).
+4. Fusion après sa validation, jamais `staging` dans `main` sans retirer le bloc « STAGING ONLY ».
 
 ## Décisions prises par Bourama
 - Réglage par catégorie avec exception outil par outil.
