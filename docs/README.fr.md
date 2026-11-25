@@ -25,6 +25,7 @@ Point d'entrée central de toute la documentation du backend Classinus. L'anglai
 - [Page bambara : profils, historique et éléments gardés](./chantiers/PAGE_BAMBARA_PROFILS.fr.md)
 - [Travail sur les documents joints (modifier un fichier, travailler sur des PDF)](./chantiers/OUTILS_DOCUMENTS_JOINTS.fr.md)
 - [Skills publics (publier, chercher, ajouter, mettre à jour)](./chantiers/skills-publics/README.fr.md)
+- [Ligne d'outils et notes de l'IA (l'outil `commenter`)](./chantiers/LIGNE_OUTILS_COMMENTAIRE.fr.md)
 
 ## Historique et travaux archivés
 

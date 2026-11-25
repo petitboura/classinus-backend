@@ -25,6 +25,7 @@ from routage_outils import (
     _ecrire_outils_retenus,
     _separer_appels_garder_outils,
     NOM_OUTIL_GARDER_OUTILS,
+    _separer_appels_commenter,
     _separer_appels_demander_outils,
     _outils_deja_en_main,
     _valider_noms_a_garder,
@@ -57,6 +58,10 @@ from filtre_texte_streaming import (
     _traiter_fragment_raisonnement,
 )
 from profils_agents import _nom_lisible_appel, _nom_lisible
+
+# Plafond de notes de l'outil interne commenter par tour (25/11/2026, demande de Bourama) : assez pour
+# commenter un long travail, assez bas pour qu'une IA qui n'appellerait plus que cet outil s'arrete.
+MAX_COMMENTAIRES_PAR_TOUR = 12
 
 def _nom_affiche(nom_outil):
     """Nom montré à l'utilisateur : le vrai nom de l'outil d'un serveur personnalisé, sans préfixe ni code interne."""
@@ -498,6 +503,9 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
     # -- sert uniquement a _detecter_appel_repete, jamais vide entre deux
     # tours (nouvelle liste a chaque appel de _agent_groq).
     historique_appels_tour = []
+    # Notes de l'outil interne commenter deja montrees ce tour (25/11/2026) : plafonne une IA qui
+    # n'appellerait plus que cet outil, jamais compte dans le budget d'aller-retours.
+    nb_commentaires_tour = 0
     limite_atteinte = False
     etape = 0
     while True:
@@ -762,6 +770,11 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
             if noms_a_garder_ce_lot or not noms_ignores_ce_lot:
                 _ecrire_outils_retenus(conversation_id, noms_a_garder_ce_lot)
 
+        # Outil interne commenter (25/11/2026, demande Bourama) : sorti du lot ICI, meme
+        # principe que garder_outils juste au-dessus. Les notes sont montrees plus bas, une fois
+        # le message assistant avec tool_calls ajoute a messages_agent.
+        appels_normaux, commentaires_ce_lot = _separer_appels_commenter(appels_normaux)
+
         # Outil interne demander_outils (etape 3, chantier "demander_outils",
         # 06/09/2026, demande Bourama) : sorti du lot ICI, meme principe que
         # garder_outils juste au-dessus -- jamais route vers table_routage,
@@ -853,6 +866,21 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
                         )
                     ),
                 })
+
+        # Notes de l'outil interne commenter (25/11/2026) : une ligne de commentaire dans la
+        # timeline (evenement "commentaire", sans outil_resultat), puis une reponse synthetique
+        # au modele. Jamais via _traiter_appels. Une note inutilisable ou au-dela du plafond du
+        # tour n'est pas montree et le dit au modele.
+        for commentaire in commentaires_ce_lot:
+            if commentaire["texte"] and nb_commentaires_tour < MAX_COMMENTAIRES_PAR_TOUR:
+                nb_commentaires_tour += 1
+                yield {"type": "commentaire", "texte": commentaire["texte"], "id_appel": commentaire["id"]}
+                reponse_commentaire = "Note affichee a l'utilisateur. Continue ton travail."
+            elif commentaire["texte"]:
+                reponse_commentaire = "Trop de notes ce tour-ci, n'en ecris plus. Continue ton travail."
+            else:
+                reponse_commentaire = "Note vide ou illisible, ignoree. Continue ton travail."
+            messages_agent.append({"role": "tool", "tool_call_id": commentaire["id"], "content": reponse_commentaire})
 
         # Branchement reel de demander_outils (etape 3) -- jamais via
         # _traiter_appels, totalement invisible pour l'utilisateur cote UI
@@ -1219,6 +1247,11 @@ def _capturer_reponse(generateur, accumulateur, meta=None, fichiers_generes_accu
                 _ajouter_segment_texte(meta, "texte", event["texte"])
         elif meta is not None and event["type"] == "raisonnement":
             _ajouter_segment_texte(meta, "raisonnement", event["texte"])
+        elif meta is not None and event["type"] == "commentaire":
+            # 25/11/2026 (demande Bourama) : la note de l'IA est une ligne de la timeline, gardee
+            # dans l'ordre pour survivre a la reouverture d'une conversation. Jamais dans
+            # meta["outils"] : ce n'est pas un outil, rien a reinjecter au modele.
+            meta.setdefault("segments", []).append({"type": "commentaire", "texte": event["texte"]})
         elif meta is not None and event["type"] == "outil_resultat":
             # 24/09/2026 (demande Bourama, regroupement des outils qui
             # s'enchaînent) : l'action est gardée pour que la petite icône

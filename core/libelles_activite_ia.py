@@ -65,8 +65,10 @@ def schema_avec_libelle(schema):
     }
 
 
-# Outils internes dont l'appel n'est jamais montré dans la timeline : pas de champ de libellé.
-_OUTILS_SANS_LIBELLE = {"garder_outils"}
+# Outils internes dont l'appel n'est jamais montré dans la timeline comme un outil : pas de champ de
+# libellé. "commenter" (25/11/2026) s'affiche, mais comme une ligne de commentaire et non comme un
+# outil : il porte déjà son propre texte.
+_OUTILS_SANS_LIBELLE = {"garder_outils", "commenter"}
 
 
 def outils_avec_libelle(outils):
@@ -96,6 +98,29 @@ def nettoyer_libelle(valeur):
     texte = re.sub(r"\s+", " ", texte).strip(" ,.;:!…")
     if len(texte) > LONGUEUR_MAX_LIBELLE:
         texte = texte[:LONGUEUR_MAX_LIBELLE].rsplit(" ", 1)[0].strip(" ,.;:!…")
+    if len(texte) < 3 or not re.search(r"[^\W\d_]", texte):
+        return None
+    return texte
+
+
+LONGUEUR_MAX_COMMENTAIRE = 240
+
+
+def nettoyer_commentaire(valeur):
+    """
+    Commentaire de l'IA prêt à afficher dans la timeline (25/11/2026, demande de Bourama), ou
+    None s'il n'est pas utilisable. Plus long qu'un libellé (une ou deux phrases) et la
+    ponctuation reste, mais mêmes protections : pas de retour à la ligne, pas de balises ni de
+    crochets, pas de tirets doubles.
+    """
+    if not isinstance(valeur, str):
+        return None
+    texte = re.sub(r"[\x00-\x1f\x7f]+", " ", valeur)
+    texte = re.sub(r"[`<>{}\[\]]", "", texte)
+    texte = re.sub(r"\s*(--+|—|–)\s*", ", ", texte)
+    texte = re.sub(r"\s+", " ", texte).strip(" ,;:")
+    if len(texte) > LONGUEUR_MAX_COMMENTAIRE:
+        texte = texte[:LONGUEUR_MAX_COMMENTAIRE].rsplit(" ", 1)[0].strip(" ,;:")
     if len(texte) < 3 or not re.search(r"[^\W\d_]", texte):
         return None
     return texte
