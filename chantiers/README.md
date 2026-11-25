@@ -33,3 +33,4 @@ Un travail fini, fusionné et vérifié n'est plus un chantier : on le retire de
 Les ajouter ici au fur et à mesure, une ligne chacun, avec le lien vers son sous-dossier.
 
 - [Coût d'entrée du modèle : cache de prompt](cache-prompt-cout-entree/RESUME.md) : deux correctifs prêts sur des branches du backend, à essayer sur le staging.
+- [Permissions des outils : autoriser, demander, bloquer](permissions-outils/RESUME.md) : fondations du backend poussées sur `feat/permissions-outils`, table Supabase créée, reste les routes, l'interface et la documentation.
