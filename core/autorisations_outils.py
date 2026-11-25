@@ -8,55 +8,34 @@ plusieurs actions) est gardée en base pour CETTE personne. Les fois suivantes,
 cette action précise ne redemande plus rien. Rien d'autre n'est autorisé :
 une autre action du même service redemande toujours confirmation.
 
-Table : autorisations_outils_permanentes (user_id, cle, nom_lisible, created_at).
-La personne les retire depuis Applications connectées (api/autorisations_outils.py).
+Depuis le 24/11/2026 ces réglages vivent dans la table permissions_outils, avec
+deux états de plus (demander, bloquer) et des réglages par catégorie d'outils :
+voir core/permissions_outils.py, qui porte toute la logique. Ce fichier garde
+les mêmes noms de fonctions pour le bouton du chat et l'écran Applications
+connectées d'avant : "Toujours autoriser" revient à écrire l'état "autoriser",
+et "Retirer" supprime le réglage (la valeur par défaut s'applique de nouveau).
+Les anciennes tables (autorisations_outils_permanentes et
+mcp_personnalises.autoriser_non_sensibles) ont été reprises par la migration
+2026_11_24_permissions_outils.sql et ne sont plus lues.
 """
 
 import logging
 
-from core.outils_generation_commun import _supabase_memoire
+from core.permissions_outils import (  # noqa: F401  (appli_de_cle est réexporté pour l'existant)
+    AUTORISER,
+    LONGUEUR_MAX_CLE,
+    LONGUEUR_MAX_NOM,
+    appli_de_cle,
+    charger_permissions,
+    ecrire_etat,
+    lire_lignes,
+    retirer_reglage,
+)
 from registre_outils import (
     AUTORISATION_PERMANENTE_INTERDITE,
     OUTILS_SENSIBLES,
     est_outil_sensible_serveur_personnel,
 )
-
-TABLE = "autorisations_outils_permanentes"
-LONGUEUR_MAX_CLE = 200
-LONGUEUR_MAX_NOM = 300
-
-
-# Application de l'écran Applications connectées (noms de lib/outils.ts côté frontend)
-# à laquelle appartient une action, d'après le début de son nom.
-_APPLI_PAR_PREFIXE = (
-    ("gerer_depot_github", "github"),
-    ("notion-", "notion"),
-    ("higgsfield_", "higgsfield_mcp"),
-    ("vercel_", "vercel_mcp"),
-    ("railway_", "railway_mcp"),
-    ("supabase_", "supabase_mcp"),
-    ("render_", "render_mcp"),
-    ("cloudflare_", "cloudflare_mcp"),
-    ("netlify_", "netlify_mcp"),
-    ("gmail_", "google_gmail_mcp"),
-    ("gdocs_", "google_docs_mcp"),
-    ("gsheets_", "google_sheets_mcp"),
-    ("gslides_", "google_slides_mcp"),
-    ("gcal_", "google_calendar_mcp"),
-    ("gchat_", "google_chat_mcp"),
-    ("gclass_", "google_classroom_mcp"),
-    ("gpeople_", "google_people_mcp"),
-    ("ms365_", "microsoft_mcp"),
-    ("custommcp_", "mcp_personnalise"),
-)
-
-
-def appli_de_cle(cle):
-    """Nom de l'application concernée, ou None si elle n'est dans aucune."""
-    for prefixe, appli in _APPLI_PAR_PREFIXE:
-        if cle.startswith(prefixe):
-            return appli
-    return None
 
 
 def cle_valide(cle):
@@ -69,45 +48,20 @@ def cle_valide(cle):
 
 
 def charger_autorisations(user_id):
-    """Ensemble des clés autorisées pour cette personne. Vide en cas de panne (donc on redemande)."""
-    if not user_id:
-        return frozenset()
-    try:
-        lignes = (
-            _supabase_memoire.table(TABLE).select("cle").eq("user_id", user_id).execute()
-        ).data or []
-        # Une autorisation déjà en base pour une action qui exige toujours la confirmation est
-        # ignorée : la personne sera de nouveau interrogée à chaque fois.
-        cles = frozenset(
-            ligne["cle"] for ligne in lignes if ligne["cle"] not in AUTORISATION_PERMANENTE_INTERDITE
-        )
-    except Exception as e:
-        logging.error(f"ERREUR SUPABASE (lecture {TABLE} user={user_id}) : {e}")
-        return frozenset()
-    return cles | _serveurs_autorises_en_bloc(user_id)
-
-
-def _serveurs_autorises_en_bloc(user_id):
-    """Repères des serveurs perso dont les outils non sensibles sont autorisés d'un coup (17/11/2026).
-
-    Ne lève jamais d'exception : en cas de problème, la confirmation est demandée comme avant."""
-    try:
-        from connexions.mcp_personnalises import autorisations_serveurs_pour_utilisateur
-        return autorisations_serveurs_pour_utilisateur(user_id)
-    except Exception as e:
-        logging.warning(f"Autorisations en bloc des MCP personnels indisponibles : {type(e).__name__}")
-        return frozenset()
+    """Réglages de cette personne (objet Permissions). Vide en cas de panne : les valeurs par défaut
+    s'appliquent donc, c'est-à-dire qu'on redemande pour les actions sensibles."""
+    return charger_permissions(user_id)
 
 
 def lister_autorisations(user_id):
-    """Lignes complètes pour l'écran Applications connectées. Lève l'erreur de la base."""
-    lignes = (
-        _supabase_memoire.table(TABLE)
-        .select("cle, nom_lisible, created_at")
-        .eq("user_id", user_id)
-        .order("created_at", desc=True)
-        .execute()
-    ).data or []
+    """Actions "toujours autorisées" pour l'ancien écran Applications connectées. Lève l'erreur de la base.
+
+    Seuls les réglages d'outils à l'état "autoriser" sont listés : les réglages de catégorie et les
+    outils à confirmer ou bloqués se gèrent dans la nouvelle section Permissions des outils."""
+    lignes = [
+        ligne for ligne in lire_lignes(user_id)
+        if ligne.get("etat") == AUTORISER and not ligne["cle"].startswith("categorie:")
+    ]
     return [{**ligne, "nom_lisible": _nom_lisible_a_afficher(ligne), "appli": appli_de_cle(ligne["cle"])} for ligne in lignes]
 
 
@@ -128,16 +82,13 @@ def enregistrer_autorisation(user_id, cle, nom_lisible):
     if not user_id or not cle_valide(cle):
         return False
     try:
-        _supabase_memoire.table(TABLE).upsert(
-            {"user_id": user_id, "cle": cle, "nom_lisible": (nom_lisible or cle)[:LONGUEUR_MAX_NOM]},
-            on_conflict="user_id,cle",
-        ).execute()
+        ecrire_etat(user_id, cle, AUTORISER, nom_lisible or cle)
         return True
     except Exception as e:
-        logging.error(f"ERREUR SUPABASE (écriture {TABLE} user={user_id} cle={cle}) : {e}")
+        logging.error(f"ERREUR SUPABASE (écriture permissions_outils user={user_id} cle={cle}) : {e}")
         return False
 
 
 def retirer_autorisation(user_id, cle):
     """Retire l'autorisation. Lève l'erreur de la base."""
-    _supabase_memoire.table(TABLE).delete().eq("user_id", user_id).eq("cle", cle).execute()
+    retirer_reglage(user_id, cle)

@@ -10,6 +10,7 @@ import concurrent.futures
 import requests
 from core.mcp_tools import appeler_outil
 from registre_outils import OUTILS_SENSIBLES, est_outil_sensible_serveur_personnel
+from core.permissions_outils import AUTORISER, BLOQUER, ECRITURE, LECTURE, groupe_de_outil
 from profils_agents import _nom_lisible_appel, _action_appel, _champs_domaines_appel
 from libelles_activite_ia import champs_timeline_appel
 from historique_outils import champs_historique_outil
@@ -445,6 +446,82 @@ def cle_autorisation_appel(appel):
     return None
 
 
+# Texte renvoyé à l'IA quand la personne a bloqué l'outil (24/11/2026). Il existe en français et en
+# anglais : l'IA répond dans la langue de la conversation. Aucun tiret double ni tiret long.
+TEXTE_OUTIL_BLOQUE = (
+    "Outil bloqué : l'utilisateur a bloqué « {nom} » dans les réglages de l'application. "
+    "N'essaie pas de le relancer ni de contourner ce blocage. Dis-lui que cet outil est bloqué et qu'il "
+    "peut le réactiver dans Connexions, en ouvrant l'application concernée.\n"
+    "Tool blocked: the user blocked \"{nom}\" in the app settings. Do not retry it or work around the "
+    "block. Tell them this tool is blocked and that they can turn it back on in Connections by opening "
+    "the app."
+)
+
+
+def _est_permissions(autorisations):
+    """True pour l'objet de réglages (core/permissions_outils.py), False pour un ancien ensemble de clés."""
+    return hasattr(autorisations, "etat_explicite")
+
+
+def etat_permission_appel(appel, autorisations):
+    """Réglage appliqué à CET appel : "autoriser", "demander" ou "bloquer".
+
+    Ordre : réglage de l'outil, puis de sa catégorie (lecture ou écriture de son application), puis
+    valeur par défaut. Renvoie None quand il n'y a pas de réglages à appliquer (ancien ensemble de
+    clés) ou en cas d'imprévu : l'appelant retombe alors sur le comportement d'avant, prudent pour
+    les actions sensibles. Une panne ici ne doit jamais casser le chat."""
+    if not _est_permissions(autorisations):
+        return None
+    try:
+        nom = appel["name"]
+        cle = cle_autorisation_appel(appel)
+        cle_outil = cle or nom
+        if nom.startswith("custommcp_"):
+            # Un outil de serveur perso inconnu de ce processus compte comme écriture (le plus prudent).
+            from connexions.mcp_personnalises import est_outil_non_sensible
+            type_outil = LECTURE if est_outil_non_sensible(nom) else ECRITURE
+        else:
+            type_outil = LECTURE if cle is None else ECRITURE
+        # Un blocage posé sur le nom de l'outil vaut pour toutes ses actions.
+        if cle_outil != nom and autorisations.etat_explicite(nom) == BLOQUER:
+            return BLOQUER
+        return autorisations.etat(cle_outil, groupe_de_outil(nom), type_outil)
+    except Exception as e:
+        logging.error(f"ERREUR permissions outil ({type(e).__name__}) : {e}")
+        return None
+
+
+def _refuser_appel_bloque(appel, messages_agent):
+    """Refuse un appel d'outil bloqué par la personne, sans l'exécuter, avec les mêmes évènements que
+    pour un outil exécuté (la ligne de la chronologie se ferme proprement) et un résultat que l'IA lit."""
+    nom_lisible = _nom_lisible_appel(appel)
+    nom_tl, texte_cours_tl, _, marque_tl = _champs_timeline(appel)
+    resultat = TEXTE_OUTIL_BLOQUE.format(nom=nom_lisible)
+    yield {
+        "type": "statut",
+        "texte": texte_cours_tl,
+        "id_appel": appel["id"],
+        "nom_outil": appel["name"],
+        **marque_tl,
+        "nom_lisible": nom_tl,
+        "action": _action_appel(appel),
+        **_champs_domaines_appel(appel),
+    }
+    yield {"type": "statut_termine", "texte": f"{nom_lisible} bloqué", "id_appel": appel["id"]}
+    yield {
+        "type": "outil_resultat",
+        "nom_outil": appel["name"],
+        **marque_tl,
+        "nom_lisible": nom_tl,
+        "action": _action_appel(appel),
+        **_champs_domaines_appel(appel),
+        "resultat": resultat,
+        **champs_historique_outil(appel["arguments"], resultat, resultat),
+        "id_appel": appel["id"],
+    }
+    messages_agent.append({"role": "tool", "tool_call_id": appel["id"], "content": resultat})
+
+
 def _est_outil_sensible(appel, autorisations=None):
     """
     True si cet appel doit déclencher la confirmation utilisateur
@@ -457,6 +534,12 @@ def _est_outil_sensible(appel, autorisations=None):
       26/08 (plusieurs outils fusionnés en un seul avec un paramètre
       `action`, dont certaines actions sont sensibles et d'autres non).
     """
+    # Réglages de la personne (24/11/2026) : outil, puis catégorie, puis défaut. Seul "autoriser" saute
+    # la confirmation ; "demander" la réclame, même pour une lecture ; "bloquer" est refusé en amont
+    # (voir _traiter_appels) et, par prudence, compterait ici comme à confirmer.
+    etat = etat_permission_appel(appel, autorisations)
+    if etat is not None:
+        return etat != AUTORISER
     cle = cle_autorisation_appel(appel)
     if cle is None:
         return False
@@ -504,6 +587,18 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
     # Arrêt demandé avant même de commencer ce lot : aucun outil n'est lancé.
     if arret is not None and arret.est_demande():
         return
+    # Outils bloqués par la personne (24/11/2026) : refusés sans être lancés ni demandés, et l'IA lit
+    # pourquoi. Les autres appels du lot continuent normalement.
+    if _est_permissions(autorisations) and autorisations.a_des_blocages():
+        restants = []
+        for appel in appels:
+            if etat_permission_appel(appel, autorisations) == BLOQUER:
+                yield from _refuser_appel_bloque(appel, messages_agent)
+            else:
+                restants.append(appel)
+        appels = restants
+        if not appels:
+            return
     index_sensible = next(
         (i for i, appel in enumerate(appels) if _est_outil_sensible(appel, autorisations)),
         None,

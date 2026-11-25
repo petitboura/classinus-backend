@@ -257,6 +257,7 @@ def traduire_libelle_outil(texte: Any) -> Any:
         (" effectué", " completed"),
         (" annulée", " canceled"),
         (" annulé", " canceled"),
+        (" bloqué", " blocked"),
         ("...", "..."),
         ("…", "…"),
     )
