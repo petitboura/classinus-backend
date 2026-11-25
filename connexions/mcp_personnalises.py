@@ -373,10 +373,35 @@ def definir_autorisation_non_sensibles(user_id: str, serveur_id: str, autoriser:
             _SUPABASE.table("mcp_personnalises").update({"autoriser_non_sensibles": bool(autoriser)})
             .eq("id", serveur_id).eq("user_id", user_id).execute().data or []
         )
-        return bool(lignes)
+        if not lignes:
+            return False
+        # Depuis le 24/11/2026 la source lue par le chat est la table permissions_outils (catégorie
+        # "lecture" de ce serveur). La colonne reste écrite aussi, pour pouvoir revenir en arrière.
+        _ecrire_categorie_lecture(user_id, serveur_id, autoriser, lignes[0].get("nom"))
+        return True
     except Exception as exc:
         logging.error("Réglage d'autorisation d'un MCP personnalisé impossible (%s).", type(exc).__name__)
         return False
+
+
+def _ecrire_categorie_lecture(user_id: str, serveur_id: str, autoriser: bool, nom: str | None = None) -> None:
+    """Réglage "outils en lecture seule" d'un serveur dans la table permissions_outils. Lève l'erreur de la base."""
+    from core.permissions_outils import AUTORISER, DEMANDER, LECTURE, cle_categorie, ecrire_etat, groupe_serveur_perso
+    ecrire_etat(
+        user_id,
+        cle_categorie(groupe_serveur_perso(serveur_id), LECTURE),
+        AUTORISER if autoriser else DEMANDER,
+        f"Outils en lecture seule de {nom}" if nom else "Outils en lecture seule",
+    )
+
+
+def _lecture_autorisee(ligne: dict, permissions) -> bool:
+    """True si la personne a autorisé en bloc les outils en lecture seule de ce serveur.
+    `permissions` : réglages chargés (core/permissions_outils.py) ; sans eux on lit l'ancienne colonne."""
+    if permissions is None:
+        return bool(ligne.get("autoriser_non_sensibles", False))
+    from core.permissions_outils import AUTORISER, LECTURE, cle_categorie, groupe_serveur_perso
+    return permissions.etat_explicite(cle_categorie(groupe_serveur_perso(ligne["id"]), LECTURE)) == AUTORISER
 
 
 def _onglet_pour_outil(outil, nom_reel: str) -> str:
@@ -1019,7 +1044,7 @@ def sonder_serveur(url: str, site_officiel: str | None, user_id: str, lien_jeton
     }
 
 
-def _config_publique(ligne: dict, user_id: str) -> dict:
+def _config_publique(ligne: dict, user_id: str, permissions=None) -> dict:
     connecte = False
     if ligne.get("auth_type") in ("none", "bearer"):
         connecte = bool(ligne.get("actif"))
@@ -1029,7 +1054,7 @@ def _config_publique(ligne: dict, user_id: str) -> dict:
         "id": ligne["id"], "nom": ligne["nom"], "url": ligne["url"],
         "auth_type": ligne["auth_type"], "actif": bool(ligne.get("actif", True)),
         "connecte": connecte, "created_at": ligne.get("created_at"), "updated_at": ligne.get("updated_at"),
-        "autoriser_non_sensibles": bool(ligne.get("autoriser_non_sensibles", False)),
+        "autoriser_non_sensibles": _lecture_autorisee(ligne, permissions),
     }
 
 
@@ -1040,7 +1065,9 @@ def lister_serveurs(utilisateur=Depends(utilisateur_courant)):
             _SUPABASE.table("mcp_personnalises").select("id,nom,url,auth_type,actif,created_at,updated_at,autoriser_non_sensibles")
             .eq("user_id", utilisateur.id).order("created_at", desc=False).execute().data or []
         )
-        return {"serveurs": [_config_publique(ligne, utilisateur.id) for ligne in lignes]}
+        from core.permissions_outils import charger_permissions
+        permissions = charger_permissions(utilisateur.id)
+        return {"serveurs": [_config_publique(ligne, utilisateur.id, permissions) for ligne in lignes]}
     except Exception as exc:
         logging.error("Liste des MCP personnalisés indisponible (%s).", type(exc).__name__)
         _erreur("MCP_LISTE_INDISPONIBLE", "Impossible de charger les serveurs MCP pour le moment.", 503)
@@ -1079,7 +1106,14 @@ def ajouter_serveur(payload: ServeurPayload, utilisateur=Depends(utilisateur_cou
         if outils_reseau is not None:
             # Les outils viennent d'être découverts : le premier message n'a pas à les redécouvrir.
             _ranger_cache(_cle_cache(lignes[0], utilisateur.id), _construire_outils(lignes[0], outils_reseau))
-        return {"serveur": _config_publique(lignes[0], utilisateur.id)}
+        from core.permissions_outils import charger_permissions
+        if payload.autoriser_non_sensibles:
+            try:
+                _ecrire_categorie_lecture(utilisateur.id, lignes[0]["id"], True, nom)
+            except Exception as exc:
+                # Le serveur est bien enregistré : on ne le déclare pas en échec, la case restera décochée.
+                logging.warning("Réglage des outils en lecture d'un nouveau MCP non enregistré (%s).", type(exc).__name__)
+        return {"serveur": _config_publique(lignes[0], utilisateur.id, charger_permissions(utilisateur.id))}
     except HTTPException:
         raise
     except ValueError as exc:
@@ -1134,11 +1168,14 @@ def modifier_serveur(serveur_id: str, payload: ServeurPayload, utilisateur=Depen
         if payload.autoriser_non_sensibles is not None:
             modifications["autoriser_non_sensibles"] = payload.autoriser_non_sensibles
         _SUPABASE.table("mcp_personnalises").update(modifications).eq("id", serveur_id).eq("user_id", utilisateur.id).execute()
+        if payload.autoriser_non_sensibles is not None:
+            _ecrire_categorie_lecture(utilisateur.id, serveur_id, payload.autoriser_non_sensibles, nom)
         if url != precedent.get("url") or payload.auth_type != precedent.get("auth_type"):
             _SUPABASE.table("mcp_personnalises_oauth_connections").delete().eq("server_id", serveur_id).eq("user_id", utilisateur.id).execute()
         _invalider_cache_serveur(serveur_id)
         mis_a_jour = _serveur_pour_utilisateur(serveur_id, utilisateur.id)
-        return {"serveur": _config_publique(mis_a_jour, utilisateur.id)}
+        from core.permissions_outils import charger_permissions
+        return {"serveur": _config_publique(mis_a_jour, utilisateur.id, charger_permissions(utilisateur.id))}
     except HTTPException:
         raise
     except Exception as exc:
@@ -1185,6 +1222,12 @@ def supprimer_serveur(serveur_id: str, utilisateur=Depends(utilisateur_courant))
     try:
         _SUPABASE.table("mcp_personnalises").delete().eq("id", serveur_id).eq("user_id", utilisateur.id).execute()
         _invalider_cache_serveur(serveur_id)
+        try:
+            # Les réglages d'outils de ce serveur n'ont plus d'objet : on les retire (sans bloquer la suppression).
+            from core.permissions_outils import groupe_serveur_perso, retirer_reglages_groupe
+            retirer_reglages_groupe(utilisateur.id, groupe_serveur_perso(serveur_id))
+        except Exception as exc:
+            logging.warning("Réglages d'outils d'un MCP supprimé non retirés (%s).", type(exc).__name__)
         return {"supprime": True}
     except Exception as exc:
         logging.error("Suppression d’un MCP personnalisé impossible (%s).", type(exc).__name__)

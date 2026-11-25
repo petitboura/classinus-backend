@@ -114,6 +114,14 @@ def est_cle_categorie(cle):
     return isinstance(cle, str) and cle.startswith(_PREFIXE_CATEGORIE)
 
 
+def appartient_au_groupe(cle, groupe):
+    """True si ce réglage (d'outil ou de catégorie) concerne ce groupe."""
+    if est_cle_categorie(cle):
+        morceaux = cle.split(":")
+        return len(morceaux) == 3 and morceaux[1] == groupe
+    return groupe_de_outil(cle) == groupe
+
+
 def defaut_pour(groupe, type_outil):
     """Réglage appliqué quand la personne n'a rien choisi."""
     if isinstance(groupe, str) and groupe.startswith(_PREFIXE_SERVEUR_PERSO):
@@ -260,3 +268,12 @@ def ecrire_etat(user_id, cle, etat, nom_lisible=""):
 def retirer_reglage(user_id, cle):
     """Supprime un réglage : la valeur par défaut s'applique de nouveau. Lève l'erreur de la base."""
     _client().table(TABLE).delete().eq("user_id", user_id).eq("cle", cle).execute()
+
+
+def retirer_reglages_groupe(user_id, groupe):
+    """Supprime tous les réglages d'un groupe (ex. quand un serveur personnalisé est supprimé).
+    Lève l'erreur de la base."""
+    lignes = _client().table(TABLE).select("cle").eq("user_id", user_id).execute().data or []
+    a_retirer = [ligne["cle"] for ligne in lignes if appartient_au_groupe(ligne["cle"], groupe)]
+    if a_retirer:
+        _client().table(TABLE).delete().eq("user_id", user_id).in_("cle", a_retirer).execute()

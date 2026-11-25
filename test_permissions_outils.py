@@ -4,7 +4,7 @@ Ne touchent ni la base ni le réseau : toute la logique de priorité est dans co
 import os
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "core"))
 
@@ -112,6 +112,39 @@ class PrioriteTest(unittest.TestCase):
     def test_blocages(self):
         self.assertFalse(Permissions({"a": AUTORISER}).a_des_blocages())
         self.assertTrue(Permissions({"a": BLOQUER}).a_des_blocages())
+
+
+class GroupeReglagesTest(unittest.TestCase):
+    def test_appartenance_d_un_reglage_a_son_groupe(self):
+        self.assertTrue(p.appartient_au_groupe(p.cle_categorie("custommcp_abcdef", LECTURE), "custommcp_abcdef"))
+        self.assertTrue(p.appartient_au_groupe(OUTIL_PERSO, "custommcp_abcdef"))
+        self.assertTrue(p.appartient_au_groupe("vercel_list_projects", "vercel_mcp"))
+        # Un autre serveur, une autre application : jamais touchés.
+        self.assertFalse(p.appartient_au_groupe(p.cle_categorie("custommcp_123456", LECTURE), "custommcp_abcdef"))
+        self.assertFalse(p.appartient_au_groupe("custommcp_list_123456_x", "custommcp_abcdef"))
+        self.assertFalse(p.appartient_au_groupe("vercel_list_projects", "railway_mcp"))
+        self.assertFalse(p.appartient_au_groupe("categorie:mal", "custommcp_abcdef"))
+
+    def test_retirer_un_groupe_ne_supprime_que_ses_reglages(self):
+        lignes = [
+            {"cle": p.cle_categorie("custommcp_abcdef", LECTURE)},
+            {"cle": OUTIL_PERSO},
+            {"cle": "custommcp_list_123456_x"},
+            {"cle": "vercel_list_projects"},
+        ]
+        base = MagicMock()
+        base.table.return_value.select.return_value.eq.return_value.execute.return_value.data = lignes
+        with patch.object(p, "_client", return_value=base):
+            p.retirer_reglages_groupe("u1", "custommcp_abcdef")
+        supprimes = base.table.return_value.delete.return_value.eq.return_value.in_.call_args[0][1]
+        self.assertEqual(sorted(supprimes), sorted([p.cle_categorie("custommcp_abcdef", LECTURE), OUTIL_PERSO]))
+
+    def test_rien_a_retirer_ne_supprime_rien(self):
+        base = MagicMock()
+        base.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [{"cle": "vercel_x"}]
+        with patch.object(p, "_client", return_value=base):
+            p.retirer_reglages_groupe("u1", "custommcp_abcdef")
+        base.table.return_value.delete.assert_not_called()
 
 
 class ValidationTest(unittest.TestCase):
