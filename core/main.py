@@ -62,7 +62,7 @@ from lecture_urls_externes import _construire_parts_gemini, _enrichir_message_av
 from ocr_pages_scannees import ocr_tesseract_image_fiable
 from profils_agents import _nom_agent, _nom_lisible, _nom_lisible_appel, _action_appel, _champs_domaines_appel
 from routage_outils import (
-    _ecrire_outils_retenus, _lire_outils_retenus, _outil_garder_outils, _router_outils,
+    _ecrire_outils_retenus, _lire_outils_retenus, _outil_garder_outils, _outil_commenter, _router_outils,
     _preparer_demander_outils, _catalogue_pour_demander_outils, _outils_memoire_toujours_disponibles,
 )
 from prompt_voix_bambara import est_client_voix_bambara, OUTILS_TOUJOURS_VOIX_BAMBARA
@@ -1374,6 +1374,14 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
                 outils_mcp, table_routage, catalogue_complet, table_routage_complet,
                 noms=OUTILS_TOUJOURS_VOIX_BAMBARA,
             )
+
+    # Outil interne commenter (25/11/2026, demande Bourama) : une courte note a l'utilisateur entre
+    # deux appels d'outils, montree comme une ligne a point dans la timeline. Ajoute APRES
+    # demander_outils pour que le tout premier tour (ou seul demander_outils est propose) puisse
+    # deja commenter. Seulement quand des outils sont proposes (sinon rien a commenter), jamais au
+    # client vocal bambara (aucune timeline a l'ecran). Definition fixe : le cache de prompt n'est pas casse.
+    if outils_mcp and not est_client_voix_bambara(client):
+        outils_mcp = outils_mcp + [_outil_commenter()]
 
     # Etat du canal dit au modele a chaque message (16/10/2026, demande Bourama) : active ou
     # non, et pour le canal actif la regle des cartes de videos et d'images (leur lien doit etre

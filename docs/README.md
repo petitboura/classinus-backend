@@ -24,6 +24,7 @@ Central entry point for all Classinus backend documentation. English is the defa
 - [Plan unlock per person (and the one-agent rule)](./chantiers/DEBLOCAGE_PALIERS.md)
 - [Bambara page: profiles, history and kept items](./chantiers/PAGE_BAMBARA_PROFILS.md)
 - [Working on attached documents (edit a file, work on PDFs)](./chantiers/OUTILS_DOCUMENTS_JOINTS.md)
+- [Tool line and AI notes (the `commenter` tool)](./chantiers/LIGNE_OUTILS_COMMENTAIRE.md)
 
 ## Project history and archived work
 
