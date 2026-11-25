@@ -24,6 +24,15 @@ parenthèse, ou reformuler la phrase. Exemple concret corrigé le 20/08/2026 :
 Cette règle est un standing instruction : la vérifier avant de livrer tout
 texte destiné à être affiché, sans que Bourama ait à la répéter.
 
+## Classinus n'a qu'un seul agent
+
+Ordre de Bourama du 25 novembre 2026. Règle d'architecture, pas une question : ne jamais la remettre en cause ni en reparler.
+
+- Classinus n'est pas une plateforme multi-agents. Il n'y a qu'**un seul agent**.
+- Un palier, un abonnement ou un déblocage appartient à **la personne**, jamais à un agent (table `deblocages_paliers`, voir `docs/chantiers/DEBLOCAGE_PALIERS.fr.md`).
+- Ne jamais proposer de réglage, de palier ou de choix « par agent », et ne jamais demander à Bourama de décider quelque chose « pour un agent ».
+- La même règle est écrite dans le commentaire de la table `agents` dans Supabase.
+
 ## Toute nouvelle donnée liée à un utilisateur doit être purgée à la suppression du compte
 
 Erreur constatée le 12/10/2026 : la suppression de compte

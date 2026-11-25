@@ -642,6 +642,7 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
         ("skills_independants", "skills", "owner_id"),
         ("liste_attente_modeles", "liste_attente_modeles", "user_id"),
         ("evenements_liste_attente", "evenements_liste_attente", "user_id"),
+        ("deblocages_paliers", "deblocages_paliers", "user_id"),
     )
     for cle_export, table, colonne in tables_par_colonne_simple:
         try:
