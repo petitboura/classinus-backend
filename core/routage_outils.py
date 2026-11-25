@@ -8,7 +8,7 @@ from groq import Groq
 from constantes_agent import get_secret, supabase, MODELE_ROUTEUR_OUTILS, MODELE_ROUTEUR_OUTILS_REPLI, DELAI_MAX_PAR_APPEL
 from core.mcp_tools import lister_outils_autorises_pour_agent
 from registre_outils import NOMS_CATEGORIES_PROPOSEES_A_L_IA, INDEX_CATEGORIES_OUTILS, OUTILS_TOUJOURS_PRESENTS
-from libelles_activite_ia import schema_avec_libelle, libelle_ia_de_l_appel
+from libelles_activite_ia import schema_avec_libelle, libelle_ia_de_l_appel, nettoyer_commentaire
 
 def _resume_description_outil(description, max_caracteres=200):
     """
@@ -164,6 +164,76 @@ def _separer_appels_garder_outils(appels):
         else:
             appels_normaux.append(appel)
     return appels_normaux, list(dict.fromkeys(noms_a_garder))
+
+
+NOM_OUTIL_COMMENTER = "commenter"
+
+
+def _outil_commenter():
+    """
+    Outil interne (25/11/2026, demande de Bourama) : permet a l'IA de glisser une courte note a
+    l'utilisateur pendant qu'elle travaille, entre ses appels d'outils, au lieu de s'arreter pour
+    ecrire du texte. La note s'affiche dans la timeline comme une ligne a point, jamais comme un
+    outil (evenement "commentaire", voir _agent_groq). Jamais route vers table_routage, jamais
+    compte parmi les appels d'outils du tour ni dans la detection de repetition, comme garder_outils.
+    Un tour ou l'IA n'appelle que cet outil coute quand meme un aller-retour avec le modele.
+
+    CACHE DE PROMPT : la definition est FIXE, comme celle de garder_outils. Elle est ecrite en
+    anglais expres (meme raison que le libelle d'activite) et fixe la langue de la note sur celle
+    du dernier message de l'utilisateur.
+    """
+    return {
+        "type": "function",
+        "function": {
+            "name": NOM_OUTIL_COMMENTER,
+            "description": (
+                "Show the user a short note in the activity timeline while you work, between or "
+                "alongside your other tool calls. Use it to say what you just found or what you are "
+                "about to do next, in one or two short sentences. It is NOT your answer: never use "
+                "it for the final reply, never repeat what a tool label already says, and never put "
+                "results, code or lists in it. Write at most one note per round of tool calls, and "
+                "skip it when there is nothing useful to say. It does not end your turn: keep "
+                "working after it."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "texte": {
+                        "type": "string",
+                        "description": (
+                            "The note, under 200 characters, written in the language of the user's "
+                            "most recent message (the language of their earlier messages if the last "
+                            "one is too short to tell). No markdown, no line break."
+                        ),
+                    }
+                },
+                "required": ["texte"],
+            },
+        },
+    }
+
+
+def _separer_appels_commenter(appels):
+    """
+    Sort les appels a l'outil interne commenter (voir _outil_commenter) du reste des appels
+    normaux. Renvoie (appels_normaux, commentaires), commentaires etant une liste de
+    {"id": id_appel, "texte": note nettoyee ou None si inutilisable}, dans l'ordre des appels.
+    """
+    appels_normaux = []
+    commentaires = []
+    for appel in appels:
+        if appel["name"] == NOM_OUTIL_COMMENTER:
+            texte = None
+            try:
+                arguments = json.loads(appel["arguments"] or "{}")
+                if isinstance(arguments, dict):
+                    texte = nettoyer_commentaire(arguments.get("texte"))
+            except Exception as e:
+                logging.error(f"ERREUR arguments commenter illisibles : {e}")
+            commentaires.append({"id": appel["id"], "texte": texte})
+        else:
+            appels_normaux.append(appel)
+    return appels_normaux, commentaires
 
 
 NOM_OUTIL_DEMANDER_OUTILS = "demander_outils"
