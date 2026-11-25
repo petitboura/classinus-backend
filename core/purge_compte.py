@@ -52,6 +52,8 @@ _TABLES_SIMPLES = (
     ("mcp_personnalises_oauth_temp", "user_id"),
     ("mcp_personnalises_oauth_connections", "user_id"),
     ("mcp_personnalises", "user_id"),
+    # Permissions des outils (25/11/2026) : ON DELETE CASCADE existe aussi, cette étape double la sécurité.
+    ("permissions_outils", "user_id"),
     # Appareil : temps d'écran, actions, jetons de notifications, rappels.
     ("usage_appareil_mobile", "user_id"),
     ("actions_appareil_mobile", "user_id"),

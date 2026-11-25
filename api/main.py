@@ -33,6 +33,7 @@ from api.traduction_erreurs import router as traduction_erreurs_router
 from api.generation import router as generation_router
 from api.memoire_eleve import router as memoire_eleve_router
 from api.autorisations_outils import router as autorisations_outils_router
+from api.permissions_outils import router as permissions_outils_router
 from api.widgets_outils import router as widgets_outils_router
 from api.higgsfield import router as higgsfield_router
 from core import higgsfield_suivi
@@ -941,6 +942,7 @@ app.include_router(notifications_router)
 app.include_router(import_ia_router)
 app.include_router(memoire_eleve_router)
 app.include_router(autorisations_outils_router)
+app.include_router(permissions_outils_router)
 app.include_router(widgets_outils_router)
 app.include_router(higgsfield_router)
 app.include_router(bibliotheque_utilisateur_router)

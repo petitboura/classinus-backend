@@ -781,6 +781,17 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
     except Exception as e:
         logging.error(f"ERREUR SUPABASE (export mcp_personnalises pour {user_id}) : {e}")
         export["serveurs_mcp_personnalises"] = {"erreur": "recuperation impossible, reessayer plus tard"}
+    # Permissions des outils choisies par la personne (autoriser, demander, bloquer).
+    try:
+        res = (
+            supabase.table("permissions_outils")
+            .select("cle, etat, nom_lisible, created_at, updated_at")
+            .eq("user_id", user_id).execute()
+        )
+        export["permissions_outils"] = res.data or []
+    except Exception as e:
+        logging.error(f"ERREUR SUPABASE (export permissions_outils pour {user_id}) : {e}")
+        export["permissions_outils"] = {"erreur": "recuperation impossible, reessayer plus tard"}
 
     # follows et messages_directs : deux colonnes possibles chacune (sens
     # de la relation), donc pas dans la boucle simple ci-dessus.

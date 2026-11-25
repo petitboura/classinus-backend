@@ -19,7 +19,8 @@ from api.journal import journaliser
 from core.autorisations_outils import charger_autorisations, enregistrer_autorisation
 from core.constantes_agent import AGENT_ID_PAR_DEFAUT
 from core.erreurs import erreur_api
-from core.execution_outils import cle_autorisation_appel
+from core.execution_outils import cle_autorisation_appel, etat_permission_appel
+from core.permissions_outils import AUTORISER, BLOQUER
 from core.limitation_debit import limiteur
 from core.mcp_tools import appeler_outil, lister_outils_autorises_pour_agent
 from core.profils_agents import _nom_lisible_appel
@@ -59,14 +60,23 @@ def appeler_outil_de_widget(request: Request, demande: DemandeAppelWidget, utili
 
     appel = appel_au_format_chat(nom_expose, demande.arguments)
     cle = cle_autorisation_appel(appel)
-    if cle is not None and not demande.approuve and cle not in charger_autorisations(utilisateur.id):
+    autorisations = charger_autorisations(utilisateur.id)
+    # Réglage "Permissions des outils" de la personne. None = pas de réglages lisibles : ancien comportement.
+    etat = etat_permission_appel(appel, autorisations)
+    if etat == BLOQUER:
+        raise erreur_api(403, "OUTIL_BLOQUE")
+    if etat is None:
+        a_confirmer = cle is not None and cle not in autorisations
+    else:
+        a_confirmer = etat != AUTORISER
+    if a_confirmer and not demande.approuve:
         return {
             "statut": "confirmation_requise",
             "nom_lisible": _nom_lisible_appel(appel),
             "plateforme": plateforme_outil_personnel(nom_expose),
-            "cle": cle,
+            "cle": cle or nom_expose,
         }
-    if cle is not None and demande.approuve and demande.toujours_autoriser:
+    if cle is not None and a_confirmer and demande.approuve and demande.toujours_autoriser:
         enregistrer_autorisation(utilisateur.id, cle, _nom_lisible_appel(appel))
 
     try:
@@ -74,7 +84,7 @@ def appeler_outil_de_widget(request: Request, demande: DemandeAppelWidget, utili
     except Exception as e:
         logging.error(f"ERREUR WIDGET (appel {nom_expose} user={utilisateur.id}) : {e}")
         raise erreur_api(502, "WIDGET_APPEL_ECHEC")
-    if cle is not None:
+    if cle is not None or a_confirmer:
         journaliser(
             action="outils.widget_appel_confirme",
             user_id=utilisateur.id,

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "core"))
 
-from core import autorisations_outils, boucle_agent
+from core import autorisations_outils, boucle_agent, permissions_outils
 from core.execution_outils import _est_outil_sensible, cle_autorisation_appel
 from core.registre_outils import AUTORISATION_PERMANENTE_INTERDITE
 
@@ -44,10 +44,13 @@ class AutorisationPermanenteInterditeTest(unittest.TestCase):
         cle = cle_autorisation_appel(APPEL_SUBMIT)
         self.assertEqual(cle, "gerer_navigateur:submit")
         lignes = MagicMock()
-        lignes.data = [{"cle": "gerer_navigateur:submit"}, {"cle": "gerer_depot_github:creer_issue"}]
+        lignes.data = [
+            {"cle": "gerer_navigateur:submit", "etat": "autoriser"},
+            {"cle": "gerer_depot_github:creer_issue", "etat": "autoriser"},
+        ]
         base = MagicMock()
         base.table.return_value.select.return_value.eq.return_value.execute.return_value = lignes
-        with patch.object(autorisations_outils, "_supabase_memoire", base):
+        with patch.object(permissions_outils, "_client", return_value=base):
             autorisees = autorisations_outils.charger_autorisations("u1")
         self.assertNotIn("gerer_navigateur:submit", autorisees)
         self.assertIn("gerer_depot_github:creer_issue", autorisees)
@@ -55,7 +58,7 @@ class AutorisationPermanenteInterditeTest(unittest.TestCase):
 
     def test_rien_n_est_enregistre(self):
         base = MagicMock()
-        with patch.object(autorisations_outils, "_supabase_memoire", base):
+        with patch.object(permissions_outils, "_client", return_value=base):
             self.assertFalse(autorisations_outils.enregistrer_autorisation("u1", "gerer_navigateur:submit", "x"))
             self.assertFalse(
                 autorisations_outils.enregistrer_autorisation("u1", "gerer_execution_code:demander_acces_reseau", "x")

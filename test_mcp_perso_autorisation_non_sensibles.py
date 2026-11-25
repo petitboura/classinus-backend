@@ -80,14 +80,18 @@ class AutorisationNonSensiblesTest(unittest.TestCase):
         self.assertTrue(_est_outil_sensible(_appel(self.noms["delete_project"]), self.autorisations))
         self.assertTrue(_est_outil_sensible(_appel(self.nom_autre), self.autorisations))
 
-    def test_charger_autorisations_ajoute_les_serveurs_autorises(self):
+    def test_reglage_de_categorie_lecture_autorise_les_non_sensibles(self):
+        from core import permissions_outils
+        nom = self.noms["list_projects"]
+        groupe = permissions_outils.groupe_de_outil(nom)
         lignes = MagicMock()
-        lignes.data = []
+        lignes.data = [{"cle": permissions_outils.cle_categorie(groupe, "lecture"), "etat": "autoriser"}]
         base = MagicMock()
         base.table.return_value.select.return_value.eq.return_value.execute.return_value = lignes
-        with patch.object(autorisations_outils, "_supabase_memoire", base), \
-             patch.object(mcp, "autorisations_serveurs_pour_utilisateur", return_value=self.autorisations):
-            self.assertEqual(autorisations_outils.charger_autorisations("u1"), self.autorisations)
+        with patch.object(permissions_outils, "_client", return_value=base):
+            permissions = autorisations_outils.charger_autorisations("u1")
+        self.assertFalse(_est_outil_sensible(_appel(nom), permissions))
+        self.assertTrue(_est_outil_sensible(_appel(self.noms["delete_project"]), permissions))
 
     def test_panne_de_lecture_des_serveurs_redemande(self):
         with patch.object(mcp, "_SUPABASE", MagicMock(**{"table.side_effect": RuntimeError("panne")})):
