@@ -648,6 +648,12 @@ def _config_modeles():
     return config
 
 
+def ordre_des_paliers():
+    """Noms des paliers dans l'ordre croissant (du moins fort au plus fort), tels que la configuration
+    Supabase (modeles_llm) les donne. Sert a valider un deblocage de palier (core/deblocage_paliers.py)."""
+    return list(_config_modeles()["paliers"])
+
+
 def reinitialiser_cache_config_modeles():
     """Force la relecture immédiate de la configuration (utile aux tests)."""
     _cache_config_modeles["valeur"] = None

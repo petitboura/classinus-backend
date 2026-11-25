@@ -45,6 +45,8 @@ _TABLES_SIMPLES = (
     # Liste d'attente des modèles Bientôt (16/11/2026) : ON DELETE CASCADE existe aussi, cette étape double la sécurité.
     ("liste_attente_modeles", "user_id"),
     ("evenements_liste_attente", "user_id"),
+    # Deblocages de palier (25/11/2026) : ON DELETE CASCADE existe aussi, cette etape double la securite.
+    ("deblocages_paliers", "user_id"),
     # Page bambara (18/11/2026) : ON DELETE CASCADE existe aussi. Les gardés et audios partent avant les conversations et profils.
     ("bambara_gardes", "user_id"),
     ("bambara_audios_messages", "user_id"),

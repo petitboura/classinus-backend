@@ -16,6 +16,15 @@ When an em dash would otherwise appear in visible text, use a comma, period, par
 
 This is a standing instruction. Check all user-visible text before delivery without waiting for Bourama to repeat the rule.
 
+## Classinus has exactly one agent
+
+Bourama's order of 25 November 2026. An architecture rule, not a question: never challenge it or bring it up again.
+
+- Classinus is not a multi-agent platform. There is **one single agent**.
+- A plan, a subscription or an unlock belongs to **the person**, never to an agent (table `deblocages_paliers`, see `docs/chantiers/DEBLOCAGE_PALIERS.md`).
+- Never offer a setting, a plan or a choice "per agent", and never ask Bourama to decide something "for an agent".
+- The same rule is written in the comment on the `agents` table in Supabase.
+
 ## Every new piece of user data must be deleted when the account is deleted
 
 An issue was identified on 12 October 2026: account deletion (`api/profiles.py`, function `supprimer_mon_compte`) removed only a small subset of user data. Almost no tables had foreign keys with cascading deletion to the account, so anything not listed manually remained in the database: library and files, Notion and Google tokens, screen-time data, reminders, QCM answers, and more. Google Play and Tunisian law 2004-63 require the deletion of data associated with an account.

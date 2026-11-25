@@ -644,6 +644,7 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
         ("skills_publics_ajoutes", "skill_activations", "active_par"),
         ("liste_attente_modeles", "liste_attente_modeles", "user_id"),
         ("evenements_liste_attente", "evenements_liste_attente", "user_id"),
+        ("deblocages_paliers", "deblocages_paliers", "user_id"),
         ("bambara_profils", "bambara_profils", "user_id"),
         ("bambara_conversations", "bambara_conversations", "user_id"),
         ("bambara_gardes", "bambara_gardes", "user_id"),

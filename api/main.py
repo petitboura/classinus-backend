@@ -89,6 +89,7 @@ from api.bambara_audios import router as bambara_audios_router  # 22/11/2026, me
 from api.avatar_napster import router as avatar_napster_router  # 16/11/2026, avatar Napster du mode vocal
 from api.minuteurs import router_minuteurs
 from api.liste_attente import router_liste_attente  # 16/11/2026, liste d'attente des modèles Bientôt
+from api.deblocage_paliers import router_deblocage_paliers  # 25/11/2026, déblocage de palier par personne
 from api.webhooks_github import router as webhooks_github_router
 from api.dossiers_designes import router as dossiers_designes_router
 from api.programme_notions import router as programme_notions_router
@@ -1024,6 +1025,7 @@ app.include_router(bambara_audios_router)  # 22/11/2026, messages audio des conv
 app.include_router(avatar_napster_router)  # 16/11/2026, avatar Napster du mode vocal
 app.include_router(router_minuteurs)
 app.include_router(router_liste_attente)
+app.include_router(router_deblocage_paliers)
 app.include_router(dossiers_designes_router)
 app.include_router(webhooks_github_router)
 app.include_router(programme_notions_router)
