@@ -24,6 +24,8 @@ Depuis le 26 novembre 2026, l'IA est invitée à écrire pour chaque outil un te
 
 Ce texte est obligatoire : la consigne le dit et le champ est requis dans le schéma envoyé au modèle, sauf pour les modèles servis par Groq, qui refuserait tout l'appel si le champ manquait. Si un modèle l'oublie quand même, le texte fixe habituel s'affiche.
 
+Outils appelés par `appeler_outil` (ceux obtenus avec `demander_outils`) : le schéma de l'enveloppe demande aussi ce texte, écrit à côté de `nom` et `arguments`. `deballer_appels_appeler_outil` (`core/routage_outils.py`) le recopie dans les arguments de l'outil réel quand ils n'en ont pas déjà un. Avant, il était jeté et la ligne retombait sur le texte fixe (corrigé le 26 novembre 2026, `test_libelle_appeler_outil.py`).
+
 ## Tests
 
 `test_commenter_outil.py` joue la vraie boucle avec un faux fournisseur : événement, réponse au modèle, plafond, persistance, nettoyage et définition fixe.

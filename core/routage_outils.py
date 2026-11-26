@@ -8,7 +8,7 @@ from groq import Groq
 from constantes_agent import get_secret, supabase, MODELE_ROUTEUR_OUTILS, MODELE_ROUTEUR_OUTILS_REPLI, DELAI_MAX_PAR_APPEL
 from core.mcp_tools import lister_outils_autorises_pour_agent
 from registre_outils import NOMS_CATEGORIES_PROPOSEES_A_L_IA, INDEX_CATEGORIES_OUTILS, OUTILS_TOUJOURS_PRESENTS
-from libelles_activite_ia import schema_avec_libelle, libelle_ia_de_l_appel, nettoyer_commentaire
+from libelles_activite_ia import PARAMETRE_LIBELLE_OUTIL, schema_avec_libelle, libelle_ia_de_l_appel, nettoyer_commentaire
 
 def _resume_description_outil(description, max_caracteres=200):
     """
@@ -588,6 +588,11 @@ def deballer_appels_appeler_outil(appels, outils_mcp, outils_obtenus, table_rout
         if manquants:
             refus[appel["id"]] = f"Arguments obligatoires manquants pour {nom} : {', '.join(manquants)}. Refais l'appel complet."
             continue
+        # Le texte de ligne demande par le schema de l'enveloppe est ecrit a cote de nom et arguments
+        # (26/11/2026) : sans cette recopie il etait jete au deballage et l'ecran retombait sur le
+        # texte fixe. Celui qui est deja dans les arguments de l'outil garde la priorite.
+        if PARAMETRE_LIBELLE_OUTIL not in arguments and PARAMETRE_LIBELLE_OUTIL in contenu:
+            arguments = {**arguments, PARAMETRE_LIBELLE_OUTIL: contenu[PARAMETRE_LIBELLE_OUTIL]}
         deballes.append({"id": appel["id"], "name": nom, "arguments": json.dumps(arguments, ensure_ascii=False)})
     return deballes, refus
 

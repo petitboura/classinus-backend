@@ -24,6 +24,8 @@ Since 26 November 2026 the AI is asked to write about 15 words (12 to 18) for ea
 
 This text is mandatory: the instruction says so and the field is required in the schema sent to the model, except for Groq-served models, since Groq would reject the whole call if the field were missing. If a model still omits it, the usual fixed text is shown.
 
+Tools called through `appeler_outil` (the ones obtained with `demander_outils`): the wrapper schema also asks for this text, written next to `nom` and `arguments`. `deballer_appels_appeler_outil` (`core/routage_outils.py`) copies it into the real tool's arguments when they do not already carry one. Before, it was dropped and the line fell back to the fixed text (fixed on November 26, 2026, `test_libelle_appeler_outil.py`).
+
 ## Tests
 
 `test_commenter_outil.py` plays the real loop with a fake provider: event, model reply, cap, persistence, cleaning and fixed definition.
