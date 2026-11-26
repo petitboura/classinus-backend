@@ -33,7 +33,7 @@ Un texte vide renvoie l'erreur typée `REPONSE_CHAT_VIDE` (message français et 
 ## Le délai d'attente
 
 - Stocké dans la table Supabase `parametres_outils`, clé `delai_reponse_question_secondes`, en secondes. Valeur de départ : 600 (10 minutes). Valeur de repli dans `core/mcp_tools.py` si la ligne manque.
-- Le code le garde entre 30 secondes et 840 secondes. Railway coupe une requête HTTP au bout de 15 minutes (900 s) de durée totale : le maximum reste donc en dessous. Il se change avec la variable d'environnement `QUESTION_DELAI_MAX_SECONDES` si Railway change sa limite.
+- Le code le garde entre 30 secondes et 840 secondes. La limite Railway de 15 minutes (900 s) par requête est le chiffre qu'on nous a donné mais elle n'a PAS été confirmée dans la documentation de Railway : le maximum reste en dessous par prudence. Il se change avec la variable d'environnement `QUESTION_DELAI_MAX_SECONDES` si Railway change sa limite.
 - Le délai général des outils (60 s, `core/mcp_tools.py::appeler_outil`) ne s'applique PAS à une question bloquante : son délai est le réglage plus une marge de 20 secondes, pour que l'outil rende lui-même « pas de réponse » avant que l'appel ne soit coupé. Une question non bloquante garde le délai général.
 - Le flux du chat reste ouvert pendant l'attente grâce au signe de vie que le flux envoie déjà, et les tours des comptes connectés sont détachés (`core/tours_detaches.py`) : si la connexion tombe, la page se rattache au tour.
 - Pour changer le délai sans toucher au code : `update parametres_outils set valeur = 300, updated_at = now() where cle = 'delai_reponse_question_secondes';` Le réglage est mis en cache 24 heures : redémarrer le service Railway pour l'appliquer tout de suite.
@@ -57,6 +57,6 @@ L'outil est forcé parmi les outils du modèle pour tout compte connecté (`core
 
 `python3 tests/verifier_question_bloquante.py` et `python3 tests/verifier_delai_question_outil.py` couvrent : la lecture et les valeurs par défaut de la question, l'événement de carte, l'attente depuis le fil et la boucle propres à l'outil, la réponse d'un autre compte refusée, le délai dépassé, le bouton Arrêter, le réglage du délai et ses bornes, et le fait qu'une question bloquante n'est pas coupée par le délai général de 60 secondes.
 
-## Point ouvert
+## Rouvrir la page
 
-Rouvrir la page pendant une attente bloquante doit redessiner la carte. Les événements de question font partie du flux rejoué quand la page se rattache à un tour, mais il faudra le vérifier côté frontend une fois sa partie faite.
+Rouvrir la page pendant une attente bloquante redessine la carte : `core/persistance_tours.py` garde toutes les lignes du flux sans filtrer par type, donc `question_en_direct` est rejoué, et le frontend (`ChatIA.tsx`, `traiterEvenement`) construit la carte à partir de lui. La moitié frontend est décrite dans `classinus-frontend/docs/chantiers/messages-et-questions-en-cours.fr.md`.

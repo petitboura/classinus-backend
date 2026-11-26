@@ -33,7 +33,7 @@ An empty text returns the typed error `REPONSE_CHAT_VIDE` (French and English me
 ## The waiting delay
 
 - Stored in the Supabase table `parametres_outils`, key `delai_reponse_question_secondes`, in seconds. Starting value: 600 (10 minutes). Fallback in `core/mcp_tools.py` if the row is missing.
-- The code keeps it between 30 seconds and 840 seconds. Railway cuts an HTTP request after 15 minutes (900 s) of total duration, so the maximum stays under it. It can be changed with the environment variable `QUESTION_DELAI_MAX_SECONDES` if Railway changes its limit.
+- The code keeps it between 30 seconds and 840 seconds. The 15 minute (900 s) Railway request limit is the figure we were told but it was NOT confirmed from Railway's documentation, so the maximum stays under it as a precaution. It can be changed with the environment variable `QUESTION_DELAI_MAX_SECONDES` if Railway changes its limit.
 - The general tool delay (60 s, `core/mcp_tools.py::appeler_outil`) does NOT apply to a blocking question: its delay is the setting plus a 20 second margin, so the tool itself answers "no answer" before the call is cut. A non-blocking question keeps the general delay.
 - The chat stream stays open during the wait thanks to the keep-alive signal the stream already sends, and turns of signed-in accounts are detached (`core/tours_detaches.py`): if the connection drops, the page reattaches to the turn.
 - To change the delay without touching code: `update parametres_outils set valeur = 300, updated_at = now() where cle = 'delai_reponse_question_secondes';` The setting is cached for 24 hours: restart the Railway service to apply it at once.
@@ -57,6 +57,6 @@ The tool is forced into the model's tools for every signed-in account (`core/mai
 
 `python3 tests/verifier_question_bloquante.py` and `python3 tests/verifier_delai_question_outil.py` cover: reading and defaults of the question, the card event, the wait from the tool's own thread and loop, an answer from another account refused, delay passed, the Stop button, the delay setting and its limits, and the fact that a blocking question is not cut by the 60 second general delay.
 
-## Open point
+## Reopening the page
 
-Opening the page again during a blocking wait must redraw the card. The question events are part of the stream replayed when the page reattaches to a turn, but the front end must be checked on this case once its part is done.
+Opening the page again during a blocking wait redraws the card: `core/persistance_tours.py` keeps every stream line without filtering by type, so `question_en_direct` is replayed, and the front end (`ChatIA.tsx`, `traiterEvenement`) builds the card from it. The front end half is described in `classinus-frontend/docs/chantiers/messages-et-questions-en-cours.md`.
