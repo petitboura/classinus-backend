@@ -208,6 +208,21 @@ def _purger_sandboxes_execution_code(supabase, user_id: str) -> None:
             logging.warning("ERREUR arrêt sandbox pendant purge: %s", type(e).__name__)
 
 
+def _purger_deblocages_modeles(supabase, user_id: str) -> None:
+    """
+    Deblocages de modeles (26/11/2026) : la table est indexee par adresse e-mail, pas par compte. On retrouve
+    l'adresse du compte avant sa suppression et on retire ses lignes. Les lignes "pour tout le monde"
+    (email vide) ne sont pas liees a une personne et restent.
+    """
+    try:
+        reponse = supabase.auth.admin.get_user_by_id(user_id)
+        email = (getattr(getattr(reponse, "user", None), "email", None) or "").strip().lower()
+        if email:
+            supabase.table("deblocages_modeles").delete().eq("email", email).execute()
+    except Exception as e:
+        logging.error(f"ERREUR purge compte (deblocages de modeles pour {user_id}) : {e}")
+
+
 def _purger_videos(user_id: str) -> None:
     """Vidéos du montage (originaux et fichiers produits, dans R2 et en cache local)."""
     try:
@@ -246,6 +261,7 @@ def purger_donnees_compte(supabase, user_id: str) -> None:
         logging.error(f"ERREUR SUPABASE (purge skills {user_id}) : {e}")
     _purger_fichiers(supabase, user_id)
     _purger_videos(user_id)
+    _purger_deblocages_modeles(supabase, user_id)
 
     # Les activations de skills publics pointent vers le comportement de
     # l'élève avec SET NULL : on les supprime avant, pour ne pas laisser de

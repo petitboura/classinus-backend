@@ -32,6 +32,7 @@ fait ici. A previlegier pour la v2 si Bourama le confirme.
 import os
 import time
 import logging
+from datetime import datetime, timezone
 
 logging.basicConfig(level=logging.INFO)
 
@@ -446,6 +447,7 @@ def _config_modeles_de_repli():
         "modeles": {distributeur: dict(paliers) for distributeur, paliers in HIERARCHIE_MODELES.items()},
         "textes": {"bientot": dict(LIBELLE_BIENTOT_DE_REPLI)},
         "acces_anticipe": {},
+        "deblocages_modeles": {"tous": set(), "emails": {}},
     }
 
 
@@ -481,6 +483,71 @@ def _lire_acces_anticipe(client):
 def _a_acces_anticipe(config, distributeur, email):
     email = _normaliser_email(email)
     return bool(email) and email in config.get("acces_anticipe", {}).get(distributeur, set())
+
+
+def _lire_deblocages_modeles(client):
+    """
+    Modeles debloques a la main (26/11/2026, demande de Bourama) : table deblocages_modeles. Un modele
+    debloque pour tout le monde (email vide) ou pour une adresse devient choisissable malgre le palier et
+    le Bientot (la cle API reste exigee, voir modeles_disponibles_pour_agent). Seuls les deblocages actifs
+    (non revoques, non expires) comptent. Si la table n'existe pas encore ou ne repond pas, rien n'est
+    debloque : le comportement reste celui d'avant et le reste de la configuration n'est pas touche.
+    Forme : {"tous": {modele_id}, "emails": {email: {modele_id}}}.
+    """
+    vide = {"tous": set(), "emails": {}}
+    try:
+        lignes = (
+            client.table("deblocages_modeles")
+            .select("modele_id, email, expire_le")
+            .is_("revoque_le", "null")
+            .execute()
+            .data
+            or []
+        )
+    except Exception as e:
+        logging.warning(f"Lecture de deblocages_modeles impossible, aucun modele debloque a la main : {e}")
+        return vide
+    maintenant = datetime.now(timezone.utc)
+    debloques = {"tous": set(), "emails": {}}
+    for ligne in lignes:
+        modele_id = ligne.get("modele_id")
+        if not modele_id:
+            continue
+        fin = ligne.get("expire_le")
+        if fin:
+            try:
+                fin_date = datetime.fromisoformat(str(fin).replace("Z", "+00:00"))
+                if fin_date.tzinfo is None:
+                    fin_date = fin_date.replace(tzinfo=timezone.utc)
+                if fin_date <= maintenant:
+                    continue
+            except ValueError:
+                continue
+        email = _normaliser_email(ligne.get("email"))
+        if ligne.get("email") is None:
+            debloques["tous"].add(modele_id)
+        elif email:
+            debloques["emails"].setdefault(email, set()).add(modele_id)
+    return debloques
+
+
+def _modeles_debloques_a_la_main(config, email):
+    """Ids des modeles debloques a la main pour cette personne : ceux de tout le monde et ceux de son adresse."""
+    debloques = config.get("deblocages_modeles") or {}
+    ids = set(debloques.get("tous", set()))
+    adresse = _normaliser_email(email)
+    if adresse:
+        ids |= debloques.get("emails", {}).get(adresse, set())
+    return ids
+
+
+def ids_des_modeles():
+    """Ids (modele_id) de tous les modeles de la configuration, pour valider un deblocage de modele."""
+    return {
+        info["id"]
+        for paliers in _config_modeles()["modeles"].values()
+        for info in paliers.values()
+    }
 
 
 def _lire_config_modeles_supabase():
@@ -627,6 +694,7 @@ def _lire_config_modeles_supabase():
         "modeles": modeles,
         "textes": textes,
         "acces_anticipe": _lire_acces_anticipe(client),
+        "deblocages_modeles": _lire_deblocages_modeles(client),
     }
 
 
@@ -720,6 +788,11 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque, email
     exclus, cle API presente ou non, sauf pour une adresse e-mail listee dans la table
     acces_anticipe_modeles pour ce fournisseur (la cle API reste exigee). Tout vient de la configuration Supabase
     (voir _config_modeles), avec le code comme valeur de repli.
+
+    Modeles debloques a la main (26/11/2026, demande de Bourama, table deblocages_modeles) : un modele
+    debloque pour tout le monde ou pour l'adresse de la personne est choisissable malgre le palier et le
+    Bientot (modele ou fournisseur). La cle API reste exigee, et le fournisseur doit etre parmi ceux que
+    distributeur_debloque ouvre : rien d'autre n'est contourne.
     """
     if not distributeur_debloque or distributeur_debloque == "aucun":
         return []
@@ -742,11 +815,14 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque, email
 
     resultats = []
     ids_deja_vus = set()
+    modeles_a_la_main = _modeles_debloques_a_la_main(config, email)
     for distributeur in distributeurs_autorises:
         # Fournisseur utilisable : pas Bientot (sauf acces anticipe) et cle API presente.
         fournisseur_ouvert = not (
             config["fournisseurs"][distributeur]["bientot"] and not _a_acces_anticipe(config, distributeur, email)
         ) and _distributeur_disponible(distributeur, config)
+        # Un modele debloque a la main passe aussi un fournisseur Bientot, mais pas une cle API absente.
+        cle_disponible = _distributeur_disponible(distributeur, config)
         modeles_du_distributeur = []
         # Palier specialise (Grok Build, 04/11/2026, demande de Bourama) : au-dessus de tous les
         # paliers debloques par un agent, donc toujours Bientot, sauf pour les adresses de la table
@@ -754,13 +830,23 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque, email
         paliers_du_distributeur = list(paliers_autorises)
         if "specialise" in ordre_paliers and "specialise" not in paliers_du_distributeur and _a_acces_anticipe(config, distributeur, email):
             paliers_du_distributeur.append("specialise")
+        # Paliers au-dessus de celui de la personne : on ne les parcourt que si un modele est debloque a la
+        # main, et seul ce modele y est retenu (voir debloque_a_la_main plus bas).
+        paliers_de_base = set(paliers_du_distributeur)
+        if modeles_a_la_main:
+            paliers_du_distributeur += [p for p in ordre_paliers if p not in paliers_de_base]
         for palier in paliers_du_distributeur:
             info = config["modeles"].get(distributeur, {}).get(palier)
             if not info:
                 continue
+            debloque_a_la_main = info["id"] in modeles_a_la_main
+            # Palier au-dessus de celui de la personne : seul un deblocage a la main l'ouvre.
+            if palier not in paliers_de_base and not debloque_a_la_main:
+                continue
             # Modele Bientot un par un (04/11/2026) : ferme a tout le monde, sauf aux adresses de
-            # la table acces_anticipe_modeles pour ce fournisseur (ceux qui voient tout).
-            if info.get("bientot") and not _a_acces_anticipe(config, distributeur, email):
+            # la table acces_anticipe_modeles pour ce fournisseur (ceux qui voient tout) et aux
+            # modeles debloques a la main.
+            if info.get("bientot") and not _a_acces_anticipe(config, distributeur, email) and not debloque_a_la_main:
                 continue
             if info.get("baseten_seul"):
                 # Modele servi seulement par Baseten (Muse Spark Open, 30/10/2026) : ouvert a
@@ -772,7 +858,7 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque, email
                 # ouvert a tout le monde malgre un Bientot eventuel, mais seulement si la cle Vultr existe.
                 if not cle_vultr_disponible():
                     continue
-            elif not fournisseur_ouvert:
+            elif not (fournisseur_ouvert or (debloque_a_la_main and cle_disponible)):
                 continue
             # Dedoublonnage par modele_id (cas DeepSeek, ou deux paliers
             # partagent le meme modele) : sans cela le meme modele apparaitrait

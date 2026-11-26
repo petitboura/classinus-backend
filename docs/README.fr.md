@@ -22,6 +22,7 @@ Point d'entrée central de toute la documentation du backend Classinus. L'anglai
 - [État backend Higgsfield](./status/HIGGSFIELD_TODO.fr.md)
 - [Liste d'attente des modèles « Bientôt »](./chantiers/LISTE_ATTENTE_MODELES.fr.md)
 - [Déblocage de palier par personne (et règle de l'agent unique)](./chantiers/DEBLOCAGE_PALIERS.fr.md)
+- [Déblocage d'un modèle pour tout le monde ou une liste d'adresses](./chantiers/DEBLOCAGE_MODELES.fr.md)
 - [Page bambara : profils, historique et éléments gardés](./chantiers/PAGE_BAMBARA_PROFILS.fr.md)
 - [Travail sur les documents joints (modifier un fichier, travailler sur des PDF)](./chantiers/OUTILS_DOCUMENTS_JOINTS.fr.md)
 - [Ligne d'outils et notes de l'IA (l'outil `commenter`)](./chantiers/LIGNE_OUTILS_COMMENTAIRE.fr.md)
