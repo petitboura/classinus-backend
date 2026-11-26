@@ -701,6 +701,20 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
         logging.error("ERREUR SUPABASE (export domaines autorises execution code): %s", type(e).__name__)
         export["domaines_autorises_execution_code"] = {"erreur": "recuperation impossible, reessayer plus tard"}
 
+    # Deblocages de modeles (26/11/2026) : la table est indexee par adresse e-mail, pas par compte.
+    try:
+        adresse = (getattr(utilisateur, "email", None) or "").strip().lower()
+        if adresse:
+            res = (
+                supabase.table("deblocages_modeles")
+                .select("modele_id, motif, debut, expire_le, revoque_le")
+                .eq("email", adresse).execute()
+            )
+            export["deblocages_modeles"] = res.data or []
+    except Exception as e:
+        logging.error("ERREUR SUPABASE (export deblocages modeles): %s", type(e).__name__)
+        export["deblocages_modeles"] = {"erreur": "recuperation impossible, reessayer plus tard"}
+
     try:
         res = (
             supabase.table("execution_code_usage_events")
