@@ -35,6 +35,7 @@ from bibliotheque_fichiers import enregistrer_fichier, enregistrer_lien, lister_
 from core.mcp_tools import lister_outils_autorises_pour_agent  # noqa: E402
 from core.erreurs import erreur_api
 from core.fournisseurs_llm import modeles_disponibles_pour_agent, modeles_bientot_pour_agent, modele_id_est_autorise
+from core.deblocage_paliers import palier_pour_modeles
 
 logging.basicConfig(level=logging.INFO)
 
@@ -403,11 +404,19 @@ def obtenir_agent_public(agent_id: str, utilisateur=Depends(utilisateur_optionne
         metier=ligne.get("metier"),
         filiere=ligne.get("filiere"),
         domaine=ligne.get("domaine"),
+        # 25/11/2026 (demande de Bourama) : Classinus n'a qu'un seul agent, le palier est celui de la PERSONNE
+        # (core/deblocage_paliers.py), pas celui de l'agent. Tout le monde voit tous les modeles ; ceux
+        # au-dessus de son palier sont grises avec le verrou (modeles_bientot, avec_verrous_palier).
         modeles_disponibles=modeles_disponibles_pour_agent(
-            ligne.get("distributeur_debloque"), ligne.get("palier_debloque"), getattr(utilisateur, "email", None)
+            ligne.get("distributeur_debloque"),
+            palier_pour_modeles(getattr(utilisateur, "id", None)),
+            getattr(utilisateur, "email", None),
         ),
         modeles_bientot=modeles_bientot_pour_agent(
-            ligne.get("distributeur_debloque"), ligne.get("palier_debloque"), getattr(utilisateur, "email", None)
+            ligne.get("distributeur_debloque"),
+            palier_pour_modeles(getattr(utilisateur, "id", None)),
+            getattr(utilisateur, "email", None),
+            avec_verrous_palier=True,
         ),
         modele_choisi=ligne.get("modele_choisi"),
         contenu_dynamique_par_matiere=bool(ligne.get("contenu_dynamique_par_matiere")),

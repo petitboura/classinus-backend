@@ -13,7 +13,8 @@ Table : deblocages_paliers (voir migrations/2026_11_25_deblocages_paliers.sql).
   configuration Supabase (core.fournisseurs_llm.ordre_des_paliers), jamais un ordre ecrit en dur ici.
 - Les deblocages s'ajoutent : en accorder un nouveau n'en retire aucun. Une revocation garde la ligne.
 
-Cette etape ne branche PAS encore le palier debloque sur l'acces aux modeles du chat : voir
+Acces aux modeles (25/11/2026) : palier_pour_modeles() donne le palier qui decide des modeles qu'une personne peut
+choisir dans le chat (api/agents.py pour la liste, api/chat.py pour la verification). Voir
 docs/chantiers/DEBLOCAGE_PALIERS.md.
 """
 
@@ -25,6 +26,9 @@ from api.auth import supabase
 from core.fournisseurs_llm import ordre_des_paliers
 
 SOURCES = ("manuel", "paiement")
+# Palier d'acces anticipe : reserve a la table acces_anticipe_modeles, jamais accorde par un deblocage
+# (le donner a quelqu'un le ferait passer devant la regle d'acces anticipe de core/fournisseurs_llm.py).
+PALIER_ACCES_ANTICIPE = "specialise"
 LONGUEUR_MAX_MOTIF = 500
 # Recherche d'une personne par e-mail : l'API Supabase ne sait pas chercher par e-mail, on parcourt donc
 # les comptes page par page, avec un plafond (route admin, usage rare). L'identifiant reste le chemin sur.
@@ -39,6 +43,11 @@ class ErreurDeblocage(Exception):
         super().__init__(code)
         self.code = code
         self.statut_http = statut_http
+
+
+def paliers_deblocables() -> list[str]:
+    """Les paliers qu'un deblocage peut accorder, du moins fort au plus fort (sans le palier d'acces anticipe)."""
+    return [p for p in ordre_des_paliers() if p != PALIER_ACCES_ANTICIPE]
 
 
 def _maintenant() -> datetime:
@@ -137,7 +146,7 @@ def deblocages_actifs(user_id: str) -> list[dict]:
 
 
 def _plus_haut_palier(lignes: list[dict], user_id: str) -> str | None:
-    ordre = ordre_des_paliers()
+    ordre = paliers_deblocables()
     meilleur = None
     for ligne in lignes:
         palier = ligne.get("palier")
@@ -155,6 +164,24 @@ def palier_debloque_de(user_id: str) -> str | None:
     return _plus_haut_palier(deblocages_actifs(user_id), user_id)
 
 
+def palier_pour_modeles(user_id: str | None) -> str | None:
+    """
+    Palier qui decide des modeles qu'une personne peut CHOISIR dans le chat : son plus haut deblocage actif,
+    sinon le palier le plus bas. Un visiteur sans compte (user_id vide) a le palier le plus bas. Tout le monde
+    VOIT tous les modeles (les plus hauts sont grises avec le verrou), mais ne peut choisir que ceux de ce palier.
+
+    Jamais d'erreur ici : si la base ne repond pas, on retombe sur le palier le plus bas (on ne donne jamais
+    plus que ce qu'on sait), et l'erreur est journalisee. None veut dire "le plus bas" pour
+    core.fournisseurs_llm.modeles_disponibles_pour_agent.
+    """
+    if not user_id:
+        return None
+    try:
+        return palier_debloque_de(user_id)
+    except ErreurDeblocage:
+        return None
+
+
 def debloquer(
     user_id: str,
     palier: str,
@@ -166,7 +193,7 @@ def debloquer(
     """Accorde un palier a une personne. Le futur webhook de paiement appellera cette fonction."""
     if source not in SOURCES:
         raise ErreurDeblocage("DEBLOCAGE_SOURCE_INVALIDE")
-    if palier not in ordre_des_paliers():
+    if palier not in paliers_deblocables():
         raise ErreurDeblocage("DEBLOCAGE_PALIER_INVALIDE")
     fin = None
     if expire_le is not None:

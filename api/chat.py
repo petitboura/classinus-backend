@@ -45,6 +45,7 @@ from main import chat as chat_generateur  # core/main.py:chat()
 from erreur_tour import classer_erreur
 from core.libelles_outils_anglais import traduire_libelle_outil
 from fournisseurs_llm import modele_id_est_autorise
+from core.deblocage_paliers import palier_pour_modeles  # 25/11/2026, palier de la personne
 from core.outils_page_bambara import effort_reflexion_page
 
 logging.basicConfig(level=logging.INFO)
@@ -343,7 +344,7 @@ class EnvoyerMessagePayload(BaseModel):
         return valeurs
 
 
-def _resoudre_modele_force(agent_id, modele_demande, email=None):
+def _resoudre_modele_force(agent_id, modele_demande, email=None, user_id=None):
     """
     Revalide `modele_demande` (envoye par le frontend) contre ce que
     l'agent `agent_id` a REELLEMENT debloque en base (distributeur_debloque/
@@ -359,7 +360,7 @@ def _resoudre_modele_force(agent_id, modele_demande, email=None):
     try:
         res = (
             supabase.table("agents")
-            .select("distributeur_debloque, palier_debloque")
+            .select("distributeur_debloque")
             .eq("id", agent_id)
             .maybe_single()
             .execute()
@@ -370,7 +371,8 @@ def _resoudre_modele_force(agent_id, modele_demande, email=None):
     if not res or not res.data:
         return None
     ligne = res.data
-    if modele_id_est_autorise(modele_demande, ligne.get("distributeur_debloque"), ligne.get("palier_debloque"), email):
+    # 25/11/2026 : le palier est celui de la PERSONNE (un seul agent), pas celui de l'agent.
+    if modele_id_est_autorise(modele_demande, ligne.get("distributeur_debloque"), palier_pour_modeles(user_id), email):
         return modele_demande
     logging.error(
         f"Modele '{modele_demande}' demande mais non debloque pour l'agent {agent_id} -- ignore, repli sur Groq."
@@ -438,7 +440,7 @@ def _evenements_sse(payload: EnvoyerMessagePayload, user_id: Optional[str], lang
                 erreurs_typees=bool(payload.erreurs_typees),
             )
         else:
-            modele_force_tour = _resoudre_modele_force(payload.agent_id, payload.modele, email_utilisateur)
+            modele_force_tour = _resoudre_modele_force(payload.agent_id, payload.modele, email_utilisateur, user_id)
             generateur = chat_generateur(
                 message_utilisateur=payload.message,
                 historique=[m.model_dump() for m in payload.historique],

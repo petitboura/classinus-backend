@@ -802,7 +802,7 @@ def modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque, email
     return resultats
 
 
-def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque, email=None):
+def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque, email=None, avec_verrous_palier=False):
     """
     Modèles affichés grisés avec un verrou (plus de mot "Bientôt" depuis le 17/11/2026) : tous les niveaux de
     chaque fournisseur marqué Bientôt dans Supabase (table fournisseurs_llm),
@@ -816,6 +816,11 @@ def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque, email=Non
 
     Ces modèles ne sont JAMAIS acceptés par modele_id_est_autorise (qui ne lit
     que modeles_disponibles_pour_agent) : le frontend ne peut pas les imposer.
+
+    avec_verrous_palier (25/11/2026, demande de Bourama) : tout le monde voit tous les paliers, et ceux
+    au-dessus du palier de la personne sont grisés avec le verrou, comme les modèles Bientôt. Ils ont la
+    même forme et sont ajoutés à la liste. Faux par défaut : seuls les appels qui passent le palier de la
+    PERSONNE (api/agents.py, obtenir_agent_public) le demandent.
     """
     disponibles = modeles_disponibles_pour_agent(distributeur_debloque, palier_debloque, email)
     if not disponibles:
@@ -849,7 +854,39 @@ def modeles_bientot_pour_agent(distributeur_debloque, palier_debloque, email=Non
             })
         # Même ordre que les modèles disponibles : du plus puissant au moins puissant.
         resultats.extend(reversed(modeles_du_distributeur))
+    if avec_verrous_palier:
+        resultats.extend(_modeles_verrouilles_par_palier(distributeur_debloque, email, ids_a_exclure, libelles))
+        # Regroupe par fournisseur dans l'ordre de la hiérarchie, sans changer l'ordre à l'intérieur.
+        rang = {d: i for i, d in enumerate(config["distributeurs"])}
+        resultats.sort(key=lambda m: rang.get(m["distributeur"], len(rang)))
     return resultats
+
+
+def _modeles_verrouilles_par_palier(distributeur_debloque, email, ids_deja_listes, libelles):
+    """
+    Modèles que le palier le plus haut débloquerait mais pas celui de la personne : ils s'affichent grisés
+    avec le verrou. On réutilise modeles_disponibles_pour_agent au palier le plus haut, donc les mêmes règles
+    s'appliquent (clé API, fournisseur Bientôt, accès anticipé). Le palier « specialise » (accès anticipé)
+    n'est jamais pris comme palier le plus haut : il reste réservé à la table acces_anticipe_modeles.
+    """
+    paliers = [p for p in _config_modeles()["paliers"] if p != "specialise"]
+    if not paliers:
+        return []
+    verrouilles = []
+    for m in modeles_disponibles_pour_agent(distributeur_debloque, paliers[-1], email):
+        if m["modele_id"] in ids_deja_listes:
+            continue
+        verrouilles.append({
+            "modele_id": m["modele_id"],
+            "label": m["label"],
+            "distributeur": m["distributeur"],
+            "nom_distributeur": m["nom_distributeur"],
+            "palier": m["palier"],
+            "groupe": m["groupe"],
+            "libelles_badge": m["libelles_badge"],
+            "libelles_bientot": dict(libelles),
+        })
+    return verrouilles
 
 
 def modele_id_est_autorise(modele_id, distributeur_debloque, palier_debloque, email=None):
