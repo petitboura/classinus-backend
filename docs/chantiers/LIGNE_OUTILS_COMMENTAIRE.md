@@ -22,6 +22,8 @@ Request of 25 November 2026. In the chat, the tool activity is one collapsed lin
 
 Since 26 November 2026 the AI is asked to write about 15 words (12 to 18) for each tool, capped at `LONGUEUR_MAX_LIBELLE` characters (`core/libelles_activite_ia.py`). Note length is unchanged.
 
+This text is mandatory: the instruction says so and the field is required in the schema sent to the model, except for Groq-served models, since Groq would reject the whole call if the field were missing. If a model still omits it, the usual fixed text is shown.
+
 ## Tests
 
 `test_commenter_outil.py` plays the real loop with a fake provider: event, model reply, cap, persistence, cleaning and fixed definition.
