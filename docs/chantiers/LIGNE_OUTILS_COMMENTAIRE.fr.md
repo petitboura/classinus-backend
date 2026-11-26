@@ -18,6 +18,10 @@ Demande du 25 novembre 2026. Dans le chat, l'activité des outils tient sur une 
 - La note n'est pas traduite par le serveur de chat : l'IA l'écrit déjà dans la bonne langue.
 - `_capturer_reponse` la garde dans `meta["segments"]` sous la forme `{"type": "commentaire", "texte": ...}`, dans l'ordre, pour que la ligne survive à la réouverture d'une conversation. Elle n'est jamais gardée dans `meta["outils"]`, puisqu'il n'y a rien à rejouer au modèle.
 
+## Texte des lignes d'outils
+
+Depuis le 26 novembre 2026, l'IA est invitée à écrire pour chaque outil un texte d'environ 15 mots (12 à 18), limité à `LONGUEUR_MAX_LIBELLE` caractères (`core/libelles_activite_ia.py`). La longueur des notes ne change pas.
+
 ## Tests
 
 `test_commenter_outil.py` joue la vraie boucle avec un faux fournisseur : événement, réponse au modèle, plafond, persistance, nettoyage et définition fixe.

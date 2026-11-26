@@ -18,6 +18,10 @@ Request of 25 November 2026. In the chat, the tool activity is one collapsed lin
 - The note is not translated by the chat server: the AI already writes it in the right language.
 - `_capturer_reponse` stores it in `meta["segments"]` as `{"type": "commentaire", "texte": ...}`, in order, so the line survives reopening a conversation. It is never stored in `meta["outils"]`, since there is nothing to replay to the model.
 
+## Tool line text
+
+Since 26 November 2026 the AI is asked to write about 15 words (12 to 18) for each tool, capped at `LONGUEUR_MAX_LIBELLE` characters (`core/libelles_activite_ia.py`). Note length is unchanged.
+
 ## Tests
 
 `test_commenter_outil.py` plays the real loop with a fake provider: event, model reply, cap, persistence, cleaning and fixed definition.

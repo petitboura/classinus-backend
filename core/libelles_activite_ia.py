@@ -1,8 +1,9 @@
 """
 Libellés de la timeline du chat écrits par l'IA elle-même (23/10/2026, demande de
 Bourama). Chaque outil proposé à l'IA reçoit un paramètre optionnel, dans lequel elle
-décrit en un court groupe nominal, sans verbe conjugué, ce qu'elle fait pour l'utilisateur
-(« Recherche de vidéos sur les dérivées »), dans la langue de la conversation. Changement
+décrit en un groupe nominal d'environ 15 mots (26/11/2026), sans verbe conjugué, ce qu'elle
+fait pour l'utilisateur (« Recherche de vidéos claires sur les dérivées avec des exemples
+corrigés pas à pas »), dans la langue de la conversation. Changement
 du 24/10/2026 : plus de phrases au présent à la première personne (« Je cherche… »).
 
 Règles de la base posée ici :
@@ -20,14 +21,16 @@ import json
 import re
 
 PARAMETRE_LIBELLE_OUTIL = "libelle_activite"
-LONGUEUR_MAX_LIBELLE = 90
+# Environ 15 mots demandés à l'IA (26/11/2026) : la limite laisse de la marge aux langues aux mots longs.
+LONGUEUR_MAX_LIBELLE = 160
 
 # Description écrite en anglais exprès (05/11/2026, demande de Bourama) : les modèles lisaient la
 # version française et écrivaient le libellé en français même quand l'utilisateur écrivait en
 # anglais. La règle de langue est maintenant la langue du DERNIER message de l'utilisateur.
 _DESCRIPTION_PARAMETRE = (
-    "Optional but always fill it in. A short label (under 8 words) telling the user what you are "
-    "doing right now, with its real subject. LANGUAGE RULE: write the label in the language of the "
+    "Optional but always fill it in. A descriptive label of about 15 words (between 12 and 18) telling the "
+    "user what you are doing right now, with its real subject and the useful details of this precise "
+    "action, without inventing any. LANGUAGE RULE: write the label in the language of the "
     "user's most recent message. If the user writes English, the label is in English. If the user "
     "writes French, it is in French. The same goes for any other language. Never write it in French "
     "by default just because this description, the system prompt or the tool names are in French or "
@@ -36,8 +39,11 @@ _DESCRIPTION_PARAMETRE = (
     "action noun followed by its subject, never a sentence with a conjugated verb, never first person, "
     "never present tense (no « Je cherche », « Je lis », \"I'm looking for\"). No tool name, no file "
     "name, no technical jargon, no final period. "
-    "Examples: user writes English, label \"Video search on derivatives\" or \"Chemistry course reading\"; "
-    "user writes French, label « Recherche de vidéos sur les dérivées » or « Lecture de ton cours de chimie »."
+    "Examples: user writes English, label \"Search for clear videos on derivatives with worked examples explained "
+    "one step at a time\" or \"Reading of the chapter of your chemistry course about reactions between acids "
+    "and bases\"; user writes French, label « Recherche de vidéos claires sur les dérivées avec des exemples "
+    "corrigés pas à pas » or « Lecture du chapitre de ton cours de chimie sur les réactions entre acides et "
+    "bases »."
 )
 
 
