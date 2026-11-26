@@ -443,6 +443,44 @@ def annuler_attentes(user_id: str) -> int:
     return nombre
 
 
+@_sur_boucle_principale
+async def attendre_reponse_question(user_id: str, id_question: str, delai_secondes: float) -> Any | None:
+    """
+    Question bloquante (25/11/2026) : attend la réponse de la personne à la carte
+    `id_question`, dans le même tour. Renvoie {"reponse": texte}, le dictionnaire
+    d'erreur du bouton Arrêter (voir annuler_attentes, les attentes sont les mêmes
+    que celles des clics), ou None si le délai est dépassé sans réponse.
+    """
+    future = asyncio.get_running_loop().create_future()
+    _attentes[id_question] = future
+    _attentes_utilisateur[id_question] = user_id
+    try:
+        return await asyncio.wait_for(asyncio.shield(future), timeout=delai_secondes)
+    except asyncio.TimeoutError:
+        return None
+    finally:
+        _attentes.pop(id_question, None)
+        _attentes_utilisateur.pop(id_question, None)
+        if not future.done():
+            future.cancel()
+
+
+def repondre_question(user_id: str, id_question: str, reponse: str) -> bool:
+    """
+    Réponse de la personne à une question bloquante. À appeler depuis la boucle
+    d'événements (les Futures y vivent). True si une attente de CET utilisateur
+    l'a reçue ; False sinon (question non bloquante, délai déjà dépassé, ou
+    question d'un autre compte, qui n'est jamais résolue).
+    """
+    if _attentes_utilisateur.get(id_question) != user_id:
+        return False
+    future = _attentes.get(id_question)
+    if future is None or future.done():
+        return False
+    future.set_result({"reponse": reponse})
+    return True
+
+
 async def diffuser_arret(user_id: str) -> None:
     """Prévient toutes les connexions du compte (appli web, PC) : plus aucune action de Clovis ne doit partir ni continuer."""
     async with _verrou_connexions:

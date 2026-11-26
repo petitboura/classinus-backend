@@ -14,6 +14,7 @@ from profils_agents import _nom_lisible_appel, _action_appel, _champs_domaines_a
 from libelles_activite_ia import champs_timeline_appel
 from historique_outils import champs_historique_outil
 from core import captures_modele
+from core.questions_utilisateur import NOM_OUTIL_QUESTION, evenement_question_depuis_appel
 from core.ressources_ui import marquer_source, separer_ressources_ui, NOTE_POUR_LE_MODELE
 
 class _AttenteConfirmation(Exception):
@@ -54,6 +55,11 @@ def _executer_un_appel(appel, table_routage, arret=None):
         arguments = json.loads(appel["arguments"] or "{}")
     except Exception:
         arguments = {}
+    if appel["name"] == NOM_OUTIL_QUESTION and isinstance(arguments, dict):
+        # Une question bloquante est retrouvée par l'identifiant de son appel : le même que celui
+        # de la carte affichée (événement question_en_direct) et de la réponse envoyée par la page.
+        # Écrasé ici, jamais laissé au modèle.
+        arguments["id_question"] = appel["id"]
     return appeler_outil(appel["name"], arguments, table_routage, arret=arret)
 
 
@@ -539,6 +545,12 @@ def _traiter_appels(appels, messages_agent, table_routage, compteur_sources=None
                 "action": _action_appel(appel),
                 **_champs_domaines_appel(appel),
             }
+            # Question à l'utilisateur (25/11/2026) : la carte part AVANT que l'outil ne commence à
+            # attendre, sinon une question bloquante resterait invisible jusqu'à sa propre réponse.
+            if appel["name"] == NOM_OUTIL_QUESTION:
+                evenement_question = evenement_question_depuis_appel(appel)
+                if evenement_question is not None:
+                    yield evenement_question
 
         # Pas de `with` ici (12/10/2026, bouton Arrêter) : sa sortie attend la fin de TOUS
         # les fils, donc un arrêt ne servirait à rien tant que l'outil le plus lent n'a pas

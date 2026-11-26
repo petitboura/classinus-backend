@@ -26,6 +26,7 @@ Point d'entrée central de toute la documentation du backend Classinus. L'anglai
 - [Travail sur les documents joints (modifier un fichier, travailler sur des PDF)](./chantiers/OUTILS_DOCUMENTS_JOINTS.fr.md)
 - [Skills publics (publier, chercher, ajouter, mettre à jour)](./chantiers/skills-publics/README.fr.md)
 - [Ligne d'outils et notes de l'IA (l'outil `commenter`)](./chantiers/LIGNE_OUTILS_COMMENTAIRE.fr.md)
+- [Messages et questions pendant que Classinus travaille (chat)](./chantiers/QUESTIONS_ET_MESSAGES_EN_COURS.fr.md)
 
 ## Historique et travaux archivés
 

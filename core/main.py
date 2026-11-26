@@ -941,6 +941,11 @@ def chat(message_utilisateur=None, historique=None, user_id=None, reprise=None, 
     mes_programmes = []
     reponses_qcm_recentes = reponses_qcm_a_injecter(historique, conversation_id)
     outils_forces_contexte = []
+    if user_id and not message_automatique:
+        # Question à l'utilisateur pendant que Classinus travaille (25/11/2026, demande de Bourama) :
+        # proposée à tout compte connecté, sans passer par demander_outils, comme la file de messages
+        # du canal en direct. Jamais sur un message automatique : personne n'est là pour répondre.
+        outils_forces_contexte.append("poser_question")
     if contexte_video:
         outils_forces_contexte.extend(["video_lister_outils", "video_executer_outil"])
     if skills_catalogue["skills"] or skills_catalogue.get("officiels"):

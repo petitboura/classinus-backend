@@ -50,6 +50,12 @@ from client_http_supabase import nouveau_client_http_supabase
 from registre_outils import SERVEURS_MCP
 from core.ressources_ui import adresse_widget_declaree, collecter_ressources_ui, joindre_ressources_ui
 from libelles_activite_ia import PARAMETRE_LIBELLE_OUTIL, schema_avec_libelle
+from core.questions_utilisateur import (
+    MARGE_APPEL_QUESTION_SECONDES,
+    NOM_OUTIL_QUESTION,
+    delai_question_secondes,
+    est_bloquante,
+)
 
 
 # 21/10/2026 (demande de Bourama) : la liste des outils de Higgsfield dépasse 1 Mo
@@ -201,6 +207,9 @@ _REPLI_PARAMETRES_OUTILS = {
     "palier_extension": 5,
     "plafond_absolu": 20,
     "tolerance_repetition": 3,
+    # Délai d'attente d'une question bloquante, en secondes (25/11/2026) : voir
+    # core/questions_utilisateur.py. Même valeur que la ligne insérée par la migration.
+    "delai_reponse_question_secondes": 600,
 }
 
 _cache_parametres_outils = {"valeur": None, "expire_a": 0}
@@ -977,6 +986,11 @@ def appeler_outil(nom_outil, arguments, table_routage, arret=None):
         # La création ou la reprise d'un sandbox (ou le démarrage du navigateur) peut dépasser 60 secondes.
         # Ce délai transporte l'appel MCP, sans élargir la durée d'une commande.
         delai = 180
+    elif nom_outil == NOM_OUTIL_QUESTION and est_bloquante(arguments.get("bloquante")):
+        # Une question bloquante attend la réponse d'une personne (25/11/2026) : le délai est
+        # celui du réglage, pas les 60 s des autres outils, avec une marge pour que l'outil
+        # rende lui-même "pas de réponse" avant que l'appel ne soit coupé.
+        delai = delai_question_secondes() + MARGE_APPEL_QUESTION_SECONDES
     else:
         delai = _delai_demande(delai_demande)
     if nom_outil == "gerer_execution_code":
