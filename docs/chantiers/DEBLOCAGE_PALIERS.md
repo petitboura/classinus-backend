@@ -47,13 +47,22 @@ The routes require `profiles.role = 'admin'` for the calling account. No account
 
 - `core/deblocage_paliers.py`: all the logic (`debloquer`, `revoquer`, `deblocages_actifs`, `palier_debloque_de`, `etat`). The future webhook will call `debloquer(..., source="paiement")`.
 - `api/deblocage_paliers.py`: the HTTP layer.
-- `core/fournisseurs_llm.py`: `ordre_des_paliers()` gives the plan order.
+- `core/fournisseurs_llm.py`: `ordre_des_paliers()` gives the plan order; `modeles_bientot_pour_agent(..., avec_verrous_palier=True)` adds the locked models.
 - `migrations/2026_11_25_deblocages_paliers.sql`: the table and the rule comment on `agents`.
 - `test_deblocage_paliers.py`: tests with no network access.
 
+## Model access: the person's plan
+
+Decided by Bourama on 25 November 2026: **everyone sees all models and all plans**, those above their subscription are **greyed out with the lock** (like "Coming soon" models; the Max badge stays as it is today), and each person only gets what their plan allows.
+
+- **Which plan?** The person's highest active unlock (`core/deblocage_paliers.py`, `palier_pour_modeles`). Without an unlock, a visitor with no account or a person with no subscription gets the **lowest plan**. If the database does not answer, we also fall back to the lowest: we never give more than we know.
+- **The list** (`GET /api/agents/{id}`, `api/agents.py`): `modeles_disponibles` holds what the person's plan lets them choose. `modeles_bientot` holds the "Coming soon" models **and** those from a plan above theirs (same shape, so the frontend shows them greyed with the lock with no change; a click opens the same flow as today). Function: `modeles_bientot_pour_agent(..., avec_verrous_palier=True)` in `core/fournisseurs_llm.py`.
+- **The check** (`api/chat.py`, `_resoudre_modele_force`): the model sent by the client is revalidated server side with the person's plan. A greyed model can never be forced.
+- **The agent's plan** (`agents.palier_debloque`) no longer decides people's access: there is only one agent. `distributeur_debloque` is still read (it says which providers are open). The agent creation and edit screens (creator only) are unchanged.
+- **The `specialise` plan** (early access) is never granted by an unlock: it stays reserved to the `acces_anticipe_modeles` table.
+
 ## What is NOT done yet
 
-- **The unlocked plan does not change chat model access yet.** Today access comes from `agents.palier_debloque` and `distributeur_debloque`, and the single agent is set to the highest plan: everyone already sees everything. Wiring the person's plan to model access is the next step, to be decided with Bourama (it removes access to higher-plan models for anyone without an unlock).
 - Monthly plan credits are not handled here.
 - No webhook and no payment provider.
 - No screen: the administrator uses the routes or Supabase.

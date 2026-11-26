@@ -4,6 +4,7 @@ de fin et de la personne, calcul du plus haut palier actif (non revoque, non exp
 aux administrateurs. Sans appel reseau : Supabase est remplace par un faux client.
 """
 
+import os
 import unittest
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -12,8 +13,16 @@ from unittest.mock import MagicMock, patch
 from fastapi import HTTPException
 
 from core import deblocage_paliers as d
+from core import fournisseurs_llm
+from core.fournisseurs_llm import (
+    modele_id_est_autorise,
+    modeles_bientot_pour_agent,
+    modeles_disponibles_pour_agent,
+    reinitialiser_cache_config_modeles,
+)
 
 ORDRE = ["essentiel", "pro", "premium", "max", "ultra"]
+ORDRE_AVEC_ACCES_ANTICIPE = ORDRE + ["specialise"]
 UUID_A = "11111111-1111-4111-8111-111111111111"
 UUID_ADMIN = "22222222-2222-4222-8222-222222222222"
 
@@ -170,6 +179,133 @@ class TestDeblocagePaliers(unittest.TestCase):
         client = MagicMock()
         client.table.side_effect = Exception("boom")
         self.assertEqual(self.code(client, d.deblocages_actifs, UUID_A), "DEBLOCAGE_ECHEC")
+
+
+class TestPalierPourModeles(unittest.TestCase):
+    """Le palier qui decide des modeles qu'une personne peut choisir dans le chat."""
+
+    def setUp(self):
+        p = patch("core.deblocage_paliers.ordre_des_paliers", return_value=ORDRE_AVEC_ACCES_ANTICIPE)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_un_visiteur_sans_compte_a_le_palier_le_plus_bas(self):
+        # None veut dire "le plus bas" pour modeles_disponibles_pour_agent.
+        self.assertIsNone(d.palier_pour_modeles(None))
+        self.assertIsNone(d.palier_pour_modeles(""))
+
+    def test_sans_deblocage_le_palier_le_plus_bas(self):
+        client, _ = faux_supabase(lignes=[])
+        with patch("core.deblocage_paliers.supabase", client):
+            self.assertIsNone(d.palier_pour_modeles(UUID_A))
+
+    def test_avec_deblocage_le_plus_haut_palier(self):
+        client, _ = faux_supabase(lignes=[{"id": "1", "palier": "pro", "expire_le": None},
+                                          {"id": "2", "palier": "max", "expire_le": dans(3)}])
+        with patch("core.deblocage_paliers.supabase", client):
+            self.assertEqual(d.palier_pour_modeles(UUID_A), "max")
+
+    def test_base_en_panne_on_ne_donne_jamais_plus(self):
+        client = MagicMock()
+        client.table.side_effect = Exception("boom")
+        with patch("core.deblocage_paliers.supabase", client):
+            self.assertIsNone(d.palier_pour_modeles(UUID_A))
+
+    def test_le_palier_d_acces_anticipe_ne_s_accorde_pas(self):
+        client, ecr = faux_supabase()
+        with patch("core.deblocage_paliers.supabase", client):
+            with self.assertRaises(d.ErreurDeblocage) as c:
+                d.debloquer(UUID_A, "specialise")
+        self.assertEqual(c.exception.code, "DEBLOCAGE_PALIER_INVALIDE")
+        self.assertEqual(ecr["insert"], [])
+
+    def test_une_ligne_specialise_deja_en_base_ne_donne_rien(self):
+        client, _ = faux_supabase(lignes=[{"id": "1", "palier": "specialise", "expire_le": None}])
+        with patch("core.deblocage_paliers.supabase", client):
+            self.assertIsNone(d.palier_pour_modeles(UUID_A))
+
+
+CLES_DEEPSEEK_SEULE = {"DEEPSEEK_API_KEY": "x"}
+
+
+class TestVerrousParPalier(unittest.TestCase):
+    """Tout le monde voit tous les modeles ; ceux au-dessus de son palier sont grises avec le verrou."""
+
+    def setUp(self):
+        reinitialiser_cache_config_modeles()
+
+    def tearDown(self):
+        reinitialiser_cache_config_modeles()
+
+    def listes(self, palier, avec_verrous=True):
+        with patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True):
+            dispo = modeles_disponibles_pour_agent("claude", palier)
+            grises = modeles_bientot_pour_agent("claude", palier, avec_verrous_palier=avec_verrous)
+        return dispo, grises
+
+    def test_les_modeles_au_dessus_du_palier_sont_grises(self):
+        dispo, grises = self.listes("pro")
+        sans_verrous = self.listes("pro", avec_verrous=False)[1]
+        ids_dispo = {m["modele_id"] for m in dispo}
+        en_plus = [m for m in grises if m not in sans_verrous]
+        self.assertTrue(en_plus, "un modele de palier superieur doit apparaitre grise")
+        self.assertTrue(all(m["modele_id"] not in ids_dispo for m in en_plus))
+        self.assertTrue(all(m["palier"] != "pro" for m in en_plus))
+        # Meme forme que les autres modeles grises : le frontend les montre avec le verrou sans changement.
+        self.assertTrue(all("libelles_bientot" in m and "label" in m and "distributeur" in m for m in en_plus))
+
+    def test_sans_la_demande_la_liste_ne_change_pas(self):
+        _, sans = self.listes("pro", avec_verrous=False)
+        _, defaut = self.listes("pro", avec_verrous=False)
+        self.assertEqual(sans, defaut)
+
+    def test_au_palier_le_plus_haut_rien_de_plus_n_est_verrouille(self):
+        _, avec = self.listes("ultra", avec_verrous=True)
+        _, sans = self.listes("ultra", avec_verrous=False)
+        self.assertEqual(avec, sans)
+
+    def test_aucun_modele_n_apparait_deux_fois(self):
+        dispo, grises = self.listes("pro")
+        ids = [m["modele_id"] for m in dispo] + [m["modele_id"] for m in grises]
+        self.assertEqual(len(ids), len(set(ids)))
+
+    def test_le_palier_specialise_n_est_jamais_montre_ni_verrouille(self):
+        _, grises = self.listes("pro")
+        self.assertNotIn("specialise", {m["palier"] for m in grises})
+
+    def test_un_modele_grise_ne_peut_pas_etre_impose(self):
+        _, grises = self.listes("pro")
+        verrouille = next(m for m in grises if m["distributeur"] == "deepseek" and m["palier"] == "max")
+        with patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True):
+            self.assertFalse(modele_id_est_autorise(verrouille["modele_id"], "claude", "pro"))
+            self.assertTrue(modele_id_est_autorise(verrouille["modele_id"], "claude", "max"))
+
+
+class TestVerificationDuChat(unittest.TestCase):
+    """api/chat.py : le modele force par le client est revalide avec le palier de la PERSONNE."""
+
+    def setUp(self):
+        reinitialiser_cache_config_modeles()
+        self.addCleanup(reinitialiser_cache_config_modeles)
+
+    def resoudre(self, palier_personne, modele_id):
+        from api import chat
+
+        agent = MagicMock()
+        agent.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = MagicMock(
+            data={"distributeur_debloque": "claude"}
+        )
+        with patch.object(chat, "supabase", agent), patch.object(chat, "palier_pour_modeles", return_value=palier_personne), \
+                patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True):
+            return chat._resoudre_modele_force("agent-unique", modele_id, "a@b.c", UUID_A)
+
+    def test_un_modele_de_son_palier_est_accepte_pas_un_modele_plus_haut(self):
+        with patch.dict(os.environ, CLES_DEEPSEEK_SEULE, clear=True):
+            haut = next(m for m in modeles_disponibles_pour_agent("claude", "max") if m["palier"] == "max")["modele_id"]
+            bas = next(m for m in modeles_disponibles_pour_agent("claude", "pro") if m["palier"] == "pro")["modele_id"]
+        self.assertEqual(self.resoudre("pro", bas), bas)
+        self.assertIsNone(self.resoudre("pro", haut))
+        self.assertEqual(self.resoudre("max", haut), haut)
 
 
 class TestRoutesAdmin(unittest.TestCase):
