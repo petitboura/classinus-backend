@@ -22,6 +22,8 @@ Demande du 25 novembre 2026. Dans le chat, l'activité des outils tient sur une 
 
 Depuis le 26 novembre 2026, l'IA est invitée à écrire pour chaque outil un texte d'environ 15 mots (12 à 18), limité à `LONGUEUR_MAX_LIBELLE` caractères (`core/libelles_activite_ia.py`). La longueur des notes ne change pas.
 
+Ce texte est obligatoire : la consigne le dit et le champ est requis dans le schéma envoyé au modèle, sauf pour les modèles servis par Groq, qui refuserait tout l'appel si le champ manquait. Si un modèle l'oublie quand même, le texte fixe habituel s'affiche.
+
 ## Tests
 
 `test_commenter_outil.py` joue la vraie boucle avec un faux fournisseur : événement, réponse au modèle, plafond, persistance, nettoyage et définition fixe.

@@ -1,14 +1,18 @@
 """
 Libellés de la timeline du chat écrits par l'IA elle-même (23/10/2026, demande de
-Bourama). Chaque outil proposé à l'IA reçoit un paramètre optionnel, dans lequel elle
+Bourama). Chaque outil proposé à l'IA reçoit un paramètre obligatoire (26/11/2026, demande
+de Bourama), dans lequel elle
 décrit en un groupe nominal d'environ 15 mots (26/11/2026), sans verbe conjugué, ce qu'elle
 fait pour l'utilisateur (« Recherche de vidéos claires sur les dérivées avec des exemples
 corrigés pas à pas »), dans la langue de la conversation. Changement
 du 24/10/2026 : plus de phrases au présent à la première personne (« Je cherche… »).
 
 Règles de la base posée ici :
-- Le paramètre est optionnel : sans phrase valable, le texte fixe habituel s'affiche
-  (voir profils_agents._nom_lisible), comme avant.
+- Le paramètre est obligatoire pour l'IA : sa description le dit, et il est inscrit dans les
+  champs requis du schéma envoyé au modèle. Seule exception : les modèles servis par Groq,
+  qui refuse tout l'appel (erreur 400) quand un champ requis manque ; ils reçoivent la
+  consigne sans la contrainte. Si un modèle l'oublie quand même, l'outil s'exécute et le
+  texte fixe habituel s'affiche (voir profils_agents._nom_lisible).
 - Le paramètre n'est jamais transmis à l'outil lui-même (voir mcp_tools.appeler_outil).
 - La phrase est nettoyée avant affichage (longueur, retours à la ligne, tirets doubles).
 - Elle ne sert qu'à la timeline. Les confirmations d'actions sensibles gardent le texte
@@ -28,7 +32,8 @@ LONGUEUR_MAX_LIBELLE = 160
 # version française et écrivaient le libellé en français même quand l'utilisateur écrivait en
 # anglais. La règle de langue est maintenant la langue du DERNIER message de l'utilisateur.
 _DESCRIPTION_PARAMETRE = (
-    "Optional but always fill it in. A descriptive label of about 15 words (between 12 and 18) telling the "
+    "REQUIRED: this field is mandatory in every single tool call, never omit it and never leave it "
+    "empty. It is a descriptive label of about 15 words (between 12 and 18) telling the "
     "user what you are doing right now, with its real subject and the useful details of this precise "
     "action, without inventing any. LANGUAGE RULE: write the label in the language of the "
     "user's most recent message. If the user writes English, the label is in English. If the user "
@@ -77,12 +82,24 @@ def schema_avec_libelle(schema):
 _OUTILS_SANS_LIBELLE = {"garder_outils", "commenter"}
 
 
-def outils_avec_libelle(outils):
+def _exiger_libelle(schema):
+    """Inscrit le libellé dans les champs requis du schéma (copie, l'original n'est pas touché)."""
+    if not isinstance(schema, dict) or PARAMETRE_LIBELLE_OUTIL not in (schema.get("properties") or {}):
+        return schema
+    requis = schema.get("required")
+    requis = list(requis) if isinstance(requis, list) else []
+    if PARAMETRE_LIBELLE_OUTIL in requis:
+        return schema
+    return {**schema, "required": [PARAMETRE_LIBELLE_OUTIL, *requis]}
+
+
+def outils_avec_libelle(outils, obligatoire=True):
     """
     Liste d'outils prête à être envoyée à l'IA, avec le champ de libellé sur CHACUN (sans
     toucher à la liste d'origine). Appliqué au moment de l'envoi : quelle que soit la source
     d'un outil (service intégré, serveur personnalisé, outil futur), il reçoit le champ.
-    Sans effet si le champ y est déjà.
+    Sans effet si le champ y est déjà. `obligatoire` l'inscrit aussi dans les champs requis ;
+    à mettre à False pour Groq, qui rejette l'appel entier quand un champ requis manque.
     """
     resultat = []
     for outil in outils or []:
@@ -90,7 +107,10 @@ def outils_avec_libelle(outils):
         if not isinstance(fonction, dict) or fonction.get("name") in _OUTILS_SANS_LIBELLE:
             resultat.append(outil)
             continue
-        resultat.append({**outil, "function": {**fonction, "parameters": schema_avec_libelle(fonction.get("parameters"))}})
+        parametres = schema_avec_libelle(fonction.get("parameters"))
+        if obligatoire:
+            parametres = _exiger_libelle(parametres)
+        resultat.append({**outil, "function": {**fonction, "parameters": parametres}})
     return resultat
 
 
