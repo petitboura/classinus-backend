@@ -69,6 +69,14 @@ class TestConsignesPageBambara(unittest.TestCase):
         self.assertIn("outils", texte)
         self.assertNotIn("--", texte)
 
+    def test_consignes_page_disent_comment_ecrire_un_lien(self):
+        texte = prompt_voix_bambara.consignes_page()
+        self.assertIn("note D", texte)
+        self.assertIn("jamais de titre entre guillemets", texte)
+        self.assertIn("extension", texte)
+        self.assertIn("ne les imite pas", texte)
+        self.assertNotIn("\u2014", texte)
+
 
 class TestEffortPageBambara(unittest.TestCase):
     def test_effort_au_plus_faible_sans_modele_impose(self):

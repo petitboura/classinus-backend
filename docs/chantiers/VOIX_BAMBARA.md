@@ -29,6 +29,8 @@ The frontend sends `client: "voix_bambara"` with every Bambara-mode message (sam
 3. Added on 14 November 2026: the AI must always favor visuals, images and videos, over voice alone, because they can be understood without reading.
 4. Added on 14 November 2026: when the AI does not know something, it must search online with its search tools instead of answering "I don't know". It only says it found nothing after really searching and getting nothing usable, and then says so honestly, in Bambara.
 
+The Bambara page (`client: "page_bambara"`) has its own notes, added by `consignes_page()`. Note D (26 November 2026) fixes how the AI writes links, so the voice and the screen never show "jpg", "attached image" or a half address: a video is its full link alone on its line; an image is `![description](link)` alone on its line, with no quoted title after the link; no file name, extension or address in spoken sentences; and the AI never writes or imitates the `[Image jointe : ...]` and `[Lien réel du fichier : ...]` blocks, which only the server adds. The frontend also cleans the text before it is read or shown (`lib/voixBambaraTexte.ts`), as a second safety net.
+
 ### Tools always given in this mode
 
 On every Bambara-mode message, the AI also gets these tools directly, without going through `demander_outils`: `tavily_search`, `rechercher_image`, `rechercher_video`, `lire_video`. `tavily_extract`, `tavily_crawl`, `tavily_map` and `tavily_research` are deliberately left out. The list is `OUTILS_TOUJOURS_VOIX_BAMBARA` in `core/prompt_voix_bambara.py`; it is wired in `core/main.py` through `_outils_memoire_toujours_disponibles(..., noms=...)` in `core/routage_outils.py`. Other clients are not affected.

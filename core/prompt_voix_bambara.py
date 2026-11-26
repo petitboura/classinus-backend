@@ -109,6 +109,22 @@ NOTE_PAGE_QUANTITE = (
 )
 
 
+# 26/11/2026, demande de Bourama : on entendait et on voyait « jpg », « image jointe » et des restes d'adresses. Le
+# frontend nettoie maintenant le texte (lib/voixBambaraTexte.ts), mais la meilleure protection reste que l'IA écrive
+# ses liens toujours de la même façon. Cette note dit comment, et interdit d'imiter les repères que le serveur ajoute
+# lui même à la fin de la réponse ([Image jointe : ...], [Lien réel du fichier : ...]).
+NOTE_PAGE_LIENS = (
+    "PAGE BAMBARA, note D : voici comment écrire un lien, toujours de la même façon. Une vidéo : son lien "
+    "complet seul sur sa ligne, sans texte ni crochets ni parenthèses autour. Une image : ![description](lien) "
+    "seule sur sa ligne, avec uniquement le lien entre les parenthèses, jamais de titre entre guillemets après "
+    "le lien. Chaque lien est écrit en entier, tel que les outils te l'ont donné. Dans tes phrases, qui sont lues "
+    "à voix haute, ne dis et n'écris jamais : un nom de fichier, une extension (jpg, png, mp4, pdf), une adresse, "
+    "ni les mots « image jointe », « vidéo jointe », « lien ». N'écris jamais toi même un bloc entre crochets "
+    "comme [Image jointe : ...] ou [Lien réel du fichier : ...] : le serveur les ajoute seul, ne les imite pas. "
+    "Après un lien, passe à la ligne et continue par une phrase normale en bambara."
+)
+
+
 def est_client_page_bambara(client):
     return isinstance(client, str) and client.strip().lower() == CLIENT_PAGE_BAMBARA
 
@@ -117,5 +133,5 @@ def consignes_page():
     """Les notes de la page bambara, prêtes à être ajoutées au prompt système."""
     return (
         "\n\n" + NOTE_PAGE_AFFICHAGE + "\n\n" + NOTE_BAMBARA_ORAL + "\n\n" + NOTE_PAGE_OUTILS
-        + "\n\n" + NOTE_PAGE_QUANTITE
+        + "\n\n" + NOTE_PAGE_QUANTITE + "\n\n" + NOTE_PAGE_LIENS
     )
