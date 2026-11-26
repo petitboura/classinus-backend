@@ -516,12 +516,19 @@ def _agent_groq(client_groq, messages_agent, outils_mcp, table_routage,
         # ajoutes AVANT l'appel au modele, apres les resultats d'outils deja
         # ranges dans messages_agent (ordre valide pour le tool calling).
         for texte_etudiant in retirer_messages_etudiant(user_id):
+            # La bulle de dire_a_l_etudiant n'existe que dans le canal en direct (25/11/2026) :
+            # dans le chat normal, la réponse se donne dans la réponse elle-même.
+            consigne_reponse = (
+                "réponds-lui brièvement avec dire_a_l_etudiant ou dans ta réponse : "
+                if "dire_a_l_etudiant" in table_routage
+                else "réponds-lui dans ta réponse : "
+            )
             messages_agent.append({
                 "role": "user",
                 "content": (
-                    "Message de l'utilisateur, écrit ou dicté pendant que tu agissais dans "
-                    "l'application. Tiens-en compte tout de suite : adapte ou arrête ton action "
-                    "si besoin, et réponds-lui brièvement avec dire_a_l_etudiant ou dans ta réponse : "
+                    "Message de l'utilisateur, écrit ou dicté pendant que tu travaillais. "
+                    "Tiens-en compte tout de suite : adapte ou arrête ton action "
+                    "si besoin, et " + consigne_reponse
                     + texte_etudiant
                 ),
             })

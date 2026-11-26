@@ -27,6 +27,7 @@ MESSAGES_FR: dict[str, str] = {
     "CIBLE_DU_SIGNALEMENT_MANQUANTE": "Précise le document ou l'emplacement concerné.",
     "COMPTE_NON_CREATEUR": "Ce compte n'a pas (encore) le statut créateur.",
     "TOUR_CHAT_INTROUVABLE": "Cette réponse n'est plus disponible.",
+    "REPONSE_CHAT_VIDE": "Le message ne peut pas être vide.",
     "COMMENTAIRE_VIDE": "Le commentaire ne peut pas être vide.",
     "COMMENTAIRE_INTROUVABLE": "Commentaire introuvable.",
     # 22/09/2026, catalogue public du Programme.
@@ -635,6 +636,7 @@ MESSAGES_EN: dict[str, str] = {
     "CIBLE_DU_SIGNALEMENT_MANQUANTE": "Specify the document or location concerned.",
     "COMPTE_NON_CREATEUR": "This account does not have creator status yet.",
     "TOUR_CHAT_INTROUVABLE": "This reply is no longer available.",
+    "REPONSE_CHAT_VIDE": "The message cannot be empty.",
     "COMMENTAIRE_VIDE": "The comment cannot be empty.",
     "COMMENTAIRE_INTROUVABLE": "Comment not found.",
     "COMMENTAIRE_NE_T_APPARTIENT_PAS": "This comment does not belong to you.",

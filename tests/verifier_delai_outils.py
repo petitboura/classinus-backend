@@ -7,6 +7,16 @@ for n in arbre.body:
     nom = getattr(n,"name",None) or (n.targets[0].id if isinstance(n,ast.Assign) else None)
     if nom in voulus: noeuds.append(n)
 ns={"asyncio":asyncio,"logging":logging,"os":os,"time":time}
+# Noms que appeler_outil lit ailleurs dans mcp_tools.py (ajoutés le 25/11/2026 : le test ne les
+# fournissait plus depuis la phrase de timeline du 23/10/2026 et échouait avant même de commencer).
+ns.update({
+    "PARAMETRE_LIBELLE_OUTIL": "libelle_outil",
+    "NOM_OUTIL_QUESTION": "poser_question",
+    "MARGE_APPEL_QUESTION_SECONDES": 20,
+    "delai_question_secondes": lambda: 600,
+    "est_bloquante": lambda v: v is True,
+    "_reveiller_si_recent_non_tente": lambda url: None,
+})
 # faux serveur MCP : dort `duree` secondes puis répond
 etat={"duree":0.1,"args":None}
 async def faux(url,nom,arguments,headers=None):

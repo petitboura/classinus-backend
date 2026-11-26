@@ -24,6 +24,7 @@ Central entry point for all Classinus backend documentation. English is the defa
 - [Bambara page: profiles, history and kept items](./chantiers/PAGE_BAMBARA_PROFILS.md)
 - [Working on attached documents (edit a file, work on PDFs)](./chantiers/OUTILS_DOCUMENTS_JOINTS.md)
 - [Public skills (publish, search, add, update)](./chantiers/skills-publics/README.md)
+- [Messages and questions while Classinus works (chat)](./chantiers/QUESTIONS_ET_MESSAGES_EN_COURS.md)
 
 ## Project history and archived work
 
