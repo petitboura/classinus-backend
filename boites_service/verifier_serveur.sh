@@ -29,7 +29,11 @@ run "curl -sS -m 10 -o /dev/null -w '%{http_code}' https://www.wikipedia.org 2>&
 titre "12. adresse interne du serveur via le proxy (attendu : refusé)"
 run "curl -sS -m 10 -o /dev/null -w '%{http_code}' http://169.254.169.254/ 2>&1; echo"
 
-titre "8. bombe de processus, dans une boîte à part (attendu : nombre borné à 256 au plus)"
+titre "13. le pilote du navigateur est dans l'image (attendu : /opt/navigateur/pilote.py)"; run "ls /opt/navigateur/pilote.py"
+titre "14. une application locale est joignable sans proxy (attendu : 200)"
+run "python3 -m http.server 8099 --directory /tmp >/dev/null 2>&1 & p=\$!; sleep 1; curl -sS -m 5 -o /dev/null -w '%{http_code}' http://localhost:8099/; kill \$p; echo"
+
+titre "8. bombe de processus, dans une boîte à part (attendu : nombre borné à 512 au plus)"
 ID2=$(curl -s -X POST "$BOITES_URL/boites" -H "$H" -H 'Content-Type: application/json' -d '{}' | sed 's/.*"id":"\([a-f0-9]*\)".*/\1/')
 curl -s -X POST "$BOITES_URL/boites/$ID2/commande" -H "$H" -H 'Content-Type: application/json' -d '{"commande":"echo aW1wb3J0IHN1YnByb2Nlc3MgYXMgcwpwID0gW10KZm9yIGkgaW4gcmFuZ2UoNjAwKToKICAgIHRyeToKICAgICAgICBwLmFwcGVuZChzLlBvcGVuKFsic2xlZXAiLCAiMyJdKSkKICAgIGV4Y2VwdCBPU0Vycm9yOgogICAgICAgIGJyZWFrCnByaW50KCJwcm9jZXNzdXMgbGFuY2VzIGF2YW50IGxlIGJsb2NhZ2UgOiIsIGxlbihwKSkK | base64 -d | python","timeout":15}'; echo
 curl -s -X DELETE "$BOITES_URL/boites/$ID2" -H "$H" >/dev/null

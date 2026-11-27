@@ -17,11 +17,17 @@ ID = "a" * 32
 class FauxDocker:
     def __init__(self):
         self.boites = {}
-        self.navigateurs = {}
+        self.arrets = {}
         self.appels = []
 
     def lister(self):
         return list(self.boites)
+
+    def lister_en_marche(self):
+        return [i for i, e in self.boites.items() if e == "running"]
+
+    def lister_arretees(self):
+        return [(i, self.arrets.get(i, 0)) for i, e in self.boites.items() if e == "exited"]
 
     def etat(self, boite_id):
         return self.boites.get(boite_id)
@@ -29,13 +35,8 @@ class FauxDocker:
     def adresse(self, boite_id):
         return "172.20.0.5" if boite_id in self.boites else None
 
-    def creer(self, boite_id, navigateur=False, utilisateur=""):
+    def creer(self, boite_id):
         self.boites[boite_id] = "running"
-        if navigateur:
-            self.navigateurs[boite_id] = (utilisateur, 0)
-
-    def lister_navigateurs(self, utilisateur=""):
-        return [(i, c) for i, (u, c) in self.navigateurs.items() if not utilisateur or u == utilisateur]
 
     def demarrer(self, boite_id):
         self.boites[boite_id] = "running"
@@ -45,7 +46,6 @@ class FauxDocker:
 
     def supprimer(self, boite_id):
         self.boites.pop(boite_id, None)
-        self.navigateurs.pop(boite_id, None)
 
     def executer(self, boite_id, commande, delai):
         self.appels.append((commande, delai))
@@ -125,6 +125,30 @@ class ServiceBoites(unittest.TestCase):
             self.assertEqual(self.client.post("/boites", json={}, headers=AUTH).status_code, 200)
             self.assertEqual(self.client.post("/boites", json={}, headers=AUTH).status_code, 200)
             self.assertEqual(self.client.post("/boites", json={}, headers=AUTH).status_code, 429)
+
+    def test_boite_en_pause_ne_compte_pas_dans_la_limite(self):
+        with patch.dict(os.environ, {"BOITES_MAX": "1"}):
+            premiere = self.client.post("/boites", json={}, headers=AUTH).json()["id"]
+            self.assertEqual(self.client.post("/boites", json={}, headers=AUTH).status_code, 429)
+            self.client.post(f"/boites/{premiere}/pause", headers=AUTH)
+            self.assertEqual(self.client.post("/boites", json={}, headers=AUTH).status_code, 200)
+            # Reprendre la première ferait deux boîtes en marche : refusé.
+            self.assertEqual(self.client.post(f"/boites/{premiere}/connexion", headers=AUTH).status_code, 429)
+
+    def test_zero_veut_dire_aucune_limite(self):
+        with patch.dict(os.environ, {"BOITES_MAX": "0"}):
+            for _ in range(30):
+                self.assertEqual(self.client.post("/boites", json={}, headers=AUTH).status_code, 200)
+
+    def test_boites_arretees_trop_vieilles_sont_supprimees(self):
+        ancienne = self.client.post("/boites", json={}, headers=AUTH).json()["id"]
+        recente = self.client.post("/boites", json={}, headers=AUTH).json()["id"]
+        for i in (ancienne, recente):
+            self.client.post(f"/boites/{i}/pause", headers=AUTH)
+        self.docker.arrets[ancienne] = 1
+        self.docker.arrets[recente] = int(__import__("time").time())
+        self.assertEqual(app_mod._supprimer_arretees_perimees(), 1)
+        self.assertEqual(self.docker.lister(), [recente])
 
 
 class Validation(unittest.TestCase):

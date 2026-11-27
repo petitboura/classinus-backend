@@ -26,6 +26,8 @@ Central entry point for all Classinus backend documentation. English is the defa
 - [Bambara page: profiles, history and kept items](./chantiers/PAGE_BAMBARA_PROFILS.md)
 - [Working on attached documents (edit a file, work on PDFs)](./chantiers/OUTILS_DOCUMENTS_JOINTS.md)
 - [Tool line and AI notes (the `commenter` tool)](./chantiers/LIGNE_OUTILS_COMMENTAIRE.md)
+- [Browser: one box, phone screens, build then open](./chantiers/NAVIGATEUR_MOBILE.md)
+- [Sandbox service (Vultr boxes, terminal and browser)](../boites_service/README.md)
 
 ## Project history and archived work
 

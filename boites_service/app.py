@@ -4,6 +4,7 @@ boîtes Docker isolées. C'est le seul composant qui touche au socket Docker.
 
 Démarrage : uvicorn boites_service.app:app --host 0.0.0.0 --port 8080
 Variables : BOITES_TOKEN (obligatoire) puis les limites décrites dans docker_cli.py.
+Une boîte contient le terminal ET le navigateur de sa conversation (voir pilote.py).
 """
 import asyncio
 import hmac
@@ -36,7 +37,7 @@ async def _lifespan(app: FastAPI):
     port = docker.port_proxy
     serveur = await asyncio.start_server(proxy_mod.fabriquer_gestionnaire(registre), "0.0.0.0", port)
     logging.info("proxy de sortie filtrée sur le port %s", port)
-    balayage = asyncio.create_task(_balayer_navigateurs())
+    balayage = asyncio.create_task(_balayer_arretees())
     try:
         yield
     finally:
@@ -44,25 +45,42 @@ async def _lifespan(app: FastAPI):
         serveur.close()
 
 
-def _fermer_navigateurs_perimes() -> int:
-    """Détruit les boîtes navigateur plus vieilles que BOITES_NAV_DUREE_MAX secondes (jamais une boîte oubliée)."""
-    limite = time.time() - int(os.environ.get("BOITES_NAV_DUREE_MAX", "900"))
+def _limite(nom: str, defaut: int) -> int:
+    """Limite lue dans l'environnement. 0 veut dire « aucune limite » ; une valeur vide ou illisible donne le défaut."""
+    try:
+        return int(os.environ.get(nom) or defaut)
+    except ValueError:
+        return defaut
+
+
+def _capacite_atteinte(nom: str, defaut: int, en_cours: int) -> bool:
+    maximum = _limite(nom, defaut)
+    return maximum > 0 and en_cours >= maximum
+
+
+def _supprimer_arretees_perimees() -> int:
+    """Détruit les boîtes arrêtées depuis plus de BOITES_ARRETEE_DUREE_MAX secondes (7 jours par défaut)."""
+    duree = _limite("BOITES_ARRETEE_DUREE_MAX", 604800)
+    if duree <= 0:
+        return 0
+    limite = time.time() - duree
     detruites = 0
-    for boite_id, cree in docker.lister_navigateurs():
-        if cree < limite:
+    for boite_id, arret in docker.lister_arretees():
+        if arret < limite:
             docker.supprimer(boite_id)
             registre.oublier(boite_id)
             detruites += 1
     return detruites
 
 
-async def _balayer_navigateurs():
+async def _balayer_arretees():
+    """Une fois par heure : détruit les boîtes arrêtées que personne ne reprend."""
     while True:
-        await asyncio.sleep(60)
+        await asyncio.sleep(3600)
         try:
-            await asyncio.to_thread(_fermer_navigateurs_perimes)
+            await asyncio.to_thread(_supprimer_arretees_perimees)
         except Exception as e:
-            logging.warning("balayage des boîtes navigateur : %s", type(e).__name__)
+            logging.warning("balayage des boîtes arrêtées : %s", type(e).__name__)
 
 
 app = FastAPI(title="Classinus boîtes", lifespan=_lifespan)
@@ -94,11 +112,6 @@ class Reseau(BaseModel):
     allow_out: list[str] = Field(default_factory=list, max_length=200)
 
 
-class OuvertureNavigateur(BaseModel):
-    cle: str = Field(min_length=16, max_length=32)
-    utilisateur: str = Field(min_length=16, max_length=32)
-
-
 def _existante(boite_id: str) -> str:
     etat = docker.etat(id_valide(boite_id))
     if etat is None:
@@ -118,9 +131,8 @@ def lister():
 
 @app.post("/boites", dependencies=[Depends(_authentifier)])
 def creer(_corps: CreationBoite):
-    maximum = int(os.environ.get("BOITES_MAX", "20"))
-    if len(docker.lister()) >= maximum:
-        raise HTTPException(status_code=429, detail=f"Le service d'exécution de code est saturé : {maximum} boîtes peuvent fonctionner simultanément. Ferme une boîte inutilisée ou réessaie plus tard.")
+    if _capacite_atteinte("BOITES_MAX", 200, len(docker.lister_en_marche())):
+        raise HTTPException(status_code=429, detail="capacité atteinte")
     boite_id = uuid.uuid4().hex
     docker.creer(boite_id)
     # Sans règle, la boîte n'a aucun accès au réseau : le proxy refuse toute adresse inconnue.
@@ -128,44 +140,12 @@ def creer(_corps: CreationBoite):
     return {"id": boite_id}
 
 
-@app.post("/navigateurs", dependencies=[Depends(_authentifier)])
-def ouvrir_navigateur(corps: OuvertureNavigateur):
-    """Boîte navigateur d'une conversation : créée si elle n'existe pas, reprise si elle est arrêtée.
-    L'identifiant est calculé par le backend (empreinte de l'utilisateur et de la conversation) : aucune
-    base de données n'est nécessaire pour la retrouver."""
-    boite_id = id_valide(corps.cle)
-    utilisateur = id_valide(corps.utilisateur)
-    etat = docker.etat(boite_id)
-    if etat is None:
-        if len(docker.lister_navigateurs()) >= int(os.environ.get("BOITES_NAV_MAX", "3")):
-            maximum_navigateurs = int(os.environ.get("BOITES_NAV_MAX", "3"))
-            raise HTTPException(status_code=429, detail=f"La capacité des navigateurs est atteinte : {maximum_navigateurs} navigateurs peuvent fonctionner simultanément. Ferme un navigateur inutilisé ou réessaie plus tard.")
-        if len(docker.lister()) >= int(os.environ.get("BOITES_MAX", "20")):
-            maximum_boites = int(os.environ.get("BOITES_MAX", "20"))
-            raise HTTPException(status_code=429, detail=f"Le service d'exécution de code est saturé : {maximum_boites} boîtes peuvent fonctionner simultanément. Ferme une boîte inutilisée ou réessaie plus tard.")
-        docker.creer(boite_id, navigateur=True, utilisateur=utilisateur)
-    elif etat != "running":
-        docker.demarrer(boite_id)
-    # Réseau fermé tant que le backend n'a pas envoyé ses domaines autorisés (PUT /boites/{id}/reseau).
-    registre.regler(boite_id, docker.adresse(boite_id), [])
-    return {"id": boite_id}
-
-
-@app.delete("/navigateurs", dependencies=[Depends(_authentifier)])
-def detruire_navigateurs_utilisateur(utilisateur: str = Query(...)):
-    """Détruit toutes les boîtes navigateur d'un utilisateur (suppression de compte)."""
-    detruites = 0
-    for boite_id, _cree in docker.lister_navigateurs(id_valide(utilisateur)):
-        docker.supprimer(boite_id)
-        registre.oublier(boite_id)
-        detruites += 1
-    return {"detruites": detruites}
-
-
 @app.post("/boites/{boite_id}/connexion", dependencies=[Depends(_authentifier)])
 def connecter(boite_id: str, _corps: CreationBoite | None = None):
     etat = _existante(boite_id)
     if etat != "running":
+        if _capacite_atteinte("BOITES_MAX", 200, len(docker.lister_en_marche())):
+            raise HTTPException(status_code=429, detail="capacité atteinte")
         docker.demarrer(boite_id)
     # Une adresse peut changer après une reprise : le réseau est donc réglé de nouveau par le backend.
     registre.regler(boite_id, docker.adresse(boite_id), [])

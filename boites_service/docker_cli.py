@@ -48,20 +48,18 @@ class Docker:
     def __init__(self):
         self.image = os.environ.get("BOITES_IMAGE", "classinus-boite:latest")
         self.reseau = os.environ.get("BOITES_RESEAU", "boites_internes")
-        self.memoire = os.environ.get("BOITES_MEMOIRE", "512m")
+        # Une seule boîte par conversation : le terminal et Chromium vivent ensemble, donc la mémoire, les
+        # processus, la mémoire partagée et /tmp sont dimensionnés pour les deux. Tout se règle par l'environnement.
+        self.memoire = os.environ.get("BOITES_MEMOIRE", "1536m")
         self.cpus = os.environ.get("BOITES_CPUS", "1")
-        self.pids = str(_entier("BOITES_PIDS", 256))
+        self.pids = str(_entier("BOITES_PIDS", 512))
         self.disque = os.environ.get("BOITES_DISQUE", "256m")
+        self.shm = os.environ.get("BOITES_SHM", "512m")
+        self.tmp = os.environ.get("BOITES_TMP", "512m")
         self.hote_proxy = os.environ.get("BOITES_HOTE_PROXY", "boites-service")
         self.port_proxy = _entier("BOITES_PORT_PROXY", 3128)
         self.sortie_max = _entier("BOITES_SORTIE_MAX", 2_000_000)
         self.lecture_max = _entier("BOITES_LECTURE_MAX", 50_000_000)
-        # Boîtes navigateur (étape 6) : Chromium demande plus de mémoire, de processus et de mémoire partagée.
-        self.image_nav = os.environ.get("BOITES_IMAGE_NAV", "classinus-navigateur:latest")
-        self.memoire_nav = os.environ.get("BOITES_NAV_MEMOIRE", "1536m")
-        self.cpus_nav = os.environ.get("BOITES_NAV_CPUS", "1")
-        self.pids_nav = str(_entier("BOITES_NAV_PIDS", 512))
-        self.disque_nav = os.environ.get("BOITES_NAV_DISQUE", "512m")
 
     @staticmethod
     def _docker(args: list[str], entree: bytes | None = None, delai: float = 30):
@@ -96,59 +94,62 @@ class Docker:
         r = self._docker(["ps", "-a", "--filter", "label=classinus=boite", "--format", "{{.Names}}"])
         return [n.removeprefix("boite-") for n in r.stdout.decode().split() if n.startswith("boite-")]
 
-    def creer(self, boite_id: str, navigateur: bool = False, utilisateur: str = "") -> None:
+    def lister_en_marche(self) -> list[str]:
+        """Boîtes qui tournent vraiment. Une boîte en pause ne consomme presque rien : elle ne compte pas dans la limite."""
+        r = self._docker(["ps", "--filter", "label=classinus=boite", "--format", "{{.Names}}"])
+        return [n.removeprefix("boite-") for n in r.stdout.decode().split() if n.startswith("boite-")]
+
+    def lister_arretees(self) -> list[tuple[str, float]]:
+        """Boîtes arrêtées (identifiant, date d'arrêt en secondes) : sert à nettoyer celles que personne ne reprend."""
+        r = self._docker([
+            "ps", "-a", "--filter", "label=classinus=boite", "--filter", "status=exited", "--format", "{{.Names}}",
+        ])
+        noms = [n for n in r.stdout.decode().split() if n.startswith("boite-")]
+        if not noms:
+            return []
+        r = self._docker(["inspect", "-f", "{{.Name}} {{.State.FinishedAt}}", *noms])
+        trouvees = []
+        for ligne in r.stdout.decode().splitlines():
+            morceaux = ligne.split()
+            if len(morceaux) != 2:
+                continue
+            try:
+                arret = time.mktime(time.strptime(morceaux[1][:19], "%Y-%m-%dT%H:%M:%S")) - time.timezone
+            except ValueError:
+                continue
+            trouvees.append((morceaux[0].lstrip("/").removeprefix("boite-"), arret))
+        return trouvees
+
+    def creer(self, boite_id: str) -> None:
         nom = self.nom(boite_id)
         volume = f"volume-{nom}"
-        disque = self.disque_nav if navigateur else self.disque
         r = self._docker([
             "volume", "create", "--driver", "local", "--opt", "type=tmpfs", "--opt", "device=tmpfs",
-            "--opt", f"o=size={disque},uid=1000,gid=1000,mode=0755", "--label", "classinus=boite", volume,
+            "--opt", f"o=size={self.disque},uid=1000,gid=1000,mode=0755", "--label", "classinus=boite", volume,
         ])
         if r.returncode != 0:
             raise ErreurDocker("création du volume impossible", 503)
         proxy = f"http://{self.hote_proxy}:{self.port_proxy}"
-        if navigateur:
-            image, memoire, cpus, pids = self.image_nav, self.memoire_nav, self.cpus_nav, self.pids_nav
-            # Chromium écrit beaucoup dans /tmp et /dev/shm : tailles à la mesure de la boîte, jamais illimitées.
-            specifique = [
-                "--shm-size", "512m", "--tmpfs", "/tmp:rw,size=512m",
-                "--label", "classinus-profil=navigateur", "--label", f"classinus-cree={int(time.time())}",
-                "--label", f"classinus-utilisateur={utilisateur or 'inconnu'}",
-            ]
-        else:
-            image, memoire, cpus, pids = self.image, self.memoire, self.cpus, self.pids
-            specifique = ["--tmpfs", "/tmp:rw,size=256m"]
+        # localhost reste dans la boîte : le terminal peut lancer une application et le navigateur l'ouvrir
+        # sans passer par le proxy, qui refuse de toute façon les adresses locales.
+        hotes_locaux = "localhost,127.0.0.1,::1"
         r = self._docker([
             "run", "-d", "--init", "--name", nom, "--label", "classinus=boite",
             "--network", self.reseau,
-            "--memory", memoire, "--memory-swap", memoire, "--cpus", cpus,
-            "--pids-limit", pids, "--ulimit", "nofile=1024:1024",
+            "--memory", self.memoire, "--memory-swap", self.memoire, "--cpus", self.cpus,
+            "--pids-limit", self.pids, "--ulimit", "nofile=1024:1024",
             "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-            "--read-only", *specifique,
+            # Chromium écrit beaucoup dans /tmp et /dev/shm : tailles à la mesure de la boîte, jamais illimitées.
+            "--read-only", "--shm-size", self.shm, "--tmpfs", f"/tmp:rw,size={self.tmp}",
             "--user", "1000:1000", "-v", f"{volume}:/home/user", "-w", "/home/user",
             "-e", f"HTTP_PROXY={proxy}", "-e", f"HTTPS_PROXY={proxy}",
             "-e", f"http_proxy={proxy}", "-e", f"https_proxy={proxy}",
-            "-e", "NO_PROXY=", "-e", "HOME=/home/user",
-            image,
+            "-e", f"NO_PROXY={hotes_locaux}", "-e", f"no_proxy={hotes_locaux}", "-e", "HOME=/home/user",
+            self.image,
         ], delai=60)
         if r.returncode != 0:
             self._docker(["volume", "rm", "-f", volume])
             raise ErreurDocker("démarrage de la boîte impossible", 503)
-
-    def lister_navigateurs(self, utilisateur: str = "") -> list[tuple[str, int]]:
-        """Boîtes navigateur (identifiant, date de création en secondes), éventuellement d'un seul utilisateur."""
-        filtres = ["--filter", "label=classinus-profil=navigateur"]
-        if utilisateur:
-            filtres += ["--filter", f"label=classinus-utilisateur={utilisateur}"]
-        r = self._docker([
-            "ps", "-a", *filtres, "--format", '{{.Names}} {{.Label "classinus-cree"}}',
-        ])
-        trouvees = []
-        for ligne in r.stdout.decode().splitlines():
-            morceaux = ligne.split()
-            if len(morceaux) == 2 and morceaux[0].startswith("boite-") and morceaux[1].isdigit():
-                trouvees.append((morceaux[0].removeprefix("boite-"), int(morceaux[1])))
-        return trouvees
 
     def demarrer(self, boite_id: str) -> None:
         r = self._docker(["start", self.nom(boite_id)], delai=60)

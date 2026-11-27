@@ -10,15 +10,15 @@ services:
     restart: unless-stopped
     environment:
       BOITES_TOKEN: ${BOITES_TOKEN:?définir BOITES_TOKEN}
-      BOITES_MAX: ${BOITES_MAX:-20}
-      BOITES_MEMOIRE: ${BOITES_MEMOIRE:-512m}
+      BOITES_MAX: ${BOITES_MAX:-200}
+      # Une boîte contient le terminal et le navigateur de la conversation : Chromium demande de la mémoire.
+      BOITES_MEMOIRE: ${BOITES_MEMOIRE:-1536m}
       BOITES_CPUS: ${BOITES_CPUS:-1}
+      BOITES_PIDS: ${BOITES_PIDS:-512}
       BOITES_DISQUE: ${BOITES_DISQUE:-256m}
-      BOITES_NAV_MEMOIRE: ${BOITES_NAV_MEMOIRE:-1536m}
-      BOITES_NAV_CPUS: ${BOITES_NAV_CPUS:-1}
-      BOITES_NAV_DISQUE: ${BOITES_NAV_DISQUE:-512m}
-      BOITES_NAV_MAX: ${BOITES_NAV_MAX:-3}
-      BOITES_NAV_DUREE_MAX: ${BOITES_NAV_DUREE_MAX:-900}
+      BOITES_SHM: ${BOITES_SHM:-512m}
+      BOITES_TMP: ${BOITES_TMP:-512m}
+      BOITES_ARRETEE_DUREE_MAX: ${BOITES_ARRETEE_DUREE_MAX:-604800}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
@@ -32,14 +32,6 @@ services:
       context: ./boites_service
       dockerfile: Dockerfile.boite
     image: classinus-boite:latest
-    command: ["true"]
-    restart: "no"
-
-  boite-navigateur-image:
-    build:
-      context: ./boites_service
-      dockerfile: Dockerfile.navigateur
-    image: classinus-navigateur:latest
     command: ["true"]
     restart: "no"
 

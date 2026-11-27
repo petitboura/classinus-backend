@@ -160,7 +160,8 @@ def domaines_de_l_appel(nom_outil, arguments):
         if nom_outil == "gerer_navigateur" and arguments.get("action") == "open":
             # 04/11/2026 : le site ouvert dans le navigateur de la boîte apparaît dans la frise du chat,
             # comme pour lire_document_externe.
-            return _domaines_de_adresses(arguments.get("url"))[:MAX_DOMAINES]
+            # 27/11/2026 : une application locale (localhost) n'est pas un site : rien à afficher dans la frise.
+            return [d for d in _domaines_de_adresses(arguments.get("url")) if d not in ("localhost", "127.0.0.1", "::1")][:MAX_DOMAINES]
         if nom_outil == "lire_document_externe":
             return _domaines_de_adresses(arguments.get("url"))[:MAX_DOMAINES]
         if nom_outil in PARAMETRES_ADRESSE_TAVILY:

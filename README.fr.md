@@ -25,9 +25,9 @@ Personne -> chat Classinus -> API backend -> Vultr Serverless Inference (le mod�
                                    |
                                    v
                     service de boîtes sur le serveur Vultr
-                      |                          |
-              boîte de code (Docker)     boîte navigateur (Docker + Chromium/Playwright)
-                      \__________________________/
+                                  |
+              une boîte par conversation (Docker) : terminal + Chromium/Playwright
+                                  |
                          proxy de sortie (liste blanche, ports 80/443 seulement)
 ```
 
