@@ -34,3 +34,4 @@ Les ajouter ici au fur et à mesure, une ligne chacun, avec le lien vers son sou
 
 - [Coût d'entrée du modèle : cache de prompt](cache-prompt-cout-entree/RESUME.md) : deux correctifs prêts sur des branches du backend, à essayer sur le staging.
 - [Permissions des outils : autoriser, demander, bloquer](permissions-outils/RESUME.md) : fondations du backend poussées sur `feat/permissions-outils`, table Supabase créée, reste les routes, l'interface et la documentation.
+- [Page bambara : images et vidéos façon Google (côté backend)](page-bambara-visuels/RESUME.md) : en cours (recherche multi-sources et règle de quantité dans staging ; reste à décider du commit « affichage progressif »).
