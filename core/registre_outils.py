@@ -884,6 +884,13 @@ REGISTRE_AFFICHAGE_OUTILS = {
     "gerer_navigateur:type": {"label": "Saisie sur la page", "icone": "Keyboard", "onglet": None},
     "gerer_navigateur:screenshot": {"label": "Capture de la page", "icone": "Camera", "onglet": None},
     "gerer_navigateur:submit": {"label": "Action finale", "icone": "ShieldCheck", "onglet": None},
+    # Mode téléphone, défilement, attente, console et fausses réponses réseau (27/11/2026). Libellés de 18 caractères au plus.
+    "gerer_navigateur:scroll": {"label": "Défilement", "icone": "ArrowDownUp", "onglet": None},
+    "gerer_navigateur:wait": {"label": "Attente d'élément", "icone": "Timer", "onglet": None},
+    "gerer_navigateur:console": {"label": "Console de la page", "icone": "Terminal", "onglet": None},
+    "gerer_navigateur:mock": {"label": "Réponse simulée", "icone": "Replace", "onglet": None},
+    "gerer_navigateur:unmock": {"label": "Retrait simulation", "icone": "Replace", "onglet": None},
+    "gerer_navigateur:device": {"label": "Changer d'écran", "icone": "Smartphone", "onglet": None},
     "gerer_navigateur:demander_acces_reseau": {"label": "Accès à un site", "icone": "Globe", "onglet": None},
     "gerer_navigateur:close": {"label": "Fermeture du site", "icone": "Power", "onglet": None},
     "gerer_execution_code:close": {"label": "Fin de l'espace", "icone": "Power", "onglet": None},
@@ -1524,8 +1531,9 @@ CATEGORIES_OUTILS = {
     # generer_code (qui écrit du code sans l'exécuter) reste dans
     # generation_documents.
     "execution_code": ["gerer_execution_code"],
-    # Navigateur (04/11/2026, demande Bourama) : catégorie à part. Ouvrir un site, le parcourir et le
-    # capturer n'a rien à voir avec lancer du code. Même boîte Docker que l'exécution de code, outil différent.
+    # Navigateur (04/11/2026, demande Bourama) : catégorie à part. Ouvrir un site ou une application, la voir
+    # sur un écran de téléphone ou de bureau, la parcourir et la capturer n'a rien à voir avec lancer du code.
+    # Même boîte Docker que l'exécution de code (27/11/2026 : le navigateur est dans la boîte du terminal), outil différent.
     "navigateur": ["gerer_navigateur"],
     # Montage vidéo (24/10/2026, demande Bourama) : disponible sans vidéo jointe, via
     # demander_outils comme les autres catégories. Distinct de recherche_web

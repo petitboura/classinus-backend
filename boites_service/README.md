@@ -1,47 +1,72 @@
-# Service de boîtes (hackathon Vultr, étape 3)
+# Sandbox service (Vultr hackathon)
 
-Remplace E2B par des boîtes Docker sur le serveur Vultr. Le backend Classinus appelle ce
-service par HTTP avec un jeton. Seul ce service touche au socket Docker.
+[English] · [Français](README.fr.md)
 
-## Ce qui est imposé à chaque boîte
+Replaces E2B with Docker boxes on the Vultr server. The Classinus backend calls this service over
+HTTP with a token. Only this service touches the Docker socket.
 
-| Protection | Mise en oeuvre |
+**One box per conversation.** The terminal (code, commands, files) and the Chromium browser (driven by
+Playwright, see `pilote.py`) live in the same box. The terminal can start an app (`npm run dev`,
+`python3 -m http.server`) and the browser opens it at `http://localhost:PORT`, with nothing leaving the box.
+
+## What is enforced on every box
+
+| Protection | Implementation |
 | --- | --- |
-| Processus isolé | un conteneur Docker par conversation, utilisateur non root (1000), `--cap-drop ALL`, `no-new-privileges`, système de fichiers en lecture seule |
-| Limites de mémoire et de processeur | `--memory`, `--memory-swap` (pas de swap), `--cpus`, `--pids-limit` (réglables : BOITES_MEMOIRE, BOITES_CPUS, BOITES_PIDS) |
-| Limite d'espace disque | volume tmpfs plafonné (BOITES_DISQUE) |
-| Limite de temps | chaque commande est tuée au bout de son délai (`timeout -k`) |
-| Aucun secret dedans | la boîte ne reçoit que les variables du proxy, aucune clé Classinus ni Vultr |
-| Réseau fermé par défaut | réseau Docker interne (`internal: true`), aucune route vers Internet |
-| Sortie par liste blanche | seul passage : le proxy du service, domaine par domaine, ports 80 et 443, adresses publiques seulement (pas de réseau interne ni de 169.254.x.x) |
-| Destruction | `DELETE` supprime le conteneur ET son volume ; la pause arrête le conteneur et garde les fichiers |
+| Isolated process | one Docker container per conversation, non-root user (1000), `--cap-drop ALL`, `no-new-privileges`, read-only filesystem |
+| Memory and CPU limits | `--memory`, `--memory-swap` (no swap), `--cpus`, `--pids-limit` (tunable: BOITES_MEMOIRE 1536m, BOITES_CPUS, BOITES_PIDS 512) |
+| Bounded shared memory and /tmp | `--shm-size` (BOITES_SHM 512m) and a size-capped tmpfs `/tmp` (BOITES_TMP 512m), needed by Chromium |
+| Disk space limit | size-capped tmpfs volume (BOITES_DISQUE) |
+| Time limit | every command is killed at its deadline (`timeout -k`) |
+| No secret inside | the box only receives the proxy variables, no Classinus or Vultr key |
+| Network closed by default | internal Docker network (`internal: true`), no route to the Internet |
+| Allow-list egress | the only way out is the service proxy, domain by domain, ports 80 and 443, public addresses only (no internal network, no 169.254.x.x) |
+| localhost stays in the box | `NO_PROXY=localhost,127.0.0.1,::1`: a local app never goes through the proxy |
+| Destruction | `DELETE` removes the container AND its volume; pause stops the container and keeps the files |
 
-Limite connue : les fichiers vivent en mémoire (tmpfs) tant que le serveur ne redémarre pas.
-Un redémarrage du serveur efface les workspaces.
+Known limit: files live in memory (tmpfs) until the server restarts. A server restart erases workspaces.
 
-## Déploiement sur le serveur Vultr (Coolify)
+## The browser inside the box
 
-1. Nouvelle ressource, Docker Compose, dépôt classinus-backend, fichier `boites_service/docker-compose.yml`.
-2. Variable obligatoire : `BOITES_TOKEN` (une longue chaîne aléatoire).
-3. Déployer. Le service `boite-image` construit l'image des boîtes puis s'arrête, c'est normal.
-4. Le service est publié sur le port 8787 du serveur (BOITES_PORT_HOTE pour en changer, le 8080 est pris par Coolify).
-   Pare-feu Vultr : n'ouvrir 8787 qu'aux adresses du backend, ou mettre le service derrière HTTPS (domaine Coolify).
-   Ne pas ouvrir le port 3128 (proxy) : il n'est destiné qu'au réseau interne des boîtes.
+`pilote.py` is copied into the image (`/opt/navigateur/pilote.py`). A small local daemon (127.0.0.1:9333)
+keeps Chromium open between actions; each action is a `python3 pilote.py <action> <json>` command that
+prints one JSON line (page, text, screenshot path).
 
-## Brancher le backend Classinus
+| Feature | Setting (pilot variable) |
+| --- | --- |
+| Phone or desktop screen | `device` (iphone, android, desktop, Playwright name) or `width` and `height`, touch and pixel ratio included (PILOTE_APPAREIL_IPHONE, PILOTE_APPAREIL_ANDROID) |
+| Screenshot quality | PILOTE_QUALITE (85), PILOTE_ECHELLE (`css` or `device`) |
+| Full page | PILOTE_HAUTEUR_MAX (4000 pixels) |
+| Scrolling, waiting for an element | PILOTE_ATTENTE_MAX_MS (20000) |
+| Console and errors | PILOTE_CONSOLE_MAX (200 lines) |
+| Fake network responses | PILOTE_SIMULATIONS_MAX (20), PILOTE_CORPS_MAX (200000) |
 
-Dans les variables d'environnement du backend (jamais dans le code) :
+## Deploying on the Vultr server (Coolify)
+
+1. New resource, Docker Compose, repository classinus-backend, file `boites_service/docker-compose.yml`.
+2. Required variable: `BOITES_TOKEN` (a long random string).
+3. Deploy. The `boite-image` service builds the box image (with Chromium, several minutes the first time) and then exits, which is normal.
+4. The service is published on server port 8787 (BOITES_PORT_HOTE to change it, 8080 is taken by Coolify).
+   Vultr firewall: open 8787 only to the backend addresses, or put the service behind HTTPS (Coolify domain).
+   Do not open port 3128 (proxy): it is only meant for the internal network of the boxes.
+5. Release order: rebuild the image on the Vultr server FIRST, then deploy the backend.
+   A workspace created with the old image has no browser: the tool explains it to the agent, which
+   downloads the files, closes the workspace and opens a new one.
+
+## Connecting the Classinus backend
+
+In the backend environment variables (never in code):
 
     EXECUTION_CODE_FOURNISSEUR=docker
-    BOITES_URL=https://<adresse du service>
-    BOITES_TOKEN=<le même jeton>
+    BOITES_URL=https://<service address>
+    BOITES_TOKEN=<the same token>
 
-Sans `EXECUTION_CODE_FOURNISSEUR=docker`, le backend continue d'utiliser E2B. Pour revenir en arrière :
-supprimer la variable ou la remettre à `e2b`.
+Without `EXECUTION_CODE_FOURNISSEUR=docker`, the backend keeps using E2B. To roll back: remove the
+variable or set it back to `e2b`. The browser only exists in docker mode.
 
 ## Tests
 
-    python3 -m unittest test_boites_isolees test_boites_service
+    python3 -m unittest test_boites_isolees test_boites_service test_navigateur
 
-Les tests sont hors ligne (faux Docker). Le vrai comportement des conteneurs reste à vérifier
-sur le serveur : voir `boites_service/verifier_serveur.sh`.
+The tests run offline (fake Docker). The real container behavior must still be checked on the
+server: see `boites_service/verifier_serveur.sh`.

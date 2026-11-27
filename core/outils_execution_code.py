@@ -1043,6 +1043,123 @@ def _message_refus(reservation: dict) -> str:
     return "Le service d'exécution de code ne peut pas vérifier sa configuration ou ses quotas. Aucune exécution n'a été lancée. Réessaie dans un instant."
 
 
+def _reserver_workspace(user_id: str, conversation_id: str, action: str):
+    """Réserve le quota et la place pour une action. Renvoie (réservation, None), ou (None, message pour le
+    modèle) quand la réservation est refusée ou impossible."""
+    try:
+        reservation = _rpc_objet(
+            "execution_code_reserver",
+            {"p_user_id": user_id, "p_conversation_id": conversation_id, "p_action": action},
+        )
+    except Exception as e:
+        logging.error("ERREUR réservation exécution code: %s", type(e).__name__)
+        return None, "Impossible de vérifier les quotas. Aucune commande n'a été exécutée."
+    if not reservation.get("allowed"):
+        return None, _message_refus(reservation)
+    return reservation, None
+
+
+def _configuration_de(reservation: dict) -> dict:
+    configuration = reservation.get("configuration") or {}
+    return configuration if isinstance(configuration, dict) else {}
+
+
+def _travailler_dans_workspace(user_id: str, conversation_id: str, reservation: dict, nom_action: str, travail) -> str:
+    """Ouvre ou reprend le workspace de la conversation, y fait travailler `travail(sandbox, configuration)`, puis
+    enregistre la consommation. Sert à l'exécution de code ET au navigateur : une seule boîte par conversation,
+    donc un seul suivi de quota, de pause et de fermeture. Renvoie le texte du résultat, sans le tronquer."""
+    event_id = reservation.get("event_id")
+    sandbox_id = reservation.get("sandbox_id")
+    configuration = _configuration_de(reservation)
+    debut = time.monotonic()
+    sandbox = None
+    garder = bool(sandbox_id)
+    resultat = "EXECUTION_CODE_ERROR: le workspace n'a pas pu terminer l'action."
+    try:
+        classe = _classe_sandbox()
+        options_reseau = _options_reseau(configuration, _domaines_conversation_ou_vide(user_id, conversation_id))
+        timeout_sandbox = max(60, int(configuration.get("sandbox_timeout_seconds", 3600)))
+        needs_new_sandbox = bool(reservation.get("needs_new_sandbox"))
+        if sandbox_id and not needs_new_sandbox:
+            try:
+                # Les sandboxes pausés sans snapshot mémoire redémarrent depuis leurs fichiers.
+                sandbox = classe.connect(
+                    sandbox_id, timeout=timeout_sandbox, on_resume="reboot"
+                )
+            except Exception as e:
+                status_code = getattr(e, "status_code", None)
+                message = str(e).lower()
+                if status_code == 404 or "not found" in message:
+                    # Pas de recréation dans la même réservation : la DB doit réserver
+                    # le coût de démarrage et un slot au prochain appel.
+                    sandbox_id = None
+                    garder = False
+                raise
+            sandbox.update_network(options_reseau)
+
+        if needs_new_sandbox or sandbox is None:
+            # Un ancien identifiant éventuel ne doit pas être conservé si la création échoue.
+            sandbox_id = None
+            garder = False
+            sandbox = classe.create(
+                template=str(configuration.get("e2b_template") or "base"),
+                timeout=timeout_sandbox,
+                metadata={"app": "classinus"},
+                network=options_reseau,
+                lifecycle={"on_timeout": {"action": "pause", "keep_memory": False}},
+            )
+            sandbox_id = sandbox.sandbox_id
+            garder = True
+            attache = _rpc_objet("execution_code_attacher_sandbox", {
+                "p_user_id": user_id, "p_conversation_id": conversation_id,
+                "p_event_id": event_id, "p_sandbox_id": sandbox_id,
+            })
+            if not attache.get("success"):
+                try:
+                    classe.kill(sandbox_id)
+                except Exception:
+                    pass
+                sandbox = None
+                sandbox_id = None
+                garder = False
+                raise RuntimeError("Impossible d'enregistrer le workspace dans Classinus.")
+
+        resultat = travail(sandbox, configuration)
+        garder = True
+    except Exception as e:
+        logging.warning(
+            "ERREUR action sandbox E2B (%s, HTTP %s): %s",
+            nom_action, getattr(e, "status_code", None), type(e).__name__
+        )
+        code_http = getattr(e, "status_code", None)
+        if code_http in (429, 503) or "concurrent sandbox limit" in str(e).lower():
+            resultat = (
+                "EXECUTION_CODE_PROVIDER_LIMIT: le fournisseur de boîtes refuse temporairement la création ou la reprise "
+                "d'un sandbox (capacité, quota ou limitation fournisseur). Réessaie plus tard."
+            )
+        else:
+            resultat = (
+                "EXECUTION_CODE_ERROR: l'action n'a pas abouti dans le sandbox. "
+                "Le workspace reste disponible lorsque sa connexion a pu être conservée. "
+                f"Type d'erreur : {type(e).__name__}."
+            )
+        if sandbox is None and not sandbox_id:
+            garder = False
+    finally:
+        elapsed = max(0, int(time.monotonic() - debut + 0.999))
+        try:
+            _rpc_objet("execution_code_finaliser", {
+                "p_user_id": user_id, "p_conversation_id": conversation_id,
+                "p_event_id": event_id, "p_sandbox_id": sandbox_id,
+                "p_active_seconds": elapsed,
+                "p_conserver_sandbox": bool(garder and sandbox_id),
+            })
+        except Exception as e:
+            logging.error("ERREUR enregistrement consommation E2B: %s", type(e).__name__)
+
+    return resultat
+
+
 @mcp_execution_code.tool()
 def gerer_execution_code(
     action: Literal["run_code", "run_command", "write_file", "edit_file", "read_file", "search_files", "find_files", "list_files", "download_files", "importer_fichier", "run_background", "command_status", "command_stop", "network", "demander_acces_reseau", "close"],
@@ -1151,28 +1268,17 @@ def gerer_execution_code(
         if erreur_import:
             return erreur_import
 
-    try:
+    reservation, refus = _reserver_workspace(
+        user_id, conversation_id,
         # Côté base de données, importer_fichier compte comme une écriture de fichier : la liste
         # des actions acceptées par la réservation n'a pas besoin de changer.
-        reservation = _rpc_objet(
-            "execution_code_reserver",
-            {
-                "p_user_id": user_id, "p_conversation_id": conversation_id,
-                "p_action": "write_file" if action == "importer_fichier" else _action_pour_reservation(action),
-            },
-        )
-    except Exception as e:
-        logging.error("ERREUR réservation exécution code: %s", type(e).__name__)
-        return "Impossible de vérifier les quotas. Aucune commande n'a été exécutée."
+        "write_file" if action == "importer_fichier" else _action_pour_reservation(action),
+    )
+    if refus:
+        return refus
 
-    if not reservation.get("allowed"):
-        return _message_refus(reservation)
-
-    event_id = reservation.get("event_id")
     sandbox_id = reservation.get("sandbox_id")
-    configuration = reservation.get("configuration") or {}
-    if not isinstance(configuration, dict):
-        configuration = {}
+    configuration = _configuration_de(reservation)
 
     if action == "close":
         _oublier_domaines_conversation(user_id, conversation_id)
@@ -1210,95 +1316,13 @@ def gerer_execution_code(
             logging.error("ERREUR validation fermeture sandbox: %s", type(e).__name__)
         return "Workspace fermé. Les fichiers de ce workspace ont été supprimés."
 
-    debut = time.monotonic()
-    sandbox = None
-    garder = bool(sandbox_id)
-    resultat = "EXECUTION_CODE_ERROR: le workspace n'a pas pu terminer l'action."
-    try:
-        classe = _classe_sandbox()
-        options_reseau = _options_reseau(configuration, _domaines_conversation_ou_vide(user_id, conversation_id))
-        timeout_sandbox = max(60, int(configuration.get("sandbox_timeout_seconds", 3600)))
-        needs_new_sandbox = bool(reservation.get("needs_new_sandbox"))
-        if sandbox_id and not needs_new_sandbox:
-            try:
-                # Les sandboxes pausés sans snapshot mémoire redémarrent depuis leurs fichiers.
-                sandbox = classe.connect(
-                    sandbox_id, timeout=timeout_sandbox, on_resume="reboot"
-                )
-            except Exception as e:
-                status_code = getattr(e, "status_code", None)
-                message = str(e).lower()
-                if status_code == 404 or "not found" in message:
-                    # Pas de recréation dans la même réservation : la DB doit réserver
-                    # le coût de démarrage et un slot au prochain appel.
-                    sandbox_id = None
-                    garder = False
-                raise
-            sandbox.update_network(options_reseau)
-
-        if needs_new_sandbox or sandbox is None:
-            # Un ancien identifiant éventuel ne doit pas être conservé si la création échoue.
-            sandbox_id = None
-            garder = False
-            sandbox = classe.create(
-                template=str(configuration.get("e2b_template") or "base"),
-                timeout=timeout_sandbox,
-                metadata={"app": "classinus"},
-                network=options_reseau,
-                lifecycle={"on_timeout": {"action": "pause", "keep_memory": False}},
-            )
-            sandbox_id = sandbox.sandbox_id
-            garder = True
-            attache = _rpc_objet("execution_code_attacher_sandbox", {
-                "p_user_id": user_id, "p_conversation_id": conversation_id,
-                "p_event_id": event_id, "p_sandbox_id": sandbox_id,
-            })
-            if not attache.get("success"):
-                try:
-                    classe.kill(sandbox_id)
-                except Exception:
-                    pass
-                sandbox = None
-                sandbox_id = None
-                garder = False
-                raise RuntimeError("Impossible d'enregistrer le workspace dans Classinus.")
-
-        resultat = _executer_action(
-            sandbox, action, language, code, command, path, content, configuration, fichier_importe,
+    resultat = _travailler_dans_workspace(
+        user_id, conversation_id, reservation, action,
+        lambda sandbox, config: _executer_action(
+            sandbox, action, language, code, command, path, content, config, fichier_importe,
             pattern, old_text, new_text, start_line, end_line, replace_all, glob, job_id,
-        )
-        garder = True
-    except Exception as e:
-        logging.warning(
-            "ERREUR action sandbox E2B (%s, HTTP %s): %s",
-            action, getattr(e, "status_code", None), type(e).__name__
-        )
-        code_http = getattr(e, "status_code", None)
-        if code_http in (429, 503) or "concurrent sandbox limit" in str(e).lower():
-            resultat = (
-                "EXECUTION_CODE_PROVIDER_LIMIT: le fournisseur de boîtes refuse temporairement la création ou la reprise "
-                "d'un sandbox (capacité, quota ou limitation fournisseur). Réessaie plus tard."
-            )
-        else:
-            resultat = (
-                "EXECUTION_CODE_ERROR: l'action n'a pas abouti dans le sandbox. "
-                "Le workspace reste disponible lorsque sa connexion a pu être conservée. "
-                f"Type d'erreur : {type(e).__name__}."
-            )
-        if sandbox is None and not sandbox_id:
-            garder = False
-    finally:
-        elapsed = max(0, int(time.monotonic() - debut + 0.999))
-        try:
-            _rpc_objet("execution_code_finaliser", {
-                "p_user_id": user_id, "p_conversation_id": conversation_id,
-                "p_event_id": event_id, "p_sandbox_id": sandbox_id,
-                "p_active_seconds": elapsed,
-                "p_conserver_sandbox": bool(garder and sandbox_id),
-            })
-        except Exception as e:
-            logging.error("ERREUR enregistrement consommation E2B: %s", type(e).__name__)
-
+        ),
+    )
     return _tronquer(resultat, max(1000, int(configuration.get("max_output_chars", 20000))))
 
 

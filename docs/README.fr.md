@@ -28,6 +28,8 @@ Point d'entrée central de toute la documentation du backend Classinus. L'anglai
 - [Skills publics (publier, chercher, ajouter, mettre à jour)](./chantiers/skills-publics/README.fr.md)
 - [Ligne d'outils et notes de l'IA (l'outil `commenter`)](./chantiers/LIGNE_OUTILS_COMMENTAIRE.fr.md)
 - [Messages et questions pendant que Classinus travaille (chat)](./chantiers/QUESTIONS_ET_MESSAGES_EN_COURS.fr.md)
+- [Navigateur : une seule boîte, écrans de téléphone, construire puis ouvrir](./chantiers/NAVIGATEUR_MOBILE.fr.md)
+- [Service de boîtes (boîtes Vultr, terminal et navigateur)](../boites_service/README.fr.md)
 
 ## Historique et travaux archivés
 

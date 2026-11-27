@@ -1,9 +1,15 @@
-# Image des boîtes : ce que le code de l'élève voit. Aucun secret, aucun outil d'administration.
+# Image des boîtes : ce que voient le code de l'élève ET le navigateur de la conversation. Une seule boîte par
+# conversation, donc un seul jeu d'outils : le terminal lance une application, Chromium (piloté par Playwright)
+# l'ouvre dans la même boîte. Aucun secret, aucun outil d'administration.
 FROM python:3.12-slim
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/pw PYTHONUNBUFFERED=1
 RUN apt-get update \
  && apt-get install -y --no-install-recommends curl ca-certificates git nodejs npm \
+ && pip install --no-cache-dir playwright==1.58.0 \
+ && playwright install --with-deps chromium \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd -g 1000 user && useradd -u 1000 -g 1000 -m -d /home/user -s /bin/bash user
+COPY pilote.py /opt/navigateur/pilote.py
 USER 1000:1000
 WORKDIR /home/user
 CMD ["sleep", "infinity"]

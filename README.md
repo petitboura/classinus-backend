@@ -27,9 +27,9 @@ Person -> Classinus chat -> backend API -> Vultr Serverless Inference (model dec
                                    |
                                    v
                     sandbox service on the Vultr server
-                      |                          |
-              code box (Docker)        browser box (Docker + Chromium/Playwright)
-                      \__________________________/
+                                  |
+              one box per conversation (Docker): terminal + Chromium/Playwright
+                                  |
                          egress proxy (allow-list, ports 80/443 only)
 ```
 
