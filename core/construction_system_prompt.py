@@ -537,8 +537,8 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
     # None ou liste vide : rien n'est injecte du tout, comportement inchange.
     if reponses_qcm_recentes and not client_thonny:
         system_final += (
-            "\n\n### Réponses récentes de l'étudiant aux QCM\n"
-            "L'étudiant vient de répondre au(x) QCM suivant(s) -- tiens-en compte "
+            "\n\n### Réponses récentes de l'utilisateur aux QCM\n"
+            "L'utilisateur vient de répondre au(x) QCM suivant(s) -- tiens-en compte "
             "dans ta réponse si c'est pertinent (ex. revenir sur une erreur, "
             "féliciter une bonne réponse), sans forcément le mentionner si ce "
             "n'est pas utile à ce moment :\n"
@@ -572,7 +572,7 @@ def _construire_system_prompt(message_utilisateur, agent_id, user_id=None, longu
             )
         system_final += (
             "\n\nNOTIONS DU PROGRAMME POTENTIELLEMENT LIÉES À CE MESSAGE (recherche automatique dans le "
-            "programme de l'élève, PAS une liste exhaustive de tout le programme) :\n"
+            "programme de l'utilisateur, PAS une liste exhaustive de tout le programme) :\n"
             f"{chr(10).join(lignes_notions)}\n"
             "Si une de ces notions correspond vraiment à la question posée, applique son statut/règle/"
             "consigne : \"acquis\" ou \"en_cours\" -> réponds normalement (en respectant quand même une "
