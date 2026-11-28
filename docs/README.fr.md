@@ -27,6 +27,7 @@ Point d'entrée central de toute la documentation du backend Classinus. L'anglai
 - [Travail sur les documents joints (modifier un fichier, travailler sur des PDF)](./chantiers/OUTILS_DOCUMENTS_JOINTS.fr.md)
 - [Ligne d'outils et notes de l'IA (l'outil `commenter`)](./chantiers/LIGNE_OUTILS_COMMENTAIRE.fr.md)
 - [Navigateur : une seule boîte, écrans de téléphone, construire puis ouvrir](./chantiers/NAVIGATEUR_MOBILE.fr.md)
+- [Sections masquées, Communauté et Perso](./chantiers/sections-communaute-perso/README.fr.md)
 - [Service de boîtes (boîtes Vultr, terminal et navigateur)](../boites_service/README.fr.md)
 
 ## Historique et travaux archivés

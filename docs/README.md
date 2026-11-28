@@ -27,6 +27,7 @@ Central entry point for all Classinus backend documentation. English is the defa
 - [Working on attached documents (edit a file, work on PDFs)](./chantiers/OUTILS_DOCUMENTS_JOINTS.md)
 - [Tool line and AI notes (the `commenter` tool)](./chantiers/LIGNE_OUTILS_COMMENTAIRE.md)
 - [Browser: one box, phone screens, build then open](./chantiers/NAVIGATEUR_MOBILE.md)
+- [Hidden sections, Community and Perso](./chantiers/sections-communaute-perso/README.md)
 - [Sandbox service (Vultr boxes, terminal and browser)](../boites_service/README.md)
 
 ## Project history and archived work
