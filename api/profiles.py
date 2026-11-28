@@ -71,6 +71,13 @@ class ProfilPublic(BaseModel):
     popup_chat_y: Optional[int] = None
     popup_chat_largeur: Optional[int] = None
     popup_chat_hauteur: Optional[int] = None
+    # 28/11/2026, demande Bourama : largeur du chat collé à droite des pages
+    # (PC), réglée en tirant sa barre, retrouvée sur tous les appareils du
+    # compte (voir ColonneChatLateral.tsx côté frontend). None = jamais
+    # réglée, le frontend prend sa largeur par défaut. Même convention
+    # "privée" que popup_chat_* : la vraie valeur n'est donnée qu'au
+    # propriétaire.
+    volet_chat_largeur: Optional[int] = None
     # 18/09/2026, chantier "profil contributeur bibliotheque publique" --
     # contrairement aux champs "prives" ci-dessus, celui-ci est TOUJOURS
     # renvoye avec sa vraie valeur, y compris a un visiteur externe : il
@@ -299,7 +306,7 @@ def obtenir_profil_public(user_id: str, utilisateur=Depends(utilisateur_optionne
     try:
         profil = (
             supabase.table("profiles")
-            .select("user_id, nom_affiche, bio, avatar_url, notifications_proactives_actives, premier_agent_id, est_createur, popup_chat_x, popup_chat_y, popup_chat_largeur, popup_chat_hauteur, profil_public")
+            .select("user_id, nom_affiche, bio, avatar_url, notifications_proactives_actives, premier_agent_id, est_createur, popup_chat_x, popup_chat_y, popup_chat_largeur, popup_chat_hauteur, volet_chat_largeur, profil_public")
             .eq("user_id", user_id)
             .maybe_single()
             .execute()
@@ -371,6 +378,7 @@ def obtenir_profil_public(user_id: str, utilisateur=Depends(utilisateur_optionne
         popup_chat_y=(ligne.get("popup_chat_y") if est_le_proprietaire else None),
         popup_chat_largeur=(ligne.get("popup_chat_largeur") if est_le_proprietaire else None),
         popup_chat_hauteur=(ligne.get("popup_chat_hauteur") if est_le_proprietaire else None),
+        volet_chat_largeur=(ligne.get("volet_chat_largeur") if est_le_proprietaire else None),
         agents_administres=(_agents_administres_de(user_id) if est_le_proprietaire else []),
     )
 
@@ -403,6 +411,8 @@ class MettreAJourProfilPayload(BaseModel):
     popup_chat_y: Optional[int] = None
     popup_chat_largeur: Optional[int] = None
     popup_chat_hauteur: Optional[int] = None
+    # 28/11/2026, voir ProfilPublic. None = champ omis, ne rien changer.
+    volet_chat_largeur: Optional[int] = None
     # 18/09/2026, chantier "profil contributeur bibliotheque publique" --
     # voir docstring de ProfilPublic. None = champ omis, ne rien changer.
     profil_public: Optional[bool] = None
@@ -482,6 +492,8 @@ def mettre_a_jour_mon_profil(
         ligne["popup_chat_largeur"] = payload.popup_chat_largeur
     if payload.popup_chat_hauteur is not None:
         ligne["popup_chat_hauteur"] = payload.popup_chat_hauteur
+    if payload.volet_chat_largeur is not None:
+        ligne["volet_chat_largeur"] = payload.volet_chat_largeur
     if payload.profil_public is not None:
         ligne["profil_public"] = payload.profil_public
     if payload.est_professeur is not None:
@@ -558,7 +570,7 @@ def mettre_a_jour_mon_profil(
     try:
         res = (
             supabase.table("profiles")
-            .select("user_id, nom_affiche, bio, avatar_url, notifications_proactives_actives, premier_agent_id, est_createur, popup_chat_x, popup_chat_y, popup_chat_largeur, popup_chat_hauteur, profil_public")
+            .select("user_id, nom_affiche, bio, avatar_url, notifications_proactives_actives, premier_agent_id, est_createur, popup_chat_x, popup_chat_y, popup_chat_largeur, popup_chat_hauteur, volet_chat_largeur, profil_public")
             .eq("user_id", utilisateur.id)
             .maybe_single()
             .execute()
@@ -595,6 +607,7 @@ def mettre_a_jour_mon_profil(
         popup_chat_y=resultat.get("popup_chat_y"),
         popup_chat_largeur=resultat.get("popup_chat_largeur"),
         popup_chat_hauteur=resultat.get("popup_chat_hauteur"),
+        volet_chat_largeur=resultat.get("volet_chat_largeur"),
         profil_public=bool(resultat.get("profil_public")),
     )
 
