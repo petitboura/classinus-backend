@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from api.auth import utilisateur_courant, utilisateur_optionnel, supabase
 from api.journal import journaliser
 from api.permissions_hierarchie import _est_admin
+from core import produits_publics
 from core.erreurs import erreur_api
 # Fonctionnalité "Programme" désactivée et isolée le 29/08/2026 (demande
 # Bourama) -- voir _desactive_programme/LISEZ_MOI_NE_JAMAIS_REUTILISER.md.
@@ -33,7 +34,8 @@ router = APIRouter(prefix="/api/signalements", tags=["signalements"])
 # "Programme" désactivée) -- plus aucun nouveau signalement de ce type ne
 # peut être créé. D'éventuels signalements déjà en base restent visibles à
 # l'admin mais ne peuvent plus être "retirés" via cet endpoint (voir plus bas).
-TYPES_SIGNALEMENT = ("bibliotheque_publique",)
+# "produit_public" ajouté le 28/11/2026 (produits publics, publication immédiate puis retrait sur signalement).
+TYPES_SIGNALEMENT = ("bibliotheque_publique", "produit_public")
 
 
 def _exige_admin(utilisateur):
@@ -44,6 +46,7 @@ def _exige_admin(utilisateur):
 class CreerSignalementPayload(BaseModel):
     type_signalement: str
     bibliotheque_publique_id: str | None = None
+    produit_public_id: str | None = None
     fichier_id: str | None = None
     type_emplacement: str | None = None
     emplacement_id: str | None = None
@@ -59,6 +62,7 @@ class SignalementReponse(BaseModel):
     id: str
     type_signalement: str
     bibliotheque_publique_id: str | None = None
+    produit_public_id: str | None = None
     fichier_id: str | None = None
     type_emplacement: str | None = None
     emplacement_id: str | None = None
@@ -85,6 +89,8 @@ def creer_signalement(
         raise erreur_api(422, "TYPE_DE_SIGNALEMENT_INVALIDE")
     if payload.type_signalement == "bibliotheque_publique" and not (payload.bibliotheque_publique_id or "").strip():
         raise erreur_api(400, "CIBLE_DU_SIGNALEMENT_MANQUANTE")
+    if payload.type_signalement == "produit_public" and not (payload.produit_public_id or "").strip():
+        raise erreur_api(400, "CIBLE_DU_SIGNALEMENT_MANQUANTE")
     if payload.type_signalement == "document_programme" and not (
         (payload.fichier_id or "").strip() and (payload.type_emplacement or "").strip() and (payload.emplacement_id or "").strip()
     ):
@@ -99,6 +105,7 @@ def creer_signalement(
     ligne = {
         "type_signalement": payload.type_signalement,
         "bibliotheque_publique_id": payload.bibliotheque_publique_id,
+        "produit_public_id": (payload.produit_public_id or "").strip() or None,
         "fichier_id": payload.fichier_id,
         "type_emplacement": payload.type_emplacement,
         "emplacement_id": payload.emplacement_id,
@@ -110,6 +117,8 @@ def creer_signalement(
         "declaration_honneur": payload.declaration_honneur,
     }
 
+    # Les champs vides ne sont pas envoyés : une colonne absente de la base ne doit pas faire échouer le signalement.
+    ligne = {cle: valeur for cle, valeur in ligne.items() if valeur is not None}
     try:
         res = supabase.table("signalements_bibliotheque").insert(ligne).execute()
     except Exception as e:
@@ -120,7 +129,7 @@ def creer_signalement(
         action="signalement.cree",
         user_id=utilisateur.id if utilisateur else None,
         cible_type=payload.type_signalement,
-        cible_id=payload.bibliotheque_publique_id or payload.fichier_id,
+        cible_id=payload.bibliotheque_publique_id or payload.produit_public_id or payload.fichier_id,
         details={"motif": payload.motif.strip()},
         request=request,
     )
@@ -173,6 +182,9 @@ def traiter_signalement(
             except Exception as e:
                 logging.error(f"ERREUR SUPABASE (retrait bibliotheque_publique {signalement['bibliotheque_publique_id']}) : {e}")
                 raise erreur_api(500, "ERREUR_INCONNUE")
+        elif signalement["type_signalement"] == "produit_public":
+            # Produit public (28/11/2026) : il disparaît du public, la ligne reste avec le motif.
+            produits_publics.retirer_par_admin(signalement["produit_public_id"], payload.notes_admin or signalement["motif"])
         else:
             # "document_programme" désactivé le 29/08/2026 -- ne peut plus
             # être retiré via cet endpoint (voir

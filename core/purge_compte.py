@@ -103,6 +103,9 @@ _TABLES_SIMPLES = (
     ("demandes_dossiers_catalogue_public", "createur_id"),
     # Signalements pédagogiques où le compte est l'élève.
     ("signalements", "etudiant_id"),
+    # 28/11/2026 : produits publics. ON DELETE CASCADE existe aussi, cette étape double la sécurité.
+    # Les images sont effacées avant, voir _purger_images_produits.
+    ("produits_publics", "auteur_id"),
 )
 
 
@@ -234,6 +237,16 @@ def _purger_videos(user_id: str) -> None:
         logging.error(f"ERREUR purge compte (vidéos pour {user_id}) : {e}")
 
 
+def _purger_images_produits(user_id: str) -> None:
+    """Images des produits publics du compte (dossier produits/<id du compte>/ dans R2)."""
+    try:
+        from core.images_produits_publics import supprimer_toutes_les_images
+
+        supprimer_toutes_les_images(user_id)
+    except Exception as e:
+        logging.error(f"ERREUR purge compte (images des produits pour {user_id}) : {e}")
+
+
 def purger_donnees_compte(supabase, user_id: str) -> None:
     """Point d'entrée, à appeler avant la suppression du profil."""
     # Tours de chat gardés en mémoire du serveur pour la reprise (core/tours_detaches.py) : rien en
@@ -259,6 +272,7 @@ def purger_donnees_compte(supabase, user_id: str) -> None:
         logging.error(f"ERREUR SUPABASE (purge skills {user_id}) : {e}")
     _purger_fichiers(supabase, user_id)
     _purger_videos(user_id)
+    _purger_images_produits(user_id)
     _purger_deblocages_modeles(supabase, user_id)
 
     # Les activations de skills publics pointent vers le comportement de

@@ -46,6 +46,7 @@ from api.contenu_dynamique_matiere import router_liste_agents as contenu_matiere
 from api.comportements_etudiants import router as comportements_etudiants_router
 from api.skills import router as skills_router
 from api.skills_publics import router as skills_publics_router
+from api.produits_publics import router as produits_publics_router
 # Fonctionnalité "Programme" désactivée et isolée le 29/08/2026 (demande
 # Bourama) -- voir _desactive_programme/LISEZ_MOI_NE_JAMAIS_REUTILISER.md.
 # Anciens imports (ne jamais réactiver) :
@@ -978,6 +979,8 @@ app.include_router(comportements_etudiants_router)
 app.include_router(skills_router)
 # 24/11/2026 : catalogue public des skills sur la table skills (remplace comportements_publics).
 app.include_router(skills_publics_router)
+# 28/11/2026 : produits publics (sites, applis, plateformes) avec page publique indexée par Google.
+app.include_router(produits_publics_router)
 # Routers "Programme" désactivés le 29/08/2026 (demande Bourama) -- voir
 # _desactive_programme/LISEZ_MOI_NE_JAMAIS_REUTILISER.md :
 #   router_programmes, router_matieres, router_chapitres,

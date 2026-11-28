@@ -642,6 +642,8 @@ def exporter_mes_donnees(request: Request, utilisateur=Depends(utilisateur_coura
         ("skills_independants", "skills", "owner_id"),
         # 24/11/2026 : skills ajoutés depuis le catalogue public (lien copie, version copiée).
         ("skills_publics_ajoutes", "skill_activations", "active_par"),
+        # 28/11/2026 : produits publiés (texte, adresse, chemins des images).
+        ("produits_publics", "produits_publics", "auteur_id"),
         ("liste_attente_modeles", "liste_attente_modeles", "user_id"),
         ("evenements_liste_attente", "evenements_liste_attente", "user_id"),
         ("deblocages_paliers", "deblocages_paliers", "user_id"),
